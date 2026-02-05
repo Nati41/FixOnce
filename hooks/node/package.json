@@ -1,0 +1,20 @@
+{
+  "name": "fixonce-hook",
+  "version": "1.0.0",
+  "description": "FixOnce error tracking hook for Node.js - Never debug the same bug twice",
+  "main": "fixonce-hook.js",
+  "keywords": [
+    "error",
+    "tracking",
+    "debugging",
+    "fixonce",
+    "ai",
+    "memory"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}

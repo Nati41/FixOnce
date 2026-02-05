@@ -1,0 +1,2836 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FixOnce</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(94, 129, 172, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(129, 178, 154, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(72, 119, 147, 0.08) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+        }
+
+        body.rtl {
+            direction: rtl;
+        }
+
+        .container {
+            max-width: 420px;
+            margin: 0 auto;
+        }
+
+        /* ===== GLASS EFFECT ===== */
+        .glass {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        /* ===== HEADER ===== */
+        .header {
+            text-align: center;
+            padding: 24px 0 16px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-text {
+            display: inline-flex;
+            align-items: baseline;
+        }
+
+        .logo-f {
+            color: #5e81ac;
+            font-weight: 700;
+        }
+
+        .logo-o {
+            position: relative;
+            display: inline-block;
+            color: #5e81ac;
+            font-weight: 700;
+        }
+
+        /* Checkmark inside the O */
+        .logo-o::after {
+            content: '✓';
+            position: absolute;
+            top: 52%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: #81b29a;
+        }
+
+        .project-name {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 4px;
+            cursor: pointer;
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .project-name:hover {
+            background: rgba(255,255,255,0.05);
+            color: #888;
+        }
+
+        /* ===== STATUS ===== */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            margin: 16px 0;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .status-bar.clear {
+            background: rgba(129, 178, 154, 0.15);
+            border: 1px solid rgba(129, 178, 154, 0.3);
+            color: #81b29a;
+        }
+
+        .status-bar.warning {
+            background: rgba(242, 204, 143, 0.15);
+            border: 1px solid rgba(242, 204, 143, 0.3);
+            color: #f2cc8f;
+        }
+
+        .status-bar.error {
+            background: rgba(231, 111, 81, 0.15);
+            border: 1px solid rgba(231, 111, 81, 0.3);
+            color: #e76f51;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* ===== CTA BUTTON ===== */
+        .cta-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 14px 20px;
+            margin: 12px 0;
+            background: rgba(94, 129, 172, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(94, 129, 172, 0.3);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        .cta-btn:hover {
+            background: rgba(94, 129, 172, 0.3);
+            border-color: rgba(94, 129, 172, 0.5);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        /* ===== SECTION ===== */
+        .section {
+            margin-top: 24px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 0 4px;
+        }
+
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .section-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .section-count {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #888;
+            border-radius: 8px;
+        }
+
+        .clear-btn {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            background: transparent;
+            border: 1px solid rgba(231, 111, 81, 0.3);
+            color: #e76f51;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .clear-btn:hover {
+            background: rgba(231, 111, 81, 0.15);
+        }
+
+        /* ===== FILTER/SORT CONTROLS ===== */
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 0 4px;
+        }
+
+        .filter-select {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(94, 129, 172, 0.3);
+            color: #5e81ac;
+            border-radius: 8px;
+            cursor: pointer;
+            outline: none;
+            flex: 1;
+            transition: all 0.2s;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%235e81ac' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            padding-right: 24px;
+        }
+
+        .filter-select:hover {
+            background-color: rgba(94, 129, 172, 0.15);
+            border-color: rgba(94, 129, 172, 0.5);
+        }
+
+        .filter-select option {
+            background: #1a1a2e;
+            color: #ccc;
+            padding: 8px;
+        }
+
+        /* ===== SOLUTION CARD DELETE ===== */
+        .solution-card {
+            position: relative;
+        }
+
+        .solution-delete {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 20px;
+            height: 20px;
+            border: none;
+            background: rgba(231, 111, 81, 0.2);
+            color: #e76f51;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            opacity: 0;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .solution-card:hover .solution-delete {
+            opacity: 1;
+        }
+
+        .solution-delete:hover {
+            background: rgba(231, 111, 81, 0.4);
+        }
+
+        .history-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .clear-history-btn {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            background: transparent;
+            border: 1px solid rgba(231, 111, 81, 0.3);
+            color: #e76f51;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .clear-history-btn:hover {
+            background: rgba(231, 111, 81, 0.15);
+        }
+
+        /* ===== ISSUE CARD ===== */
+        .issue-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .issue-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .issue-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .issue-dot.critical { background: #e76f51; }
+        .issue-dot.error { background: #f4a261; }
+        .issue-dot.warning { background: #f2cc8f; }
+
+        .issue-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .issue-message {
+            font-size: 0.85rem;
+            color: #d0d0d0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .issue-meta {
+            font-size: 0.7rem;
+            color: #555;
+            margin-top: 3px;
+        }
+
+        .issue-badge {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #888;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .issue-badge.count {
+            color: #e76f51;
+            background: rgba(231, 111, 81, 0.15);
+        }
+
+        /* ===== EMPTY STATE ===== */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #555;
+            font-size: 0.85rem;
+        }
+
+        /* ===== FOOTER ===== */
+        .footer {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-top: 32px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .footer-link {
+            font-size: 0.75rem;
+            color: #555;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .footer-link:hover {
+            color: #888;
+        }
+
+        /* ===== LANGUAGE TOGGLE ===== */
+        .lang-btn {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: #666;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
+
+        body.rtl .lang-btn {
+            right: auto;
+            left: 12px;
+        }
+
+        /* ===== MODALS ===== */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal {
+            width: 90%;
+            max-width: 360px;
+            background: rgba(26, 26, 46, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .editor-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .editor-option:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.1);
+        }
+
+        .editor-name {
+            font-size: 0.9rem;
+            color: #d0d0d0;
+        }
+
+        .editor-badge {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.05);
+            color: #666;
+        }
+
+        .editor-badge.ready {
+            background: rgba(129, 178, 154, 0.2);
+            color: #81b29a;
+        }
+
+        .modal-hint {
+            margin-top: 16px;
+            padding: 12px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 8px;
+            font-size: 0.75rem;
+            color: #666;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        .modal-close {
+            display: block;
+            width: 100%;
+            margin-top: 12px;
+            padding: 10px;
+            background: transparent;
+            border: none;
+            color: #555;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        /* ===== INPUT FIELDS ===== */
+        .field {
+            margin-bottom: 12px;
+        }
+
+        .field label {
+            display: block;
+            font-size: 0.7rem;
+            color: #666;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .field input, .field textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 0.85rem;
+        }
+
+        .field input:focus, .field textarea:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .field textarea {
+            height: 80px;
+            resize: none;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #888;
+        }
+
+        /* ===== DETAIL MODAL ===== */
+        .detail-modal {
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .detail-type {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #e76f51;
+            padding: 4px 10px;
+            background: rgba(231, 111, 81, 0.15);
+            border-radius: 6px;
+        }
+
+        .detail-close {
+            background: none;
+            border: none;
+            color: #555;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .detail-message {
+            font-size: 0.85rem;
+            color: #d0d0d0;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            word-break: break-word;
+            direction: ltr;
+            text-align: left;
+        }
+
+        .detail-location {
+            font-size: 0.7rem;
+            color: #555;
+            margin-bottom: 16px;
+        }
+
+        .detail-section {
+            margin-bottom: 16px;
+        }
+
+        .detail-section-title {
+            font-size: 0.7rem;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.7rem;
+            line-height: 1.6;
+            overflow-x: auto;
+        }
+
+        .code-line {
+            white-space: pre;
+            color: #888;
+        }
+
+        .code-line.error {
+            background: rgba(231, 111, 81, 0.15);
+            color: #e76f51;
+            margin: 0 -12px;
+            padding: 0 12px;
+        }
+
+        .vars-list {
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 8px 12px;
+        }
+
+        .var-row {
+            display: flex;
+            font-size: 0.75rem;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .var-row:last-child {
+            border-bottom: none;
+        }
+
+        .var-name {
+            color: #888;
+            font-family: monospace;
+            min-width: 80px;
+        }
+
+        .var-value {
+            color: #81b29a;
+            font-family: monospace;
+            word-break: break-all;
+        }
+
+        /* ===== HISTORY PANEL ===== */
+        .history-panel {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            max-height: 60vh;
+            background: rgba(22, 33, 62, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,0.15);
+            border-radius: 20px 20px 0 0;
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .history-panel.open {
+            display: block;
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .history-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+
+        .history-close {
+            background: none;
+            border: none;
+            color: #555;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .solution-card {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(129, 178, 154, 0.1);
+            border: 1px solid rgba(129, 178, 154, 0.2);
+            border-radius: 10px;
+        }
+
+        .solution-problem {
+            font-size: 0.75rem;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        .solution-fix {
+            font-size: 0.8rem;
+            color: #81b29a;
+        }
+
+        /* ===== NEW ERROR ANIMATION ===== */
+        @keyframes pulse-error {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(231, 111, 81, 0.4); }
+            50% { box-shadow: 0 0 20px 10px rgba(231, 111, 81, 0.2); }
+        }
+
+        .issue-card.new-error {
+            animation: pulse-error 1s ease-in-out 3;
+            border: 1px solid rgba(231, 111, 81, 0.5);
+        }
+
+        .status-bar.new-error {
+            animation: pulse-error 1s ease-in-out 3;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: rgba(231, 111, 81, 0.95);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            z-index: 2000;
+            opacity: 0;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        /* ===== SERVER CONNECT ===== */
+        .server-connect {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            margin: 12px 0;
+        }
+
+        .server-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .server-icon {
+            font-size: 1.5rem;
+        }
+
+        .server-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .server-label {
+            font-size: 0.7rem;
+            color: #666;
+        }
+
+        .server-url {
+            font-size: 0.9rem;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        .connect-btn {
+            padding: 8px 16px;
+            background: rgba(129, 178, 154, 0.2);
+            border: 1px solid rgba(129, 178, 154, 0.3);
+            border-radius: 8px;
+            color: #81b29a;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .connect-btn:hover {
+            background: rgba(129, 178, 154, 0.3);
+        }
+
+        .connect-btn.connected {
+            background: rgba(129, 178, 154, 0.15);
+            border-color: rgba(129, 178, 154, 0.2);
+            color: #81b29a;
+            cursor: default;
+        }
+
+        .connect-btn.connected::before {
+            content: '✓ ';
+        }
+
+        /* ===== AI MEMORY SECTION ===== */
+        .memory-section {
+            margin-top: 20px;
+        }
+
+        .memory-health {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            border-radius: 12px;
+        }
+
+        .memory-health-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .memory-health-icon {
+            font-size: 1.2rem;
+        }
+
+        .memory-health-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .memory-health-title {
+            font-size: 0.75rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .memory-health-status {
+            font-size: 0.85rem;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        .memory-health-bar {
+            width: 60px;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .memory-health-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s, background 0.3s;
+        }
+
+        .memory-health-fill.low { background: #81b29a; }
+        .memory-health-fill.medium { background: #f2cc8f; }
+        .memory-health-fill.high { background: #e76f51; }
+
+        /* Handover Card */
+        .handover-card {
+            padding: 14px 16px;
+            margin-bottom: 12px;
+            border-radius: 12px;
+            border-left: 3px solid #5e81ac;
+        }
+
+        .handover-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .handover-title {
+            font-size: 0.75rem;
+            color: #5e81ac;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .handover-time {
+            font-size: 0.7rem;
+            color: #555;
+        }
+
+        .handover-content {
+            font-size: 0.85rem;
+            color: #d0d0d0;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .handover-empty {
+            color: #555;
+            font-style: italic;
+        }
+
+        .handover-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .handover-btn {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            background: transparent;
+            border: 1px solid rgba(94, 129, 172, 0.3);
+            color: #5e81ac;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .handover-btn:hover {
+            background: rgba(94, 129, 172, 0.15);
+        }
+
+        .handover-btn.copy {
+            border-color: rgba(129, 178, 154, 0.3);
+            color: #81b29a;
+        }
+
+        .handover-btn.copy:hover {
+            background: rgba(129, 178, 154, 0.15);
+        }
+
+        /* ROI Card */
+        .roi-card {
+            padding: 14px 16px;
+            margin-bottom: 12px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(129, 178, 154, 0.1), rgba(94, 129, 172, 0.1));
+            border: 1px solid rgba(129, 178, 154, 0.2);
+        }
+
+        .roi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .roi-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #81b29a;
+        }
+
+        .roi-badge {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            background: rgba(129, 178, 154, 0.2);
+            border-radius: 10px;
+            color: #81b29a;
+        }
+
+        .roi-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .roi-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .roi-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #e0e0e0;
+            line-height: 1;
+        }
+
+        .roi-label {
+            font-size: 0.65rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .roi-insight {
+            margin-top: 12px;
+            padding: 8px 10px;
+            background: rgba(129, 178, 154, 0.1);
+            border-radius: 8px;
+            font-size: 0.75rem;
+            color: #81b29a;
+            text-align: center;
+            display: none;
+        }
+
+        .roi-insight.show {
+            display: block;
+        }
+
+        /* Memory Cards (Decisions, Avoid) */
+        .memory-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .memory-card {
+            padding: 12px 14px;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .memory-card.decision {
+            background: rgba(129, 178, 154, 0.1);
+            border: 1px solid rgba(129, 178, 154, 0.2);
+        }
+
+        .memory-card.avoid {
+            background: rgba(231, 111, 81, 0.1);
+            border: 1px solid rgba(231, 111, 81, 0.2);
+        }
+
+        .memory-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 4px;
+        }
+
+        .memory-card-title {
+            font-size: 0.85rem;
+            color: #e0e0e0;
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .memory-card-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+        }
+
+        .memory-card-badge.used {
+            background: rgba(129, 178, 154, 0.2);
+            color: #81b29a;
+        }
+
+        .memory-card-badge.unused {
+            background: rgba(255, 255, 255, 0.05);
+            color: #666;
+        }
+
+        .memory-card-reason {
+            font-size: 0.75rem;
+            color: #888;
+        }
+
+        .memory-card-delete {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 18px;
+            height: 18px;
+            border: none;
+            background: rgba(231, 111, 81, 0.2);
+            color: #e76f51;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.65rem;
+            opacity: 0;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .memory-card:hover .memory-card-delete {
+            opacity: 1;
+        }
+
+        .memory-card-delete:hover {
+            background: rgba(231, 111, 81, 0.4);
+        }
+
+        /* Add Memory Button */
+        .add-memory-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #555;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .add-memory-btn:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: #888;
+        }
+
+        /* Empty Memory State */
+        .memory-empty {
+            text-align: center;
+            padding: 20px;
+            color: #555;
+            font-size: 0.8rem;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .quick-action-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            color: #888;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-action-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #ccc;
+        }
+
+        .quick-action-btn.primary {
+            background: rgba(94, 129, 172, 0.15);
+            border-color: rgba(94, 129, 172, 0.3);
+            color: #5e81ac;
+        }
+
+        .quick-action-btn.primary:hover {
+            background: rgba(94, 129, 172, 0.25);
+        }
+
+        /* Collapsible sections */
+        .section-toggle {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section-toggle .toggle-icon {
+            transition: transform 0.2s;
+        }
+
+        .section-toggle.collapsed .toggle-icon {
+            transform: rotate(-90deg);
+        }
+
+        .section-content.collapsed {
+            display: none;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="toast" id="toast"></div>
+    <button class="lang-btn" onclick="toggleLang()">EN</button>
+
+    <div class="container">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="logo">
+                <span class="logo-text">Fix<span class="logo-o">O</span>nce</span>
+            </div>
+            <div class="project-name" id="project-name" onclick="openProjectEdit()">My Project</div>
+        </div>
+
+        <!-- STATUS -->
+        <div class="status-bar clear" id="status-bar">
+            <span class="status-dot"></span>
+            <span id="status-text">All Clear</span>
+        </div>
+
+        <!-- SERVER CONNECTION -->
+        <div class="server-connect glass" id="server-connect" style="display:none;">
+            <div class="server-info">
+                <span class="server-icon">🌐</span>
+                <div class="server-details">
+                    <div class="server-label" id="server-label">You're working on:</div>
+                    <div class="server-url" id="server-url">localhost:3000</div>
+                </div>
+            </div>
+            <button class="connect-btn" id="connect-btn" onclick="connectServer()">Connect</button>
+        </div>
+
+        <!-- CTA -->
+        <button class="cta-btn" onclick="openSessionModal()">
+            <span id="cta-text">Start AI Session</span>
+        </button>
+
+        <!-- AI MEMORY SECTION -->
+        <div class="memory-section">
+            <!-- Memory Health -->
+            <div class="memory-health glass" id="memory-health">
+                <div class="memory-health-left">
+                    <span class="memory-health-icon">🧠</span>
+                    <div class="memory-health-info">
+                        <span class="memory-health-title" id="memory-health-title">AI Memory</span>
+                        <span class="memory-health-status" id="memory-health-status">Loading...</span>
+                    </div>
+                </div>
+                <div class="memory-health-bar">
+                    <div class="memory-health-fill low" id="memory-health-fill" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Handover Card -->
+            <div class="handover-card glass" id="handover-card">
+                <div class="handover-header">
+                    <span class="handover-title" id="handover-title">📋 Last Session</span>
+                    <span class="handover-time" id="handover-time"></span>
+                </div>
+                <div class="handover-content" id="handover-content">
+                    <span class="handover-empty" id="handover-empty">No handover from previous session</span>
+                </div>
+                <div class="handover-actions">
+                    <button class="handover-btn copy" onclick="copyContextForAI()" id="copy-context-btn">📋 Copy for AI</button>
+                    <button class="handover-btn" onclick="clearHandover()" id="clear-handover-btn">Clear</button>
+                </div>
+            </div>
+
+            <!-- Decisions Section -->
+            <div class="section">
+                <div class="section-header section-toggle" onclick="toggleSection('decisions')">
+                    <span class="section-title">
+                        <span class="toggle-icon">▼</span>
+                        <span id="decisions-title">🎯 Decisions</span>
+                    </span>
+                    <span class="section-count" id="decisions-count">0</span>
+                </div>
+                <div class="section-content" id="decisions-content">
+                    <div class="memory-cards" id="decisions-list"></div>
+                    <button class="add-memory-btn" onclick="openAddDecision()">
+                        <span>+</span> <span id="add-decision-text">Add Decision</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Avoid Section -->
+            <div class="section">
+                <div class="section-header section-toggle" onclick="toggleSection('avoid')">
+                    <span class="section-title">
+                        <span class="toggle-icon">▼</span>
+                        <span id="avoid-title">⚠️ Avoid</span>
+                    </span>
+                    <span class="section-count" id="avoid-count">0</span>
+                </div>
+                <div class="section-content" id="avoid-content">
+                    <div class="memory-cards" id="avoid-list"></div>
+                    <button class="add-memory-btn" onclick="openAddAvoid()">
+                        <span>+</span> <span id="add-avoid-text">Add Pattern</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ROI Card -->
+            <div class="roi-card glass" id="roi-card">
+                <div class="roi-header">
+                    <span class="roi-title" id="roi-title">📊 ROI</span>
+                    <span class="roi-badge" id="roi-badge">חיסכון</span>
+                </div>
+                <div class="roi-stats">
+                    <div class="roi-stat">
+                        <span class="roi-value" id="roi-solutions">0</span>
+                        <span class="roi-label" id="roi-solutions-label">פתרונות בשימוש חוזר</span>
+                    </div>
+                    <div class="roi-stat">
+                        <span class="roi-value" id="roi-sessions">0</span>
+                        <span class="roi-label" id="roi-sessions-label">סשנים עם הקשר</span>
+                    </div>
+                    <div class="roi-stat">
+                        <span class="roi-value" id="roi-decisions">0</span>
+                        <span class="roi-label" id="roi-decisions-label">החלטות שנעזרו</span>
+                    </div>
+                    <div class="roi-stat">
+                        <span class="roi-value" id="roi-avoided">0</span>
+                        <span class="roi-label" id="roi-avoided-label">טעויות שנמנעו</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <button class="quick-action-btn primary" onclick="copyContextForAI()">
+                    <span>📋</span> <span id="quick-copy-text">Copy Context</span>
+                </button>
+                <button class="quick-action-btn" onclick="detectProject()">
+                    <span>🔍</span> <span id="quick-detect-text">Detect Stack</span>
+                </button>
+            </div>
+            <div class="quick-actions" style="margin-top: 8px;">
+                <button class="quick-action-btn" onclick="exportMemory()">
+                    <span>📤</span> <span id="quick-export-text">Export</span>
+                </button>
+                <button class="quick-action-btn" onclick="document.getElementById('import-file').click()">
+                    <span>📥</span> <span id="quick-import-text">Import</span>
+                </button>
+                <input type="file" id="import-file" accept=".json" style="display:none" onchange="importMemory(event)">
+            </div>
+        </div>
+
+        <!-- ISSUES -->
+        <div class="section" id="issues-section">
+            <div class="section-header">
+                <span class="section-title" id="issues-title">Active Issues</span>
+                <div class="section-actions">
+                    <span class="section-count" id="issues-count">0</span>
+                    <button class="clear-btn" id="clear-btn" onclick="clearIssues()" style="display:none;">Clear</button>
+                </div>
+            </div>
+            <div class="filter-bar">
+                <select class="filter-select" id="domain-filter" onchange="renderIssues()">
+                    <option value="all" id="filter-all">All Sources</option>
+                </select>
+                <select class="filter-select" id="sort-select" onchange="renderIssues()">
+                    <option value="newest" id="sort-newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="critical">Critical First</option>
+                    <option value="count">Most Recurring</option>
+                </select>
+            </div>
+            <div id="issues-list"></div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <span class="footer-link" onclick="openHistory()">
+                <span id="history-link">History</span> (<span id="history-count">0</span>)
+            </span>
+            <span class="footer-link" onclick="openSettings()">
+                <span id="settings-link">Settings</span>
+            </span>
+        </div>
+    </div>
+
+    <!-- HISTORY PANEL -->
+    <div class="history-panel" id="history-panel">
+        <div class="history-header">
+            <span class="history-title" id="history-title">Solved Issues</span>
+            <div class="history-actions">
+                <button class="clear-history-btn" id="clear-history-btn" onclick="clearHistory()" style="display:none;">Clear All</button>
+                <button class="history-close" onclick="closeHistory()">&times;</button>
+            </div>
+        </div>
+        <div id="history-list"></div>
+    </div>
+
+    <!-- SESSION MODAL -->
+    <div class="modal-overlay" id="session-modal">
+        <div class="modal">
+            <div class="modal-title" id="modal-title">Start AI Session</div>
+
+            <div class="editor-option" onclick="launchEditor('claude')">
+                <span class="editor-name">Claude Code</span>
+                <span class="editor-badge" id="badge-claude">-</span>
+            </div>
+            <div class="editor-option" onclick="launchEditor('cursor')">
+                <span class="editor-name">Cursor</span>
+                <span class="editor-badge" id="badge-cursor">-</span>
+            </div>
+            <div class="editor-option" onclick="launchEditor('windsurf')">
+                <span class="editor-name">Windsurf</span>
+                <span class="editor-badge" id="badge-windsurf">-</span>
+            </div>
+            <div class="editor-option" onclick="launchEditor('vscode')">
+                <span class="editor-name">VS Code</span>
+                <span class="editor-badge" id="badge-vscode">-</span>
+            </div>
+
+            <div class="modal-hint" id="modal-hint">
+                Ask about errors in your own words
+            </div>
+
+            <button class="modal-close" onclick="closeSessionModal()" id="session-cancel-btn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- PROJECT EDIT MODAL -->
+    <div class="modal-overlay" id="project-modal">
+        <div class="modal">
+            <div class="modal-title" id="project-title">Edit Project</div>
+            <div class="field">
+                <label id="name-label">Name</label>
+                <input type="text" id="edit-name" placeholder="My Project">
+            </div>
+            <div class="field">
+                <label id="stack-label">Stack</label>
+                <input type="text" id="edit-stack" placeholder="React, Node, Python...">
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-ghost" onclick="closeProjectEdit()" id="project-cancel-btn">Cancel</button>
+                <button class="btn btn-primary" onclick="saveProject()" id="project-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DETAIL MODAL -->
+    <div class="modal-overlay" id="detail-modal">
+        <div class="modal detail-modal">
+            <div class="detail-header">
+                <span class="detail-type" id="detail-type">Error</span>
+                <button class="detail-close" onclick="closeDetail()">&times;</button>
+            </div>
+            <div class="detail-message" id="detail-message"></div>
+            <div class="detail-location" id="detail-location"></div>
+
+            <div class="detail-section" id="snippet-section" style="display:none;">
+                <div class="detail-section-title" id="snippet-title">Code Context</div>
+                <div class="code-block" id="detail-snippet"></div>
+            </div>
+
+            <div class="detail-section" id="vars-section" style="display:none;">
+                <div class="detail-section-title" id="vars-title">Variables</div>
+                <div class="vars-list" id="detail-vars"></div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-ghost" onclick="closeDetail()" id="detail-close-btn">Close</button>
+                <button class="btn btn-primary" onclick="resolveFromDetail()" id="detail-resolve-btn">Mark Resolved</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESOLVE MODAL -->
+    <div class="modal-overlay" id="resolve-modal">
+        <div class="modal">
+            <div class="modal-title" id="resolve-title">Mark as Resolved</div>
+            <input type="hidden" id="resolve-id">
+            <div class="field">
+                <label id="resolve-solution-label">Solution</label>
+                <textarea id="resolve-solution" placeholder="Describe the fix..."></textarea>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-ghost" onclick="closeResolve()" id="resolve-cancel-btn">Cancel</button>
+                <button class="btn btn-primary" onclick="submitResolve()" id="resolve-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ALL ISSUES MODAL -->
+    <div class="modal-overlay" id="all-issues-modal">
+        <div class="modal detail-modal">
+            <div class="detail-header">
+                <span class="detail-type" id="all-issues-title">All Active Issues</span>
+                <button class="detail-close" onclick="closeAllIssues()">&times;</button>
+            </div>
+            <div id="all-issues-list" style="max-height: 60vh; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal">
+            <div class="modal-title" id="settings-title">AI Editors</div>
+
+            <div class="editor-option">
+                <span class="editor-name">Claude Code</span>
+                <span class="editor-badge" id="set-claude">-</span>
+            </div>
+            <div class="editor-option">
+                <span class="editor-name">Cursor</span>
+                <span class="editor-badge" id="set-cursor">-</span>
+            </div>
+            <div class="editor-option">
+                <span class="editor-name">Windsurf</span>
+                <span class="editor-badge" id="set-windsurf">-</span>
+            </div>
+            <div class="editor-option">
+                <span class="editor-name">VS Code</span>
+                <span class="editor-badge" id="set-vscode">-</span>
+            </div>
+
+            <button class="modal-close" onclick="closeSettings()" id="settings-close-btn">Close</button>
+        </div>
+    </div>
+
+    <!-- CONFIRM MODAL -->
+    <div class="modal-overlay" id="confirm-modal">
+        <div class="modal" style="max-width: 320px;">
+            <div class="modal-title" id="confirm-title">אישור</div>
+            <div id="confirm-message" style="margin: 16px 0; color: #aaa; font-size: 0.9rem;"></div>
+            <div class="btn-row">
+                <button class="btn btn-ghost" id="confirm-cancel">ביטול</button>
+                <button class="btn btn-primary" id="confirm-ok" style="background: rgba(231, 111, 81, 0.3); border-color: rgba(231, 111, 81, 0.5);">אישור</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD DECISION MODAL -->
+    <div class="modal-overlay" id="add-decision-modal">
+        <div class="modal">
+            <div class="modal-title" id="add-decision-title">Add Decision</div>
+            <div class="field">
+                <label id="decision-what-label">What was decided?</label>
+                <input type="text" id="decision-what" placeholder="Use Redux over Context">
+            </div>
+            <div class="field">
+                <label id="decision-why-label">Why?</label>
+                <input type="text" id="decision-why" placeholder="Need time-travel debugging">
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-ghost" onclick="closeAddDecision()" id="decision-cancel-btn">Cancel</button>
+                <button class="btn btn-primary" onclick="submitDecision()" id="decision-add-btn">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD AVOID MODAL -->
+    <div class="modal-overlay" id="add-avoid-modal">
+        <div class="modal">
+            <div class="modal-title" id="add-avoid-title">Add Avoid Pattern</div>
+            <div class="field">
+                <label id="avoid-what-label">What to avoid?</label>
+                <input type="text" id="avoid-what" placeholder="Don't use moment.js">
+            </div>
+            <div class="field">
+                <label id="avoid-why-label">Why?</label>
+                <input type="text" id="avoid-why" placeholder="Too heavy, use date-fns instead">
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-ghost" onclick="closeAddAvoid()" id="avoid-cancel-btn">Cancel</button>
+                <button class="btn btn-primary" onclick="submitAvoid()" id="avoid-add-btn">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = 'http://localhost:5000';
+        let lang = localStorage.getItem('fixonce-lang') || 'en';
+        let issues = [];
+        let solutions = [];
+        let project = {};
+        let currentIssueId = null;
+        let lastIssueCount = 0;
+        let lastIssueIds = new Set();
+
+        // Toast notification
+        function showToast(message, duration = 4000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+
+            // Play sound for new errors
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onp+dl4N0Z2V0hZOdnZmPhHZpaW59i5aZl5GGe3Fwc3yGkJWUj4Z9dXN2fIWOk5KPiYJ7d3d6gYmPkY+LhYB7eXuAh42PjouHgn57fH+FioyMioeEgX5+gYWJi4uJhoOBf4CCho2Pj42KiYeHiYyQlJaVk5KQj5CSlpmbnJuamZiYmZqdoKKioqGhoaGio6WmqKmqqqqpqaipqqutrq+wsLCwsLCwsLGytLW2t7e3t7e3t7i4ubq7vLy8vLy8vLy8vb2+v8DBwcHBwcHBwcHBwcLDxMXFxcXFxcXFxcXFxcbGx8jIyMjIyMjIyMjIyMjIyMnJycnJycnJycnJycjIyMjIx8fHx8fHx8fGxsbGxcXFxcTExMTDw8PDwsLCwcHBwcDAwMC/v7++vr6+vb29vLy8vLu7u7q6urm5ubm4uLi3t7e2tra2tbW1tLS0s7OzsrKysbGxsLCwsK+vr66urq2tra2srKyrq6uqqqqpqamop6enpqampQ==');
+                audio.volume = 0.3;
+                audio.play().catch(() => {});
+            } catch (e) {}
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
+        // Custom confirm dialog (replaces native confirm)
+        function showConfirm(message, title = null) {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('confirm-modal');
+                const titleEl = document.getElementById('confirm-title');
+                const msgEl = document.getElementById('confirm-message');
+                const okBtn = document.getElementById('confirm-ok');
+                const cancelBtn = document.getElementById('confirm-cancel');
+
+                titleEl.textContent = title || (lang === 'he' ? 'אישור' : 'Confirm');
+                msgEl.textContent = message;
+                okBtn.textContent = lang === 'he' ? 'אישור' : 'OK';
+                cancelBtn.textContent = lang === 'he' ? 'ביטול' : 'Cancel';
+
+                modal.classList.add('open');
+
+                const cleanup = () => {
+                    modal.classList.remove('open');
+                    okBtn.onclick = null;
+                    cancelBtn.onclick = null;
+                };
+
+                okBtn.onclick = () => { cleanup(); resolve(true); };
+                cancelBtn.onclick = () => { cleanup(); resolve(false); };
+            });
+        }
+
+        // Translations
+        const T = {
+            en: {
+                allClear: "All Clear",
+                hasIssues: "Issues",
+                critical: "Critical",
+                startSession: "Start AI Session",
+                activeIssues: "Active Issues",
+                noIssues: "No active issues",
+                history: "History",
+                settings: "Settings",
+                solved: "Solved Issues",
+                noHistory: "No solved issues yet",
+                editProject: "Edit Project",
+                name: "Name",
+                stack: "Stack",
+                save: "Save",
+                cancel: "Cancel",
+                close: "Close",
+                markResolved: "Mark Resolved",
+                codeContext: "Code Context",
+                variables: "Variables",
+                clear: "Clear",
+                confirmClear: "Clear all issues?",
+                hint: "Ask about errors in your own words",
+                lang: "HE",
+                allSources: "All Sources",
+                newestFirst: "Newest First",
+                oldestFirst: "Oldest First",
+                criticalFirst: "Critical First",
+                mostRecurring: "Most Recurring",
+                clearHistory: "Clear All",
+                confirmClearHistory: "Clear all solution history?",
+                confirmDeleteSolution: "Delete this solution?",
+                workingOn: "You're working on:",
+                monitoringServer: "Monitoring server errors:",
+                connect: "Connect",
+                connected: "Connected",
+                // AI Memory translations
+                aiMemory: "AI Memory",
+                memoryReady: "Ready",
+                memoryStale: "Needs refresh",
+                lastSession: "Last Session",
+                noHandover: "No handover from previous session",
+                copyForAI: "Copy for AI",
+                copiedToClipboard: "Copied to clipboard!",
+                decisions: "Decisions",
+                avoid: "Avoid",
+                addDecision: "Add Decision",
+                addPattern: "Add Pattern",
+                copyContext: "Copy Context",
+                detectStack: "Detect Stack",
+                whatDecided: "What was decided?",
+                whyDecided: "Why?",
+                whatAvoid: "What to avoid?",
+                whyAvoid: "Why?",
+                usedByAI: "AI used",
+                notUsedYet: "Not used yet",
+                confirmDeleteDecision: "Delete this decision?",
+                confirmDeleteAvoid: "Delete this avoid pattern?",
+                confirmClearHandover: "Clear handover?",
+                stackDetected: "Stack detected!",
+                noStackFound: "Could not detect stack",
+                exportMemory: "Export",
+                importMemory: "Import",
+                exportSuccess: "Memory exported!",
+                importSuccess: "Memory imported!",
+                importError: "Import failed",
+                clearHandover: "Clear",
+                add: "Add",
+                noDecisions: "No decisions yet",
+                noAvoidPatterns: "No avoid patterns yet",
+                memoryHealth: "Memory Health",
+                placeholderDecision: "Use Redux over Context",
+                placeholderDecisionWhy: "Need time-travel debugging",
+                placeholderAvoid: "Don't use moment.js",
+                placeholderAvoidWhy: "Too heavy, use date-fns",
+                allActiveIssues: "All Active Issues",
+                solution: "Solution",
+                describeFix: "Describe the fix...",
+                confirm: "Confirm",
+                ok: "OK",
+                roiTitle: "Usage Stats",
+                roiSavings: "Real Data",
+                roiSolutionsReused: "Solutions reused",
+                roiSessionsContext: "Sessions w/ context",
+                roiDecisionsUsed: "Decisions used",
+                roiErrorsAvoided: "Errors avoided"
+            },
+            he: {
+                allClear: "הכל תקין",
+                hasIssues: "בעיות",
+                critical: "קריטי",
+                startSession: "התחל שיחת AI",
+                activeIssues: "בעיות פעילות",
+                noIssues: "אין בעיות פעילות",
+                history: "היסטוריה",
+                settings: "הגדרות",
+                solved: "בעיות שנפתרו",
+                noHistory: "אין היסטוריה עדיין",
+                editProject: "עריכת פרויקט",
+                name: "שם",
+                stack: "טכנולוגיות",
+                save: "שמור",
+                cancel: "ביטול",
+                close: "סגור",
+                markResolved: "סמן כפתור",
+                codeContext: "הקשר קוד",
+                variables: "משתנים",
+                clear: "נקה",
+                confirmClear: "לנקות את כל הבעיות?",
+                hint: "שאל על שגיאות במילים שלך",
+                lang: "EN",
+                allSources: "כל המקורות",
+                newestFirst: "חדש קודם",
+                oldestFirst: "ישן קודם",
+                criticalFirst: "קריטי קודם",
+                mostRecurring: "הכי חוזר",
+                clearHistory: "נקה הכל",
+                confirmClearHistory: "לנקות את כל ההיסטוריה?",
+                confirmDeleteSolution: "למחוק את הפתרון?",
+                workingOn: "אתה עובד על:",
+                monitoringServer: "מנטר שגיאות שרת:",
+                connect: "חבר",
+                connected: "מחובר",
+                // AI Memory translations
+                aiMemory: "זיכרון AI",
+                memoryReady: "מוכן",
+                memoryStale: "דורש רענון",
+                lastSession: "סשן קודם",
+                noHandover: "אין מסירה מסשן קודם",
+                copyForAI: "העתק ל-AI",
+                copiedToClipboard: "הועתק!",
+                decisions: "החלטות",
+                avoid: "הימנע",
+                addDecision: "הוסף החלטה",
+                addPattern: "הוסף תבנית",
+                copyContext: "העתק הקשר",
+                detectStack: "זהה Stack",
+                whatDecided: "מה הוחלט?",
+                whyDecided: "למה?",
+                whatAvoid: "ממה להימנע?",
+                whyAvoid: "למה?",
+                usedByAI: "AI השתמש",
+                notUsedYet: "טרם בשימוש",
+                confirmDeleteDecision: "למחוק את ההחלטה?",
+                confirmDeleteAvoid: "למחוק את התבנית?",
+                confirmClearHandover: "לנקות את המסירה?",
+                stackDetected: "Stack זוהה!",
+                noStackFound: "לא הצלחתי לזהות Stack",
+                exportMemory: "ייצוא",
+                importMemory: "ייבוא",
+                exportSuccess: "הזיכרון יוצא!",
+                importSuccess: "הזיכרון יובא!",
+                importError: "הייבוא נכשל",
+                clearHandover: "נקה",
+                add: "הוסף",
+                noDecisions: "אין החלטות עדיין",
+                noAvoidPatterns: "אין תבניות עדיין",
+                memoryHealth: "בריאות זיכרון",
+                placeholderDecision: "השתמש ב-Redux במקום Context",
+                placeholderDecisionWhy: "צריך time-travel debugging",
+                placeholderAvoid: "אל תשתמש ב-moment.js",
+                placeholderAvoidWhy: "כבד מדי, השתמש ב-date-fns",
+                allActiveIssues: "כל הבעיות הפעילות",
+                solution: "פתרון",
+                describeFix: "תאר את התיקון...",
+                confirm: "אישור",
+                ok: "אישור",
+                roiTitle: "סטטיסטיקות",
+                roiSavings: "נתונים אמיתיים",
+                roiSolutionsReused: "פתרונות בשימוש חוזר",
+                roiSessionsContext: "סשנים עם הקשר",
+                roiDecisionsUsed: "החלטות שנעזרו",
+                roiErrorsAvoided: "טעויות שנמנעו"
+            }
+        };
+
+        const t = k => T[lang][k] || k;
+
+        function toggleLang() {
+            lang = lang === 'en' ? 'he' : 'en';
+            localStorage.setItem('fixonce-lang', lang);
+            document.body.classList.toggle('rtl', lang === 'he');
+            document.documentElement.lang = lang;
+            document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr';
+            applyLang();
+        }
+
+        function applyLang() {
+            document.querySelector('.lang-btn').textContent = t('lang');
+            document.getElementById('cta-text').textContent = t('startSession');
+            document.getElementById('issues-title').textContent = t('activeIssues');
+            document.getElementById('history-link').textContent = t('history');
+            document.getElementById('settings-link').textContent = t('settings');
+            document.getElementById('history-title').textContent = t('solved');
+            document.getElementById('modal-title').textContent = t('startSession');
+            document.getElementById('modal-hint').textContent = t('hint');
+            document.getElementById('project-title').textContent = t('editProject');
+            document.getElementById('name-label').textContent = t('name');
+            document.getElementById('stack-label').textContent = t('stack');
+            document.getElementById('resolve-title').textContent = t('markResolved');
+            document.getElementById('settings-title').textContent = t('settings');
+            document.getElementById('snippet-title').textContent = t('codeContext');
+            document.getElementById('vars-title').textContent = t('variables');
+            document.getElementById('clear-btn').textContent = t('clear');
+            document.getElementById('clear-history-btn').textContent = t('clearHistory');
+            // Filter/sort translations
+            document.getElementById('filter-all').textContent = t('allSources');
+            document.getElementById('sort-newest').textContent = t('newestFirst');
+            const sortSelect = document.getElementById('sort-select');
+            sortSelect.options[1].textContent = t('oldestFirst');
+            sortSelect.options[2].textContent = t('criticalFirst');
+            sortSelect.options[3].textContent = t('mostRecurring');
+            // Server connect translations
+            const serverLabel = document.getElementById('server-label');
+            const connectBtn = document.getElementById('connect-btn');
+            if (serverLabel && connectBtn) {
+                if (!serverConnected) {
+                    serverLabel.textContent = t('workingOn');
+                    connectBtn.textContent = t('connect');
+                } else {
+                    serverLabel.textContent = t('monitoringServer');
+                    connectBtn.textContent = t('connected');
+                }
+            }
+            // AI Memory translations
+            document.getElementById('memory-health-title').textContent = t('aiMemory');
+            document.getElementById('handover-title').textContent = '📋 ' + t('lastSession');
+            document.getElementById('copy-context-btn').textContent = '📋 ' + t('copyForAI');
+            document.getElementById('decisions-title').textContent = '🎯 ' + t('decisions');
+            document.getElementById('avoid-title').textContent = '⚠️ ' + t('avoid');
+            document.getElementById('add-decision-text').textContent = t('addDecision');
+            document.getElementById('add-avoid-text').textContent = t('addPattern');
+            document.getElementById('quick-copy-text').textContent = t('copyContext');
+            document.getElementById('quick-detect-text').textContent = t('detectStack');
+            document.getElementById('add-decision-title').textContent = t('addDecision');
+            document.getElementById('decision-what-label').textContent = t('whatDecided');
+            document.getElementById('decision-why-label').textContent = t('whyDecided');
+            document.getElementById('add-avoid-title').textContent = t('addPattern');
+            document.getElementById('avoid-what-label').textContent = t('whatAvoid');
+            document.getElementById('avoid-why-label').textContent = t('whyAvoid');
+            document.getElementById('quick-export-text').textContent = t('exportMemory');
+            document.getElementById('quick-import-text').textContent = t('importMemory');
+            document.getElementById('clear-handover-btn').textContent = t('clearHandover');
+            // Placeholders
+            document.getElementById('decision-what').placeholder = t('placeholderDecision');
+            document.getElementById('decision-why').placeholder = t('placeholderDecisionWhy');
+            document.getElementById('avoid-what').placeholder = t('placeholderAvoid');
+            document.getElementById('avoid-why').placeholder = t('placeholderAvoidWhy');
+
+            // Modal buttons
+            document.getElementById('session-cancel-btn').textContent = t('cancel');
+            document.getElementById('project-cancel-btn').textContent = t('cancel');
+            document.getElementById('project-save-btn').textContent = t('save');
+            document.getElementById('detail-close-btn').textContent = t('close');
+            document.getElementById('detail-resolve-btn').textContent = t('markResolved');
+            document.getElementById('resolve-cancel-btn').textContent = t('cancel');
+            document.getElementById('resolve-save-btn').textContent = t('save');
+            document.getElementById('settings-close-btn').textContent = t('close');
+            document.getElementById('decision-cancel-btn').textContent = t('cancel');
+            document.getElementById('decision-add-btn').textContent = t('add');
+            document.getElementById('avoid-cancel-btn').textContent = t('cancel');
+            document.getElementById('avoid-add-btn').textContent = t('add');
+            document.getElementById('all-issues-title').textContent = t('allActiveIssues');
+            document.getElementById('confirm-title').textContent = t('confirm');
+            document.getElementById('confirm-cancel').textContent = t('cancel');
+            document.getElementById('confirm-ok').textContent = t('ok');
+
+            // Resolve modal
+            document.getElementById('resolve-solution-label').textContent = t('solution');
+            document.getElementById('resolve-solution').placeholder = t('describeFix');
+
+            // ROI card (now showing real stats only)
+            document.getElementById('roi-title').textContent = '📊 ' + t('roiTitle');
+            document.getElementById('roi-badge').textContent = t('roiSavings');
+            document.getElementById('roi-solutions-label').textContent = t('roiSolutionsReused');
+            document.getElementById('roi-sessions-label').textContent = t('roiSessionsContext');
+            document.getElementById('roi-decisions-label').textContent = t('roiDecisionsUsed');
+            document.getElementById('roi-avoided-label').textContent = t('roiErrorsAvoided');
+
+            // Re-render memory sections with new language
+            if (typeof renderDecisions === 'function') renderDecisions();
+            if (typeof renderAvoid === 'function') renderAvoid();
+            if (typeof renderHandover === 'function') renderHandover();
+            if (typeof renderROI === 'function') renderROI();
+            updateStatus();
+        }
+
+        async function loadData() {
+            try {
+                const res = await fetch(API + '/api/memory');
+                const data = await res.json();
+                const newIssues = data.active_issues || [];
+                solutions = data.solutions_history || [];
+                project = data.project_info || {};
+
+                // Check for new errors
+                const newIssueIds = new Set(newIssues.map(i => i.id));
+                const addedIssues = newIssues.filter(i => !lastIssueIds.has(i.id));
+
+                if (addedIssues.length > 0 && lastIssueIds.size > 0) {
+                    // New error detected!
+                    const latest = addedIssues[0];
+                    const msg = lang === 'he' ? `שגיאה חדשה: ${latest.message.substring(0, 50)}...` : `New error: ${latest.message.substring(0, 50)}...`;
+                    showToast(msg);
+
+                    // Add animation class to status bar
+                    document.getElementById('status-bar').classList.add('new-error');
+                    setTimeout(() => document.getElementById('status-bar').classList.remove('new-error'), 3000);
+                }
+
+                lastIssueIds = newIssueIds;
+                lastIssueCount = newIssues.length;
+                issues = newIssues;
+
+                // Populate domain filter
+                updateDomainFilter();
+
+                const name = project.name || 'My Project';
+                const stack = project.stack;
+                document.getElementById('project-name').textContent = stack ? `${name} · ${stack}` : name;
+                document.getElementById('history-count').textContent = solutions.length;
+
+                updateStatus();
+                renderIssues();
+
+                // Load ROI data
+                loadROI();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        let roiData = {};
+
+        async function loadROI() {
+            try {
+                const res = await fetch(API + '/api/memory/roi');
+                roiData = await res.json();
+                renderROI();
+            } catch (e) {
+                console.error('Failed to load ROI:', e);
+            }
+        }
+
+        function renderROI() {
+            // Real metrics only
+            document.getElementById('roi-solutions').textContent = roiData.solutions_reused || 0;
+            document.getElementById('roi-sessions').textContent = roiData.sessions_with_context || 0;
+            document.getElementById('roi-decisions').textContent = roiData.decisions_referenced || 0;
+            document.getElementById('roi-avoided').textContent = roiData.errors_prevented || 0;
+        }
+
+        function updateStatus() {
+            const bar = document.getElementById('status-bar');
+            const text = document.getElementById('status-text');
+            const count = document.getElementById('issues-count');
+            const clearBtn = document.getElementById('clear-btn');
+
+            count.textContent = issues.length;
+            clearBtn.style.display = issues.length > 0 ? 'block' : 'none';
+
+            const critical = issues.filter(i => i.severity === 'critical').length;
+
+            if (issues.length === 0) {
+                bar.className = 'status-bar clear';
+                text.textContent = t('allClear');
+            } else if (critical > 0) {
+                bar.className = 'status-bar error';
+                text.textContent = `${t('critical')} (${critical})`;
+            } else {
+                bar.className = 'status-bar warning';
+                text.textContent = `${t('hasIssues')} (${issues.length})`;
+            }
+        }
+
+        function updateDomainFilter() {
+            const filter = document.getElementById('domain-filter');
+            const currentValue = filter.value;
+
+            // Extract unique domains from all issues
+            const domains = new Set();
+            issues.forEach(i => {
+                const urls = i.urls || [];
+                urls.forEach(url => {
+                    try {
+                        const domain = new URL(url).host;
+                        if (domain) domains.add(domain);
+                    } catch (e) {}
+                });
+                // Also check the direct url field
+                if (i.url) {
+                    try {
+                        const domain = new URL(i.url).host;
+                        if (domain) domains.add(domain);
+                    } catch (e) {}
+                }
+            });
+
+            // Rebuild options
+            filter.innerHTML = `<option value="all">${t('allSources')}</option>`;
+            [...domains].sort().forEach(domain => {
+                filter.innerHTML += `<option value="${domain}">${domain}</option>`;
+            });
+
+            // Restore previous selection if still valid
+            if ([...domains].includes(currentValue)) {
+                filter.value = currentValue;
+            }
+        }
+
+        function renderIssues() {
+            const list = document.getElementById('issues-list');
+            const domainFilter = document.getElementById('domain-filter').value;
+            const sortBy = document.getElementById('sort-select').value;
+
+            // Filter by domain
+            let filtered = [...issues];
+            if (domainFilter !== 'all') {
+                filtered = issues.filter(i => {
+                    const urls = i.urls || [];
+                    const hasUrl = urls.some(url => {
+                        try { return new URL(url).host === domainFilter; } catch (e) { return false; }
+                    });
+                    if (hasUrl) return true;
+                    if (i.url) {
+                        try { return new URL(i.url).host === domainFilter; } catch (e) { return false; }
+                    }
+                    return false;
+                });
+            }
+
+            if (filtered.length === 0) {
+                list.innerHTML = `<div class="empty-state">${t('noIssues')}</div>`;
+                return;
+            }
+
+            // Sort based on selection
+            const sorted = filtered.sort((a, b) => {
+                switch (sortBy) {
+                    case 'newest':
+                        return new Date(b.last_seen || b.first_seen || 0) - new Date(a.last_seen || a.first_seen || 0);
+                    case 'oldest':
+                        return new Date(a.first_seen || 0) - new Date(b.first_seen || 0);
+                    case 'critical':
+                        if (a.severity === 'critical' && b.severity !== 'critical') return -1;
+                        if (b.severity === 'critical' && a.severity !== 'critical') return 1;
+                        return new Date(b.last_seen || 0) - new Date(a.last_seen || 0);
+                    case 'count':
+                        return (b.count || 1) - (a.count || 1);
+                    default:
+                        return new Date(b.last_seen || 0) - new Date(a.last_seen || 0);
+                }
+            });
+
+            list.innerHTML = sorted.slice(0, 5).map(i => {
+                const hasXray = (i.snippet?.length > 0) || (i.locals && Object.keys(i.locals).length > 0);
+                const domain = i.urls?.[0] ? (() => { try { return new URL(i.urls[0]).host; } catch(e) { return ''; } })() : '';
+                const timeAgo = formatTimeAgo(i.last_seen || i.first_seen);
+                return `
+                    <div class="issue-card glass" onclick="openDetail('${i.id}')">
+                        <div class="issue-dot ${i.severity || 'error'}"></div>
+                        <div class="issue-content">
+                            <div class="issue-message">${esc(i.message)}</div>
+                            <div class="issue-meta">${domain}${timeAgo ? ' · ' + timeAgo : ''}</div>
+                        </div>
+                        ${(i.count || 1) > 1 ? `<span class="issue-badge count">×${i.count}</span>` : ''}
+                        ${hasXray ? '<span class="issue-badge">X-Ray</span>' : ''}
+                    </div>
+                `;
+            }).join('');
+
+            if (sorted.length > 5) {
+                list.innerHTML += `<div style="text-align:center;padding:10px;color:#555;font-size:0.8rem;cursor:pointer" onclick="showAllIssues()">+${sorted.length - 5} more</div>`;
+            }
+        }
+
+        function esc(s) {
+            if (!s) return '';
+            return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+        }
+
+        function formatTimeAgo(timestamp) {
+            const now = new Date();
+            const then = new Date(timestamp);
+            const diff = Math.floor((now - then) / 1000);
+
+            if (diff < 60) return 'now';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+            return Math.floor(diff / 86400) + 'd';
+        }
+
+        // Session Modal
+        function openSessionModal() {
+            document.getElementById('session-modal').classList.add('open');
+            loadEditorStatus();
+        }
+        function closeSessionModal() {
+            document.getElementById('session-modal').classList.remove('open');
+        }
+
+        async function loadEditorStatus() {
+            try {
+                const res = await fetch(API + '/api/system/mcp_status');
+                const data = await res.json();
+                setBadge('claude', data.claude);
+                setBadge('cursor', data.cursor);
+                setBadge('windsurf', data.windsurf);
+                setBadge('vscode', data.continue);
+                // Settings modal too
+                setStatus('set-claude', data.claude);
+                setStatus('set-cursor', data.cursor);
+                setStatus('set-windsurf', data.windsurf);
+                setStatus('set-vscode', data.continue);
+            } catch (e) {}
+        }
+
+        function setBadge(ed, st) {
+            const b = document.getElementById('badge-' + ed);
+            if (st?.configured) {
+                b.textContent = '✓';
+                b.className = 'editor-badge ready';
+            } else if (st?.installed) {
+                b.textContent = 'Ready';
+                b.className = 'editor-badge';
+            } else {
+                b.textContent = '-';
+                b.className = 'editor-badge';
+            }
+        }
+
+        function setStatus(id, st) {
+            const b = document.getElementById(id);
+            if (st?.configured) {
+                b.textContent = 'Connected';
+                b.className = 'editor-badge ready';
+            } else if (st?.installed) {
+                b.textContent = 'Installed';
+                b.className = 'editor-badge';
+            } else {
+                b.textContent = 'Not found';
+                b.className = 'editor-badge';
+            }
+        }
+
+        async function launchEditor(ed) {
+            try {
+                await fetch(API + '/api/session/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({editor: ed})
+                });
+                await fetch(API + '/api/session/launch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({editor: ed})
+                });
+                closeSessionModal();
+            } catch (e) {
+                alert('Failed to launch');
+            }
+        }
+
+        // Project Edit
+        function openProjectEdit() {
+            document.getElementById('edit-name').value = project.name || '';
+            document.getElementById('edit-stack').value = project.stack || '';
+            document.getElementById('project-modal').classList.add('open');
+        }
+        function closeProjectEdit() {
+            document.getElementById('project-modal').classList.remove('open');
+        }
+        async function saveProject() {
+            const name = document.getElementById('edit-name').value.trim() || 'My Project';
+            const stack = document.getElementById('edit-stack').value.trim();
+            try {
+                await fetch(API + '/api/memory/project', {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, stack})
+                });
+                project.name = name;
+                project.stack = stack;
+                document.getElementById('project-name').textContent = stack ? `${name} · ${stack}` : name;
+                closeProjectEdit();
+            } catch (e) {}
+        }
+
+        // Detail Modal
+        function openDetail(id) {
+            const issue = issues.find(i => i.id === id);
+            if (!issue) return;
+            currentIssueId = id;
+
+            document.getElementById('detail-type').textContent = issue.type || 'Error';
+            document.getElementById('detail-message').textContent = issue.message || '';
+
+            const file = issue.file || issue.url || '';
+            const line = issue.line || '';
+            const func = issue.function || '';
+            let loc = file;
+            if (line) loc += ':' + line;
+            if (func) loc += ' in ' + func;
+            document.getElementById('detail-location').textContent = loc;
+
+            const snippetSec = document.getElementById('snippet-section');
+            const snippetEl = document.getElementById('detail-snippet');
+            if (issue.snippet?.length > 0) {
+                snippetEl.innerHTML = issue.snippet.map(l => {
+                    const cls = l.startsWith('>>>') ? 'code-line error' : 'code-line';
+                    return `<div class="${cls}">${esc(l)}</div>`;
+                }).join('');
+                snippetSec.style.display = 'block';
+            } else {
+                snippetSec.style.display = 'none';
+            }
+
+            const varsSec = document.getElementById('vars-section');
+            const varsEl = document.getElementById('detail-vars');
+            if (issue.locals && Object.keys(issue.locals).length > 0) {
+                varsEl.innerHTML = Object.entries(issue.locals).map(([n, v]) => `
+                    <div class="var-row">
+                        <span class="var-name">${esc(n)}</span>
+                        <span class="var-value">${esc(String(v))}</span>
+                    </div>
+                `).join('');
+                varsSec.style.display = 'block';
+            } else {
+                varsSec.style.display = 'none';
+            }
+
+            document.getElementById('detail-modal').classList.add('open');
+        }
+        function closeDetail() {
+            document.getElementById('detail-modal').classList.remove('open');
+            currentIssueId = null;
+        }
+        function resolveFromDetail() {
+            if (!currentIssueId) return;
+            closeDetail();
+            openResolve(currentIssueId);
+        }
+
+        // Resolve Modal
+        function openResolve(id) {
+            document.getElementById('resolve-id').value = id;
+            document.getElementById('resolve-solution').value = '';
+            document.getElementById('resolve-modal').classList.add('open');
+        }
+        function closeResolve() {
+            document.getElementById('resolve-modal').classList.remove('open');
+        }
+        async function submitResolve() {
+            const id = document.getElementById('resolve-id').value;
+            const sol = document.getElementById('resolve-solution').value;
+            if (!sol.trim()) return;
+            try {
+                await fetch(API + `/api/memory/issues/${id}/resolve`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({solution: sol, worked: true})
+                });
+                closeResolve();
+                loadData();
+            } catch (e) {}
+        }
+
+        // Clear Issues
+        async function clearIssues() {
+            if (!await showConfirm(t('confirmClear'))) return;
+            try {
+                await fetch(API + '/api/memory/clear-issues', {method: 'POST'});
+                loadData();
+            } catch (e) {}
+        }
+
+        // History
+        function openHistory() {
+            renderHistory();
+            document.getElementById('history-panel').classList.add('open');
+        }
+        function closeHistory() {
+            document.getElementById('history-panel').classList.remove('open');
+        }
+        function renderHistory() {
+            const list = document.getElementById('history-list');
+            const clearBtn = document.getElementById('clear-history-btn');
+
+            if (solutions.length === 0) {
+                list.innerHTML = `<div class="empty-state">${t('noHistory')}</div>`;
+                clearBtn.style.display = 'none';
+                return;
+            }
+
+            clearBtn.style.display = 'block';
+            list.innerHTML = solutions.slice(0, 20).map((s, idx) => `
+                <div class="solution-card">
+                    <button class="solution-delete" onclick="deleteSolution('${s.id}', event)" title="${t('confirmDeleteSolution')}">×</button>
+                    <div class="solution-problem">${esc(s.problem?.substring(0, 80) || '')}</div>
+                    <div class="solution-fix">${esc(s.solution?.substring(0, 100) || '')}</div>
+                </div>
+            `).join('');
+        }
+
+        async function deleteSolution(solutionId, event) {
+            event.stopPropagation();
+            if (!await showConfirm(t('confirmDeleteSolution'))) return;
+
+            try {
+                await fetch(API + `/api/memory/solutions/${solutionId}`, { method: 'DELETE' });
+                await loadData();
+                renderHistory();
+            } catch (e) {
+                console.error('Failed to delete solution:', e);
+            }
+        }
+
+        async function clearHistory() {
+            if (!await showConfirm(t('confirmClearHistory'))) return;
+
+            try {
+                await fetch(API + '/api/memory/clear-history', { method: 'POST' });
+                await loadData();
+                renderHistory();
+            } catch (e) {
+                console.error('Failed to clear history:', e);
+            }
+        }
+
+        // All Issues
+        function showAllIssues() {
+            const list = document.getElementById('all-issues-list');
+            document.getElementById('all-issues-title').textContent = lang === 'he' ? `כל הבעיות (${issues.length})` : `All Issues (${issues.length})`;
+
+            const sorted = [...issues].sort((a, b) => {
+                if (a.severity === 'critical' && b.severity !== 'critical') return -1;
+                if (b.severity === 'critical' && a.severity !== 'critical') return 1;
+                return (b.count || 1) - (a.count || 1);
+            });
+
+            list.innerHTML = sorted.map(i => {
+                const hasXray = (i.snippet?.length > 0) || (i.locals && Object.keys(i.locals).length > 0);
+                const domain = i.domain || i.url?.split('/')[2] || '';
+                const timeAgo = i.timestamp ? formatTimeAgo(i.timestamp) : '';
+                return `
+                    <div class="issue-card glass" onclick="closeAllIssues(); openDetail('${i.id}')" style="margin-bottom: 8px;">
+                        <div class="issue-dot ${i.severity || 'error'}"></div>
+                        <div class="issue-content">
+                            <div class="issue-message">${esc(i.message)}</div>
+                            <div class="issue-meta">${domain}${timeAgo ? ' · ' + timeAgo : ''}</div>
+                        </div>
+                        ${(i.count || 1) > 1 ? `<span class="issue-badge count">×${i.count}</span>` : ''}
+                        ${hasXray ? '<span class="issue-badge">X-Ray</span>' : ''}
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('all-issues-modal').classList.add('open');
+        }
+
+        function closeAllIssues() {
+            document.getElementById('all-issues-modal').classList.remove('open');
+        }
+
+        // Settings
+        function openSettings() {
+            loadEditorStatus();
+            document.getElementById('settings-modal').classList.add('open');
+        }
+        function closeSettings() {
+            document.getElementById('settings-modal').classList.remove('open');
+        }
+
+        // ===== SERVER CONNECT =====
+        let serverConnected = false;
+        let currentSiteData = null;
+
+        async function loadCurrentSite() {
+            try {
+                const res = await fetch(API + '/api/current-site');
+                const data = await res.json();
+
+                if (data.domain) {
+                    currentSiteData = data;
+                    document.getElementById('server-url').textContent = data.domain;
+                    document.getElementById('server-connect').style.display = 'flex';
+
+                    // Check if already connected
+                    const statusRes = await fetch(API + '/api/server/status');
+                    const statusData = await statusRes.json();
+
+                    if (statusData.connected && statusData.server?.url?.includes(data.domain)) {
+                        setConnected();
+                    }
+                } else {
+                    document.getElementById('server-connect').style.display = 'none';
+                }
+            } catch (e) {
+                console.error('Failed to load current site:', e);
+            }
+        }
+
+        async function connectServer() {
+            if (serverConnected || !currentSiteData) return;
+
+            const btn = document.getElementById('connect-btn');
+            btn.textContent = '...';
+
+            try {
+                const res = await fetch(API + '/api/server/connect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: currentSiteData.url,
+                        port: currentSiteData.domain.split(':')[1] || '80'
+                    })
+                });
+
+                if (res.ok) {
+                    setConnected();
+                } else {
+                    btn.textContent = 'Error';
+                    setTimeout(() => btn.textContent = t('connect'), 2000);
+                }
+            } catch (e) {
+                btn.textContent = 'Error';
+                setTimeout(() => btn.textContent = t('connect'), 2000);
+            }
+        }
+
+        function setConnected() {
+            serverConnected = true;
+            const btn = document.getElementById('connect-btn');
+            btn.textContent = t('connected');
+            btn.classList.add('connected');
+            document.getElementById('server-label').textContent = t('monitoringServer');
+        }
+
+        // ===== AI MEMORY FUNCTIONS =====
+        let memoryHealth = {};
+        let handover = {};
+        let decisions = [];
+        let avoidPatterns = [];
+
+        async function loadMemoryData() {
+            try {
+                // Load memory health
+                const healthRes = await fetch(API + '/api/memory/health');
+                memoryHealth = await healthRes.json();
+                renderMemoryHealth();
+
+                // Load handover
+                const handoverRes = await fetch(API + '/api/memory/handover');
+                const handoverData = await handoverRes.json();
+                handover = handoverData.handover || {};
+                renderHandover();
+
+                // Load decisions
+                const decisionsRes = await fetch(API + '/api/memory/decisions');
+                const decisionsData = await decisionsRes.json();
+                decisions = decisionsData.decisions || [];
+                renderDecisions();
+
+                // Load avoid patterns
+                const avoidRes = await fetch(API + '/api/memory/avoid');
+                const avoidData = await avoidRes.json();
+                avoidPatterns = avoidData.avoid || [];
+                renderAvoid();
+            } catch (e) {
+                console.error('Failed to load memory data:', e);
+            }
+        }
+
+        function renderMemoryHealth() {
+            const fill = document.getElementById('memory-health-fill');
+            const status = document.getElementById('memory-health-status');
+            const percent = memoryHealth.fullness_percent || 0;
+
+            fill.style.width = percent + '%';
+            fill.className = 'memory-health-fill ' + (percent < 50 ? 'low' : percent < 80 ? 'medium' : 'high');
+
+            // Build status text
+            let statusText = '';
+            const h = memoryHealth.handover || {};
+            if (h.status === 'fresh') {
+                statusText = t('memoryReady');
+            } else if (h.status === 'stale') {
+                statusText = t('memoryStale');
+            } else if (h.exists) {
+                statusText = `${h.age_hours}h ago`;
+            } else {
+                statusText = t('noHandover');
+            }
+            status.textContent = statusText;
+        }
+
+        function renderHandover() {
+            const content = document.getElementById('handover-content');
+            const time = document.getElementById('handover-time');
+
+            if (handover && handover.summary) {
+                content.innerHTML = esc(handover.summary);
+                if (handover.created_at) {
+                    time.textContent = formatTimeAgo(handover.created_at);
+                }
+            } else {
+                content.innerHTML = `<span class="handover-empty">${t('noHandover')}</span>`;
+                time.textContent = '';
+            }
+        }
+
+        function renderDecisions() {
+            const list = document.getElementById('decisions-list');
+            const count = document.getElementById('decisions-count');
+            count.textContent = decisions.length;
+
+            if (decisions.length === 0) {
+                list.innerHTML = `<div class="memory-empty">${t('noDecisions')}</div>`;
+                return;
+            }
+
+            list.innerHTML = decisions.map(d => `
+                <div class="memory-card decision glass">
+                    <button class="memory-card-delete" onclick="deleteDecision('${d.id}', event)">×</button>
+                    <div class="memory-card-header">
+                        <span class="memory-card-title">${esc(d.decision)}</span>
+                        <span class="memory-card-badge ${d.used_by_ai ? 'used' : 'unused'}">
+                            ${d.used_by_ai ? '✓ ' + t('usedByAI') + (d.use_count > 1 ? ' ×' + d.use_count : '') : t('notUsedYet')}
+                        </span>
+                    </div>
+                    <div class="memory-card-reason">${esc(d.reason)}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderAvoid() {
+            const list = document.getElementById('avoid-list');
+            const count = document.getElementById('avoid-count');
+            count.textContent = avoidPatterns.length;
+
+            if (avoidPatterns.length === 0) {
+                list.innerHTML = `<div class="memory-empty">${t('noAvoidPatterns')}</div>`;
+                return;
+            }
+
+            list.innerHTML = avoidPatterns.map(a => `
+                <div class="memory-card avoid glass">
+                    <button class="memory-card-delete" onclick="deleteAvoid('${a.id}', event)">×</button>
+                    <div class="memory-card-header">
+                        <span class="memory-card-title">${esc(a.what)}</span>
+                        <span class="memory-card-badge ${a.used_by_ai ? 'used' : 'unused'}">
+                            ${a.used_by_ai ? '✓ ' + t('usedByAI') + (a.use_count > 1 ? ' ×' + a.use_count : '') : t('notUsedYet')}
+                        </span>
+                    </div>
+                    <div class="memory-card-reason">${esc(a.reason)}</div>
+                </div>
+            `).join('');
+        }
+
+        // Toggle section collapse
+        function toggleSection(section) {
+            const header = document.querySelector(`#${section}-content`).previousElementSibling;
+            const content = document.getElementById(`${section}-content`);
+            header.classList.toggle('collapsed');
+            content.classList.toggle('collapsed');
+        }
+
+        // Copy context for AI (non-MCP users)
+        async function copyContextForAI() {
+            try {
+                const res = await fetch(API + '/api/memory/summary');
+                const text = await res.text();
+                await navigator.clipboard.writeText(text);
+                showToast(t('copiedToClipboard'));
+            } catch (e) {
+                console.error('Failed to copy context:', e);
+            }
+        }
+
+        // Clear handover
+        async function clearHandover() {
+            if (!await showConfirm(t('confirmClearHandover'))) return;
+
+            try {
+                await fetch(API + '/api/memory/handover', { method: 'DELETE' });
+                await loadMemoryData();
+            } catch (e) {
+                console.error('Failed to clear handover:', e);
+            }
+        }
+
+        // Decision modal
+        function openAddDecision() {
+            document.getElementById('decision-what').value = '';
+            document.getElementById('decision-why').value = '';
+            document.getElementById('add-decision-modal').classList.add('open');
+        }
+
+        function closeAddDecision() {
+            document.getElementById('add-decision-modal').classList.remove('open');
+        }
+
+        async function submitDecision() {
+            const what = document.getElementById('decision-what').value.trim();
+            const why = document.getElementById('decision-why').value.trim();
+
+            if (!what || !why) return;
+
+            try {
+                await fetch(API + '/api/memory/decisions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ decision: what, reason: why })
+                });
+                closeAddDecision();
+                await loadMemoryData();
+            } catch (e) {
+                console.error('Failed to add decision:', e);
+            }
+        }
+
+        async function deleteDecision(id, event) {
+            event.stopPropagation();
+            if (!await showConfirm(t('confirmDeleteDecision'))) return;
+
+            try {
+                await fetch(API + `/api/memory/decisions/${id}`, { method: 'DELETE' });
+                await loadMemoryData();
+            } catch (e) {
+                console.error('Failed to delete decision:', e);
+            }
+        }
+
+        // Avoid modal
+        function openAddAvoid() {
+            document.getElementById('avoid-what').value = '';
+            document.getElementById('avoid-why').value = '';
+            document.getElementById('add-avoid-modal').classList.add('open');
+        }
+
+        function closeAddAvoid() {
+            document.getElementById('add-avoid-modal').classList.remove('open');
+        }
+
+        async function submitAvoid() {
+            const what = document.getElementById('avoid-what').value.trim();
+            const why = document.getElementById('avoid-why').value.trim();
+
+            if (!what || !why) return;
+
+            try {
+                await fetch(API + '/api/memory/avoid', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ what: what, reason: why })
+                });
+                closeAddAvoid();
+                await loadMemoryData();
+            } catch (e) {
+                console.error('Failed to add avoid pattern:', e);
+            }
+        }
+
+        async function deleteAvoid(id, event) {
+            event.stopPropagation();
+            if (!await showConfirm(t('confirmDeleteAvoid'))) return;
+
+            try {
+                await fetch(API + `/api/memory/avoid/${id}`, { method: 'DELETE' });
+                await loadMemoryData();
+            } catch (e) {
+                console.error('Failed to delete avoid pattern:', e);
+            }
+        }
+
+        // Auto-detect project
+        async function detectProject() {
+            try {
+                const res = await fetch(API + '/api/memory/detect', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.status === 'updated') {
+                    showToast(`${t('stackDetected')} ${data.stack.join(', ')}`);
+                    await loadData();
+                } else {
+                    showToast(t('noStackFound'));
+                }
+            } catch (e) {
+                console.error('Failed to detect project:', e);
+            }
+        }
+
+        // Export memory
+        function exportMemory() {
+            window.location.href = API + '/api/memory/export';
+            showToast(t('exportSuccess'));
+        }
+
+        // Import memory
+        async function importMemory(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+
+                const res = await fetch(API + '/api/memory/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    showToast(t('importSuccess'));
+                    await loadData();
+                    await loadMemoryData();
+                } else {
+                    showToast(t('importError'));
+                }
+            } catch (e) {
+                console.error('Import failed:', e);
+                showToast(t('importError'));
+            }
+
+            // Reset file input
+            event.target.value = '';
+        }
+
+        // Init
+        document.body.classList.toggle('rtl', lang === 'he');
+        applyLang();
+        loadData();
+        loadMemoryData();
+        loadCurrentSite();
+        setInterval(loadData, 5000);
+        setInterval(loadMemoryData, 10000);  // Refresh memory data every 10s
+        setInterval(loadCurrentSite, 10000);
+
+        // Close modals on outside click
+        ['session-modal', 'project-modal', 'detail-modal', 'resolve-modal', 'settings-modal', 'all-issues-modal', 'add-decision-modal', 'add-avoid-modal'].forEach(id => {
+            document.getElementById(id).addEventListener('click', e => {
+                if (e.target.id === id) {
+                    document.getElementById(id).classList.remove('open');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

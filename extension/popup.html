@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 320px;
+      min-height: 200px;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #e0e0e0;
+      padding: 16px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .logo {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .logo-o {
+      color: #5e81ac;
+      position: relative;
+    }
+
+    .logo-o::after {
+      content: '✓';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 0.5rem;
+      color: #81b29a;
+    }
+
+    .domain-badge {
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 10px;
+      color: #888;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+
+    .status-indicator.active {
+      background: rgba(129, 178, 154, 0.15);
+      border: 1px solid rgba(129, 178, 154, 0.3);
+    }
+
+    .status-indicator.sleeping {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .status-dot.active { background: #81b29a; }
+    .status-dot.sleeping { background: #555; }
+
+    .status-text {
+      font-size: 0.85rem;
+    }
+
+    .status-text.active { color: #81b29a; }
+    .status-text.sleeping { color: #888; }
+
+    /* Sleeping State */
+    .sleeping-view {
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .sleeping-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    .sleeping-title {
+      font-size: 0.95rem;
+      color: #888;
+      margin-bottom: 16px;
+    }
+
+    .enable-btn {
+      width: 100%;
+      padding: 12px;
+      background: rgba(94, 129, 172, 0.2);
+      border: 1px solid rgba(94, 129, 172, 0.3);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 8px;
+    }
+
+    .enable-btn:hover {
+      background: rgba(94, 129, 172, 0.3);
+      border-color: rgba(94, 129, 172, 0.5);
+    }
+
+    .session-btn {
+      width: 100%;
+      padding: 10px;
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      color: #888;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .session-btn:hover {
+      background: rgba(255,255,255,0.05);
+      color: #aaa;
+    }
+
+    /* Active State */
+    .active-view {
+      display: none;
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stat-box {
+      flex: 1;
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #e76f51;
+    }
+
+    .stat-number.zero { color: #81b29a; }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .action-btn {
+      width: 100%;
+      padding: 12px;
+      background: rgba(94, 129, 172, 0.2);
+      border: 1px solid rgba(94, 129, 172, 0.3);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 8px;
+    }
+
+    .action-btn:hover {
+      background: rgba(94, 129, 172, 0.3);
+    }
+
+    .secondary-btn {
+      width: 100%;
+      padding: 10px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      color: #888;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .secondary-btn:hover {
+      background: rgba(255,255,255,0.05);
+    }
+
+    .footer {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: #555;
+    }
+
+    .footer a {
+      color: #5e81ac;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    .whitelist-info {
+      font-size: 0.7rem;
+      color: #666;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    .whitelist-info.auto {
+      color: #81b29a;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">Fix<span class="logo-o">O</span>nce</div>
+    <div class="domain-badge" id="domain-badge">loading...</div>
+  </div>
+
+  <div class="status-indicator sleeping" id="status-indicator">
+    <div class="status-dot sleeping" id="status-dot"></div>
+    <div class="status-text sleeping" id="status-text">Inactive on this site</div>
+  </div>
+
+  <!-- Sleeping View -->
+  <div class="sleeping-view" id="sleeping-view">
+    <div class="sleeping-icon">😴</div>
+    <div class="sleeping-title">FixOnce is not tracking errors here</div>
+    <button class="enable-btn" id="enable-btn">Enable on this site</button>
+    <button class="session-btn" id="enable-session-btn">Enable for this session only</button>
+    <div class="whitelist-info" id="whitelist-info"></div>
+  </div>
+
+  <!-- Active View -->
+  <div class="active-view" id="active-view">
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-number" id="error-count">0</div>
+        <div class="stat-label">Errors</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-number zero" id="solved-count">0</div>
+        <div class="stat-label">Solved</div>
+      </div>
+    </div>
+    <button class="action-btn" id="open-dashboard-btn">Open Dashboard</button>
+    <button class="secondary-btn" id="disable-btn">Disable on this site</button>
+    <div class="whitelist-info auto" id="active-info"></div>
+  </div>
+
+  <div class="footer">
+    <span>v2.0</span>
+    <a href="http://localhost:5000/brain" target="_blank">Dashboard</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

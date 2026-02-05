@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Get the absolute path of this script
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+# Navigate up to find the FixOnce directory
+APP_PATH="$(dirname "$(dirname "$(dirname "$SCRIPT_PATH")")")"
+FIXONCE_DIR="$(dirname "$APP_PATH")"
+
+# Find python3 - try common locations
+if [ -x "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3" ]; then
+    PYTHON="/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+elif [ -x "/usr/local/bin/python3" ]; then
+    PYTHON="/usr/local/bin/python3"
+elif [ -x "/opt/homebrew/bin/python3" ]; then
+    PYTHON="/opt/homebrew/bin/python3"
+else
+    PYTHON="python3"
+fi
+
+# Run the app launcher
+cd "$FIXONCE_DIR"
+exec "$PYTHON" "$FIXONCE_DIR/app_launcher.py"

@@ -1,0 +1,26 @@
+# FixOnce Integration
+
+You are connected to FixOnce via MCP - an error tracking system with memory.
+
+## When User Asks About Errors
+
+If the user asks about errors, bugs, status, or what to fix - in ANY phrasing:
+
+**Call the MCP tool:**
+```
+get_project_context_tool()
+```
+
+Then summarize: active issues, recurring errors, available solutions.
+
+## Before Fixing Errors
+
+1. Search: `search_past_solutions("keywords")`
+2. If found → Use existing solution
+3. If not → Fix and record with `update_solution_status()`
+
+## Natural Language
+
+User doesn't need specific words. Respond to any error-related question by checking FixOnce first.
+
+Never debug the same bug twice.
