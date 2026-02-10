@@ -1,173 +1,113 @@
 # FixOnce
 
-> **Never debug the same bug twice.**
+> **Your AI Never Forgets.**
 
-FixOnce is an **AI Memory Layer** - an error tracking system that gives AI assistants persistent memory across sessions. Errors, solutions, decisions, and context are preserved so AI can pick up exactly where it left off.
-
----
-
-## What Makes FixOnce Different
-
-| Traditional Error Tracking | FixOnce AI Memory Layer |
-|---------------------------|------------------------|
-| Logs errors for humans to read | AI reads and acts on errors directly |
-| No memory between sessions | Full context persists across sessions |
-| Manual solution documentation | Solutions auto-saved with search keywords |
-| Start from scratch each time | AI knows what was done, what worked, what to avoid |
+FixOnce is an **AI Memory Layer** that gives AI coding assistants (Claude, Cursor, Copilot) persistent memory across sessions. Your AI remembers errors, solutions, decisions, and context - picking up exactly where you left off.
 
 ---
 
-## Core Features
+## Why FixOnce?
 
-### Error Tracking
-- **X-Ray Error Capture** - Code snippets + variable values at crash time
-- **Smart Deduplication** - Same error counted once, not flooding
-- **Full File Paths** - AI can locate and fix files directly
-- **Multi-language** - JavaScript, Python, any language
-
-### AI Memory Layer
-- **Handover** - Session summaries that transfer context to next AI session
-- **Decisions** - Architectural choices preserved ("Use Redux over Context - why...")
-- **Avoid Patterns** - Failed approaches documented ("Don't use moment.js - too heavy")
-- **Solutions History** - Searchable database of past fixes with keywords
-
-### Smart Partner Persona
-- **Confident Opening** - AI presents context immediately, no fumbling
-- **Proactive** - Just fixes and informs, doesn't ask permission for small steps
-- **Memory-Aware** - References past decisions ("Based on our decision to use UUID...")
-- **Hebrew-First** - Natural Hebrew communication, chat-style
-
-### Real Usage Stats
-- Solutions reused count
-- Sessions with context count
-- Decisions referenced count
-- Errors prevented count
+| Without FixOnce | With FixOnce |
+|----------------|--------------|
+| AI forgets everything each session | Full context persists forever |
+| Debug the same bug repeatedly | AI finds past solutions instantly |
+| Explain project context every time | AI knows your stack & decisions |
+| Manual documentation | Auto-saved insights & lessons |
 
 ---
 
 ## Quick Start
 
-### 1. Start the Server
+### 1. Install & Run
 ```bash
-cd server
-python3 server.py
+# Clone
+git clone https://github.com/Nati41/FixOnce.git
+cd FixOnce
+
+# Run
+python3 src/server.py
 ```
 
 ### 2. Open Dashboard
 ```
-http://localhost:5000/brain
+http://localhost:5000
 ```
 
-### 3. Configure AI Editor
-Add to your MCP config (`~/.claude.json` or `~/.cursor/mcp.json`):
-```json
+### 3. Connect Your AI Editor
+
+**Claude Code** (Automatic):
+```bash
+# Add to ~/.claude/settings.json
 {
   "mcpServers": {
     "fixonce": {
       "command": "python3",
-      "args": ["/path/to/FixOnce/server/mcp_memory_server.py"]
+      "args": ["/path/to/FixOnce/src/mcp_server/mcp_memory_server_v2.py"]
     }
   }
 }
 ```
 
-### 4. Set Project Root
-```bash
-curl -X POST http://localhost:5000/api/memory/project/root \
-  -H "Content-Type: application/json" \
-  -d '{"root_path": "/path/to/your/project"}'
-```
+**Cursor / GitHub Copilot** (Manual prompts):
+Open Dashboard → Start AI Session → Copy prompts
 
 ---
 
-## MCP Tools Reference
+## Supported Editors
 
-### Session Start
-| Tool | Purpose |
-|------|---------|
-| `get_project_context_tool()` | Full context with project path, issues, decisions |
-| `get_last_handover()` | Previous session summary |
-| `get_avoid_patterns()` | What NOT to do |
-| `get_project_decisions()` | Past architectural choices |
-
-### During Work
-| Tool | Purpose |
-|------|---------|
-| `search_past_solutions(query)` | Find existing fixes by keywords |
-| `get_active_issues()` | List current problems with IDs |
-| `get_issue_details(issue_id)` | Full issue info with file path |
-| `set_current_focus(description)` | Update work status |
-| `set_project_root(path)` | Set project root for file resolution |
-
-### After Fixing
-| Tool | Purpose |
-|------|---------|
-| `update_solution_status(id, solution, keywords)` | Record fix with searchable keywords |
-| `log_project_decision(decision, reason)` | Record architectural choice |
-| `log_avoid_pattern(what, reason)` | Record failed approach |
-
-### Session End
-| Tool | Purpose |
-|------|---------|
-| `create_handover(summary)` | Save session state for next AI |
-
----
-
-## API Endpoints
-
-### Core
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/status` | Server status |
-| GET | `/api/memory` | Full memory dump |
-| GET | `/api/memory/health` | Memory health metrics |
-
-### Issues
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/log_error` | Log new error |
-| GET | `/api/memory/issues` | Active issues |
-| POST | `/api/memory/issues/<id>/resolve` | Mark resolved |
-| POST | `/api/memory/clear-issues` | Clear all issues |
-
-### AI Memory
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET/POST/DELETE | `/api/memory/handover` | Manage handover |
-| GET/POST/DELETE | `/api/memory/decisions` | Manage decisions |
-| GET/POST/DELETE | `/api/memory/avoid` | Manage avoid patterns |
-| POST | `/api/memory/project/root` | Set project root path |
-| GET | `/api/memory/project/root` | Get project root path |
-
-### Stats
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/memory/roi` | Usage statistics |
-| POST | `/api/memory/roi/reset` | Reset stats |
-
-### Export/Import
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/memory/export` | Export all memory |
-| POST | `/api/memory/import` | Import memory backup |
+| Editor | Integration | How It Works |
+|--------|-------------|--------------|
+| **Claude Code** | Automatic (MCP) | Just say "היי" - connects automatically |
+| **Cursor** | Copy Prompts | Paste commands from dashboard |
+| **GitHub Copilot** | Copy Prompts | Paste commands from dashboard |
 
 ---
 
 ## Dashboard Features
 
-### Brain Dashboard (`/brain`)
-- **Status Bar** - Clear/issues count with severity
-- **AI Memory Section** - Handover, Decisions, Avoid patterns
-- **Active Issues** - With full file paths for AI
-- **Solutions History** - Searchable past fixes
-- **Usage Stats** - Real counts (not estimates)
-- **Quick Actions** - Copy context, detect stack, export/import
-- **Full Hebrew/English** - Toggle with one click
+### Live Activity Feed
+- Real-time tracking of all AI actions
+- **Tool badges** - See who did what (Claude/Cursor/Watcher)
+- **File links** - Click to open in editor
+- **Delete controls** - Remove single or all activities
 
-### Test Site (`/test`)
-- **4 Real Bug Scenarios** - JavaScript & Python
-- **Full Workflow Testing** - Trigger → Fix → Save → Verify
-- **ROI Tracking** - See stats update in real-time
+### Project Memory
+- **Architecture** - Stack, structure, key flows
+- **Intent** - Current goals & next steps
+- **Lessons** - Insights & failed attempts
+- **Decisions** - Why you chose X over Y
+- **Avoid Patterns** - What NOT to do
+
+### Multi-Project Support
+- Switch between projects instantly
+- Each project has isolated memory
+- Auto-detect by port or directory
+
+---
+
+## MCP Tools
+
+### Session Start
+```python
+auto_init_session()        # Auto-detect project
+init_session(port=3000)    # By port
+init_session(working_dir="/path")  # By path
+```
+
+### During Work
+```python
+search_past_solutions("error keywords")  # Find past fixes
+update_live_record("lessons", {"insight": "..."})  # Save learning
+log_decision("Use Redis", "Better for our scale")  # Record choice
+log_avoid("moment.js", "Too heavy, use date-fns")  # Record failure
+```
+
+### After Fixing
+```python
+get_live_record()          # See full memory
+get_recent_activity(10)    # Recent file changes
+```
 
 ---
 
@@ -175,97 +115,98 @@ curl -X POST http://localhost:5000/api/memory/project/root \
 
 ```
 FixOnce/
-├── server/
-│   ├── server.py                 # Flask + MCP server
-│   ├── project_memory_manager.py # Memory management
-│   ├── mcp_memory_server.py      # MCP tools
-│   ├── brain_dashboard.html      # AI Memory dashboard
-│   └── project_memory.json       # Persistent storage
-├── hooks/
-│   ├── python/fixonce_hook.py    # Python error hook
-│   └── node/fixonce-hook.js      # Node.js error hook
-├── test-site/
-│   ├── index.html                # Test dashboard
-│   └── scenarios/                # Bug scenarios for testing
-├── extension/                    # Chrome extension
-├── CLAUDE.md                     # AI instructions
-└── README.md
+├── src/
+│   ├── server.py              # Main Flask server
+│   ├── api/                   # REST endpoints
+│   │   ├── activity.py        # Activity feed
+│   │   ├── memory.py          # Memory management
+│   │   └── projects.py        # Multi-project
+│   ├── mcp_server/
+│   │   └── mcp_memory_server_v2.py  # MCP tools
+│   └── managers/
+│       └── multi_project_manager.py
+├── data/
+│   ├── brain_dashboard.html   # Dashboard UI
+│   ├── activity_log.json      # Activity history
+│   └── projects_v2/           # Project memories
+├── hooks/                     # Claude Code hooks
+│   ├── post_tool_use.sh
+│   ├── session_start.sh
+│   └── session_end.sh
+└── tests/
 ```
 
 ---
 
-## CLAUDE.md Protocol
+## API Endpoints
 
-The `CLAUDE.md` file instructs AI assistants how to use FixOnce:
+### Activity
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/activity/feed` | Get activity feed |
+| POST | `/api/activity/log` | Log new activity |
+| DELETE | `/api/activity/{id}` | Delete single activity |
+| DELETE | `/api/activity/clear` | Clear all activities |
 
-1. **Session Start** - Load context, handover, avoid patterns
-2. **Before Fixing** - Search past solutions first
-3. **After Fixing** - Save solution with keywords
-4. **Session End** - Create handover for next session
+### Memory
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/memory/live-record` | Get project memory |
+| POST | `/api/memory/live-record/{section}` | Update section |
+| GET | `/api/memory/decisions` | Get decisions |
+| GET | `/api/memory/avoid` | Get avoid patterns |
 
-See `CLAUDE.md` for full protocol.
-
----
-
-## Hooks
-
-### Python Hook
-```python
-from fixonce_hook import install_hook
-install_hook()
-# All unhandled exceptions now captured with X-Ray context
-```
-
-Features:
-- Anti-loop guard (won't capture its own errors)
-- Rate limiting (10 errors/minute max)
-- Async non-blocking sends
-
-### Node.js Hook
-```javascript
-require('./fixonce-hook');
-// All unhandled exceptions + rejections captured
-```
+### Projects
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/projects` | List all projects |
+| POST | `/api/projects/switch` | Switch active project |
+| POST | `/api/projects/scan` | Scan new project |
 
 ---
 
-## Configuration
+## How AI Uses FixOnce
 
-### Environment Variables
-```bash
-FIXONCE_PORT=5000          # Server port
-FIXONCE_PROJECT_ROOT=/path # Default project root
+### Session Start
+```
+User: "היי"
+AI: [Calls auto_init_session()]
+AI: "🎯 פרויקט: MyApp - React + Node
+     📍 איפה עצרנו: תיקון באג בlogin
+     💡 תובנה: השתמשנו ב-JWT במקום sessions
+     נמשיך מכאן?"
 ```
 
-### Memory File
-All data stored in `server/project_memory.json`:
-- Project info (name, stack, root_path)
-- Active issues
-- Solutions history
-- Decisions & avoid patterns
-- Handover
-- Usage stats
+### Before Fixing Errors
+```
+AI: [Calls search_past_solutions("TypeError undefined")]
+AI: "מצאתי שטיפלנו בזה - מחיל את אותו פתרון"
+```
+
+### After Learning Something
+```
+AI: [Calls update_live_record("lessons", {"insight": "..."})]
+AI: "שמרתי את התובנה לזיכרון"
+```
 
 ---
 
 ## Changelog
 
-### v2.0 - AI Memory Layer
-- Added Handover system for session continuity
-- Added Decisions & Avoid patterns
-- Added project root path for file resolution
-- Added real usage stats (not estimates)
-- Added Smart Partner persona in CLAUDE.md
-- Added test site with real bug scenarios
-- Full Hebrew translation for all UI elements
-- MCP tools for complete AI integration
+### v2.1.0 - Multi-Editor Support
+- Added GitHub Copilot support (replaced Windsurf)
+- Copy-to-clipboard buttons for Cursor/Copilot
+- Tool badges in activity feed (Claude/Cursor/Watcher)
+- File path links in activities
+- Activity delete controls (single + clear all)
+- Removed Live Memory Sync (redundant)
 
-### v1.0 - Initial Release
-- Error capture with X-Ray
-- Smart deduplication
-- Basic dashboard
-- Chrome extension
-- Python hook
+### v2.0.0 - AI Memory Layer
+- Complete rewrite with MCP integration
+- Multi-project support
+- Live Record system (GPS, Architecture, Intent, Lessons)
+- Dashboard with real-time activity feed
+- Hebrew-first UI
 
 ---
 
@@ -275,6 +216,4 @@ MIT
 
 ---
 
-Made with ❤️ for developers who hate debugging the same bug twice.
-
-**Core Principle:** AI should remember. Every session should continue where the last one stopped.
+**Your AI Never Forgets.** Made with ❤️ for developers who value their time.
