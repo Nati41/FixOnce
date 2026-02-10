@@ -1,6 +1,56 @@
 {
   "activities": [
     {
+      "id": "act_20260210_224107_634476",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/FixOnce.bat",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:41:07Z",
+      "human_name": "Fixonce"
+    },
+    {
+      "id": "act_20260210_224107_028569",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/FixOnce.command",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:41:07Z",
+      "human_name": "Fixonce"
+    },
+    {
+      "id": "act_20260210_224059_488189",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/scripts/install.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:40:59Z",
+      "human_name": "Install"
+    },
+    {
+      "id": "act_20260210_223516_023236",
+      "type": "unknown",
+      "tool": null,
+      "file": null,
+      "command": null,
+      "cwd": null,
+      "timestamp": "2026-02-10T22:35:16.023262",
+      "human_name": ""
+    },
+    {
+      "id": "act_20260210_223447_933587",
+      "type": "command",
+      "tool": null,
+      "file": null,
+      "command": "git add -A && git status --short",
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:34:47Z",
+      "human_name": "git add -A && git status --sho"
+    },
+    {
       "id": "act_20260210_223439_662577",
       "type": "file_change",
       "tool": "Edit",

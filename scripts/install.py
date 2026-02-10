@@ -381,22 +381,24 @@ def create_launcher_scripts():
     """Create platform-specific launcher scripts that open the desktop app"""
     fixonce_dir = get_fixonce_dir()
 
-    # Mac launcher - opens desktop app (pywebview)
+    # Mac launcher - uses RELATIVE path (works on any machine)
     mac_launcher = fixonce_dir / "FixOnce.command"
-    mac_content = f'''#!/bin/bash
+    mac_content = '''#!/bin/bash
+# FixOnce Launcher for Mac
 cd "$(dirname "$0")"
-python3 "{fixonce_dir}/scripts/app_launcher.py"
+python3 scripts/app_launcher.py
 '''
 
     with open(mac_launcher, 'w') as f:
         f.write(mac_content)
     os.chmod(mac_launcher, 0o755)
 
-    # Windows launcher - opens desktop app (pywebview)
+    # Windows launcher - uses RELATIVE path (works on any machine)
     win_launcher = fixonce_dir / "FixOnce.bat"
-    win_content = f'''@echo off
+    win_content = '''@echo off
+REM FixOnce Launcher for Windows
 cd /d "%~dp0"
-pythonw "{fixonce_dir}\\scripts\\app_launcher.py"
+pythonw scripts\\app_launcher.py
 '''
 
     with open(win_launcher, 'w') as f:

@@ -1,65 +1,21 @@
-# FixOnce Project Memory
+# FixOnce - AI Memory Protocol
 
-## Command: "סטטוס בלבד"
+You have FixOnce MCP tools for persistent project memory.
 
-When user types `סטטוס בלבד` or `status only`:
-1. Call get_project_context_tool()
-2. Show the summary below
-3. **STOP. Do not run any commands or fix anything.**
-4. Wait for user to tell you what to do
+On ANY greeting (hi, היי, hello, שלום, hey, מה קורה, מה המצב):
+1. Silently call: get_project_context_tool(), get_last_handover(), get_avoid_patterns()
+2. Present in Hebrew:
+   היי! FixOnce חיבר אותי לפרויקט [name].
+   🎯 הקשר: [stack] - [focus]
+   📜 חוקי בית: [key decision]
+   ⏸️ איפה עצרנו: [handover]
+   מאיפה ממשיכים?
 
-Response format:
+During work:
+- Before fixing: call search_past_solutions() first
+- After fixing: call update_solution_status() with keywords
+- Decisions: call log_project_decision()
 
-```
-היי! מחובר ל-[PROJECT_NAME].
+On exit (bye, סיימתי, done): call create_handover() with summary.
 
-🎯 איפה עצרנו: [HANDOVER_SUMMARY]
-
-מה עושים?
-```
-
-DO NOT search files. DO NOT run commands. The context is below.
-
----
-
-<!-- FIXONCE-START -->
-
-# FixOnce Project Memory
-
-Command: `/fixonce` - loads context (no file searches)
-
-## Project: FixOnce
-## Stack: Express, Node.js, Python
-## Updated: 2026-02-08 12:08:42
-
-## 📍 Where We Left Off
-
-## Done: Nati cleanup + server.py modular split
-- Cleaned all "Nati Debugger" references → "FixOnce"
-- Split 1,982-line monolithic server.py into modular structure
-- Created: config.py, db_solutions.py, notifications.py, routes/ package (6 blueprints)
-- All 77 routes tested and working
-
-## Insight: Flask Blueprints work well for this codebase. Semantic Engine loads correctly.
-
-## Next: Test the server end-to-end (python3 server.py) and consider the broader restructuring plan from the diagnosis report (src/core, src/mcp, packaging)
-
-_Last session: 2026-02-08T09:32:01.031832_
-
----
-
-## WHEN USER TYPES: /fixonce
-
-Respond EXACTLY like this:
-
-```
-היי! מחובר ל-FixOnce.
-
-🎯 איפה עצרנו: ## Done: Nati cleanup + server.py modular split
-
-מה עושים?
-```
-
-NO searches. NO commands. Just this response.
-
-<!-- FIXONCE-END -->
+Core principle: Never debug the same bug twice.
