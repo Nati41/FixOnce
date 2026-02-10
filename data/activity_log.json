@@ -1,6 +1,256 @@
 {
   "activities": [
     {
+      "id": "act_20260210_223439_662577",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:34:39Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_223405_890824",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:34:05Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_223326_551850",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/scripts/install.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:33:26Z",
+      "human_name": "Install"
+    },
+    {
+      "id": "act_20260210_223317_705688",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/scripts/install.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:33:17Z",
+      "human_name": "Install"
+    },
+    {
+      "id": "act_20260210_223244_750092",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/scripts/install.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:32:44Z",
+      "human_name": "Install"
+    },
+    {
+      "id": "act_20260210_223212_507453",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/scripts/install.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:32:12Z",
+      "human_name": "Install"
+    },
+    {
+      "id": "act_20260210_223205_150206",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/scripts/install.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:32:05Z",
+      "human_name": "Install"
+    },
+    {
+      "id": "act_20260210_223157_334394",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/scripts/install.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:31:57Z",
+      "human_name": "Install"
+    },
+    {
+      "id": "act_20260210_223149_578016",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/scripts/install.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:31:49Z",
+      "human_name": "Install"
+    },
+    {
+      "id": "act_20260210_223139_507809",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/install.bat",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:31:39Z",
+      "human_name": "Install"
+    },
+    {
+      "id": "act_20260210_223138_728512",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/install.command",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:31:38Z",
+      "human_name": "Install"
+    },
+    {
+      "id": "act_20260210_223137_968951",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/FixOnce.bat",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:31:37Z",
+      "human_name": "Fixonce"
+    },
+    {
+      "id": "act_20260210_223137_401273",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/FixOnce.command",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T20:31:37Z",
+      "human_name": "Fixonce"
+    },
+    {
+      "id": "act_20260210_215859_386796",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/api/activity.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T19:58:59Z",
+      "human_name": "API - activity"
+    },
+    {
+      "id": "act_20260210_215748_467770",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T19:57:48Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_215738_362048",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/api/activity.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T19:57:38Z",
+      "human_name": "API - activity"
+    },
+    {
+      "id": "act_20260210_215608_617823",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T19:56:08Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_215539_981461",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T19:55:39Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_133640_530026",
+      "type": "unknown",
+      "tool": null,
+      "file": null,
+      "command": null,
+      "cwd": null,
+      "timestamp": "2026-02-10T13:36:40.530053",
+      "human_name": ""
+    },
+    {
+      "id": "act_20260210_133612_508843",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/README.md",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T11:36:12Z",
+      "human_name": "תיעוד"
+    },
+    {
+      "id": "act_20260210_132821_283584",
+      "type": "command",
+      "tool": null,
+      "file": null,
+      "command": "git push origin main",
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T11:28:21Z",
+      "human_name": "git push origin main"
+    },
+    {
+      "id": "act_20260210_132756_981213",
+      "type": "unknown",
+      "tool": null,
+      "file": null,
+      "command": null,
+      "cwd": null,
+      "timestamp": "2026-02-10T13:27:56.981237",
+      "human_name": ""
+    },
+    {
+      "id": "act_20260210_132729_160475",
+      "type": "command",
+      "tool": null,
+      "file": null,
+      "command": "git log --oneline -3",
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T11:27:29Z",
+      "human_name": "git log --oneline -3"
+    },
+    {
+      "id": "act_20260210_132604_086828",
+      "type": "unknown",
+      "tool": null,
+      "file": null,
+      "command": null,
+      "cwd": null,
+      "timestamp": "2026-02-10T13:26:04.086854",
+      "human_name": ""
+    },
+    {
+      "id": "act_20260210_132533_868352",
+      "type": "command",
+      "tool": null,
+      "file": null,
+      "command": "git add -A && git diff --cached --stat | head -20",
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T11:25:33Z",
+      "human_name": "git add -A && git diff --cache"
+    },
+    {
       "id": "act_20260210_132525_070344",
       "type": "command",
       "tool": null,

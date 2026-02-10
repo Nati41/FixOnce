@@ -179,6 +179,32 @@ def clear_activities():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@activity_bp.route("/open-file", methods=["POST"])
+def open_file_in_editor():
+    """Open a file in the default editor (VS Code/Cursor)."""
+    import subprocess
+    import shutil
+    try:
+        data = request.get_json(silent=True) or {}
+        file_path = data.get("file", "")
+
+        if not file_path:
+            return jsonify({"status": "error", "message": "No file path"}), 400
+
+        # Try different editors in order of preference
+        if shutil.which("cursor"):
+            subprocess.Popen(["cursor", file_path])
+        elif shutil.which("code"):
+            subprocess.Popen(["code", file_path])
+        else:
+            # Fallback to Mac open command
+            subprocess.Popen(["open", file_path])
+
+        return jsonify({"status": "ok", "opened": file_path})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 def _get_human_name(data):
     """
     Convert file path to human-readable component name.

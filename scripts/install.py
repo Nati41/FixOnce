@@ -43,7 +43,7 @@ def print_banner():
   ██║     ██║██╔╝ ██╗╚██████╔╝██║ ╚████║╚██████╗███████╗
   ╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝╚══════╝
 {Colors.END}
-  {Colors.YELLOW}"Never debug the same bug twice"{Colors.END}
+  {Colors.YELLOW}"Your AI Never Forgets"{Colors.END}
 
 {'═' * 60}
 """)
@@ -109,7 +109,7 @@ def detect_editors() -> dict:
         'claude_code': False,
         'cursor': False,
         'vscode': False,
-        'windsurf': False
+        'copilot': False
     }
 
     current_platform = get_platform()
@@ -122,11 +122,9 @@ def detect_editors() -> dict:
         # Check for Cursor
         editors['cursor'] = Path('/Applications/Cursor.app').exists()
 
-        # Check for VS Code
+        # Check for VS Code (GitHub Copilot runs inside VS Code)
         editors['vscode'] = Path('/Applications/Visual Studio Code.app').exists()
-
-        # Check for Windsurf
-        editors['windsurf'] = Path('/Applications/Windsurf.app').exists()
+        editors['copilot'] = editors['vscode']  # Copilot is a VS Code extension
 
     elif current_platform == 'windows':
         # Check common Windows paths
@@ -180,7 +178,7 @@ def configure_mcp(editors: dict) -> bool:
     print(f"\n{Colors.BLUE}[3/5]{Colors.END} Configuring MCP (AI Memory Connection)...")
 
     fixonce_dir = get_fixonce_dir()
-    mcp_server_path = fixonce_dir / "src" / "mcp_server" / "mcp_memory_server.py"
+    mcp_server_path = fixonce_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py"
 
     if not mcp_server_path.exists():
         print(f"  {Colors.RED}[ERROR]{Colors.END} MCP server not found at {mcp_server_path}")
@@ -278,27 +276,6 @@ def configure_cursor_rules() -> bool:
         return False
 
 
-def configure_windsurf_rules() -> bool:
-    """Configure Windsurf's global rules"""
-    current_platform = get_platform()
-
-    # Windsurf uses ~/.windsurf/rules or similar
-    if current_platform == 'mac':
-        rules_path = Path.home() / ".windsurf" / "rules"
-    elif current_platform == 'windows':
-        rules_path = Path.home() / ".windsurf" / "rules"
-    else:
-        rules_path = Path.home() / ".windsurf" / "rules"
-
-    try:
-        rules_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(rules_path, 'w', encoding='utf-8') as f:
-            f.write(FIXONCE_RULES)
-        return True
-    except Exception:
-        return False
-
-
 def sync_rules() -> bool:
     """Sync rules files for all editors"""
     print(f"\n{Colors.BLUE}[4/5]{Colors.END} Configuring editor rules...")
@@ -311,9 +288,7 @@ def sync_rules() -> bool:
     else:
         print(f"  {Colors.YELLOW}[SKIP]{Colors.END} Could not create .cursorrules")
 
-    # Configure Windsurf rules
-    if configure_windsurf_rules():
-        print(f"  {Colors.GREEN}[OK]{Colors.END} Windsurf rules configured")
+    # Note: GitHub Copilot uses prompts from dashboard, no global rules file
 
     # Configure Claude Code CLAUDE.md
     claude_md_path = Path.home() / ".claude" / "CLAUDE.md"
@@ -561,10 +536,10 @@ def main():
   Just click the FixOnce icon to start.
 
   {Colors.BOLD}To start a session:{Colors.END}
-    In Claude Code / Cursor / Windsurf, just say:
+    In Claude Code / Cursor / GitHub Copilot, just say:
     "היי" or "מה המצב?" or "hello"
 
-  {Colors.YELLOW}NOTE: Restart Cursor/Windsurf to apply changes!{Colors.END}
+  {Colors.YELLOW}NOTE: Restart Cursor/GitHub Copilot to apply changes!{Colors.END}
 
 {'═' * 60}
 """)

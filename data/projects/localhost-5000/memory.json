@@ -36,7 +36,7 @@
   "stats": {
     "total_errors_captured": 1,
     "total_solutions_applied": 0,
-    "last_updated": "2026-02-10T12:42:49.955131"
+    "last_updated": "2026-02-10T21:58:31.062368"
   },
   "ai_session": {
     "active": true,
@@ -52,7 +52,7 @@
       "entry_points": [],
       "environment": "dev",
       "working_dir": "/Users/haimdayan/Desktop/FixOnce",
-      "updated_at": "2026-02-10T12:25:59.928389",
+      "updated_at": "2026-02-10T21:58:31.062296",
       "url": "http://localhost:5000/",
       "host": "localhost",
       "path": "/",

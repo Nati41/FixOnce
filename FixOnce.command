@@ -1,3 +1,4 @@
 #!/bin/bash
+# FixOnce Launcher for Mac
 cd "$(dirname "$0")"
-python3 "/Users/haimdayan/Desktop/FixOnce/scripts/app_launcher.py"
+python3 scripts/app_launcher.py

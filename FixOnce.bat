@@ -1,3 +1,4 @@
 @echo off
+REM FixOnce Launcher for Windows
 cd /d "%~dp0"
-pythonw "/Users/haimdayan/Desktop/FixOnce\scripts\app_launcher.py"
+pythonw scripts\app_launcher.py

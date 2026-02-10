@@ -2392,6 +2392,60 @@
             transform: scale(1.1);
         }
 
+        /* Chrome Extension Card */
+        .extension-card {
+            margin-top: 16px;
+            padding: 14px;
+            background: linear-gradient(135deg, rgba(66, 133, 244, 0.1), rgba(52, 168, 83, 0.08));
+            border: 1px solid rgba(66, 133, 244, 0.2);
+            border-radius: 12px;
+            text-align: center;
+        }
+        .extension-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .extension-icon {
+            font-size: 1.2rem;
+        }
+        .extension-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+        .extension-desc {
+            font-size: 0.75rem;
+            color: #888;
+            margin-bottom: 12px;
+            direction: rtl;
+        }
+        .extension-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #4285f4, #34a853);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .extension-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);
+        }
+        .chrome-icon {
+            width: 18px;
+            height: 18px;
+        }
+
         /* ===== PORT DETECTION ===== */
         .port-detected {
             display: none;
@@ -2848,6 +2902,21 @@
                 </div>
             </div>
 
+            <!-- Chrome Extension -->
+            <div class="extension-card">
+                <div class="extension-header">
+                    <span class="extension-icon">🧩</span>
+                    <span class="extension-title">תוסף Chrome - Error Trapper</span>
+                </div>
+                <div class="extension-desc">
+                    לכידת שגיאות מהקונסול בדפדפן ישירות לדשבורד
+                </div>
+                <a href="https://chromewebstore.google.com/detail/fixonce-error-trapper/nilbegoaeefhfdhaiigekedkpmkgoiep" target="_blank" class="extension-btn">
+                    <img src="https://www.google.com/chrome/static/images/chrome-logo.svg" alt="Chrome" class="chrome-icon">
+                    התקן מחנות Chrome
+                </a>
+            </div>
+
             <button class="modal-close" onclick="closeSessionModal()" id="session-cancel-btn">Cancel</button>
         </div>
     </div>
@@ -3079,6 +3148,20 @@
                 showToast('📋 הועתק!', 1500);
             } catch (e) {
                 console.error('Copy failed:', e);
+            }
+        }
+
+        // Open file in editor via server (works from app)
+        async function openFileInEditor(filePath) {
+            try {
+                await fetch(API + '/api/activity/open-file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: filePath })
+                });
+            } catch (e) {
+                // Fallback to URL scheme
+                window.location.href = 'vscode://file' + filePath;
             }
         }
 
@@ -4534,7 +4617,7 @@
                                     </span>
                                 </span>
                                 ${humanName && techName ? `<span class="activity-item-name-tech">${esc(techName)}</span>` : ''}
-                                ${filePath ? `<a class="activity-item-path" href="vscode://file${esc(filePath)}" title="${lang === 'he' ? 'פתח בעורך' : 'Open in editor'}">${esc(filePath)}</a>` : ''}
+                                ${filePath ? `<a class="activity-item-path" href="#" onclick="event.preventDefault(); openFileInEditor('${esc(filePath)}')" title="${lang === 'he' ? 'פתח בעורך' : 'Open in editor'}">${esc(filePath)}</a>` : ''}
                             </span>
                             <span class="activity-item-time">${isLatest ? (lang === 'he' ? '⚡ עכשיו' : '⚡ now') : time}</span>
                         </div>
