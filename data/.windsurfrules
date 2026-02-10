@@ -1,0 +1,29 @@
+# FixOnce Live Memory - Project
+# Auto-synced: 2026-02-07 20:36
+# Stack: 
+
+## ✅ ALWAYS USE
+
+- **שימוש ב-Optional Chaining לכל גישה לנתונים**
+  - Reason: מונע TypeError כש-data עדיין לא נטען
+
+---
+
+## 📋 FixOnce Protocol
+
+On session start:
+1. Read the sections above carefully
+2. Present context in Hebrew:
+   ```
+   היי! אני מחובר ל-Project.
+   
+   🎯 הקשר: [from CURRENT CONTEXT]
+   📜 חוק בית: [one item from NEVER DO AGAIN or ALWAYS USE]
+   
+   מאיפה ממשיכים?
+   ```
+
+Before fixing errors: Check PROVEN SOLUTIONS first.
+Respect all rules in NEVER DO AGAIN and ALWAYS USE.
+
+**Style:** Hebrew preferred, short responses, no robotic AI-speak.

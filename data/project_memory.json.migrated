@@ -1,0 +1,231 @@
+{
+  "project_info": {
+    "name": "FixOnce",
+    "stack": "Express, Node.js, Python",
+    "status": "Active",
+    "description": "",
+    "path": "/Users/haimdayan",
+    "root_path": "/Users/haimdayan/Desktop/FixOnce"
+  },
+  "active_issues": [],
+  "solutions_history": [],
+  "ai_context_snapshot": "FixOnce: run server end-to-end and fix any runtime/import issues",
+  "decisions": [
+    {
+      "id": "dec_20260208_132408",
+      "decision": "שימוש ב-Optional Chaining לכל גישה לנתונים",
+      "reason": "מונע TypeError כש-data עדיין לא נטען",
+      "context": "",
+      "date": "2026-02-08T13:24:08.621913",
+      "used_by_ai": false,
+      "use_count": 0
+    }
+  ],
+  "avoid": [
+    {
+      "id": "avoid_20260208_132409",
+      "what": "לא להשתמש ב-.map() ישירות על משתנה שיכול להיות undefined",
+      "reason": "גורם ל-TypeError, תמיד לבדוק קודם או להשתמש ב-?.",
+      "date": "2026-02-08T13:24:09.430534",
+      "used_by_ai": false,
+      "use_count": 0
+    }
+  ],
+  "handover": {
+    "summary": "## Done: בדיקת מערכת FixOnce\n- הוספתי שגיאה לדוגמה (TypeError)\n- הגדרתי החלטה ארכיטקטורית על Optional Chaining\n- הגדרתי Avoid Pattern למניעת .map() על undefined\n- בדקתי את Safety Switch\n\n## Next: המשך לתקן את השגיאות ברשימה",
+    "created_at": "2026-02-08T13:24:12.374534"
+  },
+  "stats": {
+    "total_errors_captured": 51,
+    "total_solutions_applied": 0,
+    "last_updated": "2026-02-08T13:24:13.186022"
+  },
+  "ai_session": {
+    "active": true,
+    "editor": "claude",
+    "started_at": "2026-02-08T13:07:09.883747",
+    "briefing_sent": true
+  },
+  "connected_server": {},
+  "roi": {
+    "solutions_reused": 1,
+    "tokens_saved": 15000,
+    "errors_prevented": 0,
+    "decisions_referenced": 0,
+    "time_saved_minutes": 25,
+    "sessions_with_context": 1
+  },
+  "safety": {
+    "enabled": true,
+    "auto_backup": true,
+    "require_approval": true,
+    "changes_history": [
+      {
+        "id": "chg_20260206_110852_738114",
+        "file_path": "/tmp/test_safety.txt",
+        "original_content": "",
+        "new_content": "Hello, Safety Switch!",
+        "diff": "--- a/test_safety.txt\n+++ b/test_safety.txt\n@@ -0,0 +1 @@\n+Hello, Safety Switch!\n",
+        "description": "Test change for Safety Switch",
+        "status": "undone",
+        "created_at": "2026-02-06T11:08:52.738163",
+        "applied_at": "2026-02-06T11:08:52.740783",
+        "backup_path": null,
+        "file_existed": false,
+        "approved_at": "2026-02-06T11:08:52.739680",
+        "undone_at": "2026-02-06T11:08:52.741945"
+      },
+      {
+        "id": "chg_20260206_112327_376455",
+        "file_path": "/tmp/fixonce_demo.js",
+        "original_content": "",
+        "new_content": "// FixOnce Demo File\nconst data = null;\n\n// FIXED: Using optional chaining\nconst items = data?.items ?? [];\nconsole.log('Items count:', items.length);\n",
+        "diff": "--- a/fixonce_demo.js\n+++ b/fixonce_demo.js\n@@ -0,0 +1,6 @@\n+// FixOnce Demo File\n+const data = null;\n+\n+// FIXED: Using optional chaining\n+const items = data?.items ?? [];\n+console.log('Items count:', items.length);\n",
+        "description": "הוספת Optional Chaining למניעת TypeError",
+        "status": "undone",
+        "created_at": "2026-02-06T11:23:27.376481",
+        "applied_at": "2026-02-06T11:23:27.888285",
+        "backup_path": null,
+        "file_existed": false,
+        "approved_at": "2026-02-06T11:23:27.882663",
+        "undone_at": "2026-02-06T11:23:28.394931"
+      },
+      {
+        "id": "chg_20260206_112357_477874",
+        "file_path": "/tmp/fixonce_demo.js",
+        "original_content": "",
+        "new_content": "// FixOnce Demo File\nconst data = null;\n\n// FIXED: Using optional chaining\nconst items = data?.items ?? [];\nconsole.log('Items count:', items.length);\n",
+        "diff": "--- a/fixonce_demo.js\n+++ b/fixonce_demo.js\n@@ -0,0 +1,6 @@\n+// FixOnce Demo File\n+const data = null;\n+\n+// FIXED: Using optional chaining\n+const items = data?.items ?? [];\n+console.log('Items count:', items.length);\n",
+        "description": "הוספת Optional Chaining למניעת TypeError",
+        "status": "undone",
+        "created_at": "2026-02-06T11:23:57.477902",
+        "applied_at": "2026-02-06T11:23:57.989388",
+        "backup_path": null,
+        "file_existed": false,
+        "approved_at": "2026-02-06T11:23:57.984954",
+        "undone_at": "2026-02-06T11:23:58.496222"
+      },
+      {
+        "id": "chg_20260206_120251_805563",
+        "file_path": "/tmp/fixonce_demo.js",
+        "original_content": "",
+        "new_content": "// FixOnce Demo File\nconst data = null;\n\n// FIXED: Using optional chaining\nconst items = data?.items ?? [];\nconsole.log('Items count:', items.length);\n",
+        "diff": "--- a/fixonce_demo.js\n+++ b/fixonce_demo.js\n@@ -0,0 +1,6 @@\n+// FixOnce Demo File\n+const data = null;\n+\n+// FIXED: Using optional chaining\n+const items = data?.items ?? [];\n+console.log('Items count:', items.length);\n",
+        "description": "הוספת Optional Chaining למניעת TypeError",
+        "status": "undone",
+        "created_at": "2026-02-06T12:02:51.805590",
+        "applied_at": "2026-02-06T12:02:52.315700",
+        "backup_path": null,
+        "file_existed": false,
+        "approved_at": "2026-02-06T12:02:52.311836",
+        "undone_at": "2026-02-06T12:02:52.822164"
+      },
+      {
+        "id": "chg_20260207_210525_612700",
+        "file_path": "/tmp/fixonce_demo.js",
+        "original_content": "",
+        "new_content": "// FixOnce Demo File\nconst data = null;\n\n// FIXED: Using optional chaining\nconst items = data?.items ?? [];\nconsole.log('Items count:', items.length);\n",
+        "diff": "--- a/fixonce_demo.js\n+++ b/fixonce_demo.js\n@@ -0,0 +1,6 @@\n+// FixOnce Demo File\n+const data = null;\n+\n+// FIXED: Using optional chaining\n+const items = data?.items ?? [];\n+console.log('Items count:', items.length);\n",
+        "description": "הוספת Optional Chaining למניעת TypeError",
+        "status": "undone",
+        "created_at": "2026-02-07T21:05:25.612732",
+        "applied_at": "2026-02-07T21:05:26.123647",
+        "backup_path": null,
+        "file_existed": false,
+        "approved_at": "2026-02-07T21:05:26.119287",
+        "undone_at": "2026-02-07T21:05:26.630863"
+      },
+      {
+        "id": "chg_20260207_210549_075542",
+        "file_path": "/tmp/fixonce_demo.js",
+        "original_content": "",
+        "new_content": "// FixOnce Demo File\nconst data = null;\n\n// FIXED: Using optional chaining\nconst items = data?.items ?? [];\nconsole.log('Items count:', items.length);\n",
+        "diff": "--- a/fixonce_demo.js\n+++ b/fixonce_demo.js\n@@ -0,0 +1,6 @@\n+// FixOnce Demo File\n+const data = null;\n+\n+// FIXED: Using optional chaining\n+const items = data?.items ?? [];\n+console.log('Items count:', items.length);\n",
+        "description": "הוספת Optional Chaining למניעת TypeError",
+        "status": "undone",
+        "created_at": "2026-02-07T21:05:49.075569",
+        "applied_at": "2026-02-07T21:05:49.587311",
+        "backup_path": null,
+        "file_existed": false,
+        "approved_at": "2026-02-07T21:05:49.582708",
+        "undone_at": "2026-02-07T21:05:50.095139"
+      },
+      {
+        "id": "chg_20260207_210620_104308",
+        "file_path": "/tmp/fixonce_demo.js",
+        "original_content": "",
+        "new_content": "// FixOnce Demo File\nconst data = null;\n\n// FIXED: Using optional chaining\nconst items = data?.items ?? [];\nconsole.log('Items count:', items.length);\n",
+        "diff": "--- a/fixonce_demo.js\n+++ b/fixonce_demo.js\n@@ -0,0 +1,6 @@\n+// FixOnce Demo File\n+const data = null;\n+\n+// FIXED: Using optional chaining\n+const items = data?.items ?? [];\n+console.log('Items count:', items.length);\n",
+        "description": "הוספת Optional Chaining למניעת TypeError",
+        "status": "undone",
+        "created_at": "2026-02-07T21:06:20.104333",
+        "applied_at": "2026-02-07T21:06:20.615986",
+        "backup_path": null,
+        "file_existed": false,
+        "approved_at": "2026-02-07T21:06:20.611346",
+        "undone_at": "2026-02-07T21:06:21.122931"
+      },
+      {
+        "id": "chg_20260207_210620_194625",
+        "file_path": "/tmp/fixonce_demo.js",
+        "original_content": "",
+        "new_content": "// FixOnce Demo File\nconst data = null;\n\n// FIXED: Using optional chaining\nconst items = data?.items ?? [];\nconsole.log('Items count:', items.length);\n",
+        "diff": "--- a/fixonce_demo.js\n+++ b/fixonce_demo.js\n@@ -0,0 +1,6 @@\n+// FixOnce Demo File\n+const data = null;\n+\n+// FIXED: Using optional chaining\n+const items = data?.items ?? [];\n+console.log('Items count:', items.length);\n",
+        "description": "הוספת Optional Chaining למניעת TypeError",
+        "status": "undone",
+        "created_at": "2026-02-07T21:06:20.194648",
+        "applied_at": "2026-02-07T21:06:20.704154",
+        "backup_path": null,
+        "file_existed": false,
+        "approved_at": "2026-02-07T21:06:20.700474",
+        "undone_at": "2026-02-07T21:06:21.210020"
+      },
+      {
+        "id": "chg_20260207_231458_359185",
+        "file_path": "/tmp/fixonce_demo.js",
+        "original_content": "",
+        "new_content": "// FixOnce Demo File\nconst data = null;\n\n// FIXED: Using optional chaining\nconst items = data?.items ?? [];\nconsole.log('Items count:', items.length);\n",
+        "diff": "--- a/fixonce_demo.js\n+++ b/fixonce_demo.js\n@@ -0,0 +1,6 @@\n+// FixOnce Demo File\n+const data = null;\n+\n+// FIXED: Using optional chaining\n+const items = data?.items ?? [];\n+console.log('Items count:', items.length);\n",
+        "description": "הוספת Optional Chaining למניעת TypeError",
+        "status": "undone",
+        "created_at": "2026-02-07T23:14:58.359208",
+        "applied_at": "2026-02-07T23:14:58.872471",
+        "backup_path": null,
+        "file_existed": false,
+        "approved_at": "2026-02-07T23:14:58.866476",
+        "undone_at": "2026-02-07T23:14:59.380688"
+      },
+      {
+        "id": "chg_20260208_130905_628371",
+        "file_path": "/tmp/fixonce_demo.js",
+        "original_content": "",
+        "new_content": "// FixOnce Demo File\nconst data = null;\n\n// FIXED: Using optional chaining\nconst items = data?.items ?? [];\nconsole.log('Items count:', items.length);\n",
+        "diff": "--- a/fixonce_demo.js\n+++ b/fixonce_demo.js\n@@ -0,0 +1,6 @@\n+// FixOnce Demo File\n+const data = null;\n+\n+// FIXED: Using optional chaining\n+const items = data?.items ?? [];\n+console.log('Items count:', items.length);\n",
+        "description": "הוספת Optional Chaining למניעת TypeError",
+        "status": "undone",
+        "created_at": "2026-02-08T13:09:05.628398",
+        "applied_at": "2026-02-08T13:09:06.140507",
+        "backup_path": null,
+        "file_existed": false,
+        "approved_at": "2026-02-08T13:09:06.135962",
+        "undone_at": "2026-02-08T13:09:06.648292"
+      },
+      {
+        "id": "chg_20260208_132410_242123",
+        "file_path": "/tmp/fixonce_demo.js",
+        "original_content": "",
+        "new_content": "// FixOnce Demo File\nconst data = null;\n\n// FIXED: Using optional chaining\nconst items = data?.items ?? [];\nconsole.log('Items count:', items.length);\n",
+        "diff": "--- a/fixonce_demo.js\n+++ b/fixonce_demo.js\n@@ -0,0 +1,6 @@\n+// FixOnce Demo File\n+const data = null;\n+\n+// FIXED: Using optional chaining\n+const items = data?.items ?? [];\n+console.log('Items count:', items.length);\n",
+        "description": "הוספת Optional Chaining למניעת TypeError",
+        "status": "undone",
+        "created_at": "2026-02-08T13:24:10.242150",
+        "applied_at": "2026-02-08T13:24:10.753686",
+        "backup_path": null,
+        "file_existed": false,
+        "approved_at": "2026-02-08T13:24:10.749446",
+        "undone_at": "2026-02-08T13:24:11.260501"
+      }
+    ],
+    "backups_dir": ".fixonce_backups"
+  }
+}

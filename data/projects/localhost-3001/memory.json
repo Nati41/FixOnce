@@ -1,0 +1,74 @@
+{
+  "project_info": {
+    "name": "localhost-3001",
+    "stack": "",
+    "status": "Active",
+    "description": "",
+    "root_path": "",
+    "created_at": "2026-02-10T11:43:10.594269"
+  },
+  "active_issues": [],
+  "solutions_history": [],
+  "ai_context_snapshot": "",
+  "decisions": [],
+  "avoid": [],
+  "handover": {},
+  "stats": {
+    "total_errors_captured": 0,
+    "total_solutions_applied": 0,
+    "last_updated": "2026-02-10T12:00:50.330902"
+  },
+  "ai_session": {
+    "active": true,
+    "editor": "claude",
+    "started_at": "2026-02-10T12:00:50.330631",
+    "briefing_sent": false
+  },
+  "live_record": {
+    "gps": {
+      "active_ports": [
+        3001
+      ],
+      "entry_points": [],
+      "environment": "dev",
+      "working_dir": "",
+      "updated_at": "2026-02-10T11:43:20.446103",
+      "url": "http://localhost:3001/src/mapper-v3/mapper-v3.html",
+      "host": "localhost",
+      "path": "/src/mapper-v3/mapper-v3.html"
+    },
+    "architecture": {
+      "summary": "",
+      "key_flows": [],
+      "updated_at": "2026-02-10T11:43:10.594269"
+    },
+    "lessons": {
+      "insights": [],
+      "failed_attempts": [],
+      "updated_at": "2026-02-10T11:43:10.594269"
+    },
+    "intent": {
+      "current_goal": "",
+      "last_milestone": "",
+      "next_step": "",
+      "blockers": [],
+      "updated_at": "2026-02-10T11:43:10.594269"
+    },
+    "updated_at": "2026-02-10T11:43:10.594269"
+  },
+  "roi": {
+    "solutions_reused": 0,
+    "tokens_saved": 0,
+    "errors_prevented": 0,
+    "decisions_referenced": 0,
+    "time_saved_minutes": 0,
+    "sessions_with_context": 0
+  },
+  "safety": {
+    "enabled": true,
+    "auto_backup": true,
+    "require_approval": true,
+    "changes_history": [],
+    "backups_dir": ".fixonce_backups"
+  }
+}

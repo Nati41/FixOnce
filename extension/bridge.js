@@ -7,7 +7,7 @@
 
   window.addEventListener('message', function(event) {
     if (event.source !== window) return;
-    if (!event.data || event.data.source !== 'NATI_DEBUGGER') return;
+    if (!event.data || event.data.source !== 'FIXONCE') return;
 
     const payload = event.data.payload;
     if (!payload) return;

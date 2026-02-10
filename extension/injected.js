@@ -77,5 +77,5 @@
     });
   });
 
-  console.log("%c[Nati Debugger] Active", "color: #56d364; font-weight: bold;");
+  console.log("%c[FixOnce] Active", "color: #56d364; font-weight: bold;");
 })();

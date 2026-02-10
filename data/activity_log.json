@@ -1,0 +1,492 @@
+{
+  "activities": [
+    {
+      "id": "act_20260210_132525_070344",
+      "type": "command",
+      "tool": null,
+      "file": null,
+      "command": "git log --oneline -5",
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "timestamp": "2026-02-10T11:25:25Z",
+      "human_name": "git log --oneline -5"
+    },
+    {
+      "id": "act_20260210_132343_019516",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:23:42Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_132323_441032",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:23:23Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_132308_162772",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:23:08Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_131639_041915",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/api/activity.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:16:39Z",
+      "human_name": "API - activity"
+    },
+    {
+      "id": "act_20260210_131612_355842",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:16:12Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_131550_367685",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:15:50Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_131527_568321",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:15:27Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_131450_751948",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:14:50Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_131309_629463",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:13:09Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_131257_400356",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:12:57Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_131229_773398",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:12:29Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_131216_088361",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:12:16Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_131133_470824",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:11:33Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130852_643971",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:08:52Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130846_636635",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:08:46Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130840_327532",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:08:40Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130827_196577",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:08:27Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130815_956383",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:08:15Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130754_019868",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:07:54Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130728_266732",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:07:28Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130413_585230",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:04:13Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130358_624815",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:03:58Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130333_489584",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:03:33Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130308_472598",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:03:08Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130248_352541",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:02:48Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_130221_407984",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T11:02:21Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_125633_921466",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:56:33Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_125620_497364",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:56:20Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_125609_312435",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:56:09Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_125541_621279",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:55:41Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_125534_048179",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:55:34Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_125329_820139",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:53:29Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_125320_142177",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:53:20Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_125309_408192",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:53:09Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_124843_344239",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/.cursor/rules",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:48:43Z",
+      "human_name": "Rules"
+    },
+    {
+      "id": "act_20260210_124839_602371",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/tests/test-site/index.html",
+      "command": null,
+      "cwd": "",
+      "timestamp": "2026-02-10T10:48:39Z",
+      "human_name": "עמוד ראשי"
+    },
+    {
+      "id": "act_20260210_124715_840640",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/tests/test-site/index.html",
+      "command": null,
+      "cwd": "",
+      "timestamp": "2026-02-10T10:47:15Z",
+      "human_name": "עמוד ראשי"
+    },
+    {
+      "id": "act_20260210_124520_033023",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/.cursor/rules",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:45:20Z",
+      "human_name": "Rules"
+    },
+    {
+      "id": "act_20260210_124146_468383",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/.cursor/rules",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:41:46Z",
+      "human_name": "Rules"
+    },
+    {
+      "id": "act_20260210_123853_891719",
+      "type": "unknown",
+      "tool": null,
+      "file": null,
+      "command": null,
+      "cwd": null,
+      "timestamp": "2026-02-10T12:38:53.891751",
+      "human_name": ""
+    },
+    {
+      "id": "act_20260210_123512_543603",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/.cursorrules",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:35:12Z",
+      "human_name": ".Cursorrules"
+    },
+    {
+      "id": "act_20260210_123423_562187",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/.cursor/mcp.json",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:34:23Z",
+      "human_name": "Mcp"
+    },
+    {
+      "id": "act_20260210_122517_353969",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/activity_log.json",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:25:17Z",
+      "human_name": "Activity Log"
+    },
+    {
+      "id": "act_20260210_122309_341714",
+      "type": "file_change",
+      "tool": "cursor",
+      "file": "/Users/haimdayan/Desktop/FixOnce/tests/test-site/watcher_test.js",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/tests/test-site",
+      "timestamp": "2026-02-10T12:23:09.332031",
+      "human_name": "בדיקות"
+    },
+    {
+      "id": "act_20260210_121627_625613",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/file_watcher.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T10:16:27Z",
+      "human_name": "File Watcher"
+    },
+    {
+      "id": "act_20260210_115805_465884",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T09:58:05Z",
+      "human_name": "דשבורד"
+    },
+    {
+      "id": "act_20260210_114620_275838",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/mcp_server/mcp_memory_server_v2.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "timestamp": "2026-02-10T09:46:20Z",
+      "human_name": "שרת MCP"
+    }
+  ],
+  "sessions": {
+    "1690e376-e6e6-4e29-83fb-70e4fefac780": {
+      "started_at": "2026-02-10T10:52:38Z",
+      "cwd": "/Users/haimdayan/Desktop/FixOnce/src",
+      "source": "compact",
+      "status": "active"
+    }
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "project_info": {
+    "name": "localhost-5000",
+    "stack": "",
+    "status": "Active",
+    "description": "",
+    "root_path": "",
+    "created_at": "2026-02-09T20:38:13.362891"
+  },
+  "active_issues": [
+    {
+      "id": "err_1525e538",
+      "type": "console.error",
+      "message": "Launch error: Cannot read properties of null (reading 'style')\nTypeError: Cannot read properties of null (reading 'style')\n    at closeSessionModal (http://localhost:5000/:3279:49)\n    at launchEditor (http://localhost:5000/:3343:21)",
+      "severity": "error",
+      "count": 2,
+      "first_seen": "2026-02-09T21:30:26.616819",
+      "last_seen": "2026-02-09T21:30:46.782994",
+      "urls": [
+        "http://localhost:5000/"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    }
+  ],
+  "solutions_history": [],
+  "ai_context_snapshot": "",
+  "decisions": [],
+  "avoid": [],
+  "handover": {},
+  "stats": {
+    "total_errors_captured": 1,
+    "total_solutions_applied": 0,
+    "last_updated": "2026-02-10T12:42:49.955131"
+  },
+  "ai_session": {
+    "active": true,
+    "editor": "cursor",
+    "started_at": "2026-02-10T12:42:49.954875",
+    "briefing_sent": false
+  },
+  "live_record": {
+    "gps": {
+      "active_ports": [
+        5000
+      ],
+      "entry_points": [],
+      "environment": "dev",
+      "working_dir": "/Users/haimdayan/Desktop/FixOnce",
+      "updated_at": "2026-02-10T12:25:59.928389",
+      "url": "http://localhost:5000/",
+      "host": "localhost",
+      "path": "/",
+      "current_goal": "הפעלת כלי המיפוי mapper-v3"
+    },
+    "architecture": {
+      "summary": "",
+      "key_flows": [],
+      "updated_at": "2026-02-09T20:38:13.362891",
+      "stack": "Python",
+      "structure": [
+        "FixOnce.app/",
+        "Install FixOnce.app/",
+        "data/",
+        "extension/",
+        "hooks/",
+        "scripts/",
+        "src/",
+        "tests/"
+      ],
+      "description": "AI Memory Layer - מערכת שמעניקה ל-AI זיכרון persistent בין sessions",
+      "apps": [
+        "FixOnce.app",
+        "Install FixOnce.app"
+      ],
+      "purpose": "AI Memory Layer - persistent error tracking for AI assistants"
+    },
+    "lessons": {
+      "insights": [
+        "capabilities section בדף הטסט הציג כלי MCP שלא קיים (check_new_errors) - עודכן לכלים הנוכחיים",
+        "Added a new button (\"כפתור חדש\") to tests/test-site/index.html and styled it with a blue outline, in addition to the existing \"בדיקת Cursor\" button."
+      ],
+      "failed_attempts": [],
+      "updated_at": "2026-02-09T20:38:13.362891"
+    },
+    "intent": {
+      "current_goal": "עדכון דף הטסטים לכלי MCP הנוכחיים",
+      "last_milestone": "",
+      "next_step": "עריכת index.html",
+      "blockers": [],
+      "updated_at": "2026-02-09T20:38:13.362891"
+    },
+    "updated_at": "2026-02-09T20:58:14.653515"
+  },
+  "roi": {
+    "solutions_reused": 0,
+    "tokens_saved": 0,
+    "errors_prevented": 0,
+    "decisions_referenced": 0,
+    "time_saved_minutes": 0,
+    "sessions_with_context": 0
+  },
+  "safety": {
+    "enabled": true,
+    "auto_backup": true,
+    "require_approval": true,
+    "changes_history": [],
+    "backups_dir": ".fixonce_backups"
+  },
+  "connected_server": {
+    "url": "http://localhost:5000",
+    "port": "5000",
+    "connected_at": "2026-02-09T21:30:46.782963",
+    "status": "active",
+    "auto_detected": true
+  }
+}

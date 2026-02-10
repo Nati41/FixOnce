@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FixOnce - בדיקות מערכת</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #81b29a, #5e81ac);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; font-size: 0.9rem; }
+
+        /* Main Test Button */
+        .main-action {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .run-all-btn {
+            padding: 20px 60px;
+            font-size: 1.3rem;
+            background: linear-gradient(135deg, #81b29a, #5e81ac);
+            border: none;
+            border-radius: 16px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 20px rgba(129, 178, 154, 0.3);
+        }
+        .run-all-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 30px rgba(129, 178, 154, 0.4);
+        }
+        .run-all-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .run-all-btn.running {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Cursor Test Button */
+        .cursor-test-btn {
+            margin-top: 12px;
+            padding: 12px 28px;
+            font-size: 1rem;
+            background: #58a6ff;
+            border: none;
+            border-radius: 12px;
+            color: #0d1117;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 18px rgba(88, 166, 255, 0.25);
+        }
+        .cursor-test-btn:hover {
+            transform: translateY(-1px);
+            background: #3b8eea;
+            box-shadow: 0 6px 24px rgba(88, 166, 255, 0.35);
+        }
+
+        /* Extra Button */
+        .extra-test-btn {
+            margin-top: 10px;
+            padding: 10px 22px;
+            font-size: 0.95rem;
+            background: transparent;
+            border: 1px solid rgba(88, 166, 255, 0.55);
+            border-radius: 12px;
+            color: #58a6ff;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .extra-test-btn:hover {
+            background: rgba(88, 166, 255, 0.12);
+            border-color: rgba(88, 166, 255, 0.8);
+            color: #9ac7ff;
+            transform: translateY(-1px);
+        }
+
+        /* Progress */
+        .progress-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #81b29a, #5e81ac);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* Test Results */
+        .results {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .results-title {
+            font-size: 1.1rem;
+            color: #81b29a;
+        }
+        .results-summary {
+            font-size: 0.85rem;
+            color: #888;
+        }
+        .test-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+        .test-item.pass { border-right: 3px solid #81b29a; }
+        .test-item.fail { border-right: 3px solid #e76f51; }
+        .test-item.pending { border-right: 3px solid #666; }
+        .test-item.running { border-right: 3px solid #5e81ac; animation: pulse 1s infinite; }
+
+        .test-icon {
+            width: 30px;
+            font-size: 1.2rem;
+            text-align: center;
+        }
+        .test-info { flex: 1; }
+        .test-name { font-weight: 500; color: #fff; font-size: 0.9rem; }
+        .test-desc { font-size: 0.75rem; color: #888; margin-top: 2px; }
+        .test-status {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.1);
+        }
+        .test-status.pass { background: rgba(129, 178, 154, 0.2); color: #81b29a; }
+        .test-status.fail { background: rgba(231, 111, 81, 0.2); color: #e76f51; }
+
+        /* Quick Links */
+        .quick-links {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .quick-link {
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: #aaa;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .quick-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        /* Log */
+        .log-section {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .log-title { color: #58a6ff; font-size: 0.85rem; }
+        .log-clear {
+            font-size: 0.7rem;
+            padding: 3px 8px;
+            background: transparent;
+            border: 1px solid #30363d;
+            color: #666;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .log-content {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.7rem;
+            max-height: 200px;
+            overflow-y: auto;
+            color: #8b949e;
+        }
+        .log-entry { padding: 3px 0; }
+        .log-entry.error { color: #f85149; }
+        .log-entry.success { color: #81b29a; }
+        .log-entry.info { color: #58a6ff; }
+
+        /* Capabilities Section */
+        .capabilities {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .capability {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+        }
+        .capability-icon { font-size: 1.5rem; margin-bottom: 8px; }
+        .capability-name { font-size: 0.9rem; color: #fff; margin-bottom: 4px; }
+        .capability-desc { font-size: 0.7rem; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 FixOnce - בדיקות מערכת</h1>
+        <p class="subtitle">כפתור אחד שבודק את כל היכולות</p>
+
+        <!-- Main Action -->
+        <div class="main-action">
+            <button class="run-all-btn" id="run-all-btn" onclick="runAllTests()">
+                🚀 הרץ את כל הבדיקות
+            </button>
+            <div>
+                <button class="cursor-test-btn" id="cursor-test-btn" type="button">
+                    בדיקת Cursor
+                </button>
+            </div>
+            <div>
+                <button class="extra-test-btn" id="extra-test-btn" type="button">
+                    כפתור חדש
+                </button>
+            </div>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+
+        <!-- Results -->
+        <div class="results">
+            <div class="results-header">
+                <span class="results-title">📊 תוצאות בדיקות</span>
+                <span class="results-summary" id="results-summary">ממתין להרצה...</span>
+            </div>
+            <div id="test-results">
+                <div class="test-item pending">
+                    <span class="test-icon">⏳</span>
+                    <div class="test-info">
+                        <div class="test-name">ממתין להרצה</div>
+                        <div class="test-desc">לחץ על הכפתור למעלה</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Capabilities -->
+        <h3 style="color:#5e81ac;margin-bottom:15px;text-align:center;">יכולות שנבדקות</h3>
+        <div class="capabilities">
+            <div class="capability">
+                <div class="capability-icon">🔌</div>
+                <div class="capability-name">חיבור שרת</div>
+                <div class="capability-desc">API ו-MCP</div>
+            </div>
+            <div class="capability">
+                <div class="capability-icon">🚀</div>
+                <div class="capability-name">auto_init_session</div>
+                <div class="capability-desc">אתחול אוטומטי</div>
+            </div>
+            <div class="capability">
+                <div class="capability-icon">📝</div>
+                <div class="capability-name">Live Record</div>
+                <div class="capability-desc">GPS, Intent, Lessons</div>
+            </div>
+            <div class="capability">
+                <div class="capability-icon">🔍</div>
+                <div class="capability-name">search_past_solutions</div>
+                <div class="capability-desc">חיפוש פתרונות קודמים</div>
+            </div>
+            <div class="capability">
+                <div class="capability-icon">💾</div>
+                <div class="capability-name">Multi-Project</div>
+                <div class="capability-desc">פרויקטים מרובים</div>
+            </div>
+            <div class="capability">
+                <div class="capability-icon">📋</div>
+                <div class="capability-name">Decisions</div>
+                <div class="capability-desc">החלטות ו-Avoid</div>
+            </div>
+        </div>
+
+        <!-- Quick Links -->
+        <div class="quick-links">
+            <a href="http://localhost:5000/" target="_blank" class="quick-link">📊 Dashboard</a>
+            <a href="#" onclick="runTestsKeepData()" class="quick-link">📝 Run & Keep Data</a>
+            <a href="#" onclick="triggerTestError()" class="quick-link">🔥 Trigger Error</a>
+            <a href="#" onclick="clearAllData()" class="quick-link">🗑️ Clear Data</a>
+        </div>
+
+        <!-- Log -->
+        <div class="log-section">
+            <div class="log-header">
+                <span class="log-title">📋 Log</span>
+                <button class="log-clear" onclick="clearLog()">Clear</button>
+            </div>
+            <div class="log-content" id="log-content">
+                <div class="log-entry info">Ready.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = 'http://localhost:5000';
+        const TEST_PROJECT_ID = 'test-project';
+        let originalProjectId = null;
+
+        // Switch to test project before tests, back after
+        async function switchToTestProject() {
+            const res = await fetch(`${API}/api/projects`);
+            const data = await res.json();
+            originalProjectId = data.active_id;
+
+            if (originalProjectId !== TEST_PROJECT_ID) {
+                await fetch(`${API}/api/projects/switch/${TEST_PROJECT_ID}`, { method: 'POST' });
+                log(`Switched to test project (was: ${originalProjectId})`, 'info');
+            }
+        }
+
+        async function switchBackToOriginal() {
+            if (originalProjectId && originalProjectId !== TEST_PROJECT_ID) {
+                await fetch(`${API}/api/projects/switch/${originalProjectId}`, { method: 'POST' });
+                log(`Switched back to ${originalProjectId}`, 'info');
+            }
+        }
+
+        async function cleanupTestData() {
+            try {
+                // Clear test issues
+                await fetch(`${API}/api/memory/clear-issues`, { method: 'POST' });
+                // Clear test live record
+                await fetch(`${API}/api/memory/live-record/lessons`, { method: 'DELETE' });
+                await fetch(`${API}/api/memory/live-record/intent`, { method: 'DELETE' });
+                await fetch(`${API}/api/memory/live-record/gps`, { method: 'DELETE' });
+                log('Test data cleaned up', 'success');
+            } catch (e) {
+                log('Cleanup failed: ' + e.message, 'error');
+            }
+        }
+
+        const tests = [
+            {
+                id: 'server',
+                name: 'חיבור לשרת',
+                desc: 'בדיקת API endpoint',
+                run: async () => {
+                    const res = await fetch(`${API}/api/memory`);
+                    if (!res.ok) throw new Error('Server not responding');
+                    return 'Server OK';
+                }
+            },
+            {
+                id: 'live-record',
+                name: 'Live Record API',
+                desc: 'קריאה וכתיבה ל-Live Record',
+                run: async () => {
+                    // Read
+                    const read = await fetch(`${API}/api/memory/live-record`);
+                    if (!read.ok) throw new Error('Cannot read live record');
+
+                    // Write
+                    const write = await fetch(`${API}/api/memory/live-record/lessons`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ insight: 'Test insight from test suite' })
+                    });
+                    if (!write.ok) throw new Error('Cannot write to live record');
+
+                    return 'Read/Write OK';
+                }
+            },
+            {
+                id: 'live-record-summary',
+                name: 'Live Record Summary',
+                desc: 'סיכום ל-Claude warm start',
+                run: async () => {
+                    const res = await fetch(`${API}/api/memory/live-record/summary`);
+                    if (!res.ok) throw new Error('Cannot get summary');
+                    const text = await res.text();
+                    if (!text.includes('Live Record')) throw new Error('Invalid summary format');
+                    return `${text.length} chars`;
+                }
+            },
+            {
+                id: 'error-logging',
+                name: 'Error Streaming',
+                desc: 'שליחת שגיאה לשרת',
+                run: async () => {
+                    const res = await fetch(`${API}/api/log_error`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'TestError',
+                            message: 'Test error from test suite',
+                            file: 'test.js',
+                            line: '1',
+                            severity: 'error'
+                        })
+                    });
+                    if (!res.ok) throw new Error('Cannot log error');
+                    return 'Error logged';
+                }
+            },
+            {
+                id: 'recent-errors',
+                name: 'Recent Errors API',
+                desc: 'בדיקת API לשגיאות אחרונות',
+                run: async () => {
+                    const res = await fetch(`${API}/api/memory`);
+                    const data = await res.json();
+                    const issues = data.active_issues || [];
+                    return `${issues.length} issues`;
+                }
+            },
+            {
+                id: 'decisions',
+                name: 'Decisions API',
+                desc: 'החלטות פרויקט',
+                run: async () => {
+                    // Add decision
+                    const add = await fetch(`${API}/api/memory/decisions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            decision: 'Test decision',
+                            reason: 'Testing the system'
+                        })
+                    });
+                    if (!add.ok) throw new Error('Cannot add decision');
+
+                    // Read decisions
+                    const read = await fetch(`${API}/api/memory/decisions`);
+                    const decisions = await read.json();
+
+                    return `${decisions.length} decisions`;
+                }
+            },
+            {
+                id: 'avoid',
+                name: 'Avoid Patterns API',
+                desc: 'דברים להימנע מהם',
+                run: async () => {
+                    // Add avoid
+                    const add = await fetch(`${API}/api/memory/avoid`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            what: 'Test avoid pattern',
+                            reason: 'Testing'
+                        })
+                    });
+                    if (!add.ok) throw new Error('Cannot add avoid');
+
+                    // Read avoid
+                    const read = await fetch(`${API}/api/memory/avoid`);
+                    const avoid = await read.json();
+
+                    return `${avoid.length} patterns`;
+                }
+            },
+            {
+                id: 'multi-project',
+                name: 'Multi-Project',
+                desc: 'רשימת פרויקטים',
+                run: async () => {
+                    const res = await fetch(`${API}/api/projects`);
+                    if (!res.ok) throw new Error('Cannot list projects');
+                    const data = await res.json();
+                    return `${data.projects?.length || 0} projects`;
+                }
+            },
+            {
+                id: 'gps-update',
+                name: 'GPS Update',
+                desc: 'עדכון מיקום פרויקט',
+                run: async () => {
+                    const res = await fetch(`${API}/api/memory/live-record/gps`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            environment: 'test',
+                            active_ports: [3000]
+                        })
+                    });
+                    if (!res.ok) throw new Error('Cannot update GPS');
+                    return 'GPS updated';
+                }
+            },
+            {
+                id: 'intent-update',
+                name: 'Intent Update',
+                desc: 'עדכון מטרה נוכחית',
+                run: async () => {
+                    const res = await fetch(`${API}/api/memory/live-record/intent`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            current_goal: 'Running test suite',
+                            next_step: 'Verify all tests pass'
+                        })
+                    });
+                    if (!res.ok) throw new Error('Cannot update intent');
+                    return 'Intent updated';
+                }
+            }
+        ];
+
+        let running = false;
+
+        function log(msg, type = 'info') {
+            const content = document.getElementById('log-content');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            content.appendChild(entry);
+            content.scrollTop = content.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log-content').innerHTML = '';
+        }
+
+        function updateProgress(pct) {
+            document.getElementById('progress-fill').style.width = pct + '%';
+        }
+
+        function renderTest(test, status, result = '') {
+            const icons = { pending: '⏳', running: '🔄', pass: '✅', fail: '❌' };
+            return `
+                <div class="test-item ${status}">
+                    <span class="test-icon">${icons[status]}</span>
+                    <div class="test-info">
+                        <div class="test-name">${test.name}</div>
+                        <div class="test-desc">${test.desc}</div>
+                    </div>
+                    ${result ? `<span class="test-status ${status}">${result}</span>` : ''}
+                </div>
+            `;
+        }
+
+        async function runAllTests() {
+            if (running) return;
+            running = true;
+
+            const btn = document.getElementById('run-all-btn');
+            btn.disabled = true;
+            btn.classList.add('running');
+            btn.textContent = '🔄 מריץ בדיקות...';
+
+            const resultsEl = document.getElementById('test-results');
+            const summaryEl = document.getElementById('results-summary');
+
+            let passed = 0;
+            let failed = 0;
+            const results = [];
+
+            log('=== Starting All Tests ===', 'info');
+
+            // Switch to isolated test project
+            try {
+                await switchToTestProject();
+            } catch (e) {
+                log('Warning: Could not switch to test project: ' + e.message, 'error');
+            }
+
+            for (let i = 0; i < tests.length; i++) {
+                const test = tests[i];
+                updateProgress(((i) / tests.length) * 100);
+
+                // Show running state
+                resultsEl.innerHTML = results.join('') + renderTest(test, 'running');
+
+                try {
+                    log(`Running: ${test.name}...`, 'info');
+                    const result = await test.run();
+                    passed++;
+                    results.push(renderTest(test, 'pass', result));
+                    log(`✓ ${test.name}: ${result}`, 'success');
+                } catch (e) {
+                    failed++;
+                    results.push(renderTest(test, 'fail', e.message));
+                    log(`✗ ${test.name}: ${e.message}`, 'error');
+                }
+
+                // Small delay between tests
+                await new Promise(r => setTimeout(r, 200));
+            }
+
+            updateProgress(100);
+            resultsEl.innerHTML = results.join('');
+
+            const total = passed + failed;
+            summaryEl.textContent = `${passed}/${total} עברו`;
+            summaryEl.style.color = failed === 0 ? '#81b29a' : '#e76f51';
+
+            log(`=== Done: ${passed}/${total} passed ===`, passed === total ? 'success' : 'error');
+
+            // Cleanup and switch back
+            try {
+                await cleanupTestData();
+                await switchBackToOriginal();
+            } catch (e) {
+                log('Warning: Cleanup failed: ' + e.message, 'error');
+            }
+
+            btn.disabled = false;
+            btn.classList.remove('running');
+            btn.textContent = failed === 0 ? '✅ הכל עבר!' : '🔄 הרץ שוב';
+
+            running = false;
+        }
+
+        async function runTestsKeepData() {
+            log('=== Running Tests (keeping data for dashboard) ===', 'info');
+
+            try {
+                // 1. Log an error
+                await fetch(`${API}/api/log_error`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'DemoError',
+                        message: 'Demo error for dashboard - ' + new Date().toLocaleTimeString(),
+                        file: 'demo.js',
+                        line: '42',
+                        severity: 'error'
+                    })
+                });
+                log('✅ Error logged', 'success');
+
+                // 2. Update GPS
+                await fetch(`${API}/api/memory/live-record/gps`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        environment: 'development',
+                        active_ports: [5000, 8080],
+                        working_dir: '/Users/haimdayan/Desktop/FixOnce'
+                    })
+                });
+                log('✅ GPS updated', 'success');
+
+                // 3. Set Intent
+                await fetch(`${API}/api/memory/live-record/intent`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        current_goal: 'Testing FixOnce Dashboard',
+                        next_step: 'Verify data appears in dashboard'
+                    })
+                });
+                log('✅ Intent set', 'success');
+
+                // 4. Add Lesson
+                await fetch(`${API}/api/memory/live-record/lessons`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        insight: 'Test data successfully sent to dashboard at ' + new Date().toLocaleTimeString()
+                    })
+                });
+                log('✅ Lesson added', 'success');
+
+                // 5. Add Decision
+                await fetch(`${API}/api/memory/decisions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        decision: 'Use FixOnce for debugging',
+                        reason: 'Saves time by remembering past solutions'
+                    })
+                });
+                log('✅ Decision logged', 'success');
+
+                log('=== Done! Open Dashboard to see the data ===', 'success');
+
+            } catch (e) {
+                log('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function triggerTestError() {
+            log('Triggering test error...', 'info');
+            try {
+                await fetch(`${API}/api/log_error`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'ManualTestError',
+                        message: 'Manual test error triggered at ' + new Date().toLocaleTimeString(),
+                        file: 'manual-test.js',
+                        line: '1',
+                        severity: 'error'
+                    })
+                });
+                log('Error sent! Check dashboard or ask Claude: "בדוק שגיאות"', 'success');
+            } catch (e) {
+                log('Failed: ' + e.message, 'error');
+            }
+        }
+
+        async function clearAllData() {
+            if (!confirm('לנקות את כל הנתונים?')) return;
+
+            try {
+                await fetch(`${API}/api/memory/clear-issues`, { method: 'POST' });
+                await fetch(`${API}/api/memory/live-record/lessons`, { method: 'DELETE' });
+                await fetch(`${API}/api/memory/live-record/intent`, { method: 'DELETE' });
+                log('Data cleared!', 'success');
+            } catch (e) {
+                log('Failed: ' + e.message, 'error');
+            }
+        }
+
+        // Check server on load
+        fetch(`${API}/api/memory`)
+            .then(() => log('Connected to FixOnce server', 'success'))
+            .catch(() => log('Server not running! Run: python3 server.py', 'error'));
+    </script>
+</body>
+</html>

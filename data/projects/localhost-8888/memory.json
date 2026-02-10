@@ -1,0 +1,78 @@
+{
+  "project_info": {
+    "name": "localhost-8888",
+    "stack": "",
+    "status": "Active",
+    "description": "",
+    "root_path": "",
+    "created_at": "2026-02-10T10:20:00.190910"
+  },
+  "active_issues": [],
+  "solutions_history": [],
+  "ai_context_snapshot": "",
+  "decisions": [],
+  "avoid": [],
+  "handover": {},
+  "stats": {
+    "total_errors_captured": 0,
+    "total_solutions_applied": 0,
+    "last_updated": "2026-02-10T10:40:11.877204"
+  },
+  "ai_session": {
+    "active": true,
+    "editor": "claude",
+    "started_at": "2026-02-10T10:20:26.357167",
+    "briefing_sent": false
+  },
+  "live_record": {
+    "gps": {
+      "active_ports": [
+        8888
+      ],
+      "entry_points": [],
+      "environment": "dev",
+      "working_dir": "/Users/haimdayan/Desktop/FixOnce/tests/test-site",
+      "updated_at": "2026-02-10T10:40:11.877111",
+      "url": "http://localhost:8888/",
+      "host": "localhost",
+      "path": "/"
+    },
+    "architecture": {
+      "summary": "",
+      "key_flows": [],
+      "updated_at": "2026-02-10T10:20:00.190910",
+      "structure": [
+        "scenarios/"
+      ],
+      "notes": "פרויקט בסיסי עם תיקיית scenarios"
+    },
+    "lessons": {
+      "insights": [],
+      "failed_attempts": [],
+      "updated_at": "2026-02-10T10:20:00.190910"
+    },
+    "intent": {
+      "current_goal": "",
+      "last_milestone": "",
+      "next_step": "",
+      "blockers": [],
+      "updated_at": "2026-02-10T10:20:00.190910"
+    },
+    "updated_at": "2026-02-10T10:20:00.190910"
+  },
+  "roi": {
+    "solutions_reused": 0,
+    "tokens_saved": 0,
+    "errors_prevented": 0,
+    "decisions_referenced": 0,
+    "time_saved_minutes": 0,
+    "sessions_with_context": 0
+  },
+  "safety": {
+    "enabled": true,
+    "auto_backup": true,
+    "require_approval": true,
+    "changes_history": [],
+    "backups_dir": ".fixonce_backups"
+  }
+}

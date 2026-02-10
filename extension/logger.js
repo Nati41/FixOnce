@@ -6,7 +6,7 @@
   'use strict';
 
   const MAX_LEN = 5000; // Performance safety
-  const NATI_ID = 'NATI_LOG_' + Date.now();
+  const FIXONCE_ID = 'FIXONCE_LOG_' + Date.now();
 
   function sanitize(str) {
     if (typeof str !== 'string') str = String(str);
@@ -48,7 +48,7 @@
       };
 
       window.postMessage({
-        source: 'NATI_DEBUGGER',
+        source: 'FIXONCE',
         payload: payload
       }, '*');
 

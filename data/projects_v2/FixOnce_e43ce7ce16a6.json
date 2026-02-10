@@ -1,0 +1,53 @@
+{
+  "project_info": {
+    "working_dir": "/Users/haimdayan/Desktop/FixOnce",
+    "name": "FixOnce",
+    "created_at": "2026-02-09T20:56:57.648570"
+  },
+  "live_record": {
+    "gps": {
+      "working_dir": "/Users/haimdayan/Desktop/FixOnce",
+      "active_ports": [],
+      "url": "",
+      "environment": "dev",
+      "current_goal": "הפעלת כלי המיפוי mapper-v3"
+    },
+    "architecture": {
+      "summary": "",
+      "key_flows": [],
+      "stack": "Python",
+      "structure": [
+        "FixOnce.app/",
+        "Install FixOnce.app/",
+        "data/",
+        "extension/",
+        "hooks/",
+        "scripts/",
+        "src/",
+        "tests/"
+      ],
+      "description": "AI Memory Layer - מערכת שמעניקה ל-AI זיכרון persistent בין sessions",
+      "apps": [
+        "FixOnce.app",
+        "Install FixOnce.app"
+      ],
+      "purpose": "AI Memory Layer - persistent error tracking for AI assistants"
+    },
+    "intent": {
+      "current_goal": "עדכון דף הטסטים לכלי MCP הנוכחיים",
+      "next_step": "עריכת index.html",
+      "blockers": []
+    },
+    "lessons": {
+      "insights": [
+        "capabilities section בדף הטסט הציג כלי MCP שלא קיים (check_new_errors) - עודכן לכלים הנוכחיים",
+        "Added a new button (\"כפתור חדש\") to tests/test-site/index.html and styled it with a blue outline, in addition to the existing \"בדיקת Cursor\" button."
+      ],
+      "failed_attempts": []
+    },
+    "updated_at": "2026-02-10T12:48:54.767853"
+  },
+  "decisions": [],
+  "avoid": [],
+  "errors": []
+}
