@@ -661,6 +661,21 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
         lines.append("---")
         lines.append("")
 
+    # INSIGHTS - Check these BEFORE researching anything!
+    insights = data.get('live_record', {}).get('lessons', {}).get('insights', []) if data else []
+    if insights:
+        lines.append("---")
+        lines.append("## 🧠 STORED INSIGHTS - CHECK BEFORE RESEARCHING")
+        lines.append("")
+        lines.append("**FORBIDDEN to research externally if relevant insight exists!**")
+        lines.append("")
+        for ins in insights[-5:]:  # Show last 5
+            text = ins.get('text', ins) if isinstance(ins, dict) else str(ins)
+            lines.append(f"💡 {text}")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
     if snapshot.get('current_goal'):
         lines.append(f"**Last Goal:** {snapshot['current_goal']}")
 
@@ -722,6 +737,21 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
                 lines.append(f"🔒 **{dec.get('decision', '')}**")
                 lines.append(f"   _Reason: {dec.get('reason', '')}_")
                 lines.append("")
+            lines.append("---")
+            lines.append("")
+
+        # INSIGHTS - Check these BEFORE researching anything!
+        insights = lr.get('lessons', {}).get('insights', [])
+        if insights:
+            lines.append("---")
+            lines.append("## 🧠 STORED INSIGHTS - CHECK BEFORE RESEARCHING")
+            lines.append("")
+            lines.append("**FORBIDDEN to research externally if relevant insight exists!**")
+            lines.append("")
+            for ins in insights[-5:]:  # Show last 5
+                text = ins.get('text', ins) if isinstance(ins, dict) else str(ins)
+                lines.append(f"💡 {text}")
+            lines.append("")
             lines.append("---")
             lines.append("")
 
