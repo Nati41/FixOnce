@@ -388,14 +388,16 @@ After updates: `(📌 FixOnce: saved)`
 
 ---
 
-## 🚨 RULE #5: USE Insights - Don't Ignore Them
+## 🚨 RULE #5: CHECK Insights BEFORE Any Research
 
-**Insights from init are NOT just for display:**
-- Review insights at session start
-- If relevant to current task → apply them
-- Before fixing errors → `search_past_solutions("keywords")`
+**BEFORE researching, YOU MUST:**
+```
+search_past_solutions("keywords")
+```
 
-When applying: `(📌 FixOnce: תובנה רלוונטית) "[insight]" - מיישם`
+**FORBIDDEN to research if insight exists.**
+**If found:** `(📌 FixOnce: תובנה קיימת) "[insight]" - מיישם`
+**Only if NO insight → proceed with research.**
 
 ---
 
