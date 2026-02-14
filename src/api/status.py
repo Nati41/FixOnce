@@ -388,6 +388,17 @@ After updates: `(📌 FixOnce: saved)`
 
 ---
 
+## 🚨 RULE #5: USE Insights - Don't Ignore Them
+
+**Insights from init are NOT just for display:**
+- Review insights at session start
+- If relevant to current task → apply them
+- Before fixing errors → `search_past_solutions("keywords")`
+
+When applying: `(📌 FixOnce: תובנה רלוונטית) "[insight]" - מיישם`
+
+---
+
 ## MCP Tools
 
 | Tool | Purpose |
@@ -398,6 +409,7 @@ After updates: `(📌 FixOnce: saved)`
 | log_avoid(what, reason) | Log anti-pattern |
 | search_past_solutions(query) | Search solutions |
 | get_browser_errors(limit) | Check browser errors |
+| get_live_record() | Read all insights |
 
 ---
 
@@ -408,6 +420,8 @@ After updates: `(📌 FixOnce: saved)`
 3. NEVER contradict decision without approval
 4. ALWAYS update goal BEFORE starting new work
 5. ALWAYS log insights during work
+6. ALWAYS use relevant insights - don't ignore them
+7. ALWAYS search past solutions before fixing errors
 
 **These are REQUIREMENTS, not suggestions.**
 """
