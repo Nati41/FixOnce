@@ -11,19 +11,20 @@ On EVERY conversation start, IMMEDIATELY call:
 auto_init_session(cwd="/Users/haimdayan/Desktop/FixOnce")
 ```
 
-Then display in Hebrew:
+Then display:
 - 🧠 FixOnce header
 - 📍 Last goal
-- 🔒 ALL decisions from response (MANDATORY!)
-- ⚠️ Avoid patterns
+- 💡 ALL insights from response
+- 🔒 ALL decisions from response
+- ⚠️ Avoid patterns (if any)
 
 ---
 
 ## 🚨 RULE #2: BEFORE ANY CHANGE - CHECK DECISIONS
 
-**BEFORE modifying architecture, storage, data structures, or system design:**
+**BEFORE modifying architecture, storage, or data structures:**
 
-1. CHECK the decisions returned from auto_init_session()
+1. CHECK the decisions from auto_init_session()
 2. IF user request CONTRADICTS a decision:
 
 ```
@@ -31,11 +32,10 @@ Then display in Hebrew:
    "[decision text]"
    Reason: [reason]
 
-Your request contradicts this decision.
-Override? (yes/no)
+This contradicts the decision. Override? (yes/no)
 ```
 
-**YOU ARE FORBIDDEN from implementing contradicting changes without EXPLICIT user approval.**
+**YOU ARE FORBIDDEN from contradicting decisions without EXPLICIT approval.**
 
 ---
 
@@ -45,7 +45,7 @@ Override? (yes/no)
 ```
 update_live_record("intent", {"current_goal": "Brief task description"})
 ```
-**Do this BEFORE working, not after!** Keeps dashboard live.
+**Do this BEFORE working, not after!**
 
 ---
 
@@ -56,26 +56,26 @@ update_live_record("intent", {"current_goal": "Brief task description"})
 | Learned something | `update_live_record("lessons", {"insight": "..."})` |
 | Decision made | `log_decision(decision, reason)` |
 | Something to avoid | `log_avoid(what, reason)` |
-| Long task milestone | Update goal with progress |
 
 After updates: `(📌 FixOnce: saved)`
+
+**ALL data MUST be in ENGLISH.**
 
 ---
 
 ## 🚨 RULE #5: CHECK Insights BEFORE Any Research
 
-**BEFORE researching or reading docs, YOU MUST:**
-```
-search_past_solutions("keywords related to task")
-```
+**BEFORE researching or reading docs:**
 
-**YOU ARE FORBIDDEN from external research if insight exists.**
+1. **READ the insights shown in init response**
+2. **If relevant insight exists → USE IT:**
 
-**If found:**
 ```
-(📌 FixOnce: תובנה קיימת) "[insight]"
+(📌 FixOnce: existing insight) "[insight text]"
 Already learned this. Applying...
 ```
+
+**YOU ARE FORBIDDEN from external research if relevant insight exists.**
 
 **Only if NO insight → proceed with research.**
 
@@ -91,17 +91,17 @@ Already learned this. Applying...
 | log_avoid(what, reason) | Log anti-pattern |
 | search_past_solutions(query) | Search solutions |
 | get_browser_errors(limit) | Check browser errors |
+| get_live_record() | Read all insights |
 
 ---
 
 ## ENFORCEMENT
 
 1. ALWAYS init at start
-2. ALWAYS display decisions
+2. ALWAYS display ALL decisions AND insights
 3. NEVER contradict decision without approval
-4. ALWAYS update goal BEFORE starting new work
-5. ALWAYS log insights during work
-6. FORBIDDEN to research if insight exists - check first!
-7. ALWAYS search past solutions before fixing errors
+4. ALWAYS update goal BEFORE starting work
+5. FORBIDDEN to research if insight exists - USE IT
+6. ALL data in ENGLISH only
 
 **These are REQUIREMENTS, not suggestions.**

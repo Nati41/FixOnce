@@ -18,14 +18,17 @@
       "project_id": "FixOnce_e43ce7ce16a6",
       "working_dir": "/Users/haimdayan/Desktop/FixOnce",
       "name": "FixOnce",
-      "git_commit_hash": "56dcb49011cc",
+      "git_commit_hash": "1f11be2f9979",
       "summary": "AI Memory Layer - שכבת זיכרון persistent ל-AI assistants. מאפשר ל-Claude/Cursor/Copilot לזכור errors, solutions, decisions והקשר בין sessions.",
       "stack": "Python (Flask), FastMCP, JavaScript (Browser Extension), HTML/CSS Dashboard, SQLite",
-      "current_goal": "Project Boundary Detection הושלם + שיפורי Dashboard",
-      "last_insight": "צריך לעדכן GPS כשהפוקוס של העבודה משתנה, לא רק intent - אחרת agents אחרים רואים מידע מיושן",
-      "decisions_count": 3,
+      "current_goal": "Find way to show hook messages in conversation",
+      "last_insight": {
+        "text": "פרוטוקול חייב להשתמש בשפה מחייבת כמו FORBIDDEN/MUST - לא הצעות או Review",
+        "timestamp": "2026-02-14T23:38:40.731108"
+      },
+      "decisions_count": 4,
       "avoid_count": 0,
-      "indexed_at": "2026-02-13T11:09:28.114979"
+      "indexed_at": "2026-02-14T23:44:48.146644"
     },
     "tetris-game_eef8bddb1e7b": {
       "project_id": "tetris-game_eef8bddb1e7b",
@@ -41,5 +44,5 @@
       "indexed_at": "2026-02-14T21:01:25.781251"
     }
   },
-  "updated_at": "2026-02-14T21:01:25.781261"
+  "updated_at": "2026-02-14T23:44:48.146766"
 }

@@ -667,7 +667,8 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
         lines.append("---")
         lines.append("## 🧠 STORED INSIGHTS - CHECK BEFORE RESEARCHING")
         lines.append("")
-        lines.append("**FORBIDDEN to research externally if relevant insight exists!**")
+        lines.append("**YOU ARE FORBIDDEN from external research if relevant insight exists below!**")
+        lines.append("**If relevant → use it. If not → proceed with research.**")
         lines.append("")
         for ins in insights[-5:]:  # Show last 5
             text = ins.get('text', ins) if isinstance(ins, dict) else str(ins)
@@ -746,7 +747,8 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
             lines.append("---")
             lines.append("## 🧠 STORED INSIGHTS - CHECK BEFORE RESEARCHING")
             lines.append("")
-            lines.append("**FORBIDDEN to research externally if relevant insight exists!**")
+            lines.append("**YOU ARE FORBIDDEN from external research if relevant insight exists below!**")
+            lines.append("**If relevant → use it. If not → proceed with research.**")
             lines.append("")
             for ins in insights[-5:]:  # Show last 5
                 text = ins.get('text', ins) if isinstance(ins, dict) else str(ins)

@@ -1,6 +1,246 @@
 {
   "activities": [
     {
+      "id": "act_20260214_234557_998724",
+      "type": "command",
+      "tool": null,
+      "file": null,
+      "command": "git status --short",
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:45:57Z",
+      "human_name": "git status --short",
+      "file_context": "",
+      "diff": {},
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_234515_118059",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/api/status.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:45:15Z",
+      "human_name": "API - status",
+      "file_context": "קוד",
+      "diff": {
+        "added": 6,
+        "removed": 5
+      },
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_234508_960901",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/api/status.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:45:08Z",
+      "human_name": "API - status",
+      "file_context": "קוד",
+      "diff": {
+        "added": 2,
+        "removed": 2
+      },
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_234437_774358",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/mcp_server/mcp_memory_server_v2.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:44:37Z",
+      "human_name": "שרת",
+      "file_context": "קוד",
+      "diff": {
+        "added": 32,
+        "removed": 0
+      },
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_234429_804518",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/mcp_server/mcp_memory_server_v2.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:44:29Z",
+      "human_name": "שרת",
+      "file_context": "קוד",
+      "diff": {
+        "added": 31,
+        "removed": 0
+      },
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_234419_381738",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/Desktop/FixOnce/.cursorrules",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:44:19Z",
+      "human_name": ".Cursorrules",
+      "file_context": "",
+      "diff": {
+        "added": 22,
+        "removed": 22
+      },
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_234406_540947",
+      "type": "file_change",
+      "tool": "Write",
+      "file": "/Users/haimdayan/.claude/CLAUDE.md",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:44:06Z",
+      "human_name": "Claude",
+      "file_context": "תיעוד",
+      "diff": {},
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_234226_744360",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/mcp_server/mcp_memory_server_v2.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:42:26Z",
+      "human_name": "שרת",
+      "file_context": "קוד",
+      "diff": {
+        "added": 30,
+        "removed": 0
+      },
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_234213_123915",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/mcp_server/mcp_memory_server_v2.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:42:13Z",
+      "human_name": "שרת",
+      "file_context": "קוד",
+      "diff": {
+        "added": 15,
+        "removed": 0
+      },
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_233823_002926",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/.cursorrules",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:38:22Z",
+      "human_name": ".Cursorrules",
+      "file_context": "",
+      "diff": {
+        "added": 21,
+        "removed": 0
+      },
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_233817_654132",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/.claude/CLAUDE.md",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:38:17Z",
+      "human_name": "Claude",
+      "file_context": "תיעוד",
+      "diff": {},
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_233812_356471",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/src/api/status.py",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:38:12Z",
+      "human_name": "API - status",
+      "file_context": "קוד",
+      "diff": {
+        "added": 16,
+        "removed": 0
+      },
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_233805_895670",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/Desktop/FixOnce/.cursorrules",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:38:05Z",
+      "human_name": ".Cursorrules",
+      "file_context": "",
+      "diff": {
+        "added": 21,
+        "removed": 0
+      },
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_233757_096947",
+      "type": "file_change",
+      "tool": "Edit",
+      "file": "/Users/haimdayan/.claude/CLAUDE.md",
+      "command": null,
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:37:57Z",
+      "human_name": "Claude",
+      "file_context": "תיעוד",
+      "diff": {},
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260214_233247_112260",
+      "type": "command",
+      "tool": null,
+      "file": null,
+      "command": "git add -A && git status --short",
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "timestamp": "2026-02-14T21:32:47Z",
+      "human_name": "git add -A && git status --sho",
+      "file_context": "",
+      "diff": {},
+      "boundary_transition": null
+    },
+    {
       "id": "act_20260214_233235_733653",
       "type": "file_change",
       "tool": "Edit",
@@ -1339,261 +1579,6 @@
         "removed": 0
       },
       "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211923_602158",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:19:23Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2922,
-        "removed": 695
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211901_791357",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:19:01Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2920,
-        "removed": 695
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211831_597921",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:18:31Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2903,
-        "removed": 696
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211741_625075",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:17:41Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2903,
-        "removed": 696
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211724_414070",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:17:24Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2883,
-        "removed": 693
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211707_609043",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:17:07Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2881,
-        "removed": 693
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211653_800579",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:16:53Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2870,
-        "removed": 693
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211632_248180",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:16:32Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2868,
-        "removed": 692
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211620_057012",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:16:20Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2849,
-        "removed": 692
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211600_945078",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:16:00Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2846,
-        "removed": 692
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211524_546913",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:15:24Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2845,
-        "removed": 692
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211140_151038",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:11:40Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2845,
-        "removed": 692
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211127_540585",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:11:27Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2833,
-        "removed": 692
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211115_470268",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:11:15Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2821,
-        "removed": 692
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260214_211031_768981",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/brain_dashboard.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce/data/projects_v2",
-      "project_id": "projects_v2_7dde58c1948f",
-      "timestamp": "2026-02-14T19:10:31Z",
-      "human_name": "דשבורד",
-      "file_context": "תצוגה",
-      "diff": {
-        "added": 2821,
-        "removed": 692
-      },
-      "boundary_transition": null
     }
   ],
   "sessions": {
@@ -1828,6 +1813,27 @@
       "source": "startup",
       "status": "ended",
       "ended_at": "2026-02-14T21:24:14Z"
+    },
+    "05170700-6035-4d8e-befa-7995ca63db9b": {
+      "started_at": "2026-02-14T21:34:43Z",
+      "cwd": "/Users/haimdayan",
+      "source": "startup",
+      "status": "ended",
+      "ended_at": "2026-02-14T21:37:52Z"
+    },
+    "9d8d1bfe-c961-420f-94ed-0f38c2165974": {
+      "started_at": "2026-02-14T21:39:27Z",
+      "cwd": "/Users/haimdayan",
+      "source": "startup",
+      "status": "ended",
+      "ended_at": "2026-02-14T21:47:43Z"
+    },
+    "f1423b01-c706-4895-9903-4f091878cfd8": {
+      "started_at": "2026-02-14T21:43:54Z",
+      "cwd": "/Users/haimdayan",
+      "source": "startup",
+      "status": "ended",
+      "ended_at": "2026-02-14T21:47:40Z"
     }
   }
 }

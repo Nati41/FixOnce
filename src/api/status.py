@@ -338,11 +338,12 @@ On EVERY conversation start, IMMEDIATELY call:
 auto_init_session(cwd="{project_path}")
 ```
 
-Then display in Hebrew:
+Then display:
 - 🧠 FixOnce header
 - 📍 Last goal
-- 🔒 ALL decisions from response (MANDATORY!)
-- ⚠️ Avoid patterns
+- 💡 ALL insights from response
+- 🔒 ALL decisions from response
+- ⚠️ Avoid patterns (if any)
 
 ---
 
@@ -395,8 +396,8 @@ After updates: `(📌 FixOnce: saved)`
 search_past_solutions("keywords")
 ```
 
-**FORBIDDEN to research if insight exists.**
-**If found:** `(📌 FixOnce: תובנה קיימת) "[insight]" - מיישם`
+**YOU ARE FORBIDDEN from external research if relevant insight exists.**
+**If found:** `(📌 FixOnce: existing insight) "[insight]" - Applying...`
 **Only if NO insight → proceed with research.**
 
 ---

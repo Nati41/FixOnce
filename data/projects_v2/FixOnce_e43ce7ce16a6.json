@@ -48,10 +48,10 @@
       "purpose": "AI Memory Layer - persistent error tracking for AI assistants"
     },
     "intent": {
-      "current_goal": "Protocol v5 - הוספת RULE #6: USE Insights",
+      "current_goal": "Find way to show hook messages in conversation",
       "next_step": "המערכת מוכנה לשימוש",
       "blockers": [],
-      "updated_at": "2026-02-14T23:32:41.973356"
+      "updated_at": "2026-02-14T23:43:12.525244"
     },
     "lessons": {
       "insights": [
@@ -70,12 +70,16 @@
         {
           "text": "Claude צריך לעדכן את ה-goal אוטומטית בהתחלת כל משימה - זה חלק מהפרוטוקול!",
           "timestamp": "2026-02-14T23:29:54.890831"
+        },
+        {
+          "text": "פרוטוקול חייב להשתמש בשפה מחייבת כמו FORBIDDEN/MUST - לא הצעות או Review",
+          "timestamp": "2026-02-14T23:38:40.731108"
         }
       ],
       "failed_attempts": [],
-      "updated_at": "2026-02-14T23:29:54.890831"
+      "updated_at": "2026-02-14T23:38:40.731108"
     },
-    "updated_at": "2026-02-14T23:32:41.973356"
+    "updated_at": "2026-02-14T23:44:48.110692"
   },
   "decisions": [
     {
@@ -108,10 +112,10 @@
   "ai_session": {
     "active": true,
     "editor": "claude",
-    "started_at": "2026-02-14T22:50:30.206371",
+    "started_at": "2026-02-14T23:43:51.030633",
     "briefing_sent": false
   },
   "stats": {
-    "last_updated": "2026-02-14T23:32:41.973521"
+    "last_updated": "2026-02-14T23:43:51.030823"
   }
 }
