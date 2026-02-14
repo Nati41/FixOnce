@@ -418,6 +418,15 @@ def add_to_dock_or_desktop():
 
         if app_path.exists():
             try:
+                # Check if already in Dock
+                result = subprocess.run(
+                    ['defaults', 'read', 'com.apple.dock', 'persistent-apps'],
+                    capture_output=True, text=True
+                )
+                if 'FixOnce' in result.stdout:
+                    print(f"  {Colors.GREEN}[OK]{Colors.END} Already in Dock")
+                    return
+
                 # Add to Dock using defaults (persistent dock item)
                 subprocess.run([
                     'defaults', 'write', 'com.apple.dock', 'persistent-apps', '-array-add',

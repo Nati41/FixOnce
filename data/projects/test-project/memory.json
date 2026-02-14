@@ -1,11 +1,11 @@
 {
   "project_info": {
-    "name": "localhost-3001",
+    "name": "test-project",
     "stack": "",
     "status": "Active",
     "description": "",
     "root_path": "",
-    "created_at": "2026-02-10T11:43:10.594269"
+    "created_at": "2026-02-10T22:53:23.397556"
   },
   "active_issues": [],
   "solutions_history": [],
@@ -16,45 +16,35 @@
   "stats": {
     "total_errors_captured": 0,
     "total_solutions_applied": 0,
-    "last_updated": "2026-02-11T21:23:08.674268"
+    "last_updated": "2026-02-10T22:53:23.397556"
   },
-  "ai_session": {
-    "active": true,
-    "editor": "claude",
-    "started_at": "2026-02-11T21:23:08.673451",
-    "briefing_sent": false
-  },
+  "ai_session": {},
   "live_record": {
     "gps": {
-      "active_ports": [
-        3001
-      ],
+      "active_ports": [],
       "entry_points": [],
       "environment": "dev",
-      "working_dir": "/Users/haimdayan",
-      "updated_at": "2026-02-11T21:14:59.524692",
-      "url": "http://localhost:3001/dev.html",
-      "host": "localhost",
-      "path": "/dev.html"
+      "working_dir": "",
+      "updated_at": "2026-02-10T22:53:23.397556"
     },
     "architecture": {
       "summary": "",
       "key_flows": [],
-      "updated_at": "2026-02-10T11:43:10.594269"
+      "updated_at": "2026-02-10T22:53:23.397556"
     },
     "lessons": {
       "insights": [],
       "failed_attempts": [],
-      "updated_at": "2026-02-10T11:43:10.594269"
+      "updated_at": "2026-02-10T22:53:23.397556"
     },
     "intent": {
       "current_goal": "",
       "last_milestone": "",
       "next_step": "",
       "blockers": [],
-      "updated_at": "2026-02-10T11:43:10.594269"
+      "updated_at": "2026-02-10T22:53:23.397556"
     },
-    "updated_at": "2026-02-10T11:43:10.594269"
+    "updated_at": "2026-02-10T22:53:23.397556"
   },
   "roi": {
     "solutions_reused": 0,

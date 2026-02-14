@@ -26,6 +26,3906 @@
       "locals": {},
       "stack": "",
       "extra": {}
+    },
+    {
+      "id": "err_dcb1addb",
+      "type": "TypeError",
+      "message": "Test error 2 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.596934",
+      "last_seen": "2026-02-11T09:26:05.596934",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_3a52ca3c",
+      "type": "TypeError",
+      "message": "Test error 5 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.600598",
+      "last_seen": "2026-02-11T09:26:05.600598",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_f1c7667e",
+      "type": "TypeError",
+      "message": "Test error 6 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.602386",
+      "last_seen": "2026-02-11T09:26:05.602386",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7ab916ab",
+      "type": "TypeError",
+      "message": "Test error 1 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.603988",
+      "last_seen": "2026-02-11T09:26:05.603988",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_12f26016",
+      "type": "TypeError",
+      "message": "Test error 8 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.605715",
+      "last_seen": "2026-02-11T09:26:05.605715",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_855513a0",
+      "type": "TypeError",
+      "message": "Test error 15 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.607368",
+      "last_seen": "2026-02-11T09:26:05.607368",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_082f75f5",
+      "type": "TypeError",
+      "message": "Test error 9 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.609052",
+      "last_seen": "2026-02-11T09:26:05.609052",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_bca6a5d6",
+      "type": "TypeError",
+      "message": "Test error 4 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.610665",
+      "last_seen": "2026-02-11T09:26:05.610665",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_440a37f3",
+      "type": "TypeError",
+      "message": "Test error 3 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.612382",
+      "last_seen": "2026-02-11T09:26:05.612382",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_88c0d461",
+      "type": "TypeError",
+      "message": "Test error 7 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.614266",
+      "last_seen": "2026-02-11T09:26:05.614266",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7aed6aee",
+      "type": "TypeError",
+      "message": "Test error 14 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.616021",
+      "last_seen": "2026-02-11T09:26:05.616021",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_00c745e4",
+      "type": "TypeError",
+      "message": "Test error 12 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.617802",
+      "last_seen": "2026-02-11T09:26:05.617802",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_76ea7d89",
+      "type": "TypeError",
+      "message": "Test error 10 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.619827",
+      "last_seen": "2026-02-11T09:26:05.619827",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7b0ca319",
+      "type": "TypeError",
+      "message": "Test error 19 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.622349",
+      "last_seen": "2026-02-11T09:26:05.622349",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_9e6e1049",
+      "type": "TypeError",
+      "message": "Test error 11 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.624265",
+      "last_seen": "2026-02-11T09:26:05.624265",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_f4a897c1",
+      "type": "TypeError",
+      "message": "Test error 16 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.626171",
+      "last_seen": "2026-02-11T09:26:05.626171",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_c7562fa7",
+      "type": "TypeError",
+      "message": "Test error 13 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.628213",
+      "last_seen": "2026-02-11T09:26:05.628213",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_15b9beb5",
+      "type": "TypeError",
+      "message": "Test error 18 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.630661",
+      "last_seen": "2026-02-11T09:26:05.630661",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_5b9452af",
+      "type": "TypeError",
+      "message": "Test error 17 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.632752",
+      "last_seen": "2026-02-11T09:26:05.632752",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7c44fbe0",
+      "type": "TypeError",
+      "message": "Test error 20 - Cannot read property of undefined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:26:05.634748",
+      "last_seen": "2026-02-11T09:26:05.634748",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_2e299edc",
+      "type": "Error",
+      "message": "Load test 1 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:22.967802",
+      "last_seen": "2026-02-11T09:27:22.967802",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_bd0c4069",
+      "type": "Error",
+      "message": "Load test 2 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:22.974888",
+      "last_seen": "2026-02-11T09:27:22.974888",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_b4373d52",
+      "type": "Error",
+      "message": "Load test 3 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:22.980560",
+      "last_seen": "2026-02-11T09:27:22.980560",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_5876d589",
+      "type": "Error",
+      "message": "Load test 4 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:22.988696",
+      "last_seen": "2026-02-11T09:27:22.988696",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_5cedf3bc",
+      "type": "Error",
+      "message": "Load test 5 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:22.997557",
+      "last_seen": "2026-02-11T09:27:22.997557",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_2032b090",
+      "type": "Error",
+      "message": "Load test 6 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.004497",
+      "last_seen": "2026-02-11T09:27:23.004497",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_75cc4ea4",
+      "type": "Error",
+      "message": "Load test 7 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.010149",
+      "last_seen": "2026-02-11T09:27:23.010149",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_3c41b3ff",
+      "type": "Error",
+      "message": "Load test 10 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.020784",
+      "last_seen": "2026-02-11T09:27:23.020784",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_4749f7a3",
+      "type": "Error",
+      "message": "Load test 9 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.028191",
+      "last_seen": "2026-02-11T09:27:23.028191",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_3d0fd48e",
+      "type": "Error",
+      "message": "Load test 8 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.033718",
+      "last_seen": "2026-02-11T09:27:23.033718",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_fe373a67",
+      "type": "Error",
+      "message": "Load test 11 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.041659",
+      "last_seen": "2026-02-11T09:27:23.041659",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_b61eef1a",
+      "type": "Error",
+      "message": "Load test 13 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.047997",
+      "last_seen": "2026-02-11T09:27:23.047997",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_37c76811",
+      "type": "Error",
+      "message": "Load test 15 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.055907",
+      "last_seen": "2026-02-11T09:27:23.055907",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_31c958ce",
+      "type": "Error",
+      "message": "Load test 12 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.065084",
+      "last_seen": "2026-02-11T09:27:23.065084",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_cd3350b0",
+      "type": "Error",
+      "message": "Load test 14 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.070827",
+      "last_seen": "2026-02-11T09:27:23.070827",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_2e2734fa",
+      "type": "Error",
+      "message": "Load test 16 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.076094",
+      "last_seen": "2026-02-11T09:27:23.076094",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_ce664e21",
+      "type": "Error",
+      "message": "Load test 17 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.096901",
+      "last_seen": "2026-02-11T09:27:23.096901",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_a5b76d28",
+      "type": "Error",
+      "message": "Load test 20 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.109441",
+      "last_seen": "2026-02-11T09:27:23.109441",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_b56f0261",
+      "type": "Error",
+      "message": "Load test 18 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.117173",
+      "last_seen": "2026-02-11T09:27:23.117173",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_f0585394",
+      "type": "Error",
+      "message": "Load test 19 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.127762",
+      "last_seen": "2026-02-11T09:27:23.127762",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_02be0214",
+      "type": "Error",
+      "message": "Load test 22 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.134500",
+      "last_seen": "2026-02-11T09:27:23.134500",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_89a91310",
+      "type": "Error",
+      "message": "Load test 21 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.144179",
+      "last_seen": "2026-02-11T09:27:23.144179",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_ffa2f6d5",
+      "type": "Error",
+      "message": "Load test 24 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.150428",
+      "last_seen": "2026-02-11T09:27:23.150428",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_e66ee97e",
+      "type": "Error",
+      "message": "Load test 25 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.157533",
+      "last_seen": "2026-02-11T09:27:23.157533",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_ccc18dbb",
+      "type": "Error",
+      "message": "Load test 23 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.162794",
+      "last_seen": "2026-02-11T09:27:23.162794",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_c320074c",
+      "type": "Error",
+      "message": "Load test 27 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.168212",
+      "last_seen": "2026-02-11T09:27:23.168212",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_bedfde2e",
+      "type": "Error",
+      "message": "Load test 29 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.171061",
+      "last_seen": "2026-02-11T09:27:23.171061",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_26f17041",
+      "type": "Error",
+      "message": "Load test 26 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.173760",
+      "last_seen": "2026-02-11T09:27:23.173760",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_1924383a",
+      "type": "Error",
+      "message": "Load test 28 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.176572",
+      "last_seen": "2026-02-11T09:27:23.176572",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_cb016ed0",
+      "type": "Error",
+      "message": "Load test 30 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.179516",
+      "last_seen": "2026-02-11T09:27:23.179516",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_4aeb1778",
+      "type": "Error",
+      "message": "Load test 31 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.182322",
+      "last_seen": "2026-02-11T09:27:23.182322",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_2623efb5",
+      "type": "Error",
+      "message": "Load test 32 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.185308",
+      "last_seen": "2026-02-11T09:27:23.185308",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_dd4c3cd0",
+      "type": "Error",
+      "message": "Load test 33 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.188301",
+      "last_seen": "2026-02-11T09:27:23.188301",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_5026437d",
+      "type": "Error",
+      "message": "Load test 36 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.191313",
+      "last_seen": "2026-02-11T09:27:23.191313",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_37351bda",
+      "type": "Error",
+      "message": "Load test 35 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.194268",
+      "last_seen": "2026-02-11T09:27:23.194268",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_a03eff7d",
+      "type": "Error",
+      "message": "Load test 34 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.197238",
+      "last_seen": "2026-02-11T09:27:23.197238",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_0385dea7",
+      "type": "Error",
+      "message": "Load test 38 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.200197",
+      "last_seen": "2026-02-11T09:27:23.200197",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_39760ffa",
+      "type": "Error",
+      "message": "Load test 37 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.203484",
+      "last_seen": "2026-02-11T09:27:23.203484",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_a61adc50",
+      "type": "Error",
+      "message": "Load test 39 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.206514",
+      "last_seen": "2026-02-11T09:27:23.206514",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_cd607664",
+      "type": "Error",
+      "message": "Load test 42 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.209572",
+      "last_seen": "2026-02-11T09:27:23.209572",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_9045cdde",
+      "type": "Error",
+      "message": "Load test 40 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.212680",
+      "last_seen": "2026-02-11T09:27:23.212680",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_9344e320",
+      "type": "Error",
+      "message": "Load test 41 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.215923",
+      "last_seen": "2026-02-11T09:27:23.215923",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_52c6309e",
+      "type": "Error",
+      "message": "Load test 43 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.219200",
+      "last_seen": "2026-02-11T09:27:23.219200",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_ce836ce8",
+      "type": "Error",
+      "message": "Load test 44 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.222603",
+      "last_seen": "2026-02-11T09:27:23.222603",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_a7f5479b",
+      "type": "Error",
+      "message": "Load test 46 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.225895",
+      "last_seen": "2026-02-11T09:27:23.225895",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_5d5ace15",
+      "type": "Error",
+      "message": "Load test 45 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.229246",
+      "last_seen": "2026-02-11T09:27:23.229246",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7a944668",
+      "type": "Error",
+      "message": "Load test 47 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.232607",
+      "last_seen": "2026-02-11T09:27:23.232607",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_5b2faffe",
+      "type": "Error",
+      "message": "Load test 48 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.236903",
+      "last_seen": "2026-02-11T09:27:23.236903",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7283f043",
+      "type": "Error",
+      "message": "Load test 49 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.240744",
+      "last_seen": "2026-02-11T09:27:23.240744",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_e1d8137e",
+      "type": "Error",
+      "message": "Load test 50 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.244850",
+      "last_seen": "2026-02-11T09:27:23.244850",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_e6d9a14f",
+      "type": "Error",
+      "message": "Load test 51 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.248690",
+      "last_seen": "2026-02-11T09:27:23.248690",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_b155ba57",
+      "type": "Error",
+      "message": "Load test 53 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.252394",
+      "last_seen": "2026-02-11T09:27:23.252394",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_bafbbdca",
+      "type": "Error",
+      "message": "Load test 52 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.256139",
+      "last_seen": "2026-02-11T09:27:23.256139",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_6645cfbf",
+      "type": "Error",
+      "message": "Load test 55 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.259871",
+      "last_seen": "2026-02-11T09:27:23.259871",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_df88fb96",
+      "type": "Error",
+      "message": "Load test 58 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.263663",
+      "last_seen": "2026-02-11T09:27:23.263663",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_95438465",
+      "type": "Error",
+      "message": "Load test 54 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.267373",
+      "last_seen": "2026-02-11T09:27:23.267373",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7a551a89",
+      "type": "Error",
+      "message": "Load test 56 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.271454",
+      "last_seen": "2026-02-11T09:27:23.271454",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_6b91140e",
+      "type": "Error",
+      "message": "Load test 57 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.275150",
+      "last_seen": "2026-02-11T09:27:23.275150",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_963a5722",
+      "type": "Error",
+      "message": "Load test 59 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.279064",
+      "last_seen": "2026-02-11T09:27:23.279064",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_f43e5bae",
+      "type": "Error",
+      "message": "Load test 60 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.282839",
+      "last_seen": "2026-02-11T09:27:23.282839",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_55bbd667",
+      "type": "Error",
+      "message": "Load test 62 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.286661",
+      "last_seen": "2026-02-11T09:27:23.286661",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_27b66968",
+      "type": "Error",
+      "message": "Load test 66 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.290526",
+      "last_seen": "2026-02-11T09:27:23.290526",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_fa9b39bb",
+      "type": "Error",
+      "message": "Load test 61 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.294622",
+      "last_seen": "2026-02-11T09:27:23.294622",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_5f58285c",
+      "type": "Error",
+      "message": "Load test 65 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.298511",
+      "last_seen": "2026-02-11T09:27:23.298511",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_c20b6e67",
+      "type": "Error",
+      "message": "Load test 63 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.302317",
+      "last_seen": "2026-02-11T09:27:23.302317",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_19ce7f54",
+      "type": "Error",
+      "message": "Load test 64 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.306443",
+      "last_seen": "2026-02-11T09:27:23.306443",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_1e93a01e",
+      "type": "Error",
+      "message": "Load test 67 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.310273",
+      "last_seen": "2026-02-11T09:27:23.310273",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_fa8ce825",
+      "type": "Error",
+      "message": "Load test 68 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.314896",
+      "last_seen": "2026-02-11T09:27:23.314896",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_1470a31d",
+      "type": "Error",
+      "message": "Load test 69 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.318970",
+      "last_seen": "2026-02-11T09:27:23.318970",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_0f734816",
+      "type": "Error",
+      "message": "Load test 74 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.322902",
+      "last_seen": "2026-02-11T09:27:23.322902",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_4f9e4f2e",
+      "type": "Error",
+      "message": "Load test 70 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.327256",
+      "last_seen": "2026-02-11T09:27:23.327256",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_975a8b71",
+      "type": "Error",
+      "message": "Load test 72 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.332052",
+      "last_seen": "2026-02-11T09:27:23.332052",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_1fc7f9b0",
+      "type": "Error",
+      "message": "Load test 76 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.336239",
+      "last_seen": "2026-02-11T09:27:23.336239",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_1b1b2330",
+      "type": "Error",
+      "message": "Load test 73 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.340472",
+      "last_seen": "2026-02-11T09:27:23.340472",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7f25a862",
+      "type": "Error",
+      "message": "Load test 71 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.345117",
+      "last_seen": "2026-02-11T09:27:23.345117",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_0e8b6e7f",
+      "type": "Error",
+      "message": "Load test 77 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.349636",
+      "last_seen": "2026-02-11T09:27:23.349636",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_e388b9d6",
+      "type": "Error",
+      "message": "Load test 75 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.354121",
+      "last_seen": "2026-02-11T09:27:23.354121",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_6e36554d",
+      "type": "Error",
+      "message": "Load test 78 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.358349",
+      "last_seen": "2026-02-11T09:27:23.358349",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_bcc814ea",
+      "type": "Error",
+      "message": "Load test 79 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.362789",
+      "last_seen": "2026-02-11T09:27:23.362789",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_2874689d",
+      "type": "Error",
+      "message": "Load test 81 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.367208",
+      "last_seen": "2026-02-11T09:27:23.367208",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_14789475",
+      "type": "Error",
+      "message": "Load test 82 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.371695",
+      "last_seen": "2026-02-11T09:27:23.371695",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_b8c96f26",
+      "type": "Error",
+      "message": "Load test 80 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.376135",
+      "last_seen": "2026-02-11T09:27:23.376135",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_1f02fb05",
+      "type": "Error",
+      "message": "Load test 83 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.380553",
+      "last_seen": "2026-02-11T09:27:23.380553",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_06d72fd2",
+      "type": "Error",
+      "message": "Load test 84 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.385164",
+      "last_seen": "2026-02-11T09:27:23.385164",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_f6374b81",
+      "type": "Error",
+      "message": "Load test 85 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.389603",
+      "last_seen": "2026-02-11T09:27:23.389603",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_061b1b5d",
+      "type": "Error",
+      "message": "Load test 87 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.394000",
+      "last_seen": "2026-02-11T09:27:23.394000",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_32278d2c",
+      "type": "Error",
+      "message": "Load test 86 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.398396",
+      "last_seen": "2026-02-11T09:27:23.398396",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_30ae5a4c",
+      "type": "Error",
+      "message": "Load test 88 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.403161",
+      "last_seen": "2026-02-11T09:27:23.403161",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_d6c3dcf6",
+      "type": "Error",
+      "message": "Load test 89 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.407790",
+      "last_seen": "2026-02-11T09:27:23.407790",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_6de94403",
+      "type": "Error",
+      "message": "Load test 93 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.412490",
+      "last_seen": "2026-02-11T09:27:23.412490",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7bf9400e",
+      "type": "Error",
+      "message": "Load test 90 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.417064",
+      "last_seen": "2026-02-11T09:27:23.417064",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_bbaaa05c",
+      "type": "Error",
+      "message": "Load test 91 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.423081",
+      "last_seen": "2026-02-11T09:27:23.423081",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_3784a2fc",
+      "type": "Error",
+      "message": "Load test 92 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.427948",
+      "last_seen": "2026-02-11T09:27:23.427948",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_5630bdf7",
+      "type": "Error",
+      "message": "Load test 94 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.432811",
+      "last_seen": "2026-02-11T09:27:23.432811",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_58fa3cc5",
+      "type": "Error",
+      "message": "Load test 96 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.438310",
+      "last_seen": "2026-02-11T09:27:23.438310",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7d6c13e7",
+      "type": "Error",
+      "message": "Load test 95 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.443265",
+      "last_seen": "2026-02-11T09:27:23.443265",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_0a3181e7",
+      "type": "Error",
+      "message": "Load test 97 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.448140",
+      "last_seen": "2026-02-11T09:27:23.448140",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_fad59893",
+      "type": "Error",
+      "message": "Load test 98 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.453041",
+      "last_seen": "2026-02-11T09:27:23.453041",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_ed36d90a",
+      "type": "Error",
+      "message": "Load test 100 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.457837",
+      "last_seen": "2026-02-11T09:27:23.457837",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_0c718505",
+      "type": "Error",
+      "message": "Load test 99 - stress testing the system",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:23.462865",
+      "last_seen": "2026-02-11T09:27:23.462865",
+      "urls": [
+        "http://localhost:4000/stress"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_4140bb65",
+      "type": "BatchError",
+      "message": "Batch test 1",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:37.491351",
+      "last_seen": "2026-02-11T09:27:37.491351",
+      "urls": [
+        "http://localhost:4000"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_837d1afc",
+      "type": "BatchError",
+      "message": "Batch test 2",
+      "severity": "warning",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:37.495838",
+      "last_seen": "2026-02-11T09:27:37.495838",
+      "urls": [
+        "http://localhost:4000"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_eaff7b33",
+      "type": "BatchError",
+      "message": "Batch test 3",
+      "severity": "critical",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:37.499975",
+      "last_seen": "2026-02-11T09:27:37.499975",
+      "urls": [
+        "http://localhost:4000"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_2fe5d2b8",
+      "type": "BatchError",
+      "message": "Batch test 4",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:37.504434",
+      "last_seen": "2026-02-11T09:27:37.504434",
+      "urls": [
+        "http://localhost:4000"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_cc382492",
+      "type": "BatchError",
+      "message": "Batch test 5",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:27:37.508721",
+      "last_seen": "2026-02-11T09:27:37.508721",
+      "urls": [
+        "http://localhost:4000"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_b6489dd7",
+      "type": "TypeError",
+      "message": "Cannot read property map of undefined - UserList failed",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:33:32.835436",
+      "last_seen": "2026-02-11T09:33:32.835436",
+      "urls": [
+        "http://localhost:4000/app"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_e5ad9bd5",
+      "type": "Error",
+      "message": "Load test 2 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.492665",
+      "last_seen": "2026-02-11T09:34:04.492665",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_67bea216",
+      "type": "Error",
+      "message": "Load test 1 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.512258",
+      "last_seen": "2026-02-11T09:34:04.512258",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_66905e9f",
+      "type": "Error",
+      "message": "Load test 3 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.533820",
+      "last_seen": "2026-02-11T09:34:04.533820",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_30e2a7c1",
+      "type": "Error",
+      "message": "Load test 5 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.564316",
+      "last_seen": "2026-02-11T09:34:04.564316",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_d418835d",
+      "type": "Error",
+      "message": "Load test 4 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.581490",
+      "last_seen": "2026-02-11T09:34:04.581490",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_995fd0df",
+      "type": "Error",
+      "message": "Load test 6 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.594708",
+      "last_seen": "2026-02-11T09:34:04.594708",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_ec0ab2d1",
+      "type": "Error",
+      "message": "Load test 10 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.602787",
+      "last_seen": "2026-02-11T09:34:04.602787",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_bc65efdd",
+      "type": "Error",
+      "message": "Load test 7 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.608244",
+      "last_seen": "2026-02-11T09:34:04.608244",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_4348d942",
+      "type": "Error",
+      "message": "Load test 9 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.613391",
+      "last_seen": "2026-02-11T09:34:04.613391",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_406d0093",
+      "type": "Error",
+      "message": "Load test 8 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.620164",
+      "last_seen": "2026-02-11T09:34:04.620164",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_c159895b",
+      "type": "Error",
+      "message": "Load test 14 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.626035",
+      "last_seen": "2026-02-11T09:34:04.626035",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_0bc598b1",
+      "type": "Error",
+      "message": "Load test 11 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.631185",
+      "last_seen": "2026-02-11T09:34:04.631185",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_e156f37d",
+      "type": "Error",
+      "message": "Load test 13 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.637814",
+      "last_seen": "2026-02-11T09:34:04.637814",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_58504daf",
+      "type": "Error",
+      "message": "Load test 12 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.643437",
+      "last_seen": "2026-02-11T09:34:04.643437",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_19aef0c0",
+      "type": "Error",
+      "message": "Load test 16 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.648759",
+      "last_seen": "2026-02-11T09:34:04.648759",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_2aede0b4",
+      "type": "Error",
+      "message": "Load test 15 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.654758",
+      "last_seen": "2026-02-11T09:34:04.654758",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_2e1b3ec2",
+      "type": "Error",
+      "message": "Load test 17 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.660565",
+      "last_seen": "2026-02-11T09:34:04.660565",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7c252c9d",
+      "type": "Error",
+      "message": "Load test 18 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.665978",
+      "last_seen": "2026-02-11T09:34:04.665978",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_60e02f55",
+      "type": "Error",
+      "message": "Load test 21 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.671998",
+      "last_seen": "2026-02-11T09:34:04.671998",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_2cf65183",
+      "type": "Error",
+      "message": "Load test 23 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.677639",
+      "last_seen": "2026-02-11T09:34:04.677639",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_e909d1e8",
+      "type": "Error",
+      "message": "Load test 20 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.683228",
+      "last_seen": "2026-02-11T09:34:04.683228",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_cde089aa",
+      "type": "Error",
+      "message": "Load test 22 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.689210",
+      "last_seen": "2026-02-11T09:34:04.689210",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_e3ec4999",
+      "type": "Error",
+      "message": "Load test 19 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.695034",
+      "last_seen": "2026-02-11T09:34:04.695034",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_82c0451d",
+      "type": "Error",
+      "message": "Load test 24 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.700825",
+      "last_seen": "2026-02-11T09:34:04.700825",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_e5e7b57f",
+      "type": "Error",
+      "message": "Load test 25 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.707035",
+      "last_seen": "2026-02-11T09:34:04.707035",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_1be02e5e",
+      "type": "Error",
+      "message": "Load test 26 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.712867",
+      "last_seen": "2026-02-11T09:34:04.712867",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_93755013",
+      "type": "Error",
+      "message": "Load test 29 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.720377",
+      "last_seen": "2026-02-11T09:34:04.720377",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_df410d2d",
+      "type": "Error",
+      "message": "Load test 27 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.726401",
+      "last_seen": "2026-02-11T09:34:04.726401",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_d580050a",
+      "type": "Error",
+      "message": "Load test 28 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.732156",
+      "last_seen": "2026-02-11T09:34:04.732156",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_548f589f",
+      "type": "Error",
+      "message": "Load test 30 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.738548",
+      "last_seen": "2026-02-11T09:34:04.738548",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_31ab7a2f",
+      "type": "Error",
+      "message": "Load test 31 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.745024",
+      "last_seen": "2026-02-11T09:34:04.745024",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_ac7d5694",
+      "type": "Error",
+      "message": "Load test 33 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.751797",
+      "last_seen": "2026-02-11T09:34:04.751797",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_4bd3db28",
+      "type": "Error",
+      "message": "Load test 32 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.758548",
+      "last_seen": "2026-02-11T09:34:04.758548",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_a4c09886",
+      "type": "Error",
+      "message": "Load test 34 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.764840",
+      "last_seen": "2026-02-11T09:34:04.764840",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_73fbb45b",
+      "type": "Error",
+      "message": "Load test 35 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.771504",
+      "last_seen": "2026-02-11T09:34:04.771504",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_221f2988",
+      "type": "Error",
+      "message": "Load test 36 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.777983",
+      "last_seen": "2026-02-11T09:34:04.777983",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_f21ded64",
+      "type": "Error",
+      "message": "Load test 37 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.784246",
+      "last_seen": "2026-02-11T09:34:04.784246",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_4dcb8043",
+      "type": "Error",
+      "message": "Load test 38 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.791115",
+      "last_seen": "2026-02-11T09:34:04.791115",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_d18835ab",
+      "type": "Error",
+      "message": "Load test 39 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.797471",
+      "last_seen": "2026-02-11T09:34:04.797471",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_dbf9529b",
+      "type": "Error",
+      "message": "Load test 42 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.804083",
+      "last_seen": "2026-02-11T09:34:04.804083",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_005eb25d",
+      "type": "Error",
+      "message": "Load test 40 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.810539",
+      "last_seen": "2026-02-11T09:34:04.810539",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_83551b54",
+      "type": "Error",
+      "message": "Load test 41 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.817352",
+      "last_seen": "2026-02-11T09:34:04.817352",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_7122da52",
+      "type": "Error",
+      "message": "Load test 44 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.828459",
+      "last_seen": "2026-02-11T09:34:04.828459",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_53849244",
+      "type": "Error",
+      "message": "Load test 43 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.835097",
+      "last_seen": "2026-02-11T09:34:04.835097",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_35585dba",
+      "type": "Error",
+      "message": "Load test 46 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.842423",
+      "last_seen": "2026-02-11T09:34:04.842423",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_0e3309aa",
+      "type": "Error",
+      "message": "Load test 45 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.848545",
+      "last_seen": "2026-02-11T09:34:04.848545",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_ed4abc12",
+      "type": "Error",
+      "message": "Load test 47 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.855846",
+      "last_seen": "2026-02-11T09:34:04.855846",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_c89d5237",
+      "type": "Error",
+      "message": "Load test 48 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.862322",
+      "last_seen": "2026-02-11T09:34:04.862322",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_15704321",
+      "type": "Error",
+      "message": "Load test 50 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.870669",
+      "last_seen": "2026-02-11T09:34:04.870669",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_157dcd9f",
+      "type": "Error",
+      "message": "Load test 49 - stress testing FixOnce",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:04.877175",
+      "last_seen": "2026-02-11T09:34:04.877175",
+      "urls": [
+        "http://localhost:4000/test"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_938e865d",
+      "type": "TypeError",
+      "message": "Cannot read property length of null",
+      "severity": "critical",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:12.953463",
+      "last_seen": "2026-02-11T09:34:12.953463",
+      "urls": [
+        "http://localhost:3000/users"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_28a85588",
+      "type": "ReferenceError",
+      "message": "userData is not defined",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:12.960744",
+      "last_seen": "2026-02-11T09:34:12.960744",
+      "urls": [
+        "http://localhost:3000/profile"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_a4ac8223",
+      "type": "SyntaxError",
+      "message": "Unexpected token in JSON",
+      "severity": "warning",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:12.967220",
+      "last_seen": "2026-02-11T09:34:12.967220",
+      "urls": [
+        "http://localhost:8080/api"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_3012ee18",
+      "type": "NetworkError",
+      "message": "Failed to fetch from API endpoint",
+      "severity": "critical",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:12.973905",
+      "last_seen": "2026-02-11T09:34:12.973905",
+      "urls": [
+        "http://myapp.local:4200"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_8c454799",
+      "type": "TypeError",
+      "message": "Cannot call method on undefined object",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:34:12.979641",
+      "last_seen": "2026-02-11T09:34:12.979641",
+      "urls": [
+        "http://dev.example.com:5173"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_8bcb24a5",
+      "type": "TypeError",
+      "message": "Cannot read property map of undefined",
+      "severity": "error",
+      "count": 2,
+      "first_seen": "2026-02-11T09:34:55.646515",
+      "last_seen": "2026-02-11T09:35:57.532255",
+      "urls": [
+        "http://localhost:4000",
+        "http://localhost:4000/products"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_ebc2759a",
+      "type": "TypeError",
+      "message": "Cannot read property map of null - UserList component",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-11T09:35:25.234084",
+      "last_seen": "2026-02-11T09:35:25.234084",
+      "urls": [
+        "http://localhost:4000/users"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_83a87490",
+      "type": "window.error",
+      "message": "Uncaught TypeError: Cannot read properties of null (reading 'style')",
+      "severity": "critical",
+      "count": 2,
+      "first_seen": "2026-02-11T11:37:36.949988",
+      "last_seen": "2026-02-11T11:37:41.715089",
+      "urls": [
+        "http://localhost:5000/"
+      ],
+      "file": "http://localhost:5000/",
+      "line": "4220",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_48f569b4",
+      "type": "console.error",
+      "message": "Failed to load changes: currentProject is not defined\nReferenceError: currentProject is not defined\n    at renderChanges (http://localhost:5000/:5529:40)\n    at loadChangesToday (http://localhost:5000/:5514:17)",
+      "severity": "error",
+      "count": 12,
+      "first_seen": "2026-02-11T21:33:46.624654",
+      "last_seen": "2026-02-11T21:35:26.615216",
+      "urls": [
+        "http://localhost:5000/"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_83f090b0",
+      "type": "http.error",
+      "message": "HTTP 404: GET http://localhost:5000/api/projects/all-insights",
+      "severity": "error",
+      "count": 4,
+      "first_seen": "2026-02-11T21:42:43.711919",
+      "last_seen": "2026-02-11T21:44:11.394833",
+      "urls": [
+        "http://localhost:5000/"
+      ],
+      "file": "http://localhost:5000/api/projects/all-insights",
+      "line": "404",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_9139176a",
+      "type": "window.error",
+      "message": "Uncaught SyntaxError: Identifier 'lang' has already been declared",
+      "severity": "critical",
+      "count": 4,
+      "first_seen": "2026-02-11T21:55:45.583852",
+      "last_seen": "2026-02-11T21:56:37.855986",
+      "urls": [
+        "http://localhost:5000/"
+      ],
+      "file": "http://localhost:5000/",
+      "line": "4107",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
     }
   ],
   "solutions_history": [],
@@ -34,14 +3934,14 @@
   "avoid": [],
   "handover": {},
   "stats": {
-    "total_errors_captured": 1,
+    "total_errors_captured": 188,
     "total_solutions_applied": 0,
-    "last_updated": "2026-02-10T21:58:31.062368"
+    "last_updated": "2026-02-12T09:14:18.703230"
   },
   "ai_session": {
     "active": true,
-    "editor": "cursor",
-    "started_at": "2026-02-10T12:42:49.954875",
+    "editor": "claude",
+    "started_at": "2026-02-12T09:14:18.703016",
     "briefing_sent": false
   },
   "live_record": {
@@ -52,7 +3952,7 @@
       "entry_points": [],
       "environment": "dev",
       "working_dir": "/Users/haimdayan/Desktop/FixOnce",
-      "updated_at": "2026-02-10T21:58:31.062296",
+      "updated_at": "2026-02-11T21:39:05.931511",
       "url": "http://localhost:5000/",
       "host": "localhost",
       "path": "/",
@@ -89,9 +3989,9 @@
       "updated_at": "2026-02-09T20:38:13.362891"
     },
     "intent": {
-      "current_goal": "עדכון דף הטסטים לכלי MCP הנוכחיים",
+      "current_goal": "Phase 0 - עצירת זליגת פרויקטים",
       "last_milestone": "",
-      "next_step": "עריכת index.html",
+      "next_step": "בדיקה ידנית של MCP server",
       "blockers": [],
       "updated_at": "2026-02-09T20:38:13.362891"
     },
@@ -115,7 +4015,7 @@
   "connected_server": {
     "url": "http://localhost:5000",
     "port": "5000",
-    "connected_at": "2026-02-09T21:30:46.782963",
+    "connected_at": "2026-02-11T21:56:37.855939",
     "status": "active",
     "auto_detected": true
   }

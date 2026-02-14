@@ -7,15 +7,29 @@
   "live_record": {
     "gps": {
       "working_dir": "/Users/haimdayan/Desktop/FixOnce",
-      "active_ports": [],
-      "url": "",
+      "active_ports": [
+        {
+          "port": 5000,
+          "service": "Flask Dashboard & API"
+        }
+      ],
+      "url": "http://localhost:5000",
       "environment": "dev",
-      "current_goal": "הפעלת כלי המיפוי mapper-v3"
+      "current_goal": "הפעלת כלי המיפוי mapper-v3",
+      "ports": [
+        5000
+      ]
     },
     "architecture": {
-      "summary": "",
-      "key_flows": [],
-      "stack": "Python",
+      "summary": "AI Memory Layer - שכבת זיכרון persistent ל-AI assistants. מאפשר ל-Claude/Cursor/Copilot לזכור errors, solutions, decisions והקשר בין sessions.",
+      "key_flows": [
+        "Session Start: init_session -> load project context -> warm start",
+        "Error Capture: Browser extension -> Flask API -> error_store -> dedup",
+        "Solution Search: search_past_solutions -> semantic engine -> find similar",
+        "Memory Update: update_live_record -> save to project JSON",
+        "Multi-Project: switch_project -> isolated memory per directory"
+      ],
+      "stack": "Python (Flask), FastMCP, JavaScript (Browser Extension), HTML/CSS Dashboard, SQLite",
       "structure": [
         "FixOnce.app/",
         "Install FixOnce.app/",
@@ -34,20 +48,66 @@
       "purpose": "AI Memory Layer - persistent error tracking for AI assistants"
     },
     "intent": {
-      "current_goal": "עדכון דף הטסטים לכלי MCP הנוכחיים",
-      "next_step": "עריכת index.html",
-      "blockers": []
+      "current_goal": "Protocol Enforcement - Claude מכבד decisions ועוצר לפני שינויים סותרים",
+      "next_step": "המערכת מוכנה לשימוש",
+      "blockers": [],
+      "updated_at": "2026-02-14T22:56:43.003518"
     },
     "lessons": {
       "insights": [
         "capabilities section בדף הטסט הציג כלי MCP שלא קיים (check_new_errors) - עודכן לכלים הנוכחיים",
-        "Added a new button (\"כפתור חדש\") to tests/test-site/index.html and styled it with a blue outline, in addition to the existing \"בדיקת Cursor\" button."
+        "Added a new button (\"כפתור חדש\") to tests/test-site/index.html and styled it with a blue outline, in addition to the existing \"בדיקת Cursor\" button.",
+        "Implemented Project Boundary Detection System - auto-switches to new project when file written outside active project. Uses confidence levels (high=.git, medium=strong marker, low=skip). Anti-ping-pong prevents auto-switch-back.",
+        "Session init (auto_init_session, init_session) now uses boundary detection as single source of truth. Detects actual project root from cwd, compares against active project, triggers boundary transition if needed BEFORE returning project context.",
+        "Fixed find_project_root to handle non-existent files (new files being written). Now walks up from parent directory if file doesn't exist yet.",
+        "צריך לעדכן GPS כשהפוקוס של העבודה משתנה, לא רק intent - אחרת agents אחרים רואים מידע מיושן",
+        "Claude Code לא מעביר את stdout/stderr של PostToolUse hooks לתוך השיחה - ההתראות נראות רק בטרמינל של המשתמש",
+        "תובנות עכשיו נשמרות עם timestamp בנפרד לכל אחת - תיקון מיון ב-Activity",
+        {
+          "text": "בדיקה: תובנה עם timestamp אישי",
+          "timestamp": "2026-02-14T21:46:34.093227"
+        }
       ],
-      "failed_attempts": []
+      "failed_attempts": [],
+      "updated_at": "2026-02-14T21:46:34.093227"
     },
-    "updated_at": "2026-02-10T12:48:54.767853"
+    "updated_at": "2026-02-14T22:56:43.003518"
   },
-  "decisions": [],
+  "decisions": [
+    {
+      "decision": "Thread-local session במקום global state",
+      "reason": "מניעת race conditions וזליגת פרויקטים בין threads",
+      "timestamp": "2026-02-12T09:50:37.847563"
+    },
+    {
+      "decision": "projects_v2 הוא ה-canonical storage היחיד",
+      "reason": "פישוט ארכיטקטורה, מניעת כפילות וסנכרונים מורכבים",
+      "timestamp": "2026-02-12T10:06:37.480135"
+    },
+    {
+      "decision": "No auto-switch-back for project boundaries",
+      "reason": "Prevents ping-pong switching. Only switch INTO new projects, return to old project must be manual (dashboard) or explicit working_dir change.",
+      "timestamp": "2026-02-12T20:18:44.371660"
+    },
+    {
+      "id": "dec_20260214_214221",
+      "decision": "PostToolUse hook לבדיקת שגיאות דפדפן",
+      "reason": "התראה אוטומטית בטרמינל כשיש שגיאות חדשות אחרי כל פעולת קובץ",
+      "context": "",
+      "date": "2026-02-14T21:42:21.650019",
+      "used_by_ai": false,
+      "use_count": 0
+    }
+  ],
   "avoid": [],
-  "errors": []
+  "errors": [],
+  "ai_session": {
+    "active": true,
+    "editor": "claude",
+    "started_at": "2026-02-14T22:50:30.206371",
+    "briefing_sent": false
+  },
+  "stats": {
+    "last_updated": "2026-02-14T22:56:43.003686"
+  }
 }

@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "name": "snake-game",
+    "working_dir": "",
+    "stack": "",
+    "status": "Active",
+    "description": "",
+    "created_at": "2026-02-13T10:44:53.442698"
+  },
+  "live_record": {
+    "gps": {
+      "working_dir": "",
+      "active_ports": [],
+      "url": "",
+      "environment": "dev",
+      "updated_at": "2026-02-13T10:44:53.442698"
+    },
+    "architecture": {
+      "summary": "",
+      "stack": "",
+      "key_flows": [],
+      "updated_at": "2026-02-13T10:44:53.442698"
+    },
+    "intent": {
+      "current_goal": "",
+      "next_step": "",
+      "blockers": [],
+      "updated_at": "2026-02-13T10:44:53.442698"
+    },
+    "lessons": {
+      "insights": [],
+      "failed_attempts": [],
+      "updated_at": "2026-02-13T10:44:53.442698"
+    },
+    "updated_at": "2026-02-13T10:44:53.442698"
+  },
+  "decisions": [],
+  "avoid": [],
+  "active_issues": [],
+  "solutions_history": [],
+  "stats": {
+    "total_errors_captured": 0,
+    "total_solutions_applied": 0,
+    "last_updated": "2026-02-13T10:44:53.442698"
+  },
+  "roi": {
+    "solutions_reused": 0,
+    "tokens_saved": 0,
+    "errors_prevented": 0,
+    "decisions_referenced": 0,
+    "time_saved_minutes": 0,
+    "sessions_with_context": 0
+  }
+}

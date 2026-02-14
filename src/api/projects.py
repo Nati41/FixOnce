@@ -25,6 +25,36 @@ def api_list_projects():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@projects_bp.route("/grouped", methods=["GET"])
+def api_get_projects_grouped():
+    """
+    Get projects grouped by status (Phase 1: Active/Recent UI).
+
+    Returns:
+        {
+            "active": {
+                "id": "...",
+                "name": "...",
+                "current_goal": "...",
+                "open_errors": 2,
+                "stack": "...",
+                "last_activity_relative": "לפני 5 דקות"
+            } or null,
+            "recent": [
+                {"id": "...", "name": "...", "last_activity_relative": "אתמול"},
+                ...
+            ],
+            "stale": [...],
+            "total_count": 3
+        }
+    """
+    try:
+        from managers.multi_project_manager import get_projects_by_status
+        return jsonify(get_projects_by_status())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @projects_bp.route("/active", methods=["GET"])
 def api_get_active_project():
     """Get the currently active project with full memory."""
@@ -171,5 +201,68 @@ def api_migrate_projects():
     try:
         from managers.multi_project_manager import migrate_from_flat_memory
         return jsonify(migrate_from_flat_memory())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@projects_bp.route("/all-insights", methods=["GET"])
+def api_get_all_insights():
+    """Get insights from ALL projects for unified view."""
+    try:
+        from managers.multi_project_manager import list_projects, load_project_memory
+
+        all_insights = []
+        all_decisions = []
+        all_avoid = []
+
+        projects = list_projects()
+
+        for proj in projects:
+            project_id = proj.get('id', '')
+            project_name = proj.get('display_name', proj.get('id', 'Unknown'))
+
+            try:
+                memory = load_project_memory(project_id)
+                live_record = memory.get('live_record', {})
+                lessons = live_record.get('lessons', {})
+
+                # Get insights
+                for insight in lessons.get('insights', []):
+                    all_insights.append({
+                        'text': insight,
+                        'project_id': project_id,
+                        'project_name': project_name,
+                        'type': 'insight'
+                    })
+
+                # Get decisions
+                for decision in memory.get('decisions', []):
+                    all_decisions.append({
+                        **decision,
+                        'project_id': project_id,
+                        'project_name': project_name,
+                        'type': 'decision'
+                    })
+
+                # Get avoid patterns
+                for avoid in memory.get('avoid', []):
+                    all_avoid.append({
+                        **avoid,
+                        'project_id': project_id,
+                        'project_name': project_name,
+                        'type': 'avoid'
+                    })
+
+            except Exception as e:
+                print(f"[Projects] Error loading {project_id}: {e}")
+                continue
+
+        return jsonify({
+            "insights": all_insights,
+            "decisions": all_decisions,
+            "avoid": all_avoid,
+            "total": len(all_insights) + len(all_decisions) + len(all_avoid),
+            "projects_count": len(projects)
+        })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500

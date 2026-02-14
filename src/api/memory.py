@@ -541,3 +541,57 @@ def api_clear_live_record_section(section):
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============ Active Project API ============
+
+@memory_bp.route("/active-project", methods=["GET"])
+def api_get_active_project():
+    """Get the active project info including connected server for hooks.
+
+    Returns:
+        - active_id: The current project ID
+        - working_dir: Project root directory
+        - connected_server: Server info with port (if active)
+        - display_name: Human readable project name
+    """
+    try:
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
+        from pathlib import Path
+        import json
+
+        # Load active project info
+        active_project_file = Path(__file__).parent.parent.parent / 'data' / 'active_project.json'
+        if active_project_file.exists():
+            with open(active_project_file, 'r', encoding='utf-8') as f:
+                active_info = json.load(f)
+        else:
+            active_info = {}
+
+        project_id = active_info.get('active_id') or get_active_project_id()
+
+        if not project_id:
+            return jsonify({
+                "active_id": None,
+                "working_dir": None,
+                "connected_server": None,
+                "display_name": None
+            })
+
+        # Get full project memory for connected_server info
+        memory = load_project_memory(project_id)
+
+        result = {
+            "active_id": project_id,
+            "working_dir": active_info.get('working_dir') or (
+                memory.get('project_info', {}).get('working_dir') if memory else None
+            ),
+            "display_name": active_info.get('display_name') or (
+                memory.get('project_info', {}).get('name') if memory else None
+            ),
+            "connected_server": memory.get('connected_server') if memory else None
+        }
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500

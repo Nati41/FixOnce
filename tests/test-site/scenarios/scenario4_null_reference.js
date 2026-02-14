@@ -5,20 +5,23 @@
  * The fix: Check if element exists before accessing properties
  */
 
-// BUG: Element might not exist in DOM
+// FIXED: Check if elements exist before accessing
 function updateUserProfile() {
     const nameElement = document.getElementById('user-profile-name');
     const avatarElement = document.querySelector('.user-avatar');
 
-    // These will crash if elements don't exist
-    nameElement.textContent = 'John Doe';
-    avatarElement.src = '/images/john.jpg';
-    avatarElement.style.display = 'block';
+    if (nameElement) {
+        nameElement.textContent = 'John Doe';
+    }
+    if (avatarElement) {
+        avatarElement.src = '/images/john.jpg';
+        avatarElement.style.display = 'block';
+    }
 }
 
-// BUG: Chained property access without null checks
+// FIXED: Optional chaining with nullish coalescing
 function getNestedValue(obj) {
-    return obj.user.profile.settings.theme;
+    return obj?.user?.profile?.settings?.theme ?? 'default';
 }
 
 // Test data with missing nested properties

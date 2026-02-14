@@ -1,6 +1,7 @@
 {
-  "active_id": "localhost-5000",
-  "detected_from": "extension",
-  "detected_at": "2026-02-10T21:58:31.061725",
-  "display_name": "localhost:5000"
+  "active_id": "FixOnce_e43ce7ce16a6",
+  "detected_from": "manual",
+  "detected_at": "2026-02-14T21:15:08.355801",
+  "display_name": "FixOnce_e43ce7ce16a6",
+  "working_dir": "/Users/haimdayan/Desktop/FixOnce"
 }

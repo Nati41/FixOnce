@@ -39,10 +39,6 @@
             z-index: 1;
         }
 
-        body.rtl {
-            direction: rtl;
-        }
-
         .container {
             max-width: 420px;
             margin: 0 auto;
@@ -60,24 +56,168 @@
 
         /* ===== HEADER ===== */
         .header {
-            text-align: center;
-            padding: 24px 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 0 16px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
         }
 
         .logo {
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-size: 1.3rem;
-            font-weight: 600;
+            font-size: 1.8rem;
+            font-weight: 700;
             color: #ffffff;
-            letter-spacing: -0.5px;
+            letter-spacing: -1px;
         }
 
         .logo-text {
             display: inline-flex;
             align-items: baseline;
-            direction: ltr;  /* Prevent RTL from reversing the logo */
+            direction: ltr;
+        }
+
+        .header-center {
+            flex: 1;
+            text-align: center;
+        }
+
+        .header-center .project-name {
+            display: inline-block;
+            padding: 6px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            color: #ccc;
+        }
+
+        .header-center .project-name:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        /* CSS Icons - clean, no emoji */
+        .icon-refresh {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid currentColor;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: none;
+        }
+        .glass-btn:hover .icon-refresh {
+            animation: spin 0.5s linear;
+        }
+
+        .icon-settings {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid currentColor;
+            border-radius: 50%;
+            position: relative;
+        }
+        .icon-settings::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 6px;
+            height: 6px;
+            border: 2px solid currentColor;
+            border-radius: 50%;
+        }
+
+        /* Activity & Error Icons - CSS based */
+        .icon-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .icon-dot.file { background: #81b29a; }
+        .icon-dot.command { background: #f2cc8f; }
+        .icon-dot.error { background: #e76f51; }
+        .icon-dot.warning { background: #f2cc8f; }
+        .icon-dot.critical { background: #ff4444; box-shadow: 0 0 6px rgba(255,68,68,0.5); }
+
+        /* Feed header icons */
+        .feed-icon {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #81b29a;
+        }
+        .feed-icon.active {
+            background: #81b29a;
+            box-shadow: 0 0 8px rgba(129, 178, 154, 0.5);
+            animation: pulse-dot 2s infinite;
+        }
+        .feed-icon.error {
+            background: #e76f51;
+            box-shadow: 0 0 8px rgba(231, 111, 81, 0.5);
+        }
+
+        /* Small glass buttons */
+        .glass-btn.small {
+            padding: 4px 8px;
+            font-size: 0.7rem;
+        }
+        .glass-btn.small .icon-refresh {
+            width: 10px;
+            height: 10px;
+            border-width: 1.5px;
+        }
+
+        /* Unified Insights Section */
+        .insights-section .section-content {
+            padding: 12px;
+        }
+        .unified-insights {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .unified-insights .memory-card {
+            position: relative;
+            padding-left: 20px;
+        }
+        .insight-type-dot {
+            position: absolute;
+            left: 8px;
+            top: 12px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+        .insight-type-dot.lesson { background: #81b29a; }
+        .insight-type-dot.decision { background: #5e81ac; }
+        .insight-type-dot.avoid { background: #e76f51; }
+        .insights-empty {
+            text-align: center;
+            color: #555;
+            font-size: 0.8rem;
+            padding: 16px;
+        }
+        .insight-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            padding-top: 12px;
+            margin-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.05);
         }
 
         .logo-f {
@@ -149,20 +289,7 @@
             transform: rotate(90deg);
         }
 
-        .header-refresh-btn {
-            background: rgba(129, 178, 154, 0.2);
-            border: 1px solid rgba(129, 178, 154, 0.3);
-            border-radius: 6px;
-            padding: 6px 10px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: all 0.3s;
-            margin-left: auto;
-        }
-        .header-refresh-btn:hover {
-            background: rgba(129, 178, 154, 0.4);
-            transform: rotate(180deg);
-        }
+        /* Removed old header-refresh-btn - now using glass-btn */
 
         /* Project List in Switcher */
         .project-list {
@@ -223,6 +350,107 @@
             color: #666;
         }
 
+        /* ===== ACTIVE PROJECT CARD (Phase 1) ===== */
+        .project-active-card {
+            background: linear-gradient(135deg, rgba(129, 178, 154, 0.2) 0%, rgba(94, 129, 172, 0.2) 100%);
+            border: 2px solid #81b29a;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .project-active-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(129, 178, 154, 0.3);
+        }
+
+        .project-active-badge {
+            font-size: 0.75rem;
+            color: #81b29a;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .project-active-name {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .project-active-stack {
+            font-size: 0.85rem;
+            color: #999;
+            margin-bottom: 12px;
+        }
+
+        .project-active-goal {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: #e0e0e0;
+            margin-bottom: 12px;
+            direction: rtl;
+        }
+
+        .project-active-stats {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .project-active-stats span {
+            font-size: 0.8rem;
+            color: #ccc;
+        }
+
+        .stat-errors { color: #ff6b6b !important; }
+        .stat-insights { color: #ffd93d !important; }
+        .stat-decisions { color: #6bcfff !important; }
+
+        .project-active-btn {
+            width: 100%;
+            padding: 12px;
+            background: #81b29a;
+            border: none;
+            border-radius: 8px;
+            color: #1a1a2e;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .project-active-btn:hover {
+            background: #9dc8b2;
+        }
+
+        .project-section-title {
+            font-size: 0.85rem;
+            color: #888;
+            margin: 16px 0 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            direction: rtl;
+        }
+
+        .project-section-stale {
+            color: #666;
+        }
+
+        .project-item-stale {
+            opacity: 0.6;
+        }
+
+        .project-item-time {
+            font-size: 0.75rem;
+            color: #888;
+        }
+
         /* ===== STATUS ===== */
         .status-bar {
             display: flex;
@@ -263,80 +491,264 @@
             background: currentColor;
         }
 
-        /* ===== LIVE STATE (NEW) ===== */
+        /* ===== LIVE STATE (Simplified) ===== */
         .live-state {
-            padding: 20px;
+            padding: 16px 20px;
             margin: 16px 0;
             text-align: center;
         }
 
-        .live-state-status {
+        /* ===== HERO CARD (Focus Mode) ===== */
+        .hero-card {
+            background: linear-gradient(145deg, rgba(20, 25, 45, 0.95) 0%, rgba(15, 20, 35, 0.98) 100%);
+            border: 1px solid rgba(129, 178, 154, 0.3);
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #81b29a, #5e81ac, #81b29a);
+            background-size: 200% 100%;
+            animation: gradientShift 3s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .hero-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #81b29a;
+            margin-bottom: 16px;
+        }
+
+        .hero-status-dot {
+            width: 8px;
+            height: 8px;
+            background: #81b29a;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(129, 178, 154, 0.4); }
+            50% { opacity: 0.8; box-shadow: 0 0 0 8px rgba(129, 178, 154, 0); }
+        }
+
+        .hero-status.disconnected { color: #e76f51; }
+        .hero-status.disconnected .hero-status-dot {
+            background: #e76f51;
+            animation: none;
+        }
+
+        .hero-project-name {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+            letter-spacing: -0.5px;
+        }
+
+        .hero-project-meta {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        .hero-project-meta span {
+            margin-left: 8px;
+        }
+
+        .hero-goal {
+            background: rgba(94, 129, 172, 0.15);
+            border: 1px solid rgba(94, 129, 172, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            direction: rtl;
+        }
+
+        .hero-goal-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #5e81ac;
+            margin-bottom: 6px;
+        }
+
+        .hero-goal-text {
+            font-size: 1.05rem;
+            color: #e0e0e0;
+            line-height: 1.5;
+            font-weight: 500;
+        }
+
+        .hero-stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .hero-stat {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+
+        .hero-stat.clickable {
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .hero-stat.clickable:hover {
+            background: rgba(255,255,255,0.1);
+            transform: scale(1.05);
+        }
+
+        .hero-stat-value {
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .hero-stat.errors .hero-stat-value { color: #ff6b6b; }
+        .hero-stat.insights .hero-stat-value { color: #ffd93d; }
+        .hero-stat.decisions .hero-stat-value { color: #6bcfff; }
+
+        .hero-btn {
+            width: 100%;
+            padding: 16px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #0a0a12;
+            background: linear-gradient(135deg, #81b29a 0%, #6a9e87 100%);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 10px;
+        }
+
+        .hero-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(129, 178, 154, 0.4);
+        }
+
+        .hero-btn-icon {
+            font-size: 1.2rem;
+        }
+
+        /* ===== COLLAPSIBLE SECTIONS ===== */
+        .collapse-section {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .collapse-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .collapse-header:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .collapse-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .collapse-icon {
+            font-size: 1rem;
+        }
+
+        .collapse-title {
             font-size: 0.9rem;
             font-weight: 500;
-            margin-bottom: 16px;
+            color: #ccc;
         }
 
-        .live-state-status.connected {
-            color: #81b29a;
+        .collapse-count {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            color: #888;
         }
 
-        .live-state-status.disconnected {
-            color: #e76f51;
-        }
-
-        .live-state-main {
-            font-size: 1.1rem;
-            color: #fff;
-            margin-bottom: 8px;
-            line-height: 1.4;
-        }
-
-        .live-state-goal {
+        .collapse-count.has-items {
+            background: rgba(94, 129, 172, 0.3);
             color: #5e81ac;
-            font-weight: 500;
         }
 
-        .live-state-context {
+        .collapse-count.has-errors {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+        }
+
+        .collapse-arrow {
             font-size: 0.8rem;
             color: #666;
-            margin-bottom: 16px;
+            transition: transform 0.2s;
         }
 
-        .live-state-insight {
-            font-size: 0.85rem;
-            color: #888;
-            padding: 12px 16px;
-            background: rgba(255,255,255,0.03);
-            border-radius: 10px;
-            border-left: 3px solid #5e81ac;
-            text-align: left;
-            margin-top: 12px;
+        .collapse-section.open .collapse-arrow {
+            transform: rotate(180deg);
         }
 
-        body.rtl .live-state-insight {
-            text-align: right;
-            border-left: none;
-            border-right: 3px solid #5e81ac;
+        .collapse-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
         }
 
-        .live-state-insight-label {
-            font-size: 0.7rem;
-            color: #555;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
+        .collapse-section.open .collapse-content {
+            max-height: 500px;
         }
 
-        .live-state-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 16px;
+        .collapse-inner {
+            padding: 0 16px 16px;
         }
+
+        /* Legacy support - hide old elements (Focus Mode) */
+        .live-state { display: none !important; }
+        .quick-stats { display: none !important; }
+        .browser-errors-feed { display: none !important; }
+        #unified-insights-section { display: none !important; }
+        .unified-insights-section { display: none !important; }
+        .section.insights-section { display: none !important; }
+        .connection-status { display: none !important; }
 
         .live-action-btn {
             display: flex;
@@ -383,7 +795,588 @@
             background: rgba(231, 111, 81, 0.1);
         }
 
-        /* Activity Feed */
+        /* ===== HUMAN UI: What Changed Today (v2 with diff stats) ===== */
+        .changes-card {
+            margin: 16px 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        .changes-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .changes-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .changes-filter {
+            display: flex;
+            background: rgba(0,0,0,0.2);
+            border-radius: 6px;
+            padding: 2px;
+        }
+        .filter-btn {
+            padding: 5px 10px;
+            font-size: 0.75rem;
+            border: none;
+            background: transparent;
+            color: rgba(255,255,255,0.5);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover {
+            color: rgba(255,255,255,0.8);
+        }
+        .filter-btn.active {
+            background: rgba(94, 129, 172, 0.3);
+            color: #fff;
+        }
+        .changes-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #fff;
+        }
+        .changes-count {
+            background: rgba(129, 178, 154, 0.2);
+            color: #81b29a;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .changes-legend {
+            display: flex;
+            gap: 16px;
+            padding: 8px 18px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            direction: rtl;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            color: #888;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            opacity: 0.5;
+            min-width: 28px;
+            min-height: 28px;
+            position: relative;
+        }
+        .legend-item:hover {
+            opacity: 1;
+            background: rgba(255,255,255,0.08);
+            transform: scale(1.1);
+        }
+        .legend-item.active {
+            opacity: 1;
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+        /* Custom tooltip */
+        .legend-item::after {
+            content: attr(title);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            pointer-events: none;
+            margin-bottom: 4px;
+            z-index: 100;
+        }
+        .legend-item:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+        .legend-icon {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .legend-icon::before {
+            content: '';
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+        }
+        .legend-icon::after {
+            position: absolute;
+            font-weight: bold;
+            font-size: 8px;
+        }
+        .legend-icon.edit::before {
+            background: rgba(94, 129, 172, 0.25);
+            border: 1.5px solid #5e81ac;
+        }
+        .legend-icon.edit::after {
+            content: '╱';
+            color: #5e81ac;
+            font-size: 9px;
+        }
+        .legend-icon.write::before {
+            background: rgba(129, 178, 154, 0.25);
+            border: 1.5px solid #81b29a;
+            border-radius: 3px;
+        }
+        .legend-icon.write::after {
+            content: '+';
+            color: #81b29a;
+            font-size: 10px;
+        }
+        .legend-icon.bash::before {
+            background: rgba(242, 164, 93, 0.25);
+            border: 1.5px solid #f2a45d;
+            border-radius: 4px;
+        }
+        .legend-icon.bash::after {
+            content: '>';
+            color: #f2a45d;
+            font-family: monospace;
+            font-size: 9px;
+        }
+        .legend-icon.read::before {
+            background: rgba(180, 142, 173, 0.25);
+            border: 1.5px solid #b48ead;
+        }
+        .legend-icon.read::after {
+            content: '•';
+            color: #b48ead;
+            font-size: 12px;
+        }
+        .legend-icon.error::before {
+            background: rgba(231, 111, 81, 0.25);
+            border: 1.5px solid #e76f51;
+        }
+        .legend-icon.error::after {
+            content: '!';
+            color: #e76f51;
+        }
+        .legend-icon.insight::before {
+            background: rgba(255, 217, 61, 0.25);
+            border: 1.5px solid #ffd93d;
+        }
+        .legend-icon.insight::after {
+            content: '✦';
+            color: #ffd93d;
+            font-size: 10px;
+        }
+        /* Full size icon for change items */
+        .change-icon.insight::before {
+            background: rgba(255, 217, 61, 0.25);
+            border: 2px solid #ffd93d;
+            border-radius: 50%;
+        }
+        .change-icon.insight::after {
+            content: '✦';
+            color: #ffd93d;
+            font-size: 12px;
+        }
+        /* Decision icon */
+        .legend-icon.decision::before {
+            background: rgba(107, 207, 255, 0.25);
+            border: 1.5px solid #6bcfff;
+        }
+        .legend-icon.decision::after {
+            content: '⚡';
+            font-size: 8px;
+        }
+        .change-icon.decision::before {
+            background: rgba(107, 207, 255, 0.25);
+            border: 2px solid #6bcfff;
+            border-radius: 50%;
+        }
+        .change-icon.decision::after {
+            content: '⚡';
+            color: #6bcfff;
+            font-size: 10px;
+            font-size: 9px;
+        }
+        .changes-list {
+            padding: 8px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .changes-empty {
+            padding: 24px;
+            text-align: center;
+            color: #666;
+            font-size: 0.85rem;
+        }
+        .change-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 18px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        .change-item:hover {
+            background: rgba(255,255,255,0.05);
+        }
+        .change-item:last-child {
+            border-bottom: none;
+        }
+        .change-item.recent {
+            background: rgba(129, 178, 154, 0.08);
+        }
+        [dir="rtl"] .change-item.recent {
+            border-left: 3px solid #81b29a;
+        }
+        [dir="ltr"] .change-item.recent {
+            border-right: 3px solid #81b29a;
+        }
+        .change-item.recent:hover {
+            background: rgba(129, 178, 154, 0.15);
+        }
+        .change-item.error-item {
+            background: rgba(231, 111, 81, 0.05);
+        }
+        .change-item.error-item:hover {
+            background: rgba(231, 111, 81, 0.1);
+        }
+        [dir="rtl"] .change-item.error-item {
+            border-left: 3px solid #e76f51;
+        }
+        [dir="ltr"] .change-item.error-item {
+            border-right: 3px solid #e76f51;
+        }
+        .change-item.insight-item {
+            background: rgba(255, 217, 61, 0.05);
+        }
+        .change-item.insight-item:hover {
+            background: rgba(255, 217, 61, 0.1);
+        }
+        [dir="rtl"] .change-item.insight-item {
+            border-left: 3px solid #ffd93d;
+        }
+        [dir="ltr"] .change-item.insight-item {
+            border-right: 3px solid #ffd93d;
+        }
+        .live-badge {
+            font-size: 0.65rem;
+            color: #81b29a;
+            background: rgba(129, 178, 154, 0.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-right: 8px;
+            animation: pulse-live 2s ease-in-out infinite;
+        }
+        @keyframes pulse-live {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .change-icon {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            position: relative;
+        }
+        .change-icon::before {
+            content: '';
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .change-icon::after {
+            position: absolute;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        /* Edit - Blue circle with diagonal line (pencil) */
+        .change-icon.edit::before {
+            background: rgba(94, 129, 172, 0.25);
+            border: 2px solid #5e81ac;
+            border-radius: 50%;
+        }
+        .change-icon.edit::after {
+            content: '╱';
+            color: #5e81ac;
+            font-size: 14px;
+            transform: rotate(-10deg);
+        }
+        /* Write - Green square with + (new file) */
+        .change-icon.write::before {
+            background: rgba(129, 178, 154, 0.25);
+            border: 2px solid #81b29a;
+            border-radius: 4px;
+        }
+        .change-icon.write::after {
+            content: '+';
+            color: #81b29a;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        /* Bash - Orange rounded square with > (terminal) */
+        .change-icon.bash::before {
+            background: rgba(242, 164, 93, 0.25);
+            border: 2px solid #f2a45d;
+            border-radius: 6px;
+        }
+        .change-icon.bash::after {
+            content: '>';
+            color: #f2a45d;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        /* Read - Purple circle with dot (eye) */
+        .change-icon.read::before {
+            background: rgba(180, 142, 173, 0.25);
+            border: 2px solid #b48ead;
+            border-radius: 50%;
+        }
+        .change-icon.read::after {
+            content: '•';
+            color: #b48ead;
+            font-size: 18px;
+        }
+        /* Error - Red circle with ! */
+        .change-icon.error::before {
+            background: rgba(231, 111, 81, 0.25);
+            border: 2px solid #e76f51;
+            border-radius: 50%;
+        }
+        .change-icon.error::after {
+            content: '!';
+            color: #e76f51;
+            font-size: 14px;
+        }
+        .change-action {
+            color: rgba(255,255,255,0.5);
+            font-weight: 400;
+        }
+        [dir="rtl"] .change-action {
+            margin-left: 4px;
+        }
+        [dir="ltr"] .change-action {
+            margin-right: 4px;
+        }
+        .change-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .change-name {
+            font-size: 0.9rem;
+            color: #fff;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .change-time {
+            font-size: 0.7rem;
+            color: #666;
+            margin-top: 2px;
+        }
+        .change-badge {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.05);
+            color: #888;
+        }
+        .change-badge.sensitive {
+            background: rgba(231, 111, 81, 0.15);
+            color: #e76f51;
+        }
+        .changes-footer {
+            padding: 12px 18px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            text-align: center;
+        }
+        .changes-show-more {
+            background: none;
+            border: none;
+            color: #5e81ac;
+            font-size: 0.8rem;
+            cursor: pointer;
+            padding: 4px 12px;
+        }
+        .changes-show-more:hover {
+            text-decoration: underline;
+        }
+
+        /* ===== Technical Drawer ===== */
+        .tech-drawer {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 380px;
+            max-width: 90vw;
+            height: 100vh;
+            background: rgba(22, 33, 62, 0.98);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(255,255,255,0.1);
+            z-index: 1000;
+            transition: right 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        .tech-drawer.open {
+            right: 0;
+        }
+        .tech-drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .tech-drawer-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .tech-drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .tech-drawer-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #fff;
+        }
+        .tech-drawer-close {
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px;
+            line-height: 1;
+        }
+        .tech-drawer-close:hover {
+            color: #fff;
+        }
+        .tech-drawer-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .drawer-section {
+            margin-bottom: 20px;
+        }
+        .drawer-label {
+            font-size: 0.7rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+        .drawer-value {
+            font-size: 0.9rem;
+            color: #e0e0e0;
+            word-break: break-all;
+        }
+        .drawer-value.mono {
+            font-family: monospace;
+            font-size: 0.8rem;
+            background: rgba(0,0,0,0.3);
+            padding: 8px 12px;
+            border-radius: 6px;
+            color: #81b29a;
+        }
+        .drawer-action-btn {
+            width: 100%;
+            padding: 12px;
+            background: rgba(94, 129, 172, 0.2);
+            border: 1px solid rgba(94, 129, 172, 0.3);
+            border-radius: 8px;
+            color: #5e81ac;
+            font-size: 0.85rem;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: all 0.2s;
+        }
+        .drawer-action-btn:hover {
+            background: rgba(94, 129, 172, 0.3);
+        }
+        .drawer-action-btn.secondary {
+            background: transparent;
+            border-color: rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.6);
+        }
+        .drawer-action-btn.secondary:hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+        }
+        .drawer-hero {
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(94, 129, 172, 0.15) 0%, rgba(129, 178, 154, 0.1) 100%);
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .drawer-hero-text {
+            font-size: 1rem;
+            color: #e0e0e0;
+            line-height: 1.5;
+        }
+        .drawer-hero-text strong {
+            color: #fff;
+        }
+        .drawer-divider {
+            height: 1px;
+            background: rgba(255,255,255,0.08);
+            margin: 20px 0;
+        }
+        .drawer-diff {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .diff-added {
+            color: #81b29a;
+            font-weight: 600;
+            font-family: monospace;
+            font-size: 0.95rem;
+        }
+        .diff-removed {
+            color: #e76f51;
+            font-weight: 600;
+            font-family: monospace;
+            font-size: 0.95rem;
+        }
+        .diff-label {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.8rem;
+        }
+
+        /* Activity Feed (keeping for browser errors) */
         .activity-feed {
             margin: 20px auto;
             max-width: 600px;
@@ -404,15 +1397,7 @@
             border-bottom: 1px solid rgba(129, 178, 154, 0.2);
         }
 
-        .activity-feed-icon {
-            font-size: 1.4rem;
-            animation: pulse-icon 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse-icon {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
+        /* feed-icon styling is now in the icon section above */
 
         .activity-feed-title {
             font-weight: 700;
@@ -426,28 +1411,53 @@
             background: linear-gradient(90deg, rgba(231, 76, 60, 0.2) 0%, rgba(129, 178, 154, 0.15) 50%, transparent 100%);
         }
 
-        .activity-feed.live .activity-feed-icon {
+        .activity-feed.live .feed-icon {
             animation: pulse-live 0.5s ease-in-out infinite;
         }
 
         @keyframes pulse-live {
             0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.3); opacity: 0.8; }
+            50% { transform: scale(1.4); opacity: 0.8; }
         }
 
-        .refresh-btn {
-            background: transparent;
-            border: none;
+        /* Glass-style action buttons */
+        .glass-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             cursor: pointer;
-            font-size: 1rem;
-            padding: 4px 8px;
-            border-radius: 6px;
+            padding: 6px 10px;
+            border-radius: 8px;
             transition: all 0.2s;
-            opacity: 0.6;
+            backdrop-filter: blur(4px);
+            color: #888;
+            font-size: 0.75rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .glass-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: #fff;
+        }
+        .glass-btn.danger:hover {
+            background: rgba(231, 111, 81, 0.15);
+            border-color: rgba(231, 111, 81, 0.3);
+            color: #e76f51;
+        }
+        .refresh-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            font-size: 0.85rem;
+            padding: 5px 8px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            backdrop-filter: blur(4px);
         }
         .refresh-btn:hover {
-            opacity: 1;
-            background: rgba(255,255,255,0.1);
+            background: rgba(129, 178, 154, 0.15);
+            border-color: rgba(129, 178, 154, 0.3);
             transform: rotate(180deg);
         }
         .refresh-btn.spinning {
@@ -459,18 +1469,91 @@
         }
 
         .clear-all-btn {
-            background: transparent;
-            border: none;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             cursor: pointer;
-            font-size: 0.9rem;
-            padding: 4px 8px;
-            border-radius: 6px;
+            font-size: 0.75rem;
+            padding: 5px 8px;
+            border-radius: 8px;
             transition: all 0.2s;
-            opacity: 0.4;
+            backdrop-filter: blur(4px);
+            color: #888;
         }
         .clear-all-btn:hover {
-            opacity: 1;
-            background: rgba(231, 111, 81, 0.2);
+            background: rgba(231, 111, 81, 0.15);
+            border-color: rgba(231, 111, 81, 0.3);
+            color: #e76f51;
+        }
+
+        /* Connection status indicator */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            backdrop-filter: blur(8px);
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 12px;
+        }
+        .connection-status.connected {
+            border-color: rgba(129, 178, 154, 0.3);
+        }
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+        }
+        .connection-status.connected .connection-dot {
+            background: #81b29a;
+            box-shadow: 0 0 8px rgba(129, 178, 154, 0.5);
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .connection-time {
+            color: #81b29a;
+            font-weight: 500;
+        }
+
+        /* Quick Stats Bar */
+        .quick-stats {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            flex: 1;
+            min-width: 100px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            backdrop-filter: blur(8px);
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #81b29a;
+        }
+        .stat-label {
+            font-size: 0.7rem;
+            color: #666;
+            margin-top: 4px;
+        }
+        .stat-item.errors .stat-value {
+            color: #e76f51;
+        }
+        .stat-item.solutions .stat-value {
+            color: #f2cc8f;
         }
 
         .activity-item-actions {
@@ -486,19 +1569,24 @@
         .activity-item-edit,
         .activity-item-delete {
             cursor: pointer;
-            font-size: 0.7rem;
-            padding: 1px 4px;
+            font-size: 0.65rem;
+            padding: 3px 6px;
             color: #666;
-            border-radius: 3px;
+            border-radius: 6px;
             transition: all 0.15s;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(4px);
         }
         .activity-item-edit:hover {
             color: #81b29a;
             background: rgba(129, 178, 154, 0.15);
+            border-color: rgba(129, 178, 154, 0.3);
         }
         .activity-item-delete:hover {
             color: #e76f51;
             background: rgba(231, 111, 81, 0.15);
+            border-color: rgba(231, 111, 81, 0.3);
         }
 
         .activity-feed-badge {
@@ -568,24 +1656,17 @@
             }
         }
 
-        .activity-item.latest .activity-item-icon {
+        .activity-item.latest .icon-dot {
             animation: bounce-icon 1s ease-in-out infinite;
         }
 
         @keyframes bounce-icon {
             0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.2); }
+            50% { transform: scale(1.3); }
         }
 
-        .activity-item-icon {
-            font-size: 1.2rem;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255,255,255,0.05);
-            border-radius: 8px;
+        .activity-item .icon-dot {
+            flex-shrink: 0;
         }
 
         .activity-item-name {
@@ -675,6 +1756,68 @@
         .activity-item-tool.watcher {
             background: rgba(150, 150, 150, 0.2);
             color: #888;
+        }
+
+        /* Solution badge */
+        .solution-badge {
+            font-size: 0.6rem;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(129, 178, 154, 0.15);
+            border: 1px solid rgba(129, 178, 154, 0.3);
+            color: #81b29a;
+            margin-left: 4px;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        .solution-badge::before {
+            content: '';
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #81b29a;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+        /* Error source tag */
+        .error-source {
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: rgba(100, 149, 237, 0.2);
+            color: #6495ed;
+            margin-left: 4px;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        .activity-item.has-solution {
+            border-left: 2px solid #81b29a;
+        }
+
+        /* Browser errors feed styling */
+        .browser-errors-feed {
+            border-top: 1px solid rgba(231, 111, 81, 0.2);
+            margin-top: 8px;
+        }
+        .browser-errors-feed .activity-feed-header {
+            background: rgba(231, 111, 81, 0.05);
+            flex-wrap: wrap;
+        }
+        .browser-errors-feed .changes-filter {
+            margin-left: auto;
+            margin-right: 8px;
+        }
+        [dir="rtl"] .browser-errors-feed .changes-filter {
+            margin-left: 8px;
+            margin-right: auto;
+        }
+        .browser-errors-feed .activity-item {
+            animation: none !important;
+            transition: opacity 0.2s;
+        }
+        .browser-errors-feed .activity-feed-list {
+            max-height: 200px;
+            overflow-y: auto;
         }
 
         /* File path link */
@@ -869,6 +2012,17 @@
             align-items: center;
             margin-bottom: 12px;
             padding: 0 4px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .section-header .insights-filter {
+            margin-left: auto;
+            margin-right: 8px;
+        }
+        [dir="rtl"] .section-header .insights-filter {
+            margin-left: 8px;
+            margin-right: auto;
         }
 
         .section-title {
@@ -1086,25 +2240,6 @@
 
         .footer-link:hover {
             color: #888;
-        }
-
-        /* ===== LANGUAGE TOGGLE ===== */
-        .lang-btn {
-            position: fixed;
-            top: 12px;
-            right: 12px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.08);
-            color: #666;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.7rem;
-            cursor: pointer;
-        }
-
-        body.rtl .lang-btn {
-            right: auto;
-            left: 12px;
         }
 
         /* ===== MODALS ===== */
@@ -1834,6 +2969,11 @@
             border: 1px solid rgba(231, 111, 81, 0.2);
         }
 
+        .memory-card.lesson {
+            background: rgba(94, 129, 172, 0.1);
+            border: 1px solid rgba(94, 129, 172, 0.2);
+        }
+
         .memory-card-header {
             display: flex;
             justify-content: space-between;
@@ -1866,6 +3006,20 @@
         .memory-card-badge.unused {
             background: rgba(255, 255, 255, 0.05);
             color: #666;
+        }
+
+        .memory-card-project {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(94, 129, 172, 0.2);
+            color: #5e81ac;
+            margin-left: 8px;
+            white-space: nowrap;
+        }
+        [dir="rtl"] .memory-card-project {
+            margin-left: 0;
+            margin-right: 8px;
         }
 
         .memory-card-reason {
@@ -2289,7 +3443,66 @@
             font-size: 0.8rem;
         }
 
-        /* ===== EDITOR CARDS IN MODAL ===== */
+        /* ===== SIMPLIFIED SESSION MODAL ===== */
+        .session-option {
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .session-option:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+        .session-option-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .session-option-name {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: #fff;
+        }
+        .session-option-badge {
+            font-size: 0.65rem;
+            padding: 3px 8px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.1);
+            color: #888;
+        }
+        .session-option-badge.connected {
+            background: rgba(129, 178, 154, 0.2);
+            color: #81b29a;
+        }
+        .session-option-hint {
+            font-size: 0.75rem;
+            color: #666;
+        }
+        .session-extension {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            color: #666;
+            padding: 12px 0;
+            margin-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .session-extension-btn {
+            padding: 4px 12px;
+            background: rgba(94, 129, 172, 0.2);
+            border: 1px solid rgba(94, 129, 172, 0.3);
+            border-radius: 6px;
+            color: #5e81ac;
+            text-decoration: none;
+            font-size: 0.7rem;
+        }
+        .session-extension-btn:hover {
+            background: rgba(94, 129, 172, 0.3);
+        }
+
+        /* ===== EDITOR CARDS IN MODAL (legacy) ===== */
         .editor-card {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -2526,7 +3739,6 @@
 </head>
 <body>
     <div class="toast" id="toast"></div>
-    <button class="lang-btn" onclick="toggleLang()">EN</button>
 
     <div class="container">
         <!-- HEADER -->
@@ -2534,85 +3746,180 @@
             <div class="logo">
                 <span class="logo-text">Fix<span class="logo-o">O</span>nce</span>
             </div>
-            <div class="project-switcher">
-                <div class="project-name" id="project-name" onclick="openProjectEdit()">My Project</div>
-                <button class="switch-project-btn" id="switch-project-btn" onclick="openProjectSwitcher()" title="Switch Project">
-                    <span class="switch-icon">&#8645;</span>
+            <div class="header-center">
+                <div class="project-name" id="project-name" onclick="openProjectSwitcher()">My Project</div>
+            </div>
+            <div class="header-actions">
+                <button class="glass-btn" onclick="refreshAll()" title="Refresh">
+                    <span class="icon-refresh"></span>
                 </button>
             </div>
-            <button class="header-refresh-btn" onclick="refreshAll()" title="רענן הכל">🔄</button>
         </div>
 
-        <!-- PORT DETECTION BANNER -->
-        <div class="port-detected" id="port-detected">
+        <!-- CONNECTION STATUS -->
+        <div class="connection-status" id="connection-status">
+            <span class="connection-dot"></span>
+            <span id="connection-text">Connecting...</span>
+            <span class="connection-time" id="connection-time"></span>
+        </div>
+
+        <!-- QUICK STATS -->
+        <div class="quick-stats">
+            <div class="stat-item errors">
+                <div class="stat-value" id="stat-errors">0</div>
+                <div class="stat-label">Open Errors</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="stat-fixed">0</div>
+                <div class="stat-label">Fixed</div>
+            </div>
+            <div class="stat-item solutions">
+                <div class="stat-value" id="stat-solutions">0</div>
+                <div class="stat-label">Saved Solutions</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="stat-insights">0</div>
+                <div class="stat-label">Insights</div>
+            </div>
+        </div>
+
+        <!-- HERO CARD (Focus Mode - Phase 1) -->
+        <div class="hero-card" id="hero-card">
+            <div class="hero-status" id="hero-status">
+                <span class="hero-status-dot"></span>
+                <span id="hero-status-text">AI Memory Active</span>
+            </div>
+            <div class="hero-project-name" id="hero-project-name">Loading...</div>
+            <div class="hero-project-meta" id="hero-project-meta">
+                <span id="hero-stack"></span>
+                <span id="hero-path"></span>
+            </div>
+            <div class="hero-goal" id="hero-goal" style="display: none;">
+                <div class="hero-goal-label">🎯 המטרה הנוכחית</div>
+                <div class="hero-goal-text" id="hero-goal-text"></div>
+            </div>
+            <div class="hero-stats" id="hero-stats">
+                <div class="hero-stat errors">
+                    <span>⚠️</span>
+                    <span class="hero-stat-value" id="hero-errors">0</span>
+                    <span>שגיאות</span>
+                </div>
+                <div class="hero-stat insights clickable" onclick="openInsightsModal('insights')">
+                    <span>💡</span>
+                    <span class="hero-stat-value" id="hero-insights">0</span>
+                    <span>תובנות</span>
+                </div>
+                <div class="hero-stat decisions clickable" onclick="openInsightsModal('decisions')">
+                    <span>📌</span>
+                    <span class="hero-stat-value" id="hero-decisions">0</span>
+                    <span>החלטות</span>
+                </div>
+            </div>
+            <button class="hero-btn" id="hero-btn" onclick="openSessionModal()">
+                <span class="hero-btn-icon">🧠</span>
+                <span id="hero-btn-text">Start AI Session</span>
+            </button>
+        </div>
+
+        <!-- Hidden: Port Detection (auto-connect now) -->
+        <div class="port-detected" id="port-detected" style="display: none;">
             <div class="port-detected-info">
                 <span class="port-detected-icon">🔍</span>
                 <span class="port-detected-text">
-                    <span id="port-detected-label">זיהיתי:</span>
+                    <span id="port-detected-label">Detected:</span>
                     <span class="port-detected-url" id="port-detected-url">localhost:3000</span>
                 </span>
             </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <button class="port-connect-btn" id="port-connect-btn" onclick="connectToDetectedPort()">
-                    <span id="port-connect-text">התחבר</span>
-                </button>
-                <button class="port-dismiss-btn" onclick="dismissPortDetection()">✕</button>
-            </div>
         </div>
 
-        <!-- LIVE STATE (NEW) -->
-        <div class="live-state glass" id="live-state">
-            <div class="live-state-status connected" id="live-state-status">
-                <span class="status-dot"></span>
-                <span id="live-state-status-text">הזיכרון פעיל</span>
-            </div>
-            <div class="live-state-main" id="live-state-main">
-                ממשיך מ: <span class="live-state-goal" id="live-state-goal">טוען...</span>
-            </div>
-            <div class="live-state-context" id="live-state-context">
-                <!-- gps info will go here -->
-            </div>
-            <div class="live-state-arch" id="live-state-arch" style="display:none; margin: 10px 0; padding: 8px; background: rgba(129,178,154,0.1); border-radius: 6px; font-size: 0.85rem;">
-                <span id="live-state-arch-text"></span>
-            </div>
-            <div class="live-state-insight" id="live-state-insight" style="display:none;">
-                <div class="live-state-insight-label" id="insight-label">תובנה אחרונה</div>
-                <div id="live-state-insight-text"></div>
-            </div>
-            <!-- AI Actions -->
-            <div class="live-state-actions">
-                <button class="live-action-btn primary" onclick="openSessionModal()">
-                    <span>🔌</span> <span id="connect-editor-text">חבר עורך</span>
-                </button>
-            </div>
-            <button class="reset-btn" id="reset-btn" onclick="confirmReset()">התחל מחדש</button>
+        <!-- Legacy: Hidden for backward compatibility -->
+        <div id="live-state" style="display:none;">
+            <div id="live-state-status"><span id="live-state-status-text"></span></div>
+            <div id="live-state-context"></div>
+            <div id="live-state-path"></div>
+            <div id="live-state-arch"><span id="live-state-arch-text"></span></div>
+            <div id="live-state-main"><span id="live-state-goal"></span></div>
+            <div id="live-state-insight"><div id="live-state-insight-text"></div></div>
         </div>
 
         <!-- Component Mapping Modal -->
         <div class="mapping-modal" id="mapping-modal" onclick="closeMappingModal(event)">
             <div class="mapping-modal-content" onclick="event.stopPropagation()">
-                <div class="mapping-modal-title">✏️ שנה שם רכיב</div>
+                <div class="mapping-modal-title">Edit Component Name</div>
                 <div class="mapping-modal-file" id="mapping-file"></div>
-                <input type="text" class="mapping-modal-input" id="mapping-input" placeholder="שם בעברית...">
+                <input type="text" class="mapping-modal-input" id="mapping-input" placeholder="Enter name...">
                 <div class="mapping-modal-buttons">
-                    <button class="mapping-modal-btn cancel" onclick="closeMappingModal()">ביטול</button>
-                    <button class="mapping-modal-btn save" onclick="saveMapping()">שמור</button>
+                    <button class="mapping-modal-btn cancel" onclick="closeMappingModal()">Cancel</button>
+                    <button class="mapping-modal-btn save" onclick="saveMapping()">Save</button>
                 </div>
             </div>
         </div>
 
-        <!-- Activity Feed -->
-        <div class="activity-feed" id="activity-feed">
-            <div class="activity-feed-header">
-                <span class="activity-feed-icon">⚡</span>
-                <span class="activity-feed-title" id="activity-feed-title">Claude עובד</span>
-                <span class="activity-feed-badge" id="activity-count">0</span>
-                <button class="refresh-btn" onclick="refreshAll()" title="רענן הכל">🔄</button>
-                <button class="clear-all-btn" onclick="clearAllActivities()" title="נקה הכל">🗑️</button>
+        <!-- Activity Feed (Human UI) -->
+        <div class="changes-card glass" id="changes-card">
+            <div class="changes-header">
+                <div class="changes-header-left">
+                    <span class="changes-title" id="changes-title">📋 Activity</span>
+                    <span class="changes-count" id="changes-count">0</span>
+                </div>
+                <div class="changes-filter" id="changes-filter">
+                    <button class="filter-btn" data-filter="all" onclick="setActivityFilter('all')">הכל</button>
+                    <button class="filter-btn active" data-filter="project" onclick="setActivityFilter('project')">פרויקט נוכחי</button>
+                </div>
             </div>
-            <div class="activity-feed-list" id="activity-list">
-                <div class="activity-empty" id="activity-empty">
-                    מחכה לפעילות...<br>Claude יתחיל לעבוד והפעילות תופיע כאן
+            <!-- מקרא סימונים (לחיץ לסינון) -->
+            <div class="changes-legend" id="changes-legend">
+                <span class="legend-item active" data-type="all" onclick="setTypeFilter('all')" title="הכל">✱</span>
+                <span class="legend-item" data-type="edit" onclick="setTypeFilter('edit')" title="עריכה"><span class="legend-icon edit"></span></span>
+                <span class="legend-item" data-type="write" onclick="setTypeFilter('write')" title="יצירה"><span class="legend-icon write"></span></span>
+                <span class="legend-item" data-type="bash" onclick="setTypeFilter('bash')" title="פקודה"><span class="legend-icon bash"></span></span>
+                <span class="legend-item" data-type="read" onclick="setTypeFilter('read')" title="קריאה"><span class="legend-icon read"></span></span>
+                <span class="legend-item" data-type="error" onclick="setTypeFilter('error')" title="שגיאה"><span class="legend-icon error"></span></span>
+                <span class="legend-item" data-type="insight" onclick="setTypeFilter('insight')" title="תובנה"><span class="legend-icon insight"></span></span>
+                <span class="legend-item" data-type="decision" onclick="setTypeFilter('decision')" title="החלטה"><span class="legend-icon decision"></span></span>
+            </div>
+            <div class="changes-list" id="changes-list">
+                <div class="changes-empty" id="changes-empty">
+                    אין שינויים היום
+                </div>
+            </div>
+            <div class="changes-footer" id="changes-footer" style="display:none;">
+                <button class="changes-show-more" id="show-more-btn" onclick="loadMoreChanges()">
+                    הצג עוד
+                </button>
+            </div>
+        </div>
+
+        <!-- Technical Drawer (slides from right) -->
+        <div class="tech-drawer" id="tech-drawer">
+            <div class="tech-drawer-header">
+                <span class="tech-drawer-title" id="drawer-title">Technical Details</span>
+                <button class="tech-drawer-close" onclick="closeDrawer()">×</button>
+            </div>
+            <div class="tech-drawer-content" id="drawer-content">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+        <div class="tech-drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+
+        <!-- Browser Errors Feed -->
+        <div class="activity-feed browser-errors-feed" id="browser-errors-feed">
+            <div class="activity-feed-header">
+                <span class="feed-icon error"></span>
+                <span class="activity-feed-title">Errors</span>
+                <span class="activity-feed-badge" id="browser-errors-count">0</span>
+                <div class="changes-filter" id="errors-filter">
+                    <button class="filter-btn active" data-filter="all" onclick="setErrorsFilter('all')">All</button>
+                    <button class="filter-btn" data-filter="project" onclick="setErrorsFilter('project')">Project</button>
+                </div>
+                <button class="glass-btn small" onclick="loadBrowserErrors()" title="Refresh">
+                    <span class="icon-refresh"></span>
+                </button>
+                <button class="glass-btn small danger" onclick="clearBrowserErrors()" title="Clear">×</button>
+            </div>
+            <div class="activity-feed-list" id="browser-errors-list">
+                <div class="activity-empty" id="browser-errors-empty">
+                    No errors<br>Errors from the extension will appear here
                 </div>
             </div>
         </div>
@@ -2671,37 +3978,27 @@
                 </div>
             </div>
 
-            <!-- Decisions Section -->
-            <div class="section">
-                <div class="section-header section-toggle" onclick="toggleSection('decisions')">
+            <!-- Unified Insights Section -->
+            <div class="section insights-section">
+                <div class="section-header section-toggle" onclick="toggleSectionLegacy('insights')">
                     <span class="section-title">
                         <span class="toggle-icon">▼</span>
-                        <span id="decisions-title">🎯 Decisions</span>
+                        <span id="insights-title">Insights & Memory</span>
                     </span>
-                    <span class="section-count" id="decisions-count">0</span>
+                    <span class="section-count" id="insights-count">0</span>
+                    <div class="changes-filter insights-filter" id="insights-filter" onclick="event.stopPropagation()">
+                        <button class="filter-btn" data-filter="all" onclick="setInsightsFilter('all')">All</button>
+                        <button class="filter-btn active" data-filter="project" onclick="setInsightsFilter('project')">Project</button>
+                    </div>
                 </div>
-                <div class="section-content" id="decisions-content">
-                    <div class="memory-cards" id="decisions-list"></div>
-                    <button class="add-memory-btn" onclick="openAddDecision()">
-                        <span>+</span> <span id="add-decision-text">Add Decision</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Avoid Section -->
-            <div class="section">
-                <div class="section-header section-toggle" onclick="toggleSection('avoid')">
-                    <span class="section-title">
-                        <span class="toggle-icon">▼</span>
-                        <span id="avoid-title">⚠️ Avoid</span>
-                    </span>
-                    <span class="section-count" id="avoid-count">0</span>
-                </div>
-                <div class="section-content" id="avoid-content">
-                    <div class="memory-cards" id="avoid-list"></div>
-                    <button class="add-memory-btn" onclick="openAddAvoid()">
-                        <span>+</span> <span id="add-avoid-text">Add Pattern</span>
-                    </button>
+                <div class="section-content" id="insights-content">
+                    <!-- All insights unified -->
+                    <div class="memory-cards unified-insights" id="unified-insights-list"></div>
+                    <!-- Add buttons -->
+                    <div class="insight-actions">
+                        <button class="glass-btn small" onclick="openAddDecision()">+ Decision</button>
+                        <button class="glass-btn small" onclick="openAddAvoid()">+ Avoid</button>
+                    </div>
                 </div>
             </div>
 
@@ -2709,31 +4006,31 @@
             <div class="roi-card glass old-ui-hidden" id="roi-card">
                 <div class="roi-header">
                     <span class="roi-title" id="roi-title">📊 ROI</span>
-                    <span class="roi-badge" id="roi-badge">חיסכון</span>
+                    <span class="roi-badge" id="roi-badge">Savings</span>
                 </div>
                 <div class="roi-stats">
                     <div class="roi-stat">
                         <span class="roi-value" id="roi-solutions">0</span>
-                        <span class="roi-label" id="roi-solutions-label">פתרונות בשימוש חוזר</span>
+                        <span class="roi-label" id="roi-solutions-label">Reused Solutions</span>
                     </div>
                     <div class="roi-stat">
                         <span class="roi-value" id="roi-sessions">0</span>
-                        <span class="roi-label" id="roi-sessions-label">סשנים עם הקשר</span>
+                        <span class="roi-label" id="roi-sessions-label">Sessions with Context</span>
                     </div>
                     <div class="roi-stat">
                         <span class="roi-value" id="roi-decisions">0</span>
-                        <span class="roi-label" id="roi-decisions-label">החלטות שנעזרו</span>
+                        <span class="roi-label" id="roi-decisions-label">Assisted Decisions</span>
                     </div>
                     <div class="roi-stat">
                         <span class="roi-value" id="roi-avoided">0</span>
-                        <span class="roi-label" id="roi-avoided-label">טעויות שנמנעו</span>
+                        <span class="roi-label" id="roi-avoided-label">Mistakes Avoided</span>
                     </div>
                 </div>
             </div>
 
             <!-- Safety Switch Section (hidden) -->
             <div class="safety-section old-ui-hidden">
-                <div class="section-header section-toggle" onclick="toggleSection('safety')">
+                <div class="section-header section-toggle" onclick="toggleSectionLegacy('safety')">
                     <span class="section-title">
                         <span class="toggle-icon">▼</span>
                         <span id="safety-section-title">🛡️ Safety Switch</span>
@@ -2807,15 +4104,6 @@
             <div id="issues-list"></div>
         </div>
 
-        <!-- FOOTER -->
-        <div class="footer">
-            <span class="footer-link" onclick="openHistory()">
-                <span id="history-link">History</span> (<span id="history-count">0</span>)
-            </span>
-            <span class="footer-link" onclick="openSettings()">
-                <span id="settings-link">Settings</span>
-            </span>
-        </div>
     </div>
 
     <!-- HISTORY PANEL -->
@@ -2830,94 +4118,91 @@
         <div id="history-list"></div>
     </div>
 
-    <!-- SESSION MODAL -->
+    <!-- SESSION MODAL (Simplified) -->
     <div class="modal-overlay" id="session-modal">
-        <div class="modal">
-            <div class="modal-title" id="modal-title">Start AI Session</div>
+        <div class="modal" style="max-width: 340px;">
+            <div class="modal-title">Start Session</div>
 
             <!-- Claude Code -->
-            <div class="editor-card">
-                <div class="editor-header" onclick="launchEditor('claude')">
-                    <span class="editor-name">Claude Code</span>
-                    <span class="editor-badge ready" id="badge-claude">✓ Connected</span>
+            <div class="session-option glass" onclick="launchEditor('claude')">
+                <div class="session-option-row">
+                    <span class="session-option-name">Claude Code</span>
+                    <span class="session-option-badge connected">Connected</span>
                 </div>
-                <div class="editor-hint">
-                    💡 Just say <strong>"היי"</strong> - connects automatically
-                </div>
+                <div class="session-option-hint">Say "hi" - auto-connects</div>
             </div>
 
             <!-- Cursor -->
-            <div class="editor-card cursor-card">
-                <div class="editor-header" onclick="launchEditor('cursor')">
-                    <span class="editor-name">Cursor</span>
-                    <span class="editor-badge" id="badge-cursor">✓</span>
+            <div class="session-option glass" onclick="launchCursorOneClick()">
+                <div class="session-option-row">
+                    <span class="session-option-name">Cursor</span>
+                    <span class="session-option-badge" style="background: rgba(129,178,154,0.2); color: #81b29a;">One Click</span>
                 </div>
-                <div class="cursor-mcp-note">
-                    ⏳ כשתמיכת MCP תהיה מלאה - יעבוד אוטומטית כמו Claude
-                </div>
-                <div class="cursor-commands">
-                    <div class="cursor-cmd">
-                        <span class="cursor-cmd-label">🚀 התחלה:</span>
-                        <code class="cursor-cmd-text">היי תחבר לדשבורד שלי</code>
-                        <button class="cursor-cmd-copy" onclick="copyToClipboard('היי תחבר לדשבורד שלי')" title="העתק">📋</button>
-                    </div>
-                    <div class="cursor-cmd">
-                        <span class="cursor-cmd-label">💾 שמירה:</span>
-                        <code class="cursor-cmd-text">שמור את מה שלמדנו</code>
-                        <button class="cursor-cmd-copy" onclick="copyToClipboard('שמור את מה שלמדנו עכשיו')" title="העתק">📋</button>
-                    </div>
-                    <div class="cursor-cmd">
-                        <span class="cursor-cmd-label">🔍 חיפוש:</span>
-                        <code class="cursor-cmd-text">חפש אם טיפלנו ב...</code>
-                        <button class="cursor-cmd-copy" onclick="copyToClipboard('חפש אם טיפלנו בזה קודם')" title="העתק">📋</button>
-                    </div>
-                </div>
+                <div class="session-option-hint">Setup + Launch automatically</div>
             </div>
 
-            <!-- GitHub Copilot (VS Code) -->
-            <div class="editor-card cursor-card">
-                <div class="editor-header" onclick="launchEditor('copilot')">
-                    <span class="editor-name">GitHub Copilot</span>
-                    <span class="editor-badge" id="badge-copilot">VS Code</span>
+            <!-- GitHub Copilot -->
+            <div class="session-option glass" onclick="launchEditor('copilot')">
+                <div class="session-option-row">
+                    <span class="session-option-name">GitHub Copilot</span>
+                    <span class="session-option-badge">VS Code</span>
                 </div>
-                <div class="cursor-mcp-note">
-                    ⏳ כשתמיכת MCP תהיה מלאה - יעבוד אוטומטית כמו Claude
-                </div>
-                <div class="cursor-commands">
-                    <div class="cursor-cmd">
-                        <span class="cursor-cmd-label">🚀 התחלה:</span>
-                        <code class="cursor-cmd-text">היי תחבר לדשבורד שלי</code>
-                        <button class="cursor-cmd-copy" onclick="copyToClipboard('היי תחבר לדשבורד שלי')" title="העתק">📋</button>
-                    </div>
-                    <div class="cursor-cmd">
-                        <span class="cursor-cmd-label">💾 שמירה:</span>
-                        <code class="cursor-cmd-text">שמור את מה שלמדנו</code>
-                        <button class="cursor-cmd-copy" onclick="copyToClipboard('שמור את מה שלמדנו עכשיו')" title="העתק">📋</button>
-                    </div>
-                    <div class="cursor-cmd">
-                        <span class="cursor-cmd-label">🔍 חיפוש:</span>
-                        <code class="cursor-cmd-text">חפש אם טיפלנו ב...</code>
-                        <button class="cursor-cmd-copy" onclick="copyToClipboard('חפש אם טיפלנו בזה קודם')" title="העתק">📋</button>
-                    </div>
-                </div>
+                <div class="session-option-hint">Copy context → Paste in chat</div>
             </div>
 
             <!-- Chrome Extension -->
-            <div class="extension-card">
-                <div class="extension-header">
-                    <span class="extension-icon">🧩</span>
-                    <span class="extension-title">תוסף Chrome - Error Trapper</span>
-                </div>
-                <div class="extension-desc">
-                    לכידת שגיאות מהקונסול בדפדפן ישירות לדשבורד
-                </div>
-                <a href="https://chromewebstore.google.com/detail/fixonce-error-trapper/nilbegoaeefhfdhaiigekedkpmkgoiep" target="_blank" class="extension-btn">
-                    <img src="https://www.google.com/chrome/static/images/chrome-logo.svg" alt="Chrome" class="chrome-icon">
-                    התקן מחנות Chrome
-                </a>
+            <div class="session-extension">
+                <span>Chrome Extension for error capture</span>
+                <a href="https://chromewebstore.google.com/detail/fixonce-error-trapper/nilbegoaeefhfdhaiigekedkpmkgoiep" target="_blank" class="session-extension-btn">Install</a>
             </div>
 
-            <button class="modal-close" onclick="closeSessionModal()" id="session-cancel-btn">Cancel</button>
+            <button class="modal-close" onclick="closeSessionModal()">Close</button>
+        </div>
+    </div>
+
+    <!-- INSIGHTS & DECISIONS MODAL -->
+    <div class="modal-overlay" id="insights-modal">
+        <div class="modal" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
+            <div class="modal-title" id="insights-modal-title">💡 תובנות</div>
+            <div id="insights-modal-content" style="flex: 1; overflow-y: auto; padding: 8px 0;">
+                <div style="color: #666; text-align: center; padding: 16px;">טוען...</div>
+            </div>
+            <button class="modal-close" onclick="closeInsightsModal()">Close</button>
+        </div>
+    </div>
+
+    <!-- CURSOR SETUP MODAL -->
+    <div class="modal-overlay" id="cursor-modal">
+        <div class="modal" style="max-width: 420px;">
+            <div class="modal-title">🔧 Cursor + FixOnce Setup</div>
+
+            <div style="text-align: right; direction: rtl; margin-bottom: 16px;">
+                <div style="font-size: 0.85rem; color: #888; margin-bottom: 12px;">
+                    <strong>שלב 1:</strong> הגדר MCP ב-Cursor
+                </div>
+                <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 0.75rem; text-align: left; direction: ltr; margin-bottom: 12px;">
+                    Cursor → Settings → MCP → Add Server<br>
+                    Name: <span style="color: #81b29a;">fixonce</span><br>
+                    Command: <span style="color: #f2cc8f;">npx -y fixonce-mcp</span>
+                </div>
+
+                <div style="font-size: 0.85rem; color: #888; margin-bottom: 8px;">
+                    <strong>שלב 2:</strong> פתח צ'אט והדבק את המשפט הזה
+                </div>
+            </div>
+
+            <div style="position: relative;">
+                <div id="cursor-prompt" style="background: linear-gradient(135deg, rgba(129,178,154,0.15), rgba(94,129,172,0.15)); border: 1px solid rgba(129,178,154,0.3); border-radius: 8px; padding: 14px; font-size: 0.9rem; text-align: right; direction: rtl; cursor: pointer;" onclick="copyCursorPrompt()">
+                    Use the FixOnce MCP tools: call auto_init_session with cwd set to the current project path, then show me the project status.
+                </div>
+                <button onclick="copyCursorPrompt()" style="position: absolute; top: 8px; left: 8px; background: rgba(129,178,154,0.2); border: none; border-radius: 4px; padding: 4px 8px; color: #81b29a; cursor: pointer; font-size: 0.7rem;">📋 Copy</button>
+            </div>
+
+            <div style="text-align: center; margin-top: 16px; font-size: 0.75rem; color: #666;">
+                💡 Cursor יקרא ל-FixOnce MCP ויטען את הקונטקסט של הפרויקט
+            </div>
+
+            <button class="modal-close" onclick="closeCursorModal()">Close</button>
         </div>
     </div>
 
@@ -3037,11 +4322,11 @@
     <!-- CONFIRM MODAL -->
     <div class="modal-overlay" id="confirm-modal">
         <div class="modal" style="max-width: 320px;">
-            <div class="modal-title" id="confirm-title">אישור</div>
+            <div class="modal-title" id="confirm-title">Confirm</div>
             <div id="confirm-message" style="margin: 16px 0; color: #aaa; font-size: 0.9rem;"></div>
             <div class="btn-row">
-                <button class="btn btn-ghost" id="confirm-cancel">ביטול</button>
-                <button class="btn btn-primary" id="confirm-ok" style="background: rgba(231, 111, 81, 0.3); border-color: rgba(231, 111, 81, 0.5);">אישור</button>
+                <button class="btn btn-ghost" id="confirm-cancel">Cancel</button>
+                <button class="btn btn-primary" id="confirm-ok" style="background: rgba(231, 111, 81, 0.3); border-color: rgba(231, 111, 81, 0.5);">Confirm</button>
             </div>
         </div>
     </div>
@@ -3114,14 +4399,190 @@
     </div>
 
     <script>
-        const API = 'http://localhost:5000';
-        let lang = localStorage.getItem('fixonce-lang') || 'en';
+        // Auto-detect server port (5000-5005)
+        let API = 'http://localhost:5000';
+        async function detectServerPort() {
+            for (const port of [5000, 5001, 5002, 5003, 5004, 5005]) {
+                try {
+                    const res = await fetch(`http://localhost:${port}/api/ping`, { method: 'GET', signal: AbortSignal.timeout(500) });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.service === 'fixonce') {
+                            API = `http://localhost:${port}`;
+                            console.log(`[FixOnce] Connected to port ${port}`);
+                            return port;
+                        }
+                    }
+                } catch {}
+            }
+            console.log('[FixOnce] Server not found, using default port 5000');
+            return 5000;
+        }
         let issues = [];
         let solutions = [];
         let project = {};
         let currentIssueId = null;
         let lastIssueCount = 0;
         let lastIssueIds = new Set();
+
+        // ===== HERO CARD & COLLAPSIBLE SECTIONS (Phase 1) =====
+
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (section) {
+                section.classList.toggle('open');
+            }
+        }
+
+        async function loadHeroCard() {
+            try {
+                // Get grouped projects data
+                const res = await fetch(API + '/api/projects/grouped');
+                const data = await res.json();
+
+                const active = data.active;
+                if (!active) {
+                    renderHeroDisconnected();
+                    return;
+                }
+
+                // Project name & meta
+                document.getElementById('hero-project-name').textContent = active.name || 'Unknown Project';
+
+                const metaParts = [];
+                if (active.stack) metaParts.push(active.stack);
+                if (active.working_dir) {
+                    let path = active.working_dir.replace(/^\/Users\/[^\/]+/, '~');
+                    metaParts.push(path);
+                }
+                document.getElementById('hero-project-meta').innerHTML = metaParts.join(' • ');
+
+                // Goal
+                const goalEl = document.getElementById('hero-goal');
+                const goalText = document.getElementById('hero-goal-text');
+                if (active.current_goal) {
+                    goalText.textContent = active.current_goal;
+                    goalEl.style.display = 'block';
+                    document.getElementById('hero-btn-text').textContent = 'Resume AI Session';
+                } else {
+                    goalEl.style.display = 'none';
+                    document.getElementById('hero-btn-text').textContent = 'Start AI Session';
+                }
+
+                // Stats - use browser errors count from allBrowserErrors
+                const browserErrorsCount = allBrowserErrors?.length || 0;
+                const insightsCount = active.insights_count || 0;
+                const decisionsCount = active.decisions_count || 0;
+
+                document.getElementById('hero-errors').textContent = browserErrorsCount;
+                document.getElementById('hero-insights').textContent = insightsCount;
+                document.getElementById('hero-decisions').textContent = decisionsCount;
+
+                // Update collapse section counts
+                updateCollapseCount('insights-count', insightsCount + decisionsCount, (insightsCount + decisionsCount) > 0 ? 'has-items' : '');
+
+            } catch (e) {
+                console.error('Failed to load hero card:', e);
+                renderHeroDisconnected();
+            }
+        }
+
+        function renderHeroDisconnected() {
+            document.getElementById('hero-status').classList.add('disconnected');
+            document.getElementById('hero-status-text').textContent = 'Connecting...';
+            document.getElementById('hero-project-name').textContent = 'No Project';
+            document.getElementById('hero-project-meta').innerHTML = 'Open a project folder to get started';
+            document.getElementById('hero-goal').style.display = 'none';
+            document.getElementById('hero-btn-text').textContent = 'Start AI Session';
+        }
+
+        function updateCollapseCount(elementId, count, extraClass = '') {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.textContent = count;
+                el.className = 'collapse-count' + (extraClass ? ' ' + extraClass : '');
+            }
+        }
+
+        async function loadActivitySection() {
+            // This section was merged into changes-card (renderChanges)
+            // Keeping function for backwards compatibility but it's now a no-op
+            const contentEl = document.getElementById('activity-content');
+            if (!contentEl) return; // Element removed - activity now shows in changes-card
+
+            try {
+                const res = await fetch(API + '/api/activity/feed?limit=10');
+                const data = await res.json();
+                const activities = data.activities || [];
+
+                updateCollapseCount('activity-count', activities.length, activities.length > 0 ? 'has-items' : '');
+
+                if (activities.length === 0) {
+                    contentEl.innerHTML = '<div style="color: #666; text-align: center; padding: 16px;">אין פעילות היום</div>';
+                    return;
+                }
+
+                let html = '<div class="activity-list">';
+                for (const act of activities.slice(0, 8)) {
+                    const name = act.human_name || (act.file ? act.file.split('/').pop() : act.command?.slice(0, 30) || '');
+                    const time = act.timestamp ? new Date(act.timestamp).toLocaleTimeString('he-IL', {hour: '2-digit', minute: '2-digit'}) : '';
+                    html += `
+                        <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <span style="color: #ccc; font-size: 0.85rem;">${esc(name)}</span>
+                            <span style="color: #666; font-size: 0.75rem;">${time}</span>
+                        </div>
+                    `;
+                }
+                html += '</div>';
+                contentEl.innerHTML = html;
+
+            } catch (e) {
+                console.error('Failed to load activity:', e);
+            }
+        }
+
+        async function loadInsightsSection() {
+            try {
+                const res = await fetch(API + '/api/memory');
+                const memory = await res.json();
+
+                const insights = memory.live_record?.lessons?.insights || [];
+                const decisions = memory.decisions || [];
+                const avoids = memory.avoid || [];
+                const total = insights.length + decisions.length + avoids.length;
+
+                updateCollapseCount('insights-count', total, total > 0 ? 'has-items' : '');
+
+                const contentEl = document.getElementById('insights-content');
+                if (total === 0) {
+                    contentEl.innerHTML = '<div style="color: #666; text-align: center; padding: 16px;">אין תובנות עדיין</div>';
+                    return;
+                }
+
+                let html = '';
+
+                // Recent insights
+                for (const insight of insights.slice(-3).reverse()) {
+                    html += `<div style="padding: 10px; margin-bottom: 8px; background: rgba(255,217,61,0.1); border-radius: 8px; border-right: 3px solid #ffd93d; direction: rtl;">
+                        <span style="color: #ffd93d;">💡</span> ${esc(insight)}
+                    </div>`;
+                }
+
+                // Recent decisions
+                for (const dec of decisions.slice(-2).reverse()) {
+                    html += `<div style="padding: 10px; margin-bottom: 8px; background: rgba(107,207,255,0.1); border-radius: 8px; border-right: 3px solid #6bcfff; direction: rtl;">
+                        <span style="color: #6bcfff;">📌</span> ${esc(dec.decision)}
+                    </div>`;
+                }
+
+                contentEl.innerHTML = html || '<div style="color: #666; text-align: center; padding: 16px;">אין תובנות עדיין</div>';
+
+            } catch (e) {
+                console.error('Failed to load insights:', e);
+            }
+        }
+
+        // ===== END HERO CARD =====
 
         // Toast notification
         function showToast(message, duration = 4000) {
@@ -3145,7 +4606,7 @@
         async function copyToClipboard(text) {
             try {
                 await navigator.clipboard.writeText(text);
-                showToast('📋 הועתק!', 1500);
+                showToast('Copied!', 1500);
             } catch (e) {
                 console.error('Copy failed:', e);
             }
@@ -3200,7 +4661,7 @@
 
                 // Add instruction header
                 const projectName = project?.name || 'Project';
-                const header = `# FixOnce Context for ${projectName}\nהדבק את זה בתחילת השיחה כדי שאני אדע מאיפה להמשיך.\n\n`;
+                const header = `# FixOnce Context for ${projectName}\nPaste this at the start of your conversation so I know where we left off.\n\n`;
                 text = header + text;
 
                 console.log('[FixOnce] Text to copy length:', text.length);
@@ -3250,10 +4711,10 @@
                 const okBtn = document.getElementById('confirm-ok');
                 const cancelBtn = document.getElementById('confirm-cancel');
 
-                titleEl.textContent = title || (lang === 'he' ? 'אישור' : 'Confirm');
+                titleEl.textContent = title || ('Confirm');
                 msgEl.textContent = message;
-                okBtn.textContent = lang === 'he' ? 'אישור' : 'OK';
-                cancelBtn.textContent = lang === 'he' ? 'ביטול' : 'Cancel';
+                okBtn.textContent = 'OK';
+                cancelBtn.textContent = 'Cancel';
 
                 modal.classList.add('open');
 
@@ -3293,7 +4754,6 @@
                 clear: "Clear",
                 confirmClear: "Clear all issues?",
                 hint: "Ask about errors in your own words",
-                lang: "HE",
                 allSources: "All Sources",
                 newestFirst: "Newest First",
                 oldestFirst: "Oldest First",
@@ -3371,122 +4831,30 @@
                 roiSolutionsReused: "Solutions reused",
                 roiSessionsContext: "Sessions w/ context",
                 roiDecisionsUsed: "Decisions used",
-                roiErrorsAvoided: "Errors avoided"
-            },
-            he: {
-                allClear: "הכל תקין",
-                hasIssues: "בעיות",
-                critical: "קריטי",
-                startSession: "התחל שיחת AI",
-                activeIssues: "בעיות פעילות",
-                noIssues: "אין בעיות פעילות",
-                history: "היסטוריה",
-                settings: "הגדרות",
-                solved: "בעיות שנפתרו",
-                noHistory: "אין היסטוריה עדיין",
-                editProject: "עריכת פרויקט",
-                name: "שם",
-                stack: "טכנולוגיות",
-                save: "שמור",
-                cancel: "ביטול",
-                close: "סגור",
-                markResolved: "סמן כפתור",
-                codeContext: "הקשר קוד",
-                variables: "משתנים",
-                clear: "נקה",
-                confirmClear: "לנקות את כל הבעיות?",
-                hint: "שאל על שגיאות במילים שלך",
-                lang: "EN",
-                allSources: "כל המקורות",
-                newestFirst: "חדש קודם",
-                oldestFirst: "ישן קודם",
-                criticalFirst: "קריטי קודם",
-                mostRecurring: "הכי חוזר",
-                clearHistory: "נקה הכל",
-                confirmClearHistory: "לנקות את כל ההיסטוריה?",
-                confirmDeleteSolution: "למחוק את הפתרון?",
-                workingOn: "אתה עובד על:",
-                monitoringServer: "מנטר שגיאות שרת:",
-                connect: "חבר",
-                connected: "מחובר",
-                // AI Memory translations
-                aiMemory: "זיכרון AI",
-                memoryReady: "מוכן",
-                memoryStale: "דורש רענון",
-                lastSession: "סשן קודם",
-                noHandover: "אין מסירה מסשן קודם",
-                copyForAI: "העתק ל-AI",
-                copiedToClipboard: "הועתק!",
-                decisions: "החלטות",
-                avoid: "הימנע",
-                addDecision: "הוסף החלטה",
-                addPattern: "הוסף תבנית",
-                copyContext: "העתק הקשר",
-                detectStack: "זהה Stack",
-                // Live State
-                memoryActive: "הזיכרון פעיל",
-                notConnected: "לא מחובר",
-                continuingFrom: "ממשיך מ:",
-                startingFresh: "מתחיל נקי",
-                lastInsight: "תובנה אחרונה",
-                connectEditor: "חבר עורך",
-                resetMemory: "התחל מחדש",
-                resetConfirmTitle: "להתחיל מחדש?",
-                resetConfirmMsg: "זה ינקה את ה-Live Record (לא את ההחלטות)",
-                memoryReset: "הזיכרון אופס",
-                // Port Detection
-                portDetected: "זיהיתי:",
-                portConnect: "התחבר",
-                switchedTo: "עברתי ל:",
-                whatDecided: "מה הוחלט?",
-                whyDecided: "למה?",
-                whatAvoid: "ממה להימנע?",
-                whyAvoid: "למה?",
-                usedByAI: "AI השתמש",
-                notUsedYet: "טרם בשימוש",
-                confirmDeleteDecision: "למחוק את ההחלטה?",
-                confirmDeleteAvoid: "למחוק את התבנית?",
-                confirmClearHandover: "לנקות את המסירה?",
-                stackDetected: "Stack זוהה!",
-                noStackFound: "לא הצלחתי לזהות Stack",
-                exportMemory: "ייצוא",
-                importMemory: "ייבוא",
-                exportSuccess: "הזיכרון יוצא!",
-                importSuccess: "הזיכרון יובא!",
-                importError: "הייבוא נכשל",
-                clearHandover: "נקה",
-                add: "הוסף",
-                noDecisions: "אין החלטות עדיין",
-                noAvoidPatterns: "אין תבניות עדיין",
-                memoryHealth: "בריאות זיכרון",
-                placeholderDecision: "השתמש ב-Redux במקום Context",
-                placeholderDecisionWhy: "צריך time-travel debugging",
-                placeholderAvoid: "אל תשתמש ב-moment.js",
-                placeholderAvoidWhy: "כבד מדי, השתמש ב-date-fns",
-                allActiveIssues: "כל הבעיות הפעילות",
-                solution: "פתרון",
-                describeFix: "תאר את התיקון...",
-                confirm: "אישור",
-                ok: "אישור",
-                roiTitle: "סטטיסטיקות",
-                roiSavings: "נתונים אמיתיים",
-                roiSolutionsReused: "פתרונות בשימוש חוזר",
-                roiSessionsContext: "סשנים עם הקשר",
-                roiDecisionsUsed: "החלטות שנעזרו",
-                roiErrorsAvoided: "טעויות שנמנעו"
+                roiErrorsAvoided: "Errors avoided",
+                // Human UI
+                changesTitle: "What Changed Today",
+                noChanges: "No changes yet today",
+                showMore: "Show more",
+                showing7days: "Showing 7 days",
+                filterAll: "All",
+                filterProject: "Current Project",
+                techDetails: "Technical Details",
+                component: "Component",
+                action: "Action",
+                fullPath: "Full Path",
+                command: "Command",
+                time: "Time",
+                source: "Source",
+                openInVSCode: "Open in VS Code",
+                renameComponent: "Rename Component",
+                sensitive: "Sensitive"
             }
         };
 
-        const t = k => T[lang][k] || k;
-
-        function toggleLang() {
-            lang = lang === 'en' ? 'he' : 'en';
-            localStorage.setItem('fixonce-lang', lang);
-            document.body.classList.toggle('rtl', lang === 'he');
-            document.documentElement.lang = lang;
-            document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr';
-            applyLang();
-        }
+        // English only - simplified
+        const lang = 'en';
+        const t = k => T.en[k] || k;
 
         // Safe text setter - prevents null errors
         function setText(id, text) {
@@ -3499,9 +4867,6 @@
         }
 
         function applyLang() {
-            const langBtn = document.querySelector('.lang-btn');
-            if (langBtn) langBtn.textContent = t('lang');
-
             setText('cta-text', t('startSession'));
             setText('issues-title', t('activeIssues'));
             setText('history-link', t('history'));
@@ -3546,8 +4911,7 @@
             setText('memory-health-title', t('aiMemory'));
             setText('handover-title', '📋 ' + t('lastSession'));
             setText('copy-context-btn', '📋 ' + t('copyForAI'));
-            setText('decisions-title', '🎯 ' + t('decisions'));
-            setText('avoid-title', '⚠️ ' + t('avoid'));
+            // Decisions and avoid now unified in insights section
             setText('add-decision-text', t('addDecision'));
             setText('add-avoid-text', t('addPattern'));
             setText('quick-copy-text', t('copyContext'));
@@ -3615,6 +4979,88 @@
             updateStatus();
         }
 
+        // Connection status tracking
+        let connectionStartTime = null;
+
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connection-status');
+            const textEl = document.getElementById('connection-text');
+            const timeEl = document.getElementById('connection-time');
+
+            if (connected) {
+                if (!connectionStartTime) connectionStartTime = Date.now();
+                statusEl.classList.add('connected');
+                textEl.textContent = 'Connected';
+
+                // Update time display
+                const elapsed = Date.now() - connectionStartTime;
+                const minutes = Math.floor(elapsed / 60000);
+                const hours = Math.floor(minutes / 60);
+                if (hours > 0) {
+                    timeEl.textContent = `${hours}h`;
+                } else if (minutes > 0) {
+                    timeEl.textContent = `${minutes}m`;
+                } else {
+                    timeEl.textContent = 'now';
+                }
+            } else {
+                statusEl.classList.remove('connected');
+                textEl.textContent = 'Disconnected';
+                timeEl.textContent = '';
+                connectionStartTime = null;
+            }
+        }
+
+        // Quick stats
+        async function loadQuickStats() {
+            try {
+                // Get errors count
+                const errorsRes = await fetch(API + '/api/live-errors');
+                const errorsData = await errorsRes.json();
+                const openErrors = (errorsData.errors || []).filter(e => !e.resolved).length;
+                document.getElementById('stat-errors').textContent = openErrors;
+
+                // Get solutions count
+                const solRes = await fetch(API + '/api/solutions/personal');
+                const solData = await solRes.json();
+                document.getElementById('stat-solutions').textContent = (solData.solutions || []).length;
+
+                // Get insights from live record
+                const lrRes = await fetch(API + '/api/memory/live-record');
+                const lrData = await lrRes.json();
+                const insights = lrData?.lessons?.insights || [];
+                document.getElementById('stat-insights').textContent = insights.length;
+
+                // Fixed count (placeholder - would need to track this)
+                document.getElementById('stat-fixed').textContent = insights.length > 0 ? insights.length : '0';
+
+                // Update connection status
+                updateConnectionStatus(true);
+            } catch (e) {
+                console.error('Failed to load quick stats:', e);
+                updateConnectionStatus(false);
+            }
+        }
+
+        // Update connection time every minute
+        setInterval(() => {
+            if (connectionStartTime) updateConnectionStatus(true);
+        }, 60000);
+
+        // Reload all project-specific data (called on project switch)
+        async function reloadAllProjectData() {
+            showingDays = 1; // Reset to today only
+            await Promise.all([
+                loadData(),
+                loadMemoryData(),
+                loadLiveRecord(),
+                loadQuickStats(),
+                loadBrowserErrors(),
+                loadChangesToday()
+            ]);
+            await loadActivityFeed();
+        }
+
         async function loadData() {
             try {
                 const res = await fetch(API + '/api/memory');
@@ -3630,7 +5076,7 @@
                 if (addedIssues.length > 0 && lastIssueIds.size > 0) {
                     // New error detected!
                     const latest = addedIssues[0];
-                    const msg = lang === 'he' ? `שגיאה חדשה: ${latest.message.substring(0, 50)}...` : `New error: ${latest.message.substring(0, 50)}...`;
+                    const msg = `New error: ${latest.message.substring(0, 50)}...`;
                     showToast(msg);
 
                     // Add animation class to status bar
@@ -3806,8 +5252,9 @@
         }
 
         function esc(s) {
-            if (!s) return '';
-            return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+            if (s === null || s === undefined) return '';
+            const str = String(s); // Convert to string first
+            return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
         }
 
         function formatTimeAgo(timestamp) {
@@ -3821,14 +5268,104 @@
             return Math.floor(diff / 86400) + 'd';
         }
 
+        function formatDateTime(timestamp) {
+            const d = new Date(timestamp);
+            const day = d.getDate().toString().padStart(2, '0');
+            const month = (d.getMonth() + 1).toString().padStart(2, '0');
+            const year = d.getFullYear();
+            const hours = d.getHours().toString().padStart(2, '0');
+            const mins = d.getMinutes().toString().padStart(2, '0');
+            return `${day}/${month}/${year} ${hours}:${mins}`;
+        }
+
+        function formatTimeFull(timestamp) {
+            // Returns both relative and absolute: "5m • 14/02 21:30"
+            const relative = formatTimeAgo(timestamp);
+            const d = new Date(timestamp);
+            const day = d.getDate().toString().padStart(2, '0');
+            const month = (d.getMonth() + 1).toString().padStart(2, '0');
+            const hours = d.getHours().toString().padStart(2, '0');
+            const mins = d.getMinutes().toString().padStart(2, '0');
+            return `${relative} • ${day}/${month} ${hours}:${mins}`;
+        }
+
         // Session Modal
         function openSessionModal() {
             document.getElementById('session-modal').classList.add('open');
             loadEditorStatus();
         }
         function closeSessionModal() {
-            document.getElementById('session-modal').classList.remove('open');
-            document.getElementById('usage-tip').style.display = 'none';
+            document.getElementById('session-modal')?.classList.remove('open');
+            const usageTip = document.getElementById('usage-tip');
+            if (usageTip) usageTip.style.display = 'none';
+        }
+
+        // Insights & Decisions Modal
+        async function openInsightsModal(type) {
+            const modal = document.getElementById('insights-modal');
+            const title = document.getElementById('insights-modal-title');
+            const content = document.getElementById('insights-modal-content');
+
+            title.textContent = type === 'insights' ? '💡 תובנות' : '📌 החלטות';
+            content.innerHTML = '<div style="color: #666; text-align: center; padding: 16px;">טוען...</div>';
+            modal.classList.add('open');
+
+            try {
+                const res = await fetch(API + '/api/memory');
+                const data = await res.json();
+
+                if (type === 'insights') {
+                    const insights = data.live_record?.lessons?.insights || [];
+                    if (insights.length === 0) {
+                        content.innerHTML = '<div style="color: #666; text-align: center; padding: 24px;">אין תובנות עדיין</div>';
+                        return;
+                    }
+                    content.innerHTML = insights.slice().reverse().map((insight, i) => {
+                        const text = typeof insight === 'object' ? insight.text : insight;
+                        const time = typeof insight === 'object' && insight.timestamp ? formatTimeFull(insight.timestamp) : '';
+                        return `
+                            <div style="padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); direction: rtl;">
+                                <div style="color: #f4a261; font-size: 0.75rem; margin-bottom: 4px;">${time}</div>
+                                <div style="color: #ccc; font-size: 0.85rem; line-height: 1.5;">${esc(text)}</div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    const decisions = data.decisions || [];
+                    if (decisions.length === 0) {
+                        content.innerHTML = '<div style="color: #666; text-align: center; padding: 24px;">אין החלטות עדיין</div>';
+                        return;
+                    }
+                    content.innerHTML = decisions.slice().reverse().map(dec => `
+                        <div style="padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); direction: rtl;">
+                            <div style="color: #81b29a; font-size: 0.75rem; margin-bottom: 4px;">${formatTimeFull(dec.timestamp)}</div>
+                            <div style="color: #fff; font-size: 0.9rem; font-weight: 500; margin-bottom: 4px;">${esc(dec.decision)}</div>
+                            <div style="color: #888; font-size: 0.8rem;">${esc(dec.reason || '')}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                content.innerHTML = '<div style="color: #e76f51; text-align: center; padding: 24px;">שגיאה בטעינה</div>';
+            }
+        }
+
+        function closeInsightsModal() {
+            document.getElementById('insights-modal')?.classList.remove('open');
+        }
+
+        // Cursor Setup Modal
+        function showCursorSetup() {
+            closeSessionModal();
+            document.getElementById('cursor-modal').classList.add('open');
+        }
+        function closeCursorModal() {
+            document.getElementById('cursor-modal').classList.remove('open');
+        }
+        function copyCursorPrompt() {
+            const prompt = document.getElementById('cursor-prompt').textContent.trim();
+            navigator.clipboard.writeText(prompt).then(() => {
+                showToast('Copied! Paste in Cursor chat');
+            });
         }
 
         async function loadEditorStatus() {
@@ -3875,6 +5412,33 @@
             }
         }
 
+        async function launchCursorOneClick() {
+            showToast('Setting up Cursor...');
+            try {
+                const projectPath = project?.working_dir || project?.root_path || '';
+                const res = await fetch(API + '/api/system/cursor_one_click', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({project_path: projectPath})
+                });
+                const data = await res.json();
+
+                if (data.status === 'ok') {
+                    showToast('Cursor launched with FixOnce!');
+                    closeSessionModal();
+                } else if (data.status === 'partial') {
+                    showToast('Cursor opened (some setup steps failed)');
+                    console.warn('Cursor setup partial:', data.results);
+                    closeSessionModal();
+                } else {
+                    showToast(data.message || 'Failed to setup Cursor');
+                }
+            } catch (e) {
+                console.error('Cursor one-click error:', e);
+                showToast('Failed: ' + e.message);
+            }
+        }
+
         async function launchEditor(ed) {
             // Map copilot to vscode (Copilot is a VS Code extension)
             const editorToLaunch = ed === 'copilot' ? 'vscode' : ed;
@@ -3895,7 +5459,7 @@
                 if (data.status === 'error') {
                     showToast(data.message || 'Failed to launch');
                 } else {
-                    showToast(lang === 'he' ? `פותח ${displayName}...` : `Launching ${displayName}...`);
+                    showToast(`Launching ${displayName}...`);
                     closeSessionModal();
                 }
             } catch (e) {
@@ -3947,37 +5511,76 @@
             listEl.innerHTML = '<div class="no-projects">Loading...</div>';
 
             try {
-                const res = await fetch(API + '/api/projects');
+                // Use the new grouped API (Phase 1)
+                const res = await fetch(API + '/api/projects/grouped');
                 const data = await res.json();
 
-                allProjects = data.projects || [];
-                activeProjectId = data.active_id;
+                const { active, recent, stale } = data;
+                allProjects = [...(active ? [active] : []), ...recent, ...stale];
+                activeProjectId = active?.id;
 
                 if (allProjects.length === 0) {
                     listEl.innerHTML = `
                         <div class="no-projects">
-                            ${lang === 'he' ? 'אין פרויקטים עדיין' : 'No projects yet'}
+                            ${'No projects yet'}
                             <br><br>
-                            ${lang === 'he' ? 'פתח אתר בבראוזר או חבר שרת' : 'Open a site in browser or connect a server'}
+                            ${'Open a site in browser or connect a server'}
                         </div>
                     `;
                     return;
                 }
 
                 let html = '';
-                for (const proj of allProjects) {
-                    const isActive = proj.id === activeProjectId;
-                    const issuesClass = proj.issues_count === 0 ? 'zero' : '';
+
+                // Active project - big card at top
+                if (active) {
                     html += `
-                        <div class="project-item ${isActive ? 'active' : ''}" onclick="switchToProject('${proj.id}')">
-                            <div>
-                                <div class="project-item-name">${esc(proj.name)}</div>
-                                <div class="project-item-stack">${esc(proj.stack || 'No stack')}</div>
+                        <div class="project-active-card" onclick="switchToProject('${active.id}')">
+                            <div class="project-active-badge">🟢 פעיל עכשיו</div>
+                            <div class="project-active-name">${esc(active.name)}</div>
+                            <div class="project-active-stack">${esc(active.stack || '')}</div>
+                            ${active.current_goal ? `<div class="project-active-goal">🎯 ${esc(active.current_goal)}</div>` : ''}
+                            <div class="project-active-stats">
+                                ${active.open_errors > 0 ? `<span class="stat-errors">⚠️ ${active.open_errors} שגיאות</span>` : ''}
+                                ${active.insights_count > 0 ? `<span class="stat-insights">💡 ${active.insights_count} תובנות</span>` : ''}
+                                ${active.decisions_count > 0 ? `<span class="stat-decisions">📌 ${active.decisions_count} החלטות</span>` : ''}
                             </div>
-                            <span class="project-item-issues ${issuesClass}">${proj.issues_count} issues</span>
+                            <button class="project-active-btn">▶️ המשך לעבוד</button>
                         </div>
                     `;
                 }
+
+                // Recent projects section
+                if (recent.length > 0) {
+                    html += `<div class="project-section-title">🕒 עבדת לאחרונה</div>`;
+                    for (const proj of recent) {
+                        html += `
+                            <div class="project-item" onclick="switchToProject('${proj.id}')">
+                                <div>
+                                    <div class="project-item-name">${esc(proj.name)}</div>
+                                    <div class="project-item-stack">${esc(proj.stack || '')}</div>
+                                </div>
+                                <span class="project-item-time">${esc(proj.last_activity_relative || '')}</span>
+                            </div>
+                        `;
+                    }
+                }
+
+                // Stale projects (collapsed)
+                if (stale.length > 0) {
+                    html += `<div class="project-section-title project-section-stale">📦 ישנים (${stale.length})</div>`;
+                    for (const proj of stale) {
+                        html += `
+                            <div class="project-item project-item-stale" onclick="switchToProject('${proj.id}')">
+                                <div>
+                                    <div class="project-item-name">${esc(proj.name)}</div>
+                                    <div class="project-item-stack">${esc(proj.stack || '')}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+
                 listEl.innerHTML = html;
 
             } catch (e) {
@@ -3995,12 +5598,10 @@
                 const data = await res.json();
 
                 if (data.status === 'ok') {
-                    showToast(lang === 'he' ? 'עברת לפרויקט אחר' : 'Switched project');
+                    showToast('Switched project');
                     closeProjectSwitcher();
-                    // Reload all data
-                    await loadData();
-                    await loadLiveRecord();  // Update currentProjectDir
-                    await loadActivityFeed(); // Refresh activity with new project context
+                    // Reload ALL data for new project
+                    await reloadAllProjectData();
                 } else {
                     showToast(data.message || 'Failed to switch');
                 }
@@ -4010,7 +5611,7 @@
         }
 
         async function createNewProject() {
-            const name = prompt(lang === 'he' ? 'שם הפרויקט:' : 'Project name:');
+            const name = prompt('Project name:');
             if (!name) return;
 
             try {
@@ -4022,11 +5623,10 @@
                 const data = await res.json();
 
                 if (data.status === 'ok') {
-                    showToast(lang === 'he' ? 'פרויקט נוצר' : 'Project created');
+                    showToast('Project created');
                     closeProjectSwitcher();
-                    await loadData();
-                    await loadLiveRecord();  // Update currentProjectDir
-                    await loadActivityFeed(); // Refresh activity with new project context
+                    // Reload ALL data for new project
+                    await reloadAllProjectData();
                 }
             } catch (e) {
                 showToast('Error: ' + e.message);
@@ -4177,7 +5777,7 @@
         // All Issues
         function showAllIssues() {
             const list = document.getElementById('all-issues-list');
-            setText('all-issues-title', lang === 'he' ? `כל הבעיות (${issues.length})` : `All Issues (${issues.length})`);
+            setText('all-issues-title', `All Issues (${issues.length})`);
 
             const sorted = [...issues].sort((a, b) => {
                 if (a.severity === 'critical' && b.severity !== 'critical') return -1;
@@ -4311,28 +5911,22 @@
 
                 if (res.ok) {
                     const data = await res.json();
-                    showToast(lang === 'he' ? 'עברתי לפרויקט: ' + data.display_name : 'Switched to: ' + data.display_name);
+                    showToast('Switched to: ' + data.display_name);
 
                     // Hide banner and reload all data
                     hidePortDetection();
                     detectedPortDismissed = null;
 
-                    // Reload everything for the new project
-                    await Promise.all([
-                        loadData(),
-                        loadMemoryData(),
-                        loadLiveRecord()
-                    ]);
-                    // Refresh activity feed after project context is updated
-                    await loadActivityFeed();
+                    // Reload ALL data for new project
+                    await reloadAllProjectData();
                 } else {
-                    btn.textContent = lang === 'he' ? 'שגיאה' : 'Error';
-                    setTimeout(() => btn.textContent = lang === 'he' ? 'התחבר' : 'Connect', 2000);
+                    btn.textContent = 'Error';
+                    setTimeout(() => btn.textContent = 'Connect', 2000);
                 }
             } catch (e) {
                 console.error('Failed to connect:', e);
-                btn.textContent = lang === 'he' ? 'שגיאה' : 'Error';
-                setTimeout(() => btn.textContent = lang === 'he' ? 'התחבר' : 'Connect', 2000);
+                btn.textContent = 'Error';
+                setTimeout(() => btn.textContent = 'Connect', 2000);
             }
         }
 
@@ -4350,7 +5944,36 @@
         let handover = {};
         let decisions = [];
         let avoidPatterns = [];
+        let lessons = [];
         let liveRecord = {};
+        let insightsFilter = 'project'; // 'all' or 'project'
+        let allProjectsInsights = null; // Cache for all projects insights
+
+        function setInsightsFilter(filter) {
+            insightsFilter = filter;
+            document.querySelectorAll('#insights-filter .filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === filter);
+            });
+
+            if (filter === 'all') {
+                loadAllProjectsInsights();
+            } else {
+                // Reset to current project's insights
+                allProjectsInsights = null;
+                renderUnifiedInsights();
+            }
+        }
+
+        async function loadAllProjectsInsights() {
+            try {
+                const res = await fetch(API + '/api/projects/all-insights');
+                const data = await res.json();
+                allProjectsInsights = data;
+                renderUnifiedInsights();
+            } catch (e) {
+                console.error('Failed to load all insights:', e);
+            }
+        }
 
         // ===== LIVE RECORD (NEW) =====
         async function loadLiveRecord() {
@@ -4385,88 +6008,87 @@
             const mainEl = document.getElementById('live-state-main');
             const goalEl = document.getElementById('live-state-goal');
             const contextEl = document.getElementById('live-state-context');
-            const insightEl = document.getElementById('live-state-insight');
-            const insightText = document.getElementById('live-state-insight-text');
+            const archEl = document.getElementById('live-state-arch');
+            const archText = document.getElementById('live-state-arch-text');
 
-            // Safety check - if elements don't exist, skip
-            if (!statusEl || !statusText || !mainEl) {
-                console.warn('Live State elements not found in DOM');
+            // Safety check
+            if (!statusEl || !statusText) {
+                console.warn('Live State elements not found');
                 return;
             }
 
             // Status - connected
             statusEl.className = 'live-state-status connected';
-            statusText.textContent = lang === 'he' ? 'הזיכרון פעיל' : 'Memory Active';
+            statusText.textContent = 'Memory Active';
 
-            // Intent / Goal
-            const intent = liveRecord.intent || {};
-            const currentGoal = intent.current_goal || '';
-            const hasArchitecture = liveRecord.architecture?.summary || liveRecord.architecture?.description || liveRecord.architecture?.stack || liveRecord.architecture?.notes;
-            const hasLessons = liveRecord.lessons?.insights?.length > 0;
-
-            // Check if this is a new/empty project
-            const isNewProject = !currentGoal && !hasArchitecture && !hasLessons;
-
-            if (currentGoal) {
-                // Existing project with active goal
-                mainEl.innerHTML = (lang === 'he' ? 'ממשיך מ: ' : 'Continuing from: ') +
-                    '<span class="live-state-goal">' + esc(currentGoal) + '</span>';
-            } else if (isNewProject) {
-                // New project - prompt to start with Claude
-                mainEl.innerHTML = lang === 'he'
-                    ? '<div class="new-project-prompt">🆕 <strong>פרויקט חדש</strong><br><span style="font-size:0.85rem;color:#888;">פתח שיחה עם Claude ואמור "היי" - הוא יסרוק את הפרויקט וייצור גיליון רפואי</span></div>'
-                    : '<div class="new-project-prompt">🆕 <strong>New Project</strong><br><span style="font-size:0.85rem;color:#888;">Start a chat with Claude and say "hi" - it will scan your project and create a medical record</span></div>';
-                if (goalEl) goalEl.textContent = '';
-            } else {
-                // Has some data but no current goal
-                mainEl.textContent = lang === 'he' ? 'מחכה למשימה הבאה' : 'Waiting for next task';
-                if (goalEl) goalEl.textContent = '';
-            }
-
-            // GPS Context
+            // GPS Context - simplified: project name + port
             const gps = liveRecord.gps || {};
             let contextParts = [];
-            if (gps.environment) contextParts.push(gps.environment);
+
+            // Show project name prominently
+            let projectName = '';
+            if (gps.working_dir) {
+                const parts = gps.working_dir.split('/');
+                projectName = parts[parts.length - 1] || parts[parts.length - 2] || '';
+            }
+            if (projectName) contextParts.push(projectName);
+
+            // Add port if available
             if (gps.active_ports && gps.active_ports.length > 0) {
-                const ports = gps.active_ports.map(p => typeof p === 'object' ? p.port : p).join(', ');
-                contextParts.push('port ' + ports);
-            }
-            // Show path from URL if available, otherwise working_dir
-            if (gps.path && gps.path !== '/') {
-                contextParts.push(gps.path);
-            } else if (gps.working_dir) {
-                contextParts.push(gps.working_dir);
+                const port = typeof gps.active_ports[0] === 'object' ? gps.active_ports[0].port : gps.active_ports[0];
+                contextParts.push('port ' + port);
             }
 
-            if (contextEl) contextEl.textContent = contextParts.length > 0 ? contextParts.join(' · ') : '';
+            if (contextEl) contextEl.textContent = contextParts.join(' · ');
 
-            // Architecture info
-            const archEl = document.getElementById('live-state-arch');
-            const archText = document.getElementById('live-state-arch-text');
+            // Show full path below (shortened with ~)
+            const pathEl = document.getElementById('live-state-path');
+            if (pathEl && gps.working_dir) {
+                let displayPath = gps.working_dir;
+                // Clean up path
+                displayPath = displayPath.replace(/\/+$/, ''); // Remove trailing slashes
+                displayPath = displayPath.replace(/~+$/, ''); // Remove trailing ~
+                displayPath = displayPath.replace(/^\/Users\/[^\/]+/, '~'); // Replace /Users/username with ~
+                displayPath = displayPath.replace(/\/~$/, ''); // Remove /~ at end if exists
+                pathEl.textContent = displayPath;
+                pathEl.style.display = 'block';
+            } else if (pathEl) {
+                pathEl.style.display = 'none';
+            }
+
+            // Architecture - stack info (no truncation)
             const arch = liveRecord.architecture || {};
-            const archDisplay = arch.stack || arch.description || arch.summary || arch.notes;
-            if (archDisplay && archEl && archText) {
-                archEl.style.display = 'block';
-                let archParts = [];
-                if (arch.stack) archParts.push('🛠️ ' + arch.stack);
-                const archDesc = arch.description || arch.summary || arch.notes;
-                if (archDesc) archParts.push(archDesc.substring(0, 60) + (archDesc.length > 60 ? '...' : ''));
-                archText.textContent = archParts.join(' • ');
+            const stack = arch.stack || '';
+            const archDesc = arch.description || arch.summary || '';
+
+            if ((stack || archDesc) && archEl && archText) {
+                let display = stack;
+                if (archDesc && archDesc !== stack) {
+                    display = display ? display + ' • ' + archDesc : archDesc;
+                }
+                archText.textContent = display;
+                archEl.style.display = display ? 'block' : 'none';
             } else if (archEl) {
                 archEl.style.display = 'none';
             }
 
-            // Last Insight
-            const lessons = liveRecord.lessons || {};
-            const insights = lessons.insights || [];
+            // Goal - current task (Phase 1: Make it prominent!)
+            const intent = liveRecord.intent || {};
+            const currentGoal = intent.current_goal || '';
+            const liveStateEl = document.getElementById('live-state');
+            const startBtn = document.querySelector('.live-start-btn');
 
-            if (insights.length > 0 && insightEl && insightText) {
-                insightEl.style.display = 'block';
-                insightText.textContent = insights[insights.length - 1];
-                const insightLabel = document.getElementById('insight-label');
-                if (insightLabel) insightLabel.textContent = lang === 'he' ? 'תובנה אחרונה' : 'Last insight';
-            } else if (insightEl) {
-                insightEl.style.display = 'none';
+            if (mainEl && goalEl) {
+                if (currentGoal) {
+                    goalEl.textContent = currentGoal;  // CSS adds the 🎯
+                    mainEl.style.display = 'block';
+                    if (liveStateEl) liveStateEl.classList.add('has-goal');
+                    if (startBtn) startBtn.textContent = '▶️ המשך לעבוד';
+                } else {
+                    mainEl.style.display = 'none';
+                    if (liveStateEl) liveStateEl.classList.remove('has-goal');
+                    if (startBtn) startBtn.textContent = 'Start Session';
+                }
             }
         }
 
@@ -4478,10 +6100,12 @@
             const insightEl = document.getElementById('live-state-insight');
 
             if (statusEl) statusEl.className = 'live-state-status disconnected';
-            if (statusText) statusText.textContent = lang === 'he' ? 'לא מחובר' : 'Not Connected';
-            if (mainEl) mainEl.textContent = lang === 'he' ? 'בודק חיבור...' : 'Checking connection...';
-            if (contextEl) contextEl.textContent = '';
-            if (insightEl) insightEl.style.display = 'none';
+            if (statusText) statusText.textContent = 'Not Connected';
+            if (contextEl) contextEl.textContent = 'Connecting...';
+            if (mainEl) mainEl.style.display = 'none';
+
+            const archEl = document.getElementById('live-state-arch');
+            if (archEl) archEl.style.display = 'none';
         }
 
         // Activity Feed
@@ -4517,7 +6141,7 @@
                 if (activities.length > 0) {
                     const latestTime = new Date(activities[0].timestamp);
                     const isRecent = (Date.now() - latestTime) < 60000; // Last minute
-                    if (title) title.textContent = isRecent ? (lang === 'he' ? '🔴 Claude עובד עכשיו' : '🔴 Claude working') : (lang === 'he' ? 'פעילות אחרונה' : 'Recent Activity');
+                    if (title) title.textContent = isRecent ? ('🔴 Claude working') : ('Recent Activity');
                     if (feedEl) feedEl.classList.toggle('live', isRecent);
                 }
 
@@ -4582,10 +6206,19 @@
                     return { name: tool, cssClass: '' };
                 }
 
+                // Filter out empty/invalid activities
+                const validActivities = activities.filter(act => {
+                    // Keep only activities with meaningful data
+                    if (act.type === 'unknown' && !act.file && !act.command && !act.cwd) {
+                        return false; // Skip empty entries
+                    }
+                    return true;
+                });
+
                 // Build activity items
                 let html = '';
-                activities.forEach((act, index) => {
-                    const icon = act.type === 'file_change' ? '📝' : '⚡';
+                validActivities.forEach((act, index) => {
+                    const iconClass = act.type === 'file_change' ? 'file' : 'command';
                     const humanName = act.human_name || '';
                     const filePath = act.file || '';
                     const techName = filePath ? filePath.split('/').pop() : (act.command || '').substring(0, 40);
@@ -4605,21 +6238,21 @@
 
                     html += `
                         <div class="${classes}" data-time="${act.timestamp}" data-file="${esc(filePath)}" data-id="${esc(act.id || '')}">
-                            <span class="activity-item-icon">${icon}</span>
+                            <span class="icon-dot ${iconClass}"></span>
                             <span class="activity-item-name">
                                 <span class="activity-item-name-main">
                                     ${esc(humanName || techName)}
                                     <span class="activity-item-project">${esc(projectName)}</span>
                                     ${toolInfo.name ? `<span class="activity-item-tool ${toolInfo.cssClass}">${esc(toolInfo.name)}</span>` : ''}
                                     <span class="activity-item-actions">
-                                        ${filePath ? `<span class="activity-item-edit" onclick="event.stopPropagation(); openMappingModal('${esc(filePath)}', '${esc(humanName)}')" title="${lang === 'he' ? 'שנה שם' : 'Rename'}">✎</span>` : ''}
-                                        <span class="activity-item-delete" onclick="event.stopPropagation(); deleteActivity('${esc(act.id || '')}')" title="${lang === 'he' ? 'מחק' : 'Delete'}">×</span>
+                                        ${filePath ? `<span class="activity-item-edit" onclick="event.stopPropagation(); openMappingModal('${esc(filePath)}', '${esc(humanName)}')" title="${'Rename'}">✎</span>` : ''}
+                                        <span class="activity-item-delete" onclick="event.stopPropagation(); deleteActivity('${esc(act.id || '')}')" title="${'Delete'}">×</span>
                                     </span>
                                 </span>
                                 ${humanName && techName ? `<span class="activity-item-name-tech">${esc(techName)}</span>` : ''}
-                                ${filePath ? `<a class="activity-item-path" href="#" onclick="event.preventDefault(); openFileInEditor('${esc(filePath)}')" title="${lang === 'he' ? 'פתח בעורך' : 'Open in editor'}">${esc(filePath)}</a>` : ''}
+                                ${filePath ? `<a class="activity-item-path" href="#" onclick="event.preventDefault(); openFileInEditor('${esc(filePath)}')" title="${'Open in editor'}">${esc(filePath)}</a>` : ''}
                             </span>
-                            <span class="activity-item-time">${isLatest ? (lang === 'he' ? '⚡ עכשיו' : '⚡ now') : time}</span>
+                            <span class="activity-item-time">${isLatest ? ('⚡ now') : time}</span>
                         </div>
                     `;
                 });
@@ -4664,18 +6297,674 @@
 
         // Clear all activities
         async function clearAllActivities() {
-            if (!confirm(lang === 'he' ? 'למחוק את כל היסטוריית הפעילות?' : 'Clear all activity history?')) return;
+            if (!confirm('Clear all activity history?')) return;
             try {
                 await fetch(API + '/api/activity/clear', { method: 'DELETE' });
                 const list = document.getElementById('activity-list');
                 const empty = document.getElementById('activity-empty');
                 const count = document.getElementById('activity-count');
-                if (list) list.innerHTML = '';
-                if (empty) { empty.style.display = 'block'; list.appendChild(empty); }
+                if (list) {
+                    list.innerHTML = '';
+                    if (empty) { empty.style.display = 'block'; list.appendChild(empty); }
+                }
                 if (count) count.textContent = '0';
-                showToast(lang === 'he' ? 'נוקה!' : 'Cleared!');
+                showToast('Cleared!');
             } catch (e) {
                 console.error('Failed to clear activities:', e);
+            }
+        }
+
+        // ===== Human UI: What Changed Today =====
+        let allActivities = [];
+        let allBrowserErrors = []; // Browser errors from extension
+        let allInsights = []; // Insights from live record
+        let allDecisions = []; // Decisions from project memory
+        let showingDays = 1; // Start with today only
+        let activityFilter = 'project'; // 'all' or 'project' - default to project
+        let typeFilter = 'all'; // 'all', 'edit', 'write', 'bash', 'read', 'error', 'insight', 'decision'
+
+        function setActivityFilter(filter) {
+            activityFilter = filter;
+            // Update button states - only in changes-filter (not all filters!)
+            document.querySelectorAll('#changes-filter .filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === filter);
+            });
+            renderChanges();
+        }
+
+        function setTypeFilter(type) {
+            typeFilter = type;
+            // Update legend item states
+            document.querySelectorAll('#changes-legend .legend-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.type === type);
+            });
+            renderChanges();
+        }
+
+        function updateFilterButtonsText() {
+            // Update all filter buttons across the dashboard
+            document.querySelectorAll('.filter-btn[data-filter="all"]').forEach(btn => {
+                btn.textContent = 'All';
+            });
+            document.querySelectorAll('.filter-btn[data-filter="project"]').forEach(btn => {
+                btn.textContent = 'Project';
+            });
+        }
+
+        async function loadChangesToday() {
+            try {
+                // Fetch activities, browser errors, and live record in parallel
+                const [actRes, errRes, lrRes] = await Promise.all([
+                    fetch(API + '/api/activity/feed?limit=50'),
+                    fetch(API + '/api/live-errors').catch(() => ({ json: () => ({ errors: [] }) })),
+                    fetch(API + '/api/memory/live-record').catch(() => ({ json: () => ({}) }))
+                ]);
+
+                const actData = await actRes.json();
+                allActivities = actData.activities || [];
+
+                try {
+                    const errData = await errRes.json();
+                    const rawErrors = errData.errors || [];
+
+                    // Group identical errors by message
+                    const errorGroups = new Map();
+                    rawErrors.forEach(err => {
+                        const key = (err.message || err.error || '').substring(0, 80);
+                        if (!errorGroups.has(key)) {
+                            errorGroups.set(key, {
+                                ...err,
+                                _isError: true,
+                                _count: 1,
+                                timestamp: err.timestamp || new Date().toISOString()
+                            });
+                        } else {
+                            const existing = errorGroups.get(key);
+                            existing._count++;
+                            // Keep the most recent timestamp
+                            if (new Date(err.timestamp) > new Date(existing.timestamp)) {
+                                existing.timestamp = err.timestamp;
+                            }
+                        }
+                    });
+                    allBrowserErrors = Array.from(errorGroups.values());
+                } catch {
+                    allBrowserErrors = [];
+                }
+
+                // Extract insights and decisions from live record
+                try {
+                    const lrData = await lrRes.json();
+                    const lessons = lrData.live_record?.lessons || lrData.lessons || {};
+                    const insights = lessons.insights || [];
+                    // Handle both old (string) and new (object with timestamp) formats
+                    allInsights = insights.map((insight, i) => {
+                        const isObject = typeof insight === 'object' && insight !== null;
+                        const text = isObject ? (insight.text || insight.insight || '') : insight;
+                        // Use individual timestamp if available, otherwise spread out from updated_at
+                        const ts = isObject && insight.timestamp
+                            ? insight.timestamp
+                            : new Date(new Date(lessons.updated_at || Date.now()).getTime() - (insights.length - i) * 60000).toISOString();
+                        return {
+                            _isInsight: true,
+                            message: text,
+                            timestamp: ts,
+                            id: `insight_${i}`
+                        };
+                    });
+
+                    // Extract decisions
+                    const decisions = lrData.decisions || [];
+                    allDecisions = decisions.map((dec, i) => ({
+                        _isDecision: true,
+                        message: dec.decision || dec.what || '',
+                        reason: dec.reason || '',
+                        timestamp: dec.timestamp || new Date().toISOString(),
+                        id: `decision_${i}`
+                    }));
+                } catch {
+                    allInsights = [];
+                    allDecisions = [];
+                }
+
+                renderChanges();
+            } catch (e) {
+                console.error('Failed to load changes:', e);
+            }
+        }
+
+        function renderChanges() {
+            const list = document.getElementById('changes-list');
+            const empty = document.getElementById('changes-empty');
+            const count = document.getElementById('changes-count');
+            const footer = document.getElementById('changes-footer');
+
+            if (!list) return;
+
+            // Get current project path for filtering
+            const currentProjectPath = window.currentProjectDir || '';
+
+            // Filter by date range
+            const now = new Date();
+            const cutoffDate = new Date(now);
+            cutoffDate.setDate(cutoffDate.getDate() - showingDays);
+            cutoffDate.setHours(0, 0, 0, 0);
+
+            let filtered = allActivities.filter(act => {
+                const actDate = new Date(act.timestamp);
+                return actDate >= cutoffDate;
+            });
+
+            // Filter browser errors by date
+            let filteredErrors = allBrowserErrors.filter(err => {
+                const errDate = new Date(err.timestamp);
+                return errDate >= cutoffDate;
+            });
+
+            // Filter insights (always show all insights for current project)
+            let filteredInsights = allInsights || [];
+
+            // Filter by project if needed
+            if (activityFilter === 'project' && currentProjectPath) {
+                filtered = filtered.filter(act => {
+                    const actPath = act.cwd || act.file || '';
+                    return actPath.startsWith(currentProjectPath);
+                });
+                filteredErrors = filteredErrors.filter(err => {
+                    const errUrl = err.url || err.source || '';
+                    return errUrl.includes(currentProjectPath) || errUrl.includes('localhost');
+                });
+                // Insights are always project-specific (from live record)
+            }
+
+            // Group activities by human name to avoid duplicates
+            const grouped = new Map();
+            filtered.forEach(act => {
+                const key = act.human_name || act.file?.split('/').pop() || act.command?.substring(0, 30) || 'unknown';
+                if (!grouped.has(key)) {
+                    grouped.set(key, act);
+                } else {
+                    // Keep the most recent
+                    const existing = grouped.get(key);
+                    if (new Date(act.timestamp) > new Date(existing.timestamp)) {
+                        grouped.set(key, act);
+                    }
+                }
+            });
+
+            // Merge activities, errors, insights, and decisions, sort by timestamp
+            let changes = [
+                ...Array.from(grouped.values()),
+                ...filteredErrors,
+                ...filteredInsights,
+                ...(allDecisions || [])
+            ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            // Apply type filter
+            if (typeFilter !== 'all') {
+                changes = changes.filter(item => {
+                    if (typeFilter === 'error') return item._isError;
+                    if (typeFilter === 'insight') return item._isInsight;
+                    if (typeFilter === 'decision') return item._isDecision;
+                    if (typeFilter === 'edit') return !item._isError && !item._isInsight && !item._isDecision && item.tool !== 'Write' && item.tool !== 'Bash' && item.tool !== 'Read';
+                    if (typeFilter === 'write') return item.tool === 'Write';
+                    if (typeFilter === 'bash') return item.tool === 'Bash' || item.type === 'command';
+                    if (typeFilter === 'read') return item.tool === 'Read';
+                    return true;
+                });
+            }
+            if (count) count.textContent = changes.length;
+
+            if (changes.length === 0) {
+                if (empty) {
+                    empty.style.display = 'block';
+                    list.innerHTML = '';
+                    list.appendChild(empty);
+                } else {
+                    list.innerHTML = '<div style="color: #666; text-align: center; padding: 16px;">אין שינויים</div>';
+                }
+                if (footer) footer.style.display = 'none';
+                return;
+            }
+
+            if (empty) empty.style.display = 'none';
+
+            // Check if there are more older activities
+            const hasMore = showingDays < 7 && allActivities.some(act => {
+                const actDate = new Date(act.timestamp);
+                return actDate < cutoffDate;
+            });
+            if (footer) footer.style.display = hasMore ? 'block' : 'none';
+
+            // Sensitive patterns
+            const sensitivePatterns = /auth|login|password|payment|billing|credit|admin|security|secret|database|migration|env|config/i;
+
+            let html = '';
+            changes.forEach((act, index) => {
+                const actTime = new Date(act.timestamp);
+                const isRecent = (now - actTime) < 60000; // 60 seconds
+                const time = formatTimeAgo(act.timestamp);
+
+                // Handle browser errors
+                if (act._isError) {
+                    const errMsg = act.message || act.error || 'Unknown error';
+                    const errShort = errMsg.substring(0, 50) + (errMsg.length > 50 ? '...' : '');
+                    const errSource = act.source || act.url || '';
+                    const sourceShort = errSource.split('/').pop()?.substring(0, 30) || 'Browser';
+
+                    // Safely stringify error for onclick
+                    const safeErr = {
+                        id: act.id || 'err_' + Date.now(),
+                        message: errMsg,
+                        source: errSource,
+                        timestamp: act.timestamp,
+                        _isError: true
+                    };
+                    const errJson = JSON.stringify(safeErr).replace(/"/g, '&quot;');
+
+                    const countBadge = act._count > 1 ? `<span style="background: rgba(231,111,81,0.2); color: #e76f51; padding: 2px 6px; border-radius: 10px; font-size: 0.65rem; margin-right: 6px;">×${act._count}</span>` : '';
+
+                    html += `
+                        <div class="change-item error-item ${isRecent ? 'recent' : ''}" onclick="openDrawer('${esc(safeErr.id)}', ${errJson})">
+                            <div class="change-icon error"></div>
+                            <div class="change-info">
+                                <div class="change-name"><span class="change-action" style="color: #e76f51;">Error</span> ${esc(sourceShort)}${countBadge}</div>
+                                <div class="change-time" style="color: #e76f51;">${esc(errShort)}</div>
+                            </div>
+                            ${isRecent ? '<span class="live-badge" style="background: rgba(231,111,81,0.15); color: #e76f51;">⚡</span>' : ''}
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Handle insights
+                if (act._isInsight) {
+                    const insightMsg = act.message || 'תובנה';
+                    const insightShort = insightMsg.length > 60 ? insightMsg.substring(0, 60) + '...' : insightMsg;
+
+                    html += `
+                        <div class="change-item insight-item">
+                            <div class="change-icon insight"></div>
+                            <div class="change-info">
+                                <div class="change-name"><span class="change-action" style="color: #ffd93d;">💡 תובנה</span></div>
+                                <div class="change-time" style="color: #ccc;">${esc(insightShort)}</div>
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Handle decisions
+                if (act._isDecision) {
+                    const decMsg = act.message || 'החלטה';
+                    const decShort = decMsg.length > 50 ? decMsg.substring(0, 50) + '...' : decMsg;
+
+                    html += `
+                        <div class="change-item decision-item" style="background: rgba(107,207,255,0.05); border-right: 3px solid #6bcfff;">
+                            <div class="change-icon decision"></div>
+                            <div class="change-info">
+                                <div class="change-name"><span class="change-action" style="color: #6bcfff;">⚡ החלטה</span></div>
+                                <div class="change-time" style="color: #ccc;">${esc(decShort)}</div>
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const fileName = act.file ? act.file.split('/').pop() : '';
+                const fileNameNoExt = fileName.replace(/\.[^.]+$/, '');
+                const humanName = act.human_name || fileNameNoExt || '';
+                const fileContext = act.file_context || '';
+                const diff = act.diff || {};
+                const isSensitive = sensitivePatterns.test(act.file || '') || sensitivePatterns.test(humanName);
+
+                // Build diff stats string: "(+12, -3)"
+                let diffStr = '';
+                if (diff.added || diff.removed) {
+                    const parts = [];
+                    if (diff.added) parts.push(`+${diff.added}`);
+                    if (diff.removed) parts.push(`-${diff.removed}`);
+                    diffStr = ` (${parts.join(', ')})`;
+                }
+
+                // Icon and action verb based on type + file context
+                let iconClass = 'edit';
+                let actionVerb = '';
+
+                if (act.type === 'command' || act.tool === 'Bash') {
+                    iconClass = 'bash';
+                    // For commands, show the command itself
+                    const cmdShort = act.command?.substring(0, 35) || '';
+                    const cmdDisplay = cmdShort + (act.command?.length > 35 ? '...' : '');
+                    actionVerb = `Ran command`;
+
+                    html += `
+                        <div class="change-item ${isRecent ? 'recent' : ''}" onclick="openDrawer('${esc(act.id || '')}', ${JSON.stringify(act).replace(/"/g, '&quot;')})">
+                            <div class="change-icon ${iconClass}"></div>
+                            <div class="change-info">
+                                <div class="change-name"><span class="change-action">${actionVerb}</span> ${isRecent ? '<span class="live-badge">⚡</span>' : ''}</div>
+                                <div class="change-time">${esc(cmdDisplay)}</div>
+                            </div>
+                        </div>
+                    `;
+                    return; // Skip the rest for commands
+                } else if (act.tool === 'Write') {
+                    iconClass = 'write';
+                    actionVerb = fileContext ? `Created ${fileContext}` : 'Created';
+                } else if (act.tool === 'Read') {
+                    iconClass = 'read';
+                    actionVerb = 'Read';
+                } else {
+                    // Edit
+                    actionVerb = fileContext ? `Updated ${fileContext}` : 'Updated';
+                }
+
+                html += `
+                    <div class="change-item ${isRecent ? 'recent' : ''}" onclick="openDrawer('${esc(act.id || '')}', ${JSON.stringify(act).replace(/"/g, '&quot;')})">
+                        <div class="change-icon ${iconClass}"></div>
+                        <div class="change-info">
+                            <div class="change-name"><span class="change-action">${actionVerb}</span> ${esc(humanName)}${diffStr}</div>
+                            <div class="change-time">${isRecent ? '⚡ עכשיו' : time}</div>
+                        </div>
+                        ${isSensitive ? '<span class="change-badge sensitive">רגיש</span>' : ''}
+                    </div>
+                `;
+            });
+
+            list.innerHTML = html;
+        }
+
+        function loadMoreChanges() {
+            if (showingDays < 7) {
+                showingDays = 7;
+                document.getElementById('show-more-btn').textContent = 'Showing 7 days';
+                renderChanges();
+            }
+        }
+
+        // ===== Technical Drawer =====
+        let currentDrawerActivity = null;
+
+        function openDrawer(activityId, activityData) {
+            currentDrawerActivity = activityData;
+            const drawer = document.getElementById('tech-drawer');
+            const overlay = document.getElementById('drawer-overlay');
+            const content = document.getElementById('drawer-content');
+
+            if (!drawer || !content) return;
+
+            const act = activityData;
+            const fileName = act.file ? act.file.split('/').pop() : '';
+            const componentName = act.human_name || fileName.replace(/\.[^.]+$/, '') || act.command?.substring(0, 20) || '';
+            const fileContext = act.file_context || '';
+            const diff = act.diff || {};
+            const timeAgo = formatTimeAgo(act.timestamp);
+
+            // Build human-readable action sentence with context
+            let actionVerb = 'edited';
+            let actionObject = '';
+            if (act.tool === 'Write') {
+                actionVerb = 'created';
+            } else if (act.type === 'command' || act.tool === 'Bash') {
+                actionVerb = 'ran a command';
+                actionObject = '';
+            } else if (act.tool === 'Read') {
+                actionVerb = 'read';
+            }
+
+            // Add file context to action if available
+            let contextStr = fileContext ? ` (${fileContext})` : '';
+
+            // Build diff display
+            let diffHtml = '';
+            if (diff.added || diff.removed) {
+                diffHtml = `
+                <div class="drawer-section">
+                    <div class="drawer-label">${'Changes'}</div>
+                    <div class="drawer-diff">
+                        ${diff.added ? `<span class="diff-added">+${diff.added}</span>` : ''}
+                        ${diff.removed ? `<span class="diff-removed">-${diff.removed}</span>` : ''}
+                        <span class="diff-label">${'lines'}</span>
+                    </div>
+                </div>
+                `;
+            }
+
+            // Handle errors, insights, decisions differently
+            if (act._isError) {
+                content.innerHTML = `
+                    <div class="drawer-hero" style="border-right: 3px solid #e76f51;">
+                        <div class="drawer-hero-text" style="color: #e76f51;">
+                            שגיאה בדפדפן
+                        </div>
+                    </div>
+                    <div class="drawer-divider"></div>
+                    <div class="drawer-section">
+                        <div class="drawer-label">סוג</div>
+                        <div class="drawer-value">${esc(act.type || 'error')}</div>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-label">הודעה</div>
+                        <div class="drawer-value" style="color: #e76f51; white-space: pre-wrap;">${esc(act.message || '')}</div>
+                    </div>
+                    ${act.source || act.url ? `
+                    <div class="drawer-section">
+                        <div class="drawer-label">מקור</div>
+                        <div class="drawer-value mono">${esc(act.source || act.url || '')}</div>
+                    </div>
+                    ` : ''}
+                    <div class="drawer-section">
+                        <div class="drawer-label">זמן</div>
+                        <div class="drawer-value">${formatTimeFull(act.timestamp)}</div>
+                    </div>
+                `;
+            } else if (act._isInsight) {
+                content.innerHTML = `
+                    <div class="drawer-hero" style="border-right: 3px solid #f4a261;">
+                        <div class="drawer-hero-text" style="color: #f4a261;">
+                            💡 תובנה
+                        </div>
+                    </div>
+                    <div class="drawer-divider"></div>
+                    <div class="drawer-section">
+                        <div class="drawer-label">תוכן</div>
+                        <div class="drawer-value" style="line-height: 1.6; white-space: pre-wrap;">${esc(act.message || '')}</div>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-label">זמן</div>
+                        <div class="drawer-value">${formatTimeFull(act.timestamp)}</div>
+                    </div>
+                `;
+            } else if (act._isDecision) {
+                content.innerHTML = `
+                    <div class="drawer-hero" style="border-right: 3px solid #81b29a;">
+                        <div class="drawer-hero-text" style="color: #81b29a;">
+                            📌 החלטה
+                        </div>
+                    </div>
+                    <div class="drawer-divider"></div>
+                    <div class="drawer-section">
+                        <div class="drawer-label">החלטה</div>
+                        <div class="drawer-value" style="font-weight: 500;">${esc(act.decision || act.message || '')}</div>
+                    </div>
+                    ${act.reason ? `
+                    <div class="drawer-section">
+                        <div class="drawer-label">סיבה</div>
+                        <div class="drawer-value" style="color: #888;">${esc(act.reason)}</div>
+                    </div>
+                    ` : ''}
+                    <div class="drawer-section">
+                        <div class="drawer-label">זמן</div>
+                        <div class="drawer-value">${formatTimeFull(act.timestamp)}</div>
+                    </div>
+                `;
+            } else {
+                // Regular file activity
+                content.innerHTML = `
+                    <div class="drawer-hero">
+                        <div class="drawer-hero-text">
+                            AI ${actionVerb} <strong>"${esc(componentName)}"</strong>${contextStr}
+                        </div>
+                    </div>
+
+                    <div class="drawer-divider"></div>
+
+                    <div class="drawer-section">
+                        <div class="drawer-label">קומפוננטה</div>
+                        <div class="drawer-value">${esc(act.human_name || fileName.replace(/\.[^.]+$/, ''))}</div>
+                    </div>
+
+                    ${act.file ? `
+                    <div class="drawer-section">
+                        <div class="drawer-label">קובץ</div>
+                        <div class="drawer-value mono">${esc(fileName)}</div>
+                    </div>
+
+                    <div class="drawer-section">
+                        <div class="drawer-label">נתיב מלא</div>
+                        <div class="drawer-value mono" style="font-size: 0.7rem; word-break: break-all;">${esc(act.file)}</div>
+                    </div>
+                    ` : ''}
+
+                    ${diffHtml}
+
+                    ${act.command ? `
+                    <div class="drawer-section">
+                        <div class="drawer-label">פקודה</div>
+                        <div class="drawer-value mono">${esc(act.command)}</div>
+                    </div>
+                    ` : ''}
+
+                    <div class="drawer-section">
+                        <div class="drawer-label">זמן</div>
+                        <div class="drawer-value">${formatTimeFull(act.timestamp)}</div>
+                    </div>
+
+                    ${act.file ? `
+                    <button class="drawer-action-btn" onclick="openFileInEditor('${esc(act.file)}')">
+                        פתח ב-VS Code
+                    </button>
+                    ` : ''}
+
+                    ${act.file ? `
+                    <button class="drawer-action-btn secondary" onclick="openMappingModal('${esc(act.file)}', '${esc(act.human_name || '')}'); closeDrawer();">
+                        שנה שם קומפוננטה
+                    </button>
+                    ` : ''}
+                `;
+            }
+
+            drawer.classList.add('open');
+            overlay.classList.add('open');
+        }
+
+        function closeDrawer() {
+            const drawer = document.getElementById('tech-drawer');
+            const overlay = document.getElementById('drawer-overlay');
+            if (drawer) drawer.classList.remove('open');
+            if (overlay) overlay.classList.remove('open');
+            currentDrawerActivity = null;
+        }
+
+        // ===== Browser Errors Feed =====
+        let errorsFilter = 'all'; // 'all' or 'project'
+
+        function setErrorsFilter(filter) {
+            errorsFilter = filter;
+            document.querySelectorAll('#errors-filter .filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === filter);
+            });
+            loadBrowserErrors();
+        }
+
+        async function loadBrowserErrors() {
+            try {
+                const res = await fetch(API + '/api/live-errors');
+                const data = await res.json();
+                let errors = data.errors || [];
+
+                // Filter by project if needed
+                const currentProjectPath = window.currentProjectDir || '';
+                if (errorsFilter === 'project' && currentProjectPath) {
+                    errors = errors.filter(err => {
+                        const errUrl = err.url || '';
+                        const errFile = err.file || '';
+                        // Check if error is from current project (by URL port or file path)
+                        return errUrl.includes('localhost') || errFile.startsWith(currentProjectPath);
+                    });
+                }
+
+                const list = document.getElementById('browser-errors-list');
+                const empty = document.getElementById('browser-errors-empty');
+                const count = document.getElementById('browser-errors-count');
+
+                if (!list) return;
+
+                if (errors.length === 0) {
+                    list.innerHTML = '';
+                    if (empty) { empty.style.display = 'block'; list.appendChild(empty); }
+                    if (count) count.textContent = '0';
+                    return;
+                }
+
+                if (empty) empty.style.display = 'none';
+                if (count) count.textContent = errors.length;
+
+                let html = '';
+                errors.slice(0, 10).forEach((err, index) => {
+                    const time = formatTimeAgo(err.timestamp);
+                    const severity = err.severity || 'error';
+                    const severityClass = severity === 'critical' ? 'critical' : (severity === 'warning' ? 'warning' : 'error');
+                    const msg = (err.message || '').substring(0, 80);
+                    const hasSolution = err.previous_solution || err.matched_solution;
+
+                    // Extract domain from URL
+                    let source = '';
+                    if (err.url) {
+                        try {
+                            const url = new URL(err.url);
+                            source = url.host;
+                        } catch { source = err.url.substring(0, 30); }
+                    }
+
+                    html += `
+                        <div class="activity-item ${index === 0 ? 'latest' : ''} ${hasSolution ? 'has-solution' : ''}">
+                            <span class="icon-dot ${severityClass}"></span>
+                            <span class="activity-item-name">
+                                <span class="activity-item-name-main">
+                                    ${esc(msg)}
+                                    ${source ? `<span class="error-source">${esc(source)}</span>` : ''}
+                                    ${hasSolution ? '<span class="solution-badge">Has Solution</span>' : ''}
+                                </span>
+                                <span class="activity-item-name-tech">${esc(err.type || 'error')}${err.file ? ' @ ' + esc(err.file) : ''}</span>
+                            </span>
+                            <span class="activity-item-time">${time}</span>
+                        </div>
+                    `;
+                });
+
+                list.innerHTML = html;
+
+            } catch (e) {
+                console.error('Failed to load browser errors:', e);
+            }
+        }
+
+        async function clearBrowserErrors() {
+            if (!confirm('Clear all errors?')) return;
+            try {
+                await fetch(API + '/api/clear-logs', { method: 'POST' });
+                const list = document.getElementById('browser-errors-list');
+                const empty = document.getElementById('browser-errors-empty');
+                const count = document.getElementById('browser-errors-count');
+                if (list) {
+                    list.innerHTML = '';
+                    if (empty) { empty.style.display = 'block'; list.appendChild(empty); }
+                }
+                if (count) count.textContent = '0';
+                showToast('Cleared!');
+            } catch (e) {
+                console.error('Failed to clear browser errors:', e);
             }
         }
 
@@ -4756,17 +7045,15 @@
             const diffMin = Math.floor(diffSec / 60);
             const diffHour = Math.floor(diffMin / 60);
 
-            if (diffSec < 60) return lang === 'he' ? 'עכשיו' : 'now';
-            if (diffMin < 60) return diffMin + (lang === 'he' ? ' דק' : 'm');
-            if (diffHour < 24) return diffHour + (lang === 'he' ? ' שע' : 'h');
+            if (diffSec < 60) return 'now';
+            if (diffMin < 60) return diffMin + ('m');
+            if (diffHour < 24) return diffHour + ('h');
             return then.toLocaleDateString();
         }
 
         async function confirmReset() {
-            const message = lang === 'he'
-                ? 'זה ינקה את ה-Live Record (לא את ההחלטות)'
-                : 'This will clear the Live Record (not decisions)';
-            const title = lang === 'he' ? 'התחל מחדש?' : 'Start fresh?';
+            const message = 'This will clear the Live Record (not decisions)';
+            const title = 'Start fresh?';
             const confirmed = await showConfirm(message, title);
 
             if (confirmed) {
@@ -4775,7 +7062,7 @@
                     await fetch(API + '/api/memory/live-record/intent', { method: 'DELETE' });
                     await fetch(API + '/api/memory/live-record/lessons', { method: 'DELETE' });
                     await fetch(API + '/api/memory/live-record/architecture', { method: 'DELETE' });
-                    showToast(lang === 'he' ? 'הזיכרון אופס' : 'Memory reset');
+                    showToast('Memory reset');
                     await loadLiveRecord();
                 } catch (e) {
                     console.error('Failed to reset:', e);
@@ -4808,6 +7095,15 @@
                 const avoidData = await avoidRes.json();
                 avoidPatterns = avoidData.avoid || [];
                 renderAvoid();
+
+                // Load lessons from live-record
+                const liveRecordRes = await fetch(API + '/api/memory/live-record');
+                const liveRecordData = await liveRecordRes.json();
+                lessons = liveRecordData.lessons?.insights || [];
+                renderLessons();
+
+                // Update unified insights count
+                updateInsightsCount();
             } catch (e) {
                 console.error('Failed to load memory data:', e);
             }
@@ -4851,56 +7147,113 @@
             }
         }
 
-        function renderDecisions() {
-            const list = document.getElementById('decisions-list');
-            const count = document.getElementById('decisions-count');
-            count.textContent = decisions.length;
+        function renderDecisions() { renderUnifiedInsights(); }
+        function renderAvoid() { renderUnifiedInsights(); }
+        function renderLessons() { renderUnifiedInsights(); }
 
-            if (decisions.length === 0) {
-                list.innerHTML = `<div class="memory-empty">${t('noDecisions')}</div>`;
-                return;
+        function renderUnifiedInsights() {
+            const list = document.getElementById('unified-insights-list');
+            if (!list) return;
+
+            const items = [];
+
+            // Use all projects data or current project based on filter
+            const useAll = insightsFilter === 'all' && allProjectsInsights;
+            const lessonsData = useAll ? allProjectsInsights.insights : lessons;
+            const decisionsData = useAll ? allProjectsInsights.decisions : decisions;
+            const avoidData = useAll ? allProjectsInsights.avoid : avoidPatterns;
+
+            // Add lessons with type indicator
+            (lessonsData || []).forEach((lesson, idx) => {
+                const text = typeof lesson === 'string' ? lesson : lesson.text || lesson.insight || JSON.stringify(lesson);
+                const projectName = lesson.project_name || '';
+                items.push({
+                    type: 'lesson',
+                    html: `
+                        <div class="memory-card lesson glass">
+                            <span class="insight-type-dot lesson"></span>
+                            <div class="memory-card-header">
+                                <span class="memory-card-title">${esc(text)}</span>
+                                ${useAll && projectName ? `<span class="memory-card-project">${esc(projectName)}</span>` : ''}
+                            </div>
+                        </div>
+                    `
+                });
+            });
+
+            // Add decisions with type indicator
+            (decisionsData || []).forEach(d => {
+                const projectName = d.project_name || '';
+                const canDelete = !useAll; // Only allow delete in project mode
+                items.push({
+                    type: 'decision',
+                    html: `
+                        <div class="memory-card decision glass">
+                            <span class="insight-type-dot decision"></span>
+                            ${canDelete ? `<button class="memory-card-delete" onclick="deleteDecision('${d.id}', event)">×</button>` : ''}
+                            <div class="memory-card-header">
+                                <span class="memory-card-title">${esc(d.decision)}</span>
+                                <span class="memory-card-badge ${d.used_by_ai ? 'used' : 'unused'}">
+                                    ${d.used_by_ai ? '✓' : ''}
+                                </span>
+                                ${useAll && projectName ? `<span class="memory-card-project">${esc(projectName)}</span>` : ''}
+                            </div>
+                            <div class="memory-card-reason">${esc(d.reason)}</div>
+                        </div>
+                    `
+                });
+            });
+
+            // Add avoid patterns with type indicator
+            (avoidData || []).forEach(a => {
+                const projectName = a.project_name || '';
+                const canDelete = !useAll; // Only allow delete in project mode
+                items.push({
+                    type: 'avoid',
+                    html: `
+                        <div class="memory-card avoid glass">
+                            <span class="insight-type-dot avoid"></span>
+                            ${canDelete ? `<button class="memory-card-delete" onclick="deleteAvoid('${a.id}', event)">×</button>` : ''}
+                            <div class="memory-card-header">
+                                <span class="memory-card-title">${esc(a.what)}</span>
+                                <span class="memory-card-badge ${a.used_by_ai ? 'used' : 'unused'}">
+                                    ${a.used_by_ai ? '✓' : ''}
+                                </span>
+                                ${useAll && projectName ? `<span class="memory-card-project">${esc(projectName)}</span>` : ''}
+                            </div>
+                            <div class="memory-card-reason">${esc(a.reason)}</div>
+                        </div>
+                    `
+                });
+            });
+
+            if (items.length === 0) {
+                const emptyMsg = useAll
+                    ? ('No insights in any project')
+                    : ('No insights yet');
+                list.innerHTML = `<div class="insights-empty">${emptyMsg}</div>`;
+            } else {
+                list.innerHTML = items.map(i => i.html).join('');
             }
 
-            list.innerHTML = decisions.map(d => `
-                <div class="memory-card decision glass">
-                    <button class="memory-card-delete" onclick="deleteDecision('${d.id}', event)">×</button>
-                    <div class="memory-card-header">
-                        <span class="memory-card-title">${esc(d.decision)}</span>
-                        <span class="memory-card-badge ${d.used_by_ai ? 'used' : 'unused'}">
-                            ${d.used_by_ai ? '✓ ' + t('usedByAI') + (d.use_count > 1 ? ' ×' + d.use_count : '') : t('notUsedYet')}
-                        </span>
-                    </div>
-                    <div class="memory-card-reason">${esc(d.reason)}</div>
-                </div>
-            `).join('');
+            updateInsightsCount();
         }
 
-        function renderAvoid() {
-            const list = document.getElementById('avoid-list');
-            const count = document.getElementById('avoid-count');
-            count.textContent = avoidPatterns.length;
-
-            if (avoidPatterns.length === 0) {
-                list.innerHTML = `<div class="memory-empty">${t('noAvoidPatterns')}</div>`;
-                return;
+        function updateInsightsCount() {
+            const count = document.getElementById('insights-count');
+            if (count) {
+                let total;
+                if (insightsFilter === 'all' && allProjectsInsights) {
+                    total = allProjectsInsights.total || 0;
+                } else {
+                    total = (lessons?.length || 0) + (decisions?.length || 0) + (avoidPatterns?.length || 0);
+                }
+                count.textContent = total;
             }
-
-            list.innerHTML = avoidPatterns.map(a => `
-                <div class="memory-card avoid glass">
-                    <button class="memory-card-delete" onclick="deleteAvoid('${a.id}', event)">×</button>
-                    <div class="memory-card-header">
-                        <span class="memory-card-title">${esc(a.what)}</span>
-                        <span class="memory-card-badge ${a.used_by_ai ? 'used' : 'unused'}">
-                            ${a.used_by_ai ? '✓ ' + t('usedByAI') + (a.use_count > 1 ? ' ×' + a.use_count : '') : t('notUsedYet')}
-                        </span>
-                    </div>
-                    <div class="memory-card-reason">${esc(a.reason)}</div>
-                </div>
-            `).join('');
         }
 
-        // Toggle section collapse
-        function toggleSection(section) {
+        // Toggle section collapse (legacy - renamed to avoid conflict)
+        function toggleSectionLegacy(section) {
             const header = document.querySelector(`#${section}-content`).previousElementSibling;
             const content = document.getElementById(`${section}-content`);
             header.classList.toggle('collapsed');
@@ -5088,65 +7441,65 @@
         const EDITOR_RULES = {
             cursor: `# FixOnce - AI Memory Protocol
 
-You have FixOnce MCP tools. On ANY greeting (hi, היי, hello, שלום, hey):
+You have FixOnce MCP tools. On ANY greeting (hi, hello, hey):
 
 1. Silently call these MCP tools:
    - get_project_context_tool()
    - get_last_handover()
    - get_avoid_patterns()
 
-2. Present in Hebrew:
-   היי! FixOnce חיבר אותי לפרויקט [name].
-   🎯 הקשר: [stack] - [focus]
-   📜 חוקי בית: [one key decision]
-   ⏸️ איפה עצרנו: [handover summary]
-   מאיפה ממשיכים?
+2. Present:
+   Hi! FixOnce connected me to project [name].
+   Context: [stack] - [focus]
+   House rules: [one key decision]
+   Where we left off: [handover summary]
+   What's next?
 
 3. During work:
    - Before fixing errors: call search_past_solutions() first
    - After fixing: call update_solution_status() with keywords
    - Made a decision: call log_project_decision()
 
-4. On exit (bye, סיימתי, יאללה, done):
+4. On exit (bye, done):
    - Call create_handover() with summary
-   - Say brief goodbye: "שמרתי הכל, להתראות!"
+   - Say brief goodbye: "All saved, see you!"
 
 Core principle: Never debug the same bug twice.`,
 
             copilot: `# FixOnce - AI Memory Protocol
 
-You have FixOnce MCP tools. On ANY greeting (hi, היי, hello, שלום, hey):
+You have FixOnce MCP tools. On ANY greeting (hi, hello, hey):
 
 1. Silently call these MCP tools:
    - get_project_context_tool()
    - get_last_handover()
    - get_avoid_patterns()
 
-2. Present in Hebrew:
-   היי! FixOnce חיבר אותי לפרויקט [name].
-   🎯 הקשר: [stack] - [focus]
-   📜 חוקי בית: [one key decision]
-   ⏸️ איפה עצרנו: [handover summary]
-   מאיפה ממשיכים?
+2. Present:
+   Hi! FixOnce connected me to project [name].
+   Context: [stack] - [focus]
+   House rules: [one key decision]
+   Where we left off: [handover summary]
+   What's next?
 
 3. During work:
    - Before fixing errors: call search_past_solutions() first
    - After fixing: call update_solution_status() with keywords
 
-4. On exit (bye, סיימתי, done):
+4. On exit (bye, done):
    - Call create_handover() with summary
 
 Core principle: Never debug the same bug twice.`,
 
             continue: `{
-  "customInstructions": "You have FixOnce MCP. On any greeting (hi/היי/hello): call get_project_context_tool(), get_last_handover(), get_avoid_patterns(). Present in Hebrew with project name, stack, handover. Before fixing: search_past_solutions(). After fixing: update_solution_status(). On exit: create_handover()."
+  "customInstructions": "You have FixOnce MCP. On any greeting: call get_project_context_tool(), get_last_handover(), get_avoid_patterns(). Present with project name, stack, handover. Before fixing: search_past_solutions(). After fixing: update_solution_status(). On exit: create_handover()."
 }`
         };
 
         const EDITOR_INSTRUCTIONS = {
-            cursor: 'Cursor → Settings (⌘,) → Rules for AI → הדבק',
-            copilot: 'VS Code → Copilot Chat → הדבק בהתחלת שיחה',
-            continue: 'הוסף ל-~/.continue/config.json'
+            cursor: 'Cursor → Settings (⌘,) → Rules for AI → Paste',
+            copilot: 'VS Code → Copilot Chat → Paste at start',
+            continue: 'Add to ~/.continue/config.json'
         };
 
         async function copyRulesFor(editor) {
@@ -5155,14 +7508,14 @@ Core principle: Never debug the same bug twice.`,
 
             try {
                 await navigator.clipboard.writeText(rules);
-                showToast(`✓ הועתק! ${instructions}`);
+                showToast(`Copied! ${instructions}`);
                 // Show usage tip for non-Claude editors
                 if (editor !== 'claude') {
                     document.getElementById('usage-tip').style.display = 'block';
                 }
             } catch (e) {
                 // Fallback: show in prompt
-                prompt(`העתק ידנית (${instructions}):`, rules);
+                prompt(`Copy manually (${instructions}):`, rules);
             }
         }
 
@@ -5182,10 +7535,10 @@ Core principle: Never debug the same bug twice.`,
 
                 const statusText = document.getElementById('safety-status-text');
                 if (safetySettings.enabled) {
-                    statusText.textContent = lang === 'he' ? 'תצוגה מקדימה ואישור שינויים' : 'Preview & approve changes';
+                    statusText.textContent = 'Preview & approve changes';
                     statusText.classList.remove('off');
                 } else {
-                    statusText.textContent = lang === 'he' ? 'כבוי - שינויים מיושמים ישירות' : 'Off - changes applied directly';
+                    statusText.textContent = 'Off - changes applied directly';
                     statusText.classList.add('off');
                 }
 
@@ -5213,7 +7566,7 @@ Core principle: Never debug the same bug twice.`,
                     body: JSON.stringify({ enabled: newState })
                 });
                 await loadSafetyData();
-                showToast(newState ? (lang === 'he' ? 'Safety Switch מופעל' : 'Safety Switch enabled') : (lang === 'he' ? 'Safety Switch כבוי' : 'Safety Switch disabled'));
+                showToast(newState ? ('Safety Switch enabled') : ('Safety Switch disabled'));
             } catch (e) {
                 console.error('Failed to toggle safety:', e);
             }
@@ -5224,7 +7577,7 @@ Core principle: Never debug the same bug twice.`,
             const noPending = document.getElementById('no-pending-text');
 
             if (!pendingChanges || pendingChanges.length === 0) {
-                container.innerHTML = `<div class="no-pending" id="no-pending-text">${lang === 'he' ? 'אין שינויים ממתינים' : 'No pending changes'}</div>`;
+                container.innerHTML = `<div class="no-pending" id="no-pending-text">${'No pending changes'}</div>`;
                 return;
             }
 
@@ -5232,7 +7585,7 @@ Core principle: Never debug the same bug twice.`,
             pendingChanges.forEach(change => {
                 const fileName = change.file_path.split('/').pop();
                 const statusClass = change.status === 'approved' ? 'approved' : '';
-                const statusText = change.status === 'approved' ? (lang === 'he' ? 'מאושר' : 'Approved') : (lang === 'he' ? 'ממתין' : 'Pending');
+                const statusText = change.status === 'approved' ? ('Approved') : ('Pending');
 
                 html += `
                     <div class="pending-card">
@@ -5243,13 +7596,13 @@ Core principle: Never debug the same bug twice.`,
                         <div class="pending-desc">${change.description || 'Code change'}</div>
                         <div class="pending-actions">
                             <button class="pending-btn preview" onclick="previewChange('${change.id}')">
-                                ${lang === 'he' ? 'תצוגה מקדימה' : 'Preview'}
+                                ${'Preview'}
                             </button>
                             <button class="pending-btn approve" onclick="approveAndApply('${change.id}')">
-                                ${lang === 'he' ? 'אשר והחל' : 'Approve & Apply'}
+                                ${'Approve & Apply'}
                             </button>
                             <button class="pending-btn reject" onclick="rejectChange('${change.id}')">
-                                ${lang === 'he' ? 'דחה' : 'Reject'}
+                                ${'Reject'}
                             </button>
                         </div>
                     </div>
@@ -5308,7 +7661,7 @@ Core principle: Never debug the same bug twice.`,
                 const result = await res.json();
 
                 if (result.status === 'ok') {
-                    showToast(lang === 'he' ? 'השינוי הוחל בהצלחה!' : 'Change applied successfully!');
+                    showToast('Change applied successfully!');
                 } else {
                     showToast(result.message || 'Failed to apply change');
                 }
@@ -5327,11 +7680,11 @@ Core principle: Never debug the same bug twice.`,
         }
 
         async function rejectChange(changeId) {
-            if (!await showConfirm(lang === 'he' ? 'לדחות את השינוי?' : 'Reject this change?')) return;
+            if (!await showConfirm('Reject this change?')) return;
 
             try {
                 await fetch(API + `/api/safety/changes/${changeId}/reject`, { method: 'POST' });
-                showToast(lang === 'he' ? 'השינוי נדחה' : 'Change rejected');
+                showToast('Change rejected');
                 await loadSafetyData();
             } catch (e) {
                 console.error('Failed to reject change:', e);
@@ -5353,7 +7706,7 @@ Core principle: Never debug the same bug twice.`,
                 const container = document.getElementById('change-history-list');
 
                 if (history.length === 0) {
-                    container.innerHTML = `<div class="no-pending">${lang === 'he' ? 'אין היסטוריית שינויים' : 'No change history'}</div>`;
+                    container.innerHTML = `<div class="no-pending">${'No change history'}</div>`;
                 } else {
                     let html = '';
                     history.forEach(item => {
@@ -5362,11 +7715,11 @@ Core principle: Never debug the same bug twice.`,
                         let statusText = item.status;
 
                         if (item.status === 'applied') {
-                            statusText = lang === 'he' ? 'הוחל' : 'Applied';
+                            statusText = 'Applied';
                         } else if (item.status === 'undone') {
-                            statusText = lang === 'he' ? 'בוטל' : 'Undone';
+                            statusText = 'Undone';
                         } else if (item.status === 'rejected') {
-                            statusText = lang === 'he' ? 'נדחה' : 'Rejected';
+                            statusText = 'Rejected';
                         }
 
                         const showUndo = item.status === 'applied';
@@ -5378,7 +7731,7 @@ Core principle: Never debug the same bug twice.`,
                                     <span class="history-item-desc">${item.description || ''}</span>
                                 </div>
                                 <span class="history-item-status ${statusClass}">${statusText}</span>
-                                ${showUndo ? `<button class="undo-btn" onclick="undoChange('${item.id}')">${lang === 'he' ? 'בטל' : 'Undo'}</button>` : ''}
+                                ${showUndo ? `<button class="undo-btn" onclick="undoChange('${item.id}')">${'Undo'}</button>` : ''}
                             </div>
                         `;
                     });
@@ -5396,14 +7749,14 @@ Core principle: Never debug the same bug twice.`,
         }
 
         async function undoChange(changeId) {
-            if (!await showConfirm(lang === 'he' ? 'לבטל את השינוי?' : 'Undo this change?')) return;
+            if (!await showConfirm('Undo this change?')) return;
 
             try {
                 const res = await fetch(API + `/api/safety/undo/${changeId}`, { method: 'POST' });
                 const result = await res.json();
 
                 if (result.status === 'ok') {
-                    showToast(lang === 'he' ? 'השינוי בוטל!' : 'Change undone!');
+                    showToast('Change undone!');
                 } else {
                     showToast(result.message || 'Failed to undo');
                 }
@@ -5416,14 +7769,14 @@ Core principle: Never debug the same bug twice.`,
         }
 
         async function undoLastChange() {
-            if (!await showConfirm(lang === 'he' ? 'לבטל את השינוי האחרון?' : 'Undo the last change?')) return;
+            if (!await showConfirm('Undo the last change?')) return;
 
             try {
                 const res = await fetch(API + '/api/safety/undo-last', { method: 'POST' });
                 const result = await res.json();
 
                 if (result.status === 'ok') {
-                    showToast(lang === 'he' ? 'השינוי האחרון בוטל!' : 'Last change undone!');
+                    showToast('Last change undone!');
                 } else {
                     showToast(result.message || 'Failed to undo');
                 }
@@ -5435,7 +7788,6 @@ Core principle: Never debug the same bug twice.`,
         }
 
         // Init
-        document.body.classList.toggle('rtl', lang === 'he');
         applyLang();
 
         // Manual refresh function
@@ -5454,9 +7806,12 @@ Core principle: Never debug the same bug twice.`,
                     loadSafetyData(),
                     loadCurrentSite(),
                     loadActivityFeed(),
+                    loadChangesToday(),
+                    loadBrowserErrors(),
+                    loadQuickStats(),
                     loadProjectsList()
                 ]);
-                showToast(lang === 'he' ? 'רוענן!' : 'Refreshed!');
+                showToast('Refreshed!');
             } catch (e) {
                 console.error('Refresh failed:', e);
             }
@@ -5465,19 +7820,41 @@ Core principle: Never debug the same bug twice.`,
         // Make refreshAll globally accessible
         window.refreshAll = refreshAll;
 
-        // Initial load
-        loadData();
-        loadMemoryData();
-        loadLiveRecord();  // Load Live Record
-        loadSafetyData();
-        loadCurrentSite();
-        loadActivityFeed();
-        setInterval(loadData, 5000);
-        setInterval(loadMemoryData, 10000);  // Refresh memory data every 10s
-        setInterval(loadLiveRecord, 5000);   // Refresh Live Record every 5s
-        setInterval(loadSafetyData, 5000);   // Refresh safety data every 5s
-        setInterval(loadCurrentSite, 10000);
-        setInterval(loadActivityFeed, 5000); // Refresh activity feed every 5s
+        // Initial load - first detect server port, then load data
+        (async function initDashboard() {
+            await detectServerPort();
+            updateFilterButtonsText(); // Set filter button text based on language
+
+            // Phase 1: Load Hero Card first (Focus Mode)
+            loadHeroCard();
+            loadActivitySection();
+            loadInsightsSection();
+
+            // Legacy loaders (some may be redundant now)
+            loadData();
+            loadMemoryData();
+            loadLiveRecord();
+            loadSafetyData();
+            loadCurrentSite();
+            loadActivityFeed();
+            loadChangesToday();
+            loadBrowserErrors();
+            // loadQuickStats(); // Hidden in Focus Mode
+
+            // Refresh intervals
+            setInterval(loadHeroCard, 10000);  // Hero updates every 10s
+            setInterval(loadActivitySection, 10000);
+            setInterval(loadInsightsSection, 30000);
+
+            setInterval(loadData, 5000);
+            // setInterval(loadQuickStats, 30000);  // Hidden in Focus Mode
+            setInterval(loadMemoryData, 10000);
+            setInterval(loadLiveRecord, 5000);
+            setInterval(loadSafetyData, 5000);
+            setInterval(loadCurrentSite, 10000);
+            setInterval(loadActivityFeed, 5000);
+            setInterval(loadChangesToday, 10000);
+        })();
 
         // Close modals on outside click
         ['session-modal', 'project-modal', 'project-switcher-modal', 'detail-modal', 'resolve-modal', 'settings-modal', 'all-issues-modal', 'add-decision-modal', 'add-avoid-modal', 'diff-modal', 'change-history-modal', 'welcome-modal'].forEach(id => {

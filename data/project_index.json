@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "projects": {
+    "test_proj": {
+      "project_id": "test_proj",
+      "working_dir": "/test/path",
+      "name": "My Project",
+      "git_commit_hash": null,
+      "summary": "Test arch",
+      "stack": "Python",
+      "current_goal": "Test goal",
+      "last_insight": "insight1",
+      "decisions_count": 1,
+      "avoid_count": 1,
+      "indexed_at": "2026-02-12T10:10:53.588212"
+    },
+    "FixOnce_e43ce7ce16a6": {
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "working_dir": "/Users/haimdayan/Desktop/FixOnce",
+      "name": "FixOnce",
+      "git_commit_hash": "56dcb49011cc",
+      "summary": "AI Memory Layer - שכבת זיכרון persistent ל-AI assistants. מאפשר ל-Claude/Cursor/Copilot לזכור errors, solutions, decisions והקשר בין sessions.",
+      "stack": "Python (Flask), FastMCP, JavaScript (Browser Extension), HTML/CSS Dashboard, SQLite",
+      "current_goal": "Project Boundary Detection הושלם + שיפורי Dashboard",
+      "last_insight": "צריך לעדכן GPS כשהפוקוס של העבודה משתנה, לא רק intent - אחרת agents אחרים רואים מידע מיושן",
+      "decisions_count": 3,
+      "avoid_count": 0,
+      "indexed_at": "2026-02-13T11:09:28.114979"
+    },
+    "tetris-game_eef8bddb1e7b": {
+      "project_id": "tetris-game_eef8bddb1e7b",
+      "working_dir": "/Users/haimdayan/Desktop/tetris-game",
+      "name": "tetris-game",
+      "git_commit_hash": null,
+      "summary": "משחק טטריס קלאסי בדפדפן",
+      "stack": "Vanilla HTML/CSS/JavaScript, Canvas API",
+      "current_goal": "",
+      "last_insight": "",
+      "decisions_count": 0,
+      "avoid_count": 0,
+      "indexed_at": "2026-02-14T21:01:25.781251"
+    }
+  },
+  "updated_at": "2026-02-14T21:01:25.781261"
+}

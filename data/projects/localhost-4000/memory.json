@@ -1,0 +1,191 @@
+{
+  "project_info": {
+    "name": "localhost-4000",
+    "stack": "",
+    "status": "Active",
+    "description": "",
+    "root_path": "",
+    "created_at": "2026-02-10T22:53:00.225000"
+  },
+  "active_issues": [
+    {
+      "id": "err_a104a355",
+      "type": "ManualTestError",
+      "message": "Manual test error triggered at 22:53:35",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-10T22:53:35.943699",
+      "last_seen": "2026-02-10T22:53:35.943699",
+      "urls": [],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_b40f2dd1",
+      "type": "ManualTestError",
+      "message": "Manual test error triggered at 22:53:51",
+      "severity": "error",
+      "count": 1,
+      "first_seen": "2026-02-10T22:53:51.761543",
+      "last_seen": "2026-02-10T22:53:51.761543",
+      "urls": [],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {
+        "matched_solution": null
+      }
+    },
+    {
+      "id": "err_9df807a4",
+      "type": "console.error",
+      "message": "Cannot read property map of undefined - UserList failed",
+      "severity": "error",
+      "count": 2,
+      "first_seen": "2026-02-10T23:06:21.572060",
+      "last_seen": "2026-02-10T23:07:15.518011",
+      "urls": [
+        "http://localhost:4000/#"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_48f569b4",
+      "type": "console.error",
+      "message": "Failed to load changes: currentProject is not defined\nReferenceError: currentProject is not defined\n    at renderChanges (http://localhost:5000/:5529:40)\n    at loadChangesToday (http://localhost:5000/:5514:17)",
+      "severity": "error",
+      "count": 3,
+      "first_seen": "2026-02-11T21:33:17.247456",
+      "last_seen": "2026-02-11T21:33:36.615569",
+      "urls": [
+        "http://localhost:5000/"
+      ],
+      "file": "",
+      "line": "",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    },
+    {
+      "id": "err_cd1d81c5",
+      "type": "window.error",
+      "message": "Uncaught ReferenceError: currentProject is not defined",
+      "severity": "critical",
+      "count": 2,
+      "first_seen": "2026-02-11T21:33:22.997015",
+      "last_seen": "2026-02-11T21:33:24.719762",
+      "urls": [
+        "http://localhost:5000/"
+      ],
+      "file": "http://localhost:5000/",
+      "line": "5529",
+      "function": "",
+      "snippet": [],
+      "locals": {},
+      "stack": "",
+      "extra": {}
+    }
+  ],
+  "solutions_history": [],
+  "ai_context_snapshot": "",
+  "decisions": [],
+  "avoid": [],
+  "handover": {},
+  "stats": {
+    "total_errors_captured": 6,
+    "total_solutions_applied": 0,
+    "last_updated": "2026-02-11T21:35:55.367995"
+  },
+  "ai_session": {
+    "active": true,
+    "editor": "claude",
+    "started_at": "2026-02-11T21:27:00.348757",
+    "briefing_sent": false
+  },
+  "live_record": {
+    "gps": {
+      "active_ports": [
+        4000
+      ],
+      "entry_points": [],
+      "environment": "dev",
+      "working_dir": "/Users/haimdayan/Desktop/FixOnce/tests/test-site",
+      "updated_at": "2026-02-11T21:35:55.367799",
+      "url": "http://localhost:4000/#",
+      "host": "localhost",
+      "path": "/"
+    },
+    "architecture": {
+      "summary": "פרויקט בדיקות לדמו של FixOnce - 4 תרחישי שגיאות נפוצות",
+      "key_flows": [
+        "undefined.map()",
+        "async/await errors",
+        "KeyError Python",
+        "null reference DOM"
+      ],
+      "updated_at": "2026-02-10T22:53:00.225000",
+      "structure": [
+        "scenarios/"
+      ],
+      "notes": "פרויקט בסיסי עם תיקיית scenarios",
+      "stack": "JavaScript, Python"
+    },
+    "lessons": {
+      "insights": [
+        "async/await: תמיד לעטוף fetch ב-try/catch, לבדוק response.ok, ולטפל ב-null בצד הקורא",
+        "Python dict: תמיד להשתמש ב-.get() עם ערך ברירת מחדל במקום גישה ישירה למפתח",
+        "JS DOM: לבדוק אם אלמנט קיים לפני גישה. לשרשור עמוק להשתמש ב-optional chaining (?.) עם nullish coalescing (??)"
+      ],
+      "failed_attempts": [],
+      "updated_at": "2026-02-10T22:53:25.502865"
+    },
+    "intent": {
+      "current_goal": "תוקנו כל 4 תרחישי השגיאות",
+      "last_milestone": "",
+      "next_step": "הפרויקט מוכן",
+      "blockers": [],
+      "updated_at": "2026-02-10T22:53:25.505999"
+    },
+    "updated_at": "2026-02-10T22:53:25.509186"
+  },
+  "roi": {
+    "solutions_reused": 0,
+    "tokens_saved": 0,
+    "errors_prevented": 0,
+    "decisions_referenced": 0,
+    "time_saved_minutes": 0,
+    "sessions_with_context": 0
+  },
+  "safety": {
+    "enabled": true,
+    "auto_backup": true,
+    "require_approval": true,
+    "changes_history": [],
+    "backups_dir": ".fixonce_backups"
+  },
+  "connected_server": {
+    "url": "http://localhost:5000",
+    "port": "5000",
+    "connected_at": "2026-02-11T21:33:36.615536",
+    "status": "active",
+    "auto_detected": true
+  }
+}

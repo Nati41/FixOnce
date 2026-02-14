@@ -13,16 +13,16 @@ user_response = {
     "role": "admin"
 }
 
-# BUG: This will crash because 'email' key doesn't exist
+# FIXED: Using .get() with default value
 def get_user_email(user_data):
-    return user_data["email"]
+    return user_data.get("email", "no-email@example.com")
 
-# BUG: This will also crash
+# FIXED: Using .get() with default values
 def format_user_info(user_data):
     return f"""
-    Name: {user_data["name"]}
-    Email: {user_data["email"]}
-    Phone: {user_data["phone"]}
+    Name: {user_data.get("name", "Unknown")}
+    Email: {user_data.get("email", "N/A")}
+    Phone: {user_data.get("phone", "N/A")}
     """
 
 # Trigger the error
