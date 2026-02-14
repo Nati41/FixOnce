@@ -1,14 +1,147 @@
 """
 FixOnce Activity API
 Receives activity logs from Claude Code hooks.
+Now with Git diff stats and file type context!
+
+Phase 0: Added project_id tagging to prevent cross-project leakage.
+Phase 1: Added boundary detection for auto project switching.
 """
+
+import sys
+from pathlib import Path
+
+# Add src directory to path for imports
+SRC_DIR = Path(__file__).parent.parent
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 from flask import Blueprint, jsonify, request
 from datetime import datetime
 import json
-from pathlib import Path
+import subprocess
+import hashlib
+
+# Boundary detection imports
+try:
+    from core.boundary_detector import (
+        detect_boundary_violation,
+        handle_boundary_transition
+    )
+    BOUNDARY_DETECTION_ENABLED = True
+    print("[Activity] Boundary detection ENABLED")
+except ImportError as e:
+    BOUNDARY_DETECTION_ENABLED = False
+    print(f"[Activity] Boundary detection not available: {e}")
 
 activity_bp = Blueprint('activity', __name__)
+
+
+# File type to Hebrew context mapping
+FILE_TYPE_CONTEXT = {
+    # Styles
+    ".css": "עיצוב",
+    ".scss": "עיצוב",
+    ".sass": "עיצוב",
+    ".less": "עיצוב",
+    ".styled.js": "עיצוב",
+    ".styled.ts": "עיצוב",
+
+    # Scripts/Logic
+    ".js": "לוגיקה",
+    ".ts": "לוגיקה",
+    ".jsx": "רכיב",
+    ".tsx": "רכיב",
+    ".vue": "רכיב",
+    ".svelte": "רכיב",
+
+    # Python
+    ".py": "קוד",
+
+    # Config
+    ".json": "הגדרות",
+    ".yaml": "הגדרות",
+    ".yml": "הגדרות",
+    ".toml": "הגדרות",
+    ".ini": "הגדרות",
+    ".env": "משתני סביבה",
+
+    # Data/Content
+    ".html": "תצוגה",
+    ".md": "תיעוד",
+    ".txt": "טקסט",
+
+    # Tests
+    ".test.js": "בדיקות",
+    ".test.ts": "בדיקות",
+    ".spec.js": "בדיקות",
+    ".spec.ts": "בדיקות",
+    "_test.py": "בדיקות",
+    "test_.py": "בדיקות",
+}
+
+
+def _get_file_type_context(file_path: str) -> str:
+    """Get Hebrew context word based on file type."""
+    if not file_path:
+        return ""
+
+    file_lower = file_path.lower()
+
+    # Check compound extensions first (like .test.js)
+    for ext, context in FILE_TYPE_CONTEXT.items():
+        if file_lower.endswith(ext):
+            return context
+
+    # Check simple extension
+    ext = Path(file_path).suffix.lower()
+    return FILE_TYPE_CONTEXT.get(ext, "")
+
+
+def _get_git_diff_stats(file_path: str, cwd: str = None) -> dict:
+    """Get git diff statistics for a file."""
+    try:
+        if not file_path:
+            return {}
+
+        # Determine working directory
+        work_dir = cwd or str(Path(file_path).parent)
+
+        # Run git diff --numstat for the specific file
+        result = subprocess.run(
+            ["git", "diff", "--numstat", "HEAD~1", "--", file_path],
+            capture_output=True,
+            text=True,
+            cwd=work_dir,
+            timeout=5
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            parts = result.stdout.strip().split('\t')
+            if len(parts) >= 2:
+                added = int(parts[0]) if parts[0] != '-' else 0
+                removed = int(parts[1]) if parts[1] != '-' else 0
+                return {"added": added, "removed": removed}
+
+        # Try unstaged changes if no committed diff
+        result = subprocess.run(
+            ["git", "diff", "--numstat", "--", file_path],
+            capture_output=True,
+            text=True,
+            cwd=work_dir,
+            timeout=5
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            parts = result.stdout.strip().split('\t')
+            if len(parts) >= 2:
+                added = int(parts[0]) if parts[0] != '-' else 0
+                removed = int(parts[1]) if parts[1] != '-' else 0
+                return {"added": added, "removed": removed}
+
+    except Exception as e:
+        print(f"[Activity] Git diff error: {e}")
+
+    return {}
 
 # Activity log file
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
@@ -33,6 +166,18 @@ def _save_activity(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def _get_project_id_from_cwd(cwd: str) -> str:
+    """Generate project_id from cwd (same logic as MCP server)."""
+    if not cwd:
+        return "__global__"
+    try:
+        path_hash = hashlib.md5(cwd.encode()).hexdigest()[:12]
+        name = Path(cwd).name
+        return f"{name}_{path_hash}"
+    except:
+        return "__global__"
+
+
 @activity_bp.route("/log", methods=["POST"])
 def log_activity():
     """
@@ -49,21 +194,52 @@ def log_activity():
     try:
         data = request.get_json(silent=True) or {}
 
+        # Skip empty/invalid activities
+        if not data.get("file") and not data.get("command") and not data.get("cwd"):
+            return jsonify({"status": "skipped", "reason": "no meaningful data"})
+
+        file_path = data.get("file")
+        cwd = data.get("cwd")
+        boundary_transition = None
+
+        # Phase 1: Check for boundary violation (file outside active project)
+        if BOUNDARY_DETECTION_ENABLED and file_path and data.get("tool") in ["Edit", "Write", "NotebookEdit"]:
+            boundary_event = detect_boundary_violation(file_path)
+            if boundary_event:
+                # High or medium confidence - execute switch
+                new_project_id = handle_boundary_transition(boundary_event)
+                project_id = new_project_id
+                boundary_transition = boundary_event.to_dict()
+            else:
+                # No violation or low confidence - use cwd as before
+                project_id = _get_project_id_from_cwd(cwd)
+        else:
+            # Fallback: Generate project_id from cwd (Phase 0: prevent cross-project leakage)
+            project_id = _get_project_id_from_cwd(cwd)
+
+        # Get enriched data
+        file_context = _get_file_type_context(file_path) if file_path else ""
+        diff_stats = _get_git_diff_stats(file_path, cwd) if file_path and data.get("tool") in ["Edit", "Write"] else {}
+
         activity = {
             "id": f"act_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}",
             "type": data.get("type", "unknown"),
             "tool": data.get("tool"),
-            "file": data.get("file"),
+            "file": file_path,
             "command": data.get("command"),
-            "cwd": data.get("cwd"),
+            "cwd": cwd,
+            "project_id": project_id,  # Phase 0: Tag with project
             "timestamp": data.get("timestamp") or datetime.now().isoformat(),
-            "human_name": _get_human_name(data)
+            "human_name": _get_human_name(data),
+            "file_context": file_context,
+            "diff": diff_stats,
+            "boundary_transition": boundary_transition  # Phase 1: Track project switches
         }
 
         log = _load_activity()
         log["activities"].insert(0, activity)  # Most recent first
 
-        # Keep only last 100 activities
+        # Keep only last 100 activities (global, will be filtered by project_id when reading)
         log["activities"] = log["activities"][:100]
 
         _save_activity(log)

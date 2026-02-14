@@ -1,6 +1,8 @@
 """
 FixOnce Error Routes
 Error logging and live error retrieval endpoints.
+
+Phase 0: Added project_id tagging to prevent cross-project leakage.
 """
 
 from flask import jsonify, request
@@ -10,9 +12,19 @@ from . import errors_bp
 from core.notifications import send_desktop_notification
 from core.error_store import get_error_log, get_log_lock, add_error, get_errors, clear_errors
 
-# Get references to shared state
+# Get references to shared state (legacy compatibility)
 error_log = get_error_log()
 log_lock = get_log_lock()
+
+
+def _get_active_project_id() -> str:
+    """Get the active project ID for error attribution."""
+    try:
+        from managers.multi_project_manager import get_active_project_id
+        pid = get_active_project_id()
+        return pid if pid else "__global__"
+    except:
+        return "__global__"
 
 
 @errors_bp.route("/log", methods=["POST"])
@@ -33,8 +45,9 @@ def receive_log():
         "timestamp": data.get("timestamp", datetime.now().isoformat()),
     }
 
-    with log_lock:
-        error_log.append(entry)
+    # Phase 0: Add error with project_id tagging
+    project_id = _get_active_project_id()
+    add_error(entry, project_id=project_id)
 
     print(
         f"\n🔥 [{entry['type']}] {entry['timestamp']}\n"
@@ -92,8 +105,9 @@ def api_log_error():
     except Exception as e:
         print(f"[V3.1] Match error: {e}")
 
-    with log_lock:
-        error_log.append(entry)
+    # Phase 0: Add error with project_id tagging
+    project_id = _get_active_project_id()
+    add_error(entry, project_id=project_id)
 
     # Update Project Memory
     try:
@@ -119,15 +133,9 @@ def api_log_error():
         )
         print(f"[ProjectMemory] {memory_result['status']}: {memory_result['issue_id']} (count: {memory_result['count']})")
 
-        # Send desktop notification for new errors
-        if memory_result['status'] == 'new':
-            is_critical = entry['severity'] == 'critical'
-            short_msg = entry['message'][:100] + '...' if len(entry['message']) > 100 else entry['message']
-            send_desktop_notification(
-                title=f"🔴 FixOnce: {entry['type']}" if is_critical else f"⚠️ FixOnce: {entry['type']}",
-                message=short_msg,
-                sound=is_critical
-            )
+        # Desktop notifications disabled - errors show in dashboard
+        # if memory_result['status'] == 'new':
+        #     send_desktop_notification(...)
     except Exception as e:
         print(f"[ProjectMemory] Error: {e}")
 
@@ -150,6 +158,9 @@ def api_log_errors_batch():
     errors = data.get("errors", [])
     processed = 0
 
+    # Phase 0: Get project_id once for the batch
+    project_id = _get_active_project_id()
+
     for error_data in errors:
         try:
             entry = {
@@ -162,8 +173,8 @@ def api_log_errors_batch():
                 "timestamp": error_data.get("timestamp", datetime.now().isoformat()),
             }
 
-            with log_lock:
-                error_log.append(entry)
+            # Phase 0: Add error with project_id tagging
+            add_error(entry, project_id=project_id)
 
             # Update Project Memory
             try:
@@ -188,14 +199,7 @@ def api_log_errors_batch():
                     extra_data={}
                 )
 
-                if memory_result.get('status') == 'new':
-                    is_critical = entry['severity'] == 'critical'
-                    short_msg = entry['message'][:100] + '...' if len(entry['message']) > 100 else entry['message']
-                    send_desktop_notification(
-                        title=f"🔴 FixOnce: {entry['type']}" if is_critical else f"⚠️ FixOnce: {entry['type']}",
-                        message=short_msg,
-                        sound=is_critical
-                    )
+                # Desktop notifications disabled - errors show in dashboard
             except Exception as e:
                 print(f"[ProjectMemory] Batch error: {e}")
 
@@ -214,11 +218,32 @@ def api_log_errors_batch():
 
 @errors_bp.route("/api/live-errors")
 def api_live_errors():
-    """API endpoint to get live errors with matched solutions."""
+    """API endpoint to get live errors with matched solutions.
+
+    Query params:
+        since: Filter to errors from the last N seconds (optional)
+    """
     from core.db_solutions import find_solution_hybrid
+
+    # Check for 'since' parameter (seconds)
+    since_seconds = request.args.get('since', type=int)
 
     with log_lock:
         errors = list(error_log)
+
+    # Filter by time if 'since' is provided
+    if since_seconds:
+        cutoff = datetime.now().timestamp() - since_seconds
+        filtered_errors = []
+        for error in errors:
+            try:
+                error_time = datetime.fromisoformat(error.get('timestamp', '')).timestamp()
+                if error_time >= cutoff:
+                    filtered_errors.append(error)
+            except:
+                # If timestamp parsing fails, include the error
+                filtered_errors.append(error)
+        errors = filtered_errors
 
     # Enrich each error with previous solution if available
     for error in errors:

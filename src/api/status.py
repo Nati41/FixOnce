@@ -263,3 +263,183 @@ def api_open_folder():
         return jsonify({"status": "ok", "path": str(extension_path)})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@status_bp.route("/system/cursor_one_click", methods=["POST"])
+def api_cursor_one_click():
+    """One-click Cursor setup: Configure MCP + Create .cursorrules + Launch Cursor."""
+    import subprocess
+    import platform
+    from config import SRC_DIR
+
+    data = request.get_json(silent=True) or {}
+    project_path = data.get("project_path")
+
+    if not project_path:
+        # Try to get from active project
+        try:
+            from managers.multi_project_manager import get_active_project_id, load_project_memory
+            project_id = get_active_project_id()
+            if project_id:
+                memory = load_project_memory(project_id)
+                project_path = memory.get('project_info', {}).get('working_dir')
+        except:
+            pass
+
+    if not project_path:
+        return jsonify({"status": "error", "message": "No project path provided"}), 400
+
+    project_path = Path(project_path)
+    if not project_path.exists():
+        return jsonify({"status": "error", "message": f"Project path not found: {project_path}"}), 404
+
+    results = {"mcp": None, "cursorrules": None, "launch": None}
+
+    # Step 1: Configure MCP in ~/.cursor/mcp.json
+    try:
+        mcp_server_path = str(SRC_DIR / "mcp_server" / "mcp_memory_server_v2.py")
+        cursor_config_path = Path.home() / ".cursor" / "mcp.json"
+        cursor_config_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if cursor_config_path.exists():
+            with open(cursor_config_path, 'r') as f:
+                config = json.load(f)
+        else:
+            config = {}
+
+        if "mcpServers" not in config:
+            config["mcpServers"] = {}
+
+        config["mcpServers"]["fixonce"] = {
+            "command": sys.executable,
+            "args": [mcp_server_path]
+        }
+
+        with open(cursor_config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+
+        results["mcp"] = {"status": "ok", "path": str(cursor_config_path)}
+    except Exception as e:
+        results["mcp"] = {"status": "error", "message": str(e)}
+
+    # Step 2: Create .cursorrules in the project
+    try:
+        cursorrules_path = project_path / ".cursorrules"
+        cursorrules_content = f"""# FixOnce Protocol - MANDATORY RULES
+
+You are FixOnce-powered. You have persistent memory. ALL RULES ARE MANDATORY.
+
+---
+
+## 🚨 RULE #1: Session Start - REQUIRED
+
+On EVERY conversation start, IMMEDIATELY call:
+```
+auto_init_session(cwd="{project_path}")
+```
+
+Then display in Hebrew:
+- 🧠 FixOnce header
+- 📍 Last goal
+- 🔒 ALL decisions from response (MANDATORY!)
+- ⚠️ Avoid patterns
+
+---
+
+## 🚨 RULE #2: BEFORE ANY CHANGE - CHECK DECISIONS
+
+**BEFORE modifying architecture, storage, data structures, or system design:**
+
+1. CHECK the decisions returned from auto_init_session()
+2. IF user request CONTRADICTS a decision:
+
+```
+🛑 STOP - Existing decision in FixOnce:
+   "[decision text]"
+   Reason: [reason]
+
+Your request contradicts this decision.
+Override? (yes/no)
+```
+
+**YOU ARE FORBIDDEN from implementing contradicting changes without EXPLICIT user approval.**
+
+---
+
+## 🚨 RULE #3: Update Goal BEFORE Starting Work
+
+**When user gives a NEW task:**
+```
+update_live_record("intent", {{"current_goal": "Brief task description"}})
+```
+**Do this BEFORE working, not after!** Keeps dashboard live.
+
+---
+
+## 🚨 RULE #4: Logging During Work - REQUIRED
+
+| Event | Action |
+|-------|--------|
+| Learned something | `update_live_record("lessons", {{"insight": "..."}})` |
+| Decision made | `log_decision(decision, reason)` |
+| Something to avoid | `log_avoid(what, reason)` |
+
+After updates: `(📌 FixOnce: saved)`
+
+---
+
+## MCP Tools
+
+| Tool | Purpose |
+|------|---------|
+| auto_init_session(cwd) | **REQUIRED first!** |
+| update_live_record(section, data) | Update memory |
+| log_decision(decision, reason) | Log decision |
+| log_avoid(what, reason) | Log anti-pattern |
+| search_past_solutions(query) | Search solutions |
+| get_browser_errors(limit) | Check browser errors |
+
+---
+
+## ENFORCEMENT
+
+1. ALWAYS init at start
+2. ALWAYS display decisions
+3. NEVER contradict decision without approval
+4. ALWAYS update goal BEFORE starting new work
+5. ALWAYS log insights during work
+
+**These are REQUIREMENTS, not suggestions.**
+"""
+        with open(cursorrules_path, 'w', encoding='utf-8') as f:
+            f.write(cursorrules_content)
+
+        results["cursorrules"] = {"status": "ok", "path": str(cursorrules_path)}
+    except Exception as e:
+        results["cursorrules"] = {"status": "error", "message": str(e)}
+
+    # Step 3: Launch Cursor with the project
+    try:
+        system = platform.system()
+        if system == "Darwin":
+            # Try 'cursor' CLI first, fall back to 'open -a Cursor'
+            try:
+                subprocess.run(["cursor", str(project_path)], check=True, timeout=5)
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                subprocess.run(["open", "-a", "Cursor", str(project_path)], check=True)
+        elif system == "Windows":
+            subprocess.run(["cursor", str(project_path)], check=True, shell=True)
+        else:
+            subprocess.run(["cursor", str(project_path)], check=True)
+
+        results["launch"] = {"status": "ok"}
+    except Exception as e:
+        results["launch"] = {"status": "error", "message": str(e)}
+
+    # Overall status
+    all_ok = all(r.get("status") == "ok" for r in results.values() if r)
+    return jsonify({
+        "status": "ok" if all_ok else "partial",
+        "results": results,
+        "message": "Cursor configured and launched!" if all_ok else "Some steps failed"
+    })

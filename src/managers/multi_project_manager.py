@@ -1,29 +1,25 @@
 """
-Multi-Project Manager for FixOnce
-Handles multiple projects with automatic detection and switching.
+Multi-Project Manager for FixOnce - V2 Only
 
-Architecture:
-- data/projects/{project_id}/memory.json - per-project memory
-- data/projects/{project_id}/solutions.db - per-project solutions
-- data/global/solutions.db - shared solutions across all projects
-- data/active_project.json - current active project pointer
+Canonical storage: data/projects_v2/{project_id}.json
+Project ID = {folder_name}_{md5_hash[:12]} derived from working_dir
+
+V1 (data/projects/) is deprecated and ignored.
 """
 
 import os
 import json
 import hashlib
 import threading
-import re
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from urllib.parse import urlparse
 
 # Paths
 SRC_DIR = Path(__file__).parent.parent
 PROJECT_DIR = SRC_DIR.parent
 DATA_DIR = PROJECT_DIR / "data"
-PROJECTS_DIR = DATA_DIR / "projects"
 PROJECTS_V2_DIR = DATA_DIR / "projects_v2"
 GLOBAL_DIR = DATA_DIR / "global"
 ACTIVE_PROJECT_FILE = DATA_DIR / "active_project.json"
@@ -32,19 +28,64 @@ ACTIVE_PROJECT_FILE = DATA_DIR / "active_project.json"
 _lock = threading.Lock()
 
 # Ensure directories exist
-PROJECTS_DIR.mkdir(exist_ok=True)
-PROJECTS_V2_DIR.mkdir(exist_ok=True)
+PROJECTS_V2_DIR.mkdir(parents=True, exist_ok=True)
 GLOBAL_DIR.mkdir(exist_ok=True)
 
 
-def _get_v2_project_by_port(port: int) -> Optional[Dict[str, Any]]:
-    """
-    Find and load v2 project data by detecting working dir from port.
-    """
-    import subprocess
+# ============================================================
+# PROJECT ID GENERATION (Canonical: working_dir based)
+# ============================================================
 
+def generate_project_id_from_path(working_dir: str) -> str:
+    """
+    Generate project ID from working directory.
+    This is the ONLY way to generate IDs now.
+
+    Format: {folder_name}_{md5_hash[:12]}
+    Example: /Users/x/my-app -> my-app_a1b2c3d4e5f6
+    """
+    path_hash = hashlib.md5(working_dir.encode()).hexdigest()[:12]
+    name = Path(working_dir).name
+    return f"{name}_{path_hash}"
+
+
+def generate_project_id(source: str, source_type: str = "path") -> str:
+    """
+    Generate project ID. Prefers path-based IDs.
+
+    For backwards compatibility with dashboard URL detection,
+    we try to detect working_dir from port if source is URL.
+    """
+    if source_type == "path":
+        return generate_project_id_from_path(source)
+
+    elif source_type == "url":
+        # Try to detect working_dir from port
+        from urllib.parse import urlparse
+        parsed = urlparse(source)
+        port = parsed.port
+
+        if port:
+            working_dir = _detect_working_dir_from_port(port)
+            if working_dir:
+                return generate_project_id_from_path(working_dir)
+
+        # Fallback: URL-based ID (legacy, less preferred)
+        host = parsed.hostname or "localhost"
+        if port and port not in (80, 443):
+            return f"{host}-{port}".lower()
+        return host.lower()
+
+    else:
+        # Manual or other - create safe ID
+        import re
+        safe = re.sub(r'[^a-zA-Z0-9-_]', '-', source).lower()
+        return f"{safe}_{hashlib.md5(source.encode()).hexdigest()[:8]}"
+
+
+def _detect_working_dir_from_port(port: int) -> Optional[str]:
+    """Detect working directory from a running port using lsof."""
     try:
-        # Get PID of process on port
         result = subprocess.run(
             ['lsof', '-i', f':{port}', '-t'],
             capture_output=True, text=True, timeout=5
@@ -54,7 +95,6 @@ def _get_v2_project_by_port(port: int) -> Optional[Dict[str, Any]]:
 
         pid = result.stdout.strip().split('\n')[0]
 
-        # Get cwd of that process
         result = subprocess.run(
             ['lsof', '-p', pid],
             capture_output=True, text=True, timeout=5
@@ -62,188 +102,62 @@ def _get_v2_project_by_port(port: int) -> Optional[Dict[str, Any]]:
         if result.returncode != 0:
             return None
 
-        # Find cwd line
-        working_dir = None
         for line in result.stdout.split('\n'):
             if ' cwd ' in line:
                 parts = line.split()
                 if len(parts) >= 9:
                     path = parts[-1]
-                    # Go up if we're in src/ or similar
                     if Path(path).name in ('src', 'dist', 'build', 'bin'):
                         path = str(Path(path).parent)
-                    working_dir = path
-                    break
-
-        if not working_dir:
-            return None
-
-        # Generate v2 project ID
-        path_hash = hashlib.md5(working_dir.encode()).hexdigest()[:12]
-        name = Path(working_dir).name
-        project_id = f"{name}_{path_hash}"
-
-        # Load v2 project file
-        v2_path = PROJECTS_V2_DIR / f"{project_id}.json"
-        if v2_path.exists():
-            with open(v2_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-
+                    return path
         return None
-    except Exception as e:
-        print(f"[MultiProject] Error loading v2 project: {e}")
+    except Exception:
         return None
 
 
-def _merge_v2_into_memory(memory: Dict[str, Any], v2_data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Merge v2 project data into v1 memory structure.
-    """
-    if not v2_data:
-        return memory
+# ============================================================
+# V2 STORAGE FUNCTIONS
+# ============================================================
 
-    # Merge live_record
-    v2_live = v2_data.get('live_record', {})
-    if 'live_record' not in memory:
-        memory['live_record'] = {}
-
-    for section in ['gps', 'architecture', 'intent', 'lessons']:
-        if section in v2_live and v2_live[section]:
-            if section not in memory['live_record']:
-                memory['live_record'][section] = {}
-            # Merge non-empty values
-            for key, value in v2_live[section].items():
-                if value:  # Only merge non-empty values
-                    memory['live_record'][section][key] = value
-
-    # Merge decisions
-    if v2_data.get('decisions'):
-        if 'decisions' not in memory:
-            memory['decisions'] = []
-        memory['decisions'].extend(v2_data['decisions'])
-
-    # Merge avoid
-    if v2_data.get('avoid'):
-        if 'avoid' not in memory:
-            memory['avoid'] = []
-        memory['avoid'].extend(v2_data['avoid'])
-
-    return memory
-
-
-def generate_project_id(source: str, source_type: str = "url") -> str:
-    """
-    Generate a clean project ID from various sources.
-
-    Args:
-        source: URL, path, or identifier
-        source_type: "url", "path", "git", "manual"
-
-    Returns:
-        Clean project ID like "tofesly-localhost-3000"
-    """
-    if source_type == "url":
-        parsed = urlparse(source)
-        host = parsed.hostname or "localhost"
-        port = parsed.port
-
-        # Clean the host
-        host = host.replace("www.", "")
-
-        if port and port not in (80, 443):
-            return f"{host}-{port}".lower()
-        return host.lower()
-
-    elif source_type == "path":
-        # Get the folder name from path
-        path = Path(source)
-        name = path.name or path.parent.name
-        # Clean it
-        name = re.sub(r'[^a-zA-Z0-9-_]', '-', name)
-        return name.lower()
-
-    elif source_type == "git":
-        # Extract repo name from git URL
-        # git@github.com:user/repo.git -> repo
-        # https://github.com/user/repo.git -> repo
-        match = re.search(r'/([^/]+?)(?:\.git)?$', source)
-        if match:
-            return match.group(1).lower()
-        return hashlib.md5(source.encode()).hexdigest()[:8]
-
-    else:
-        # Manual - just clean it
-        return re.sub(r'[^a-zA-Z0-9-_]', '-', source).lower()
+def get_project_path(project_id: str) -> Path:
+    """Get path to project JSON file in V2 storage."""
+    return PROJECTS_V2_DIR / f"{project_id}.json"
 
 
 def get_project_dir(project_id: str) -> Path:
-    """Get the directory path for a project."""
-    return PROJECTS_DIR / project_id
+    """
+    Get project directory (for compatibility).
+    In V2, this is just the projects_v2 dir with the file.
+    """
+    return PROJECTS_V2_DIR
 
 
 def get_project_memory_path(project_id: str) -> Path:
-    """Get the memory.json path for a project."""
-    return get_project_dir(project_id) / "memory.json"
+    """Get memory path (same as project path in V2)."""
+    return get_project_path(project_id)
 
 
 def get_project_solutions_path(project_id: str) -> Path:
-    """Get the solutions.db path for a project."""
-    return get_project_dir(project_id) / "solutions.db"
+    """Get solutions.db path for a project."""
+    return PROJECTS_V2_DIR / f"{project_id}_solutions.db"
 
 
 def get_global_solutions_path() -> Path:
-    """Get the global solutions.db path."""
+    """Get global solutions.db path."""
     return GLOBAL_DIR / "solutions.db"
 
 
-def list_projects() -> List[Dict[str, Any]]:
-    """
-    List all projects with basic info.
+def project_exists(project_id: str) -> bool:
+    """Check if project exists."""
+    return get_project_path(project_id).exists()
 
-    Returns:
-        List of project summaries
-    """
-    projects = []
 
-    if not PROJECTS_DIR.exists():
-        return projects
-
-    for project_dir in PROJECTS_DIR.iterdir():
-        if project_dir.is_dir():
-            memory_path = project_dir / "memory.json"
-            if memory_path.exists():
-                try:
-                    with open(memory_path, 'r', encoding='utf-8') as f:
-                        memory = json.load(f)
-
-                    info = memory.get('project_info', {})
-                    stats = memory.get('stats', {})
-
-                    projects.append({
-                        "id": project_dir.name,
-                        "name": info.get('name', project_dir.name),
-                        "stack": info.get('stack', ''),
-                        "root_path": info.get('root_path', ''),
-                        "last_updated": stats.get('last_updated', ''),
-                        "issues_count": len(memory.get('active_issues', [])),
-                        "solutions_count": len(memory.get('solutions_history', []))
-                    })
-                except Exception as e:
-                    print(f"[MultiProject] Error reading {project_dir.name}: {e}")
-
-    # Sort by last_updated descending
-    projects.sort(key=lambda x: x.get('last_updated', ''), reverse=True)
-
-    return projects
-
+# ============================================================
+# ACTIVE PROJECT MANAGEMENT
+# ============================================================
 
 def get_active_project() -> Optional[Dict[str, Any]]:
-    """
-    Get the currently active project info.
-
-    Returns:
-        Active project dict or None
-    """
+    """Get the currently active project info."""
     if not ACTIVE_PROJECT_FILE.exists():
         return None
 
@@ -264,167 +178,92 @@ def set_active_project(
     project_id: str,
     detected_from: str = "manual",
     display_name: str = None,
-    create_if_missing: bool = False
+    create_if_missing: bool = True,
+    working_dir: str = None
 ) -> Dict[str, Any]:
     """
     Set the active project.
 
     Args:
         project_id: The project ID to activate
-        detected_from: How it was detected (extension, server, editor, manual)
+        detected_from: How it was detected
         display_name: Optional display name
-        create_if_missing: If False, won't create new project (default: False)
-
-    Returns:
-        Active project info
+        create_if_missing: Create project if it doesn't exist
+        working_dir: Working directory (for new projects)
     """
     with _lock:
-        project_dir = get_project_dir(project_id)
-        memory_path = get_project_memory_path(project_id)
+        project_path = get_project_path(project_id)
 
-        # Only create project if explicitly allowed
-        if not memory_path.exists():
+        if not project_path.exists():
             if create_if_missing:
-                project_dir.mkdir(exist_ok=True)
-                init_project_memory(project_id, display_name)
+                init_project_memory(project_id, display_name, working_dir)
             else:
-                # Project doesn't exist and auto-create is disabled
-                # Fall back to 'fixonce' project
-                print(f"[MultiProject] Project '{project_id}' not found, staying on current project")
-                return get_active_project() or {"active_id": "fixonce", "detected_from": "fallback"}
+                print(f"[MultiProject] Project '{project_id}' not found")
+                return get_active_project() or {"active_id": None, "detected_from": "fallback"}
 
-        # Update active project file
+        # Phase 1: Get working_dir from project memory if not provided
+        actual_working_dir = working_dir
+        if not actual_working_dir and project_path.exists():
+            try:
+                with open(project_path, 'r', encoding='utf-8') as f:
+                    memory = json.load(f)
+                actual_working_dir = (
+                    memory.get("project_info", {}).get("working_dir") or
+                    memory.get("live_record", {}).get("gps", {}).get("working_dir")
+                )
+            except Exception:
+                pass
+
         active_info = {
             "active_id": project_id,
             "detected_from": detected_from,
             "detected_at": datetime.now().isoformat(),
-            "display_name": display_name or project_id
+            "display_name": display_name or project_id,
+            "working_dir": actual_working_dir  # Phase 1: Store for boundary detection
         }
 
         with open(ACTIVE_PROJECT_FILE, 'w', encoding='utf-8') as f:
             json.dump(active_info, f, ensure_ascii=False, indent=2)
 
         print(f"[MultiProject] Switched to: {project_id} (from {detected_from})")
-
         return active_info
 
 
-def detect_project_from_url(url: str) -> Dict[str, Any]:
-    """
-    Detect and activate project from URL.
+# ============================================================
+# PROJECT MEMORY CRUD
+# ============================================================
 
-    Args:
-        url: The URL from browser extension
-
-    Returns:
-        Active project info
-    """
-    if not url:
-        return {"error": "No URL provided"}
-
-    project_id = generate_project_id(url, "url")
-
-    # Create display name
-    parsed = urlparse(url)
-    host = parsed.hostname or "localhost"
-    port = parsed.port
-    path = parsed.path or ""
-    display_name = f"{host}:{port}" if port else host
-
-    # Set active project
-    result = set_active_project(project_id, "extension", display_name)
-
-    # Update Live Record GPS with URL info
-    memory = load_project_memory(project_id)
-    if 'live_record' not in memory:
-        memory['live_record'] = {}
-    if 'gps' not in memory['live_record']:
-        memory['live_record']['gps'] = {}
-
-    gps = memory['live_record']['gps']
-    gps['url'] = url
-    gps['host'] = host
-    gps['active_ports'] = [port] if port else []
-    gps['path'] = path
-    gps['environment'] = 'dev' if 'localhost' in host or '127.0.0.1' in host else 'prod'
-    gps['updated_at'] = datetime.now().isoformat()
-
-    save_project_memory(project_id, memory)
-
-    return result
-
-
-def detect_project_from_path(path: str) -> Dict[str, Any]:
-    """
-    Detect and activate project from file path.
-
-    Args:
-        path: Project root path
-
-    Returns:
-        Active project info
-    """
-    if not path or not os.path.isdir(path):
-        return {"error": "Invalid path"}
-
-    project_id = generate_project_id(path, "path")
-    display_name = Path(path).name
-
-    result = set_active_project(project_id, "path", display_name)
-
-    # Also set the root_path in memory
-    memory = load_project_memory(project_id)
-    memory['project_info']['root_path'] = path
-    save_project_memory(project_id, memory)
-
-    return result
-
-
-def init_project_memory(project_id: str, display_name: str = None) -> Dict[str, Any]:
-    """
-    Initialize memory for a new project.
-
-    Args:
-        project_id: The project ID
-        display_name: Optional display name
-
-    Returns:
-        New memory dict
-    """
+def init_project_memory(project_id: str, display_name: str = None, working_dir: str = None) -> Dict[str, Any]:
+    """Initialize memory for a new project."""
     now = datetime.now().isoformat()
 
     memory = {
         "project_info": {
-            "name": display_name or project_id,
+            "name": display_name or project_id.split('_')[0],
+            "working_dir": working_dir or "",
             "stack": "",
             "status": "Active",
             "description": "",
-            "root_path": "",
             "created_at": now
         },
-        "active_issues": [],
-        "solutions_history": [],
-        "ai_context_snapshot": "",
-        "decisions": [],
-        "avoid": [],
-        "handover": {},
-        "stats": {
-            "total_errors_captured": 0,
-            "total_solutions_applied": 0,
-            "last_updated": now
-        },
-        "ai_session": {},
         "live_record": {
             "gps": {
+                "working_dir": working_dir or "",
                 "active_ports": [],
-                "entry_points": [],
+                "url": "",
                 "environment": "dev",
-                "working_dir": "",
                 "updated_at": now
             },
             "architecture": {
                 "summary": "",
+                "stack": "",
                 "key_flows": [],
+                "updated_at": now
+            },
+            "intent": {
+                "current_goal": "",
+                "next_step": "",
+                "blockers": [],
                 "updated_at": now
             },
             "lessons": {
@@ -432,14 +271,16 @@ def init_project_memory(project_id: str, display_name: str = None) -> Dict[str, 
                 "failed_attempts": [],
                 "updated_at": now
             },
-            "intent": {
-                "current_goal": "",
-                "last_milestone": "",
-                "next_step": "",
-                "blockers": [],
-                "updated_at": now
-            },
             "updated_at": now
+        },
+        "decisions": [],
+        "avoid": [],
+        "active_issues": [],
+        "solutions_history": [],
+        "stats": {
+            "total_errors_captured": 0,
+            "total_solutions_applied": 0,
+            "last_updated": now
         },
         "roi": {
             "solutions_reused": 0,
@@ -448,51 +289,32 @@ def init_project_memory(project_id: str, display_name: str = None) -> Dict[str, 
             "decisions_referenced": 0,
             "time_saved_minutes": 0,
             "sessions_with_context": 0
-        },
-        "safety": {
-            "enabled": True,
-            "auto_backup": True,
-            "require_approval": True,
-            "changes_history": [],
-            "backups_dir": ".fixonce_backups"
         }
     }
 
-    memory_path = get_project_memory_path(project_id)
-    memory_path.parent.mkdir(exist_ok=True)
-
-    with open(memory_path, 'w', encoding='utf-8') as f:
+    project_path = get_project_path(project_id)
+    with open(project_path, 'w', encoding='utf-8') as f:
         json.dump(memory, f, ensure_ascii=False, indent=2)
 
-    print(f"[MultiProject] Initialized new project: {project_id}")
-
+    print(f"[MultiProject] Initialized: {project_id}")
     return memory
 
 
 def load_project_memory(project_id: str = None) -> Dict[str, Any]:
-    """
-    Load memory for a project.
-
-    Args:
-        project_id: Project ID (uses active if None)
-
-    Returns:
-        Memory dict
-    """
+    """Load memory for a project."""
     if not project_id:
         project_id = get_active_project_id()
 
     if not project_id:
-        # No active project - return empty default
         return init_project_memory("default", "Default Project")
 
-    memory_path = get_project_memory_path(project_id)
+    project_path = get_project_path(project_id)
 
-    if not memory_path.exists():
+    if not project_path.exists():
         return init_project_memory(project_id)
 
     try:
-        with open(memory_path, 'r', encoding='utf-8') as f:
+        with open(project_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"[MultiProject] Error loading {project_id}: {e}")
@@ -500,16 +322,7 @@ def load_project_memory(project_id: str = None) -> Dict[str, Any]:
 
 
 def save_project_memory(project_id: str = None, memory: Dict[str, Any] = None) -> bool:
-    """
-    Save memory for a project.
-
-    Args:
-        project_id: Project ID (uses active if None)
-        memory: Memory dict to save
-
-    Returns:
-        Success boolean
-    """
+    """Save memory for a project."""
     if not project_id:
         project_id = get_active_project_id()
 
@@ -520,14 +333,11 @@ def save_project_memory(project_id: str = None, memory: Dict[str, Any] = None) -
         return False
 
     with _lock:
-        memory_path = get_project_memory_path(project_id)
-        memory_path.parent.mkdir(exist_ok=True)
-
-        # Update timestamp
         memory.setdefault('stats', {})['last_updated'] = datetime.now().isoformat()
 
         try:
-            with open(memory_path, 'w', encoding='utf-8') as f:
+            project_path = get_project_path(project_id)
+            with open(project_path, 'w', encoding='utf-8') as f:
                 json.dump(memory, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
@@ -536,121 +346,147 @@ def save_project_memory(project_id: str = None, memory: Dict[str, Any] = None) -
 
 
 def delete_project(project_id: str) -> Dict[str, Any]:
-    """
-    Delete a project and all its data.
+    """Delete a project."""
+    project_path = get_project_path(project_id)
 
-    Args:
-        project_id: Project to delete
-
-    Returns:
-        Status dict
-    """
-    import shutil
-
-    project_dir = get_project_dir(project_id)
-
-    if not project_dir.exists():
+    if not project_path.exists():
         return {"status": "error", "message": "Project not found"}
 
     try:
-        shutil.rmtree(project_dir)
+        project_path.unlink()
 
-        # If this was the active project, clear it
-        active = get_active_project_id()
-        if active == project_id:
+        # Also delete solutions if exists
+        solutions_path = get_project_solutions_path(project_id)
+        if solutions_path.exists():
+            solutions_path.unlink()
+
+        # Clear active if this was it
+        if get_active_project_id() == project_id:
             if ACTIVE_PROJECT_FILE.exists():
                 ACTIVE_PROJECT_FILE.unlink()
 
-        return {"status": "ok", "message": f"Deleted project: {project_id}"}
+        return {"status": "ok", "message": f"Deleted: {project_id}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 
-def migrate_from_flat_memory() -> Dict[str, Any]:
-    """
-    Migrate from the old flat project_memory.json to multi-project structure.
+# ============================================================
+# LIST PROJECTS
+# ============================================================
 
-    Returns:
-        Migration status
-    """
-    old_memory_path = DATA_DIR / "project_memory.json"
+def list_projects() -> List[Dict[str, Any]]:
+    """List all projects from V2 storage."""
+    projects = []
 
-    if not old_memory_path.exists():
-        return {"status": "skipped", "message": "No old memory file found"}
+    if not PROJECTS_V2_DIR.exists():
+        return projects
 
-    try:
-        with open(old_memory_path, 'r', encoding='utf-8') as f:
-            old_memory = json.load(f)
+    for project_file in PROJECTS_V2_DIR.glob("*.json"):
+        try:
+            with open(project_file, 'r', encoding='utf-8') as f:
+                memory = json.load(f)
 
-        # Determine project ID from old data
-        project_info = old_memory.get('project_info', {})
-        name = project_info.get('name', 'migrated')
-        root_path = project_info.get('root_path', '')
+            info = memory.get('project_info', {})
+            stats = memory.get('stats', {})
+            live_record = memory.get('live_record', {})
 
-        if root_path:
-            project_id = generate_project_id(root_path, "path")
-        else:
-            project_id = generate_project_id(name, "manual")
+            projects.append({
+                "id": project_file.stem,
+                "name": info.get('name', project_file.stem),
+                "working_dir": info.get('working_dir', ''),
+                "stack": live_record.get('architecture', {}).get('stack', info.get('stack', '')),
+                "summary": live_record.get('architecture', {}).get('summary', ''),
+                "current_goal": live_record.get('intent', {}).get('current_goal', ''),
+                "last_updated": stats.get('last_updated', ''),
+                "decisions_count": len(memory.get('decisions', [])),
+                "avoid_count": len(memory.get('avoid', [])),
+                "issues_count": len(memory.get('active_issues', []))
+            })
+        except Exception as e:
+            print(f"[MultiProject] Error reading {project_file.name}: {e}")
 
-        # Create project directory
-        project_dir = get_project_dir(project_id)
-        project_dir.mkdir(exist_ok=True)
-
-        # Save memory to new location
-        new_memory_path = get_project_memory_path(project_id)
-        with open(new_memory_path, 'w', encoding='utf-8') as f:
-            json.dump(old_memory, f, ensure_ascii=False, indent=2)
-
-        # Set as active
-        set_active_project(project_id, "migration", name)
-
-        # Rename old file as backup
-        backup_path = DATA_DIR / "project_memory.json.migrated"
-        old_memory_path.rename(backup_path)
-
-        # Move solutions.db to project folder
-        old_solutions = DATA_DIR / "personal_solutions.db"
-        if old_solutions.exists():
-            import shutil
-            # Copy to project (keep original as global)
-            shutil.copy(old_solutions, get_project_solutions_path(project_id))
-            # Also copy to global
-            shutil.copy(old_solutions, get_global_solutions_path())
-
-        return {
-            "status": "ok",
-            "project_id": project_id,
-            "message": f"Migrated to project: {project_id}"
-        }
-
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    # Sort by last_updated descending
+    projects.sort(key=lambda x: x.get('last_updated', ''), reverse=True)
+    return projects
 
 
-# === Compatibility layer for existing code ===
+# ============================================================
+# DETECTION FUNCTIONS
+# ============================================================
 
-def get_project_context() -> Dict[str, Any]:
-    """
-    Compatibility: Get context for active project.
-    Maps to old API signature.
-    """
-    return load_project_memory()
+def detect_project_from_url(url: str) -> Dict[str, Any]:
+    """Detect and activate project from URL."""
+    if not url:
+        return {"error": "No URL provided"}
+
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    port = parsed.port
+    host = parsed.hostname or "localhost"
+
+    # Try to get working_dir from port
+    working_dir = None
+    if port:
+        working_dir = _detect_working_dir_from_port(port)
+
+    if working_dir:
+        project_id = generate_project_id_from_path(working_dir)
+        display_name = Path(working_dir).name
+    else:
+        # Fallback to URL-based ID
+        project_id = f"{host}-{port}" if port else host
+        display_name = f"{host}:{port}" if port else host
+        working_dir = ""
+
+    result = set_active_project(project_id, "extension", display_name, working_dir=working_dir)
+
+    # Update GPS with URL info
+    memory = load_project_memory(project_id)
+    if 'live_record' not in memory:
+        memory['live_record'] = {}
+    if 'gps' not in memory['live_record']:
+        memory['live_record']['gps'] = {}
+
+    gps = memory['live_record']['gps']
+    gps['url'] = url
+    gps['host'] = host
+    gps['active_ports'] = [port] if port else []
+    gps['environment'] = 'dev' if 'localhost' in host or '127.0.0.1' in host else 'prod'
+    gps['updated_at'] = datetime.now().isoformat()
+    if working_dir:
+        gps['working_dir'] = working_dir
+
+    save_project_memory(project_id, memory)
+    return result
 
 
-def save_memory(memory: Dict[str, Any]) -> bool:
-    """
-    Compatibility: Save memory for active project.
-    Maps to old API signature.
-    """
-    return save_project_memory(None, memory)
+def detect_project_from_path(path: str) -> Dict[str, Any]:
+    """Detect and activate project from file path."""
+    if not path or not os.path.isdir(path):
+        return {"error": "Invalid path"}
 
+    project_id = generate_project_id_from_path(path)
+    display_name = Path(path).name
+
+    result = set_active_project(project_id, "path", display_name, working_dir=path)
+
+    memory = load_project_memory(project_id)
+    memory['project_info']['working_dir'] = path
+    if 'live_record' in memory and 'gps' in memory['live_record']:
+        memory['live_record']['gps']['working_dir'] = path
+    save_project_memory(project_id, memory)
+
+    return result
+
+
+# ============================================================
+# DASHBOARD API HELPERS
+# ============================================================
 
 def get_active_project_with_memory() -> Dict[str, Any]:
-    """
-    Get active project info with full memory.
-    Used by dashboard.
-    """
+    """Get active project info with full memory (for dashboard)."""
     active = get_active_project()
+
     if not active:
         return {
             "active": False,
@@ -662,22 +498,6 @@ def get_active_project_with_memory() -> Dict[str, Any]:
     project_id = active.get('active_id', '')
     memory = load_project_memory(project_id)
 
-    # Try to get v2 data and merge it
-    # Extract port from project_id (e.g., "localhost-5000" -> 5000)
-    port = None
-    for sep in ['-', ':']:
-        if sep in project_id:
-            try:
-                port = int(project_id.split(sep)[-1])
-                break
-            except ValueError:
-                pass
-
-    if port:
-        v2_data = _get_v2_project_by_port(port)
-        if v2_data:
-            memory = _merge_v2_into_memory(memory, v2_data)
-
     return {
         "active": True,
         "project_id": project_id,
@@ -686,3 +506,190 @@ def get_active_project_with_memory() -> Dict[str, Any]:
         "memory": memory,
         "projects": list_projects()
     }
+
+
+# ============================================================
+# PROJECT STATUS (Phase 1: Active/Recent grouping)
+# ============================================================
+
+def _get_last_activity_for_project(project_id: str, working_dir: str) -> Optional[str]:
+    """Get last activity timestamp for a project from activity log."""
+    try:
+        activity_file = DATA_DIR.parent / "activity_log.json"
+        if not activity_file.exists():
+            return None
+
+        with open(activity_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        activities = data.get('activities', [])
+
+        # Find most recent activity for this project
+        for act in activities:
+            act_cwd = act.get('cwd', '')
+            act_file = act.get('file', '')
+            act_project_id = act.get('project_id', '')
+
+            # Match by project_id, cwd, or file path
+            if act_project_id == project_id:
+                return act.get('timestamp')
+            if working_dir and (act_cwd.startswith(working_dir) or act_file.startswith(working_dir)):
+                return act.get('timestamp')
+
+        return None
+    except Exception:
+        return None
+
+
+def _compute_project_status(project: Dict[str, Any], active_id: str) -> str:
+    """
+    Compute project status in real-time.
+
+    Returns:
+        'active_now' - Currently being worked on
+        'recent' - Worked on recently
+        'stale' - Not touched in a while
+    """
+    project_id = project.get('id', '')
+    working_dir = project.get('working_dir', '')
+
+    # Check 1: Is this the active project?
+    if project_id == active_id:
+        return "active_now"
+
+    # Check 2: Activity in last 10 minutes
+    last_activity = _get_last_activity_for_project(project_id, working_dir)
+    if last_activity:
+        try:
+            last_time = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
+            now = datetime.now()
+            # Handle timezone-naive comparison
+            if last_time.tzinfo:
+                last_time = last_time.replace(tzinfo=None)
+
+            diff_minutes = (now - last_time).total_seconds() / 60
+
+            if diff_minutes < 10:
+                return "active_now"
+            elif diff_minutes < 60 * 24:  # Last 24 hours
+                return "recent"
+            elif diff_minutes < 60 * 24 * 7:  # Last week
+                return "recent"
+            else:
+                return "stale"
+        except Exception:
+            pass
+
+    # Check 3: Has meaningful data = recent, otherwise stale
+    if project.get('decisions_count', 0) > 0 or project.get('current_goal'):
+        return "recent"
+
+    return "stale"
+
+
+def _format_relative_time(timestamp: str) -> str:
+    """Format timestamp as relative time in Hebrew."""
+    if not timestamp:
+        return ""
+
+    try:
+        then = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        now = datetime.now()
+        if then.tzinfo:
+            then = then.replace(tzinfo=None)
+
+        diff = now - then
+        minutes = diff.total_seconds() / 60
+        hours = minutes / 60
+        days = hours / 24
+
+        if minutes < 1:
+            return "עכשיו"
+        elif minutes < 60:
+            return f"לפני {int(minutes)} דקות"
+        elif hours < 24:
+            return f"לפני {int(hours)} שעות"
+        elif days < 2:
+            return "אתמול"
+        elif days < 7:
+            return f"לפני {int(days)} ימים"
+        elif days < 30:
+            weeks = int(days / 7)
+            return f"לפני {weeks} שבועות" if weeks > 1 else "לפני שבוע"
+        else:
+            return f"לפני {int(days / 30)} חודשים"
+    except Exception:
+        return ""
+
+
+def get_projects_by_status() -> Dict[str, Any]:
+    """
+    Get projects grouped by status.
+
+    Returns:
+        {
+            "active": {...} or None,
+            "recent": [...],
+            "stale": [...]
+        }
+    """
+    projects = list_projects()
+    active_id = get_active_project_id()
+
+    active = None
+    recent = []
+    stale = []
+
+    for project in projects:
+        project_id = project.get('id', '')
+        working_dir = project.get('working_dir', '')
+
+        # Get last activity
+        last_activity = _get_last_activity_for_project(project_id, working_dir)
+        project['last_activity'] = last_activity
+        project['last_activity_relative'] = _format_relative_time(last_activity)
+
+        # Compute status
+        status = _compute_project_status(project, active_id)
+        project['status'] = status
+
+        if status == "active_now":
+            # Load full memory for active project
+            memory = load_project_memory(project_id)
+            project['current_goal'] = memory.get('live_record', {}).get('intent', {}).get('current_goal', '')
+            project['open_errors'] = len(memory.get('active_issues', []))
+            project['insights_count'] = len(memory.get('live_record', {}).get('lessons', {}).get('insights', []))
+            active = project
+        elif status == "recent":
+            recent.append(project)
+        else:
+            stale.append(project)
+
+    # Sort recent by last activity
+    recent.sort(key=lambda x: x.get('last_activity') or '', reverse=True)
+
+    return {
+        "active": active,
+        "recent": recent,
+        "stale": stale,
+        "total_count": len(projects)
+    }
+
+
+# ============================================================
+# COMPATIBILITY LAYER
+# ============================================================
+
+def get_project_context() -> Dict[str, Any]:
+    """Compatibility: Get context for active project."""
+    return load_project_memory()
+
+
+def save_memory(memory: Dict[str, Any]) -> bool:
+    """Compatibility: Save memory for active project."""
+    return save_project_memory(None, memory)
+
+
+def migrate_from_flat_memory() -> Dict[str, Any]:
+    """Migration from old format - now just returns status."""
+    return {"status": "skipped", "message": "V2 is now canonical, no migration needed"}

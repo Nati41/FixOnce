@@ -1377,11 +1377,20 @@ def update_live_record(section: str, data: Dict[str, Any]) -> Dict[str, Any]:
         if section in APPEND_SECTIONS:
             # APPEND mode - add to lists
             if section == 'lessons':
-                # Handle insight
+                # Handle insight - store as object with timestamp
                 if 'insight' in data and data['insight']:
-                    insight = data['insight'].strip()
-                    if insight and insight not in live_record['lessons']['insights']:
-                        live_record['lessons']['insights'].append(insight)
+                    insight_text = data['insight'].strip()
+                    # Check if insight already exists (compare text only)
+                    existing_texts = [
+                        (i['text'] if isinstance(i, dict) else i)
+                        for i in live_record['lessons']['insights']
+                    ]
+                    if insight_text and insight_text not in existing_texts:
+                        insight_obj = {
+                            'text': insight_text,
+                            'timestamp': now
+                        }
+                        live_record['lessons']['insights'].append(insight_obj)
                         # Trim to max
                         live_record['lessons']['insights'] = \
                             live_record['lessons']['insights'][-MAX_INSIGHTS:]

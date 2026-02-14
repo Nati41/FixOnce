@@ -1,21 +1,86 @@
-# FixOnce - AI Memory Protocol
+# FixOnce Protocol - MANDATORY RULES
 
-You have FixOnce MCP tools for persistent project memory.
+You are FixOnce-powered. You have persistent memory. ALL RULES ARE MANDATORY.
 
-On ANY greeting (hi, היי, hello, שלום, hey, מה קורה, מה המצב):
-1. Silently call: get_project_context_tool(), get_last_handover(), get_avoid_patterns()
-2. Present in Hebrew:
-   היי! FixOnce חיבר אותי לפרויקט [name].
-   🎯 הקשר: [stack] - [focus]
-   📜 חוקי בית: [key decision]
-   ⏸️ איפה עצרנו: [handover]
-   מאיפה ממשיכים?
+---
 
-During work:
-- Before fixing: call search_past_solutions() first
-- After fixing: call update_solution_status() with keywords
-- Decisions: call log_project_decision()
+## 🚨 RULE #1: Session Start - REQUIRED
 
-On exit (bye, סיימתי, done): call create_handover() with summary.
+On EVERY conversation start, IMMEDIATELY call:
+```
+auto_init_session(cwd="/Users/haimdayan/Desktop/FixOnce")
+```
 
-Core principle: Never debug the same bug twice.
+Then display in Hebrew:
+- 🧠 FixOnce header
+- 📍 Last goal
+- 🔒 ALL decisions from response (MANDATORY!)
+- ⚠️ Avoid patterns
+
+---
+
+## 🚨 RULE #2: BEFORE ANY CHANGE - CHECK DECISIONS
+
+**BEFORE modifying architecture, storage, data structures, or system design:**
+
+1. CHECK the decisions returned from auto_init_session()
+2. IF user request CONTRADICTS a decision:
+
+```
+🛑 STOP - Existing decision in FixOnce:
+   "[decision text]"
+   Reason: [reason]
+
+Your request contradicts this decision.
+Override? (yes/no)
+```
+
+**YOU ARE FORBIDDEN from implementing contradicting changes without EXPLICIT user approval.**
+
+---
+
+## 🚨 RULE #3: Update Goal BEFORE Starting Work
+
+**When user gives a NEW task:**
+```
+update_live_record("intent", {"current_goal": "Brief task description"})
+```
+**Do this BEFORE working, not after!** Keeps dashboard live.
+
+---
+
+## 🚨 RULE #4: Logging During Work - REQUIRED
+
+| Event | Action |
+|-------|--------|
+| Learned something | `update_live_record("lessons", {"insight": "..."})` |
+| Decision made | `log_decision(decision, reason)` |
+| Something to avoid | `log_avoid(what, reason)` |
+| Long task milestone | Update goal with progress |
+
+After updates: `(📌 FixOnce: saved)`
+
+---
+
+## MCP Tools
+
+| Tool | Purpose |
+|------|---------|
+| auto_init_session(cwd) | **REQUIRED first!** |
+| update_live_record(section, data) | Update memory |
+| log_decision(decision, reason) | Log decision |
+| log_avoid(what, reason) | Log anti-pattern |
+| search_past_solutions(query) | Search solutions |
+| get_browser_errors(limit) | Check browser errors |
+
+---
+
+## ENFORCEMENT
+
+1. ALWAYS init at start
+2. ALWAYS display decisions
+3. NEVER contradict decision without approval
+4. ALWAYS update goal BEFORE starting new work
+5. ALWAYS log insights during work
+
+**These are REQUIREMENTS, not suggestions.**
