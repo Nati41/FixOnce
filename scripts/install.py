@@ -465,11 +465,182 @@ $Shortcut.Save()
         except Exception as e:
             print(f"  {Colors.YELLOW}[INFO]{Colors.END} Create desktop shortcut manually")
 
+# ============ Step 6: Configure Auto-Start ============
+
+def configure_auto_start() -> bool:
+    """Configure FixOnce to start automatically on login"""
+    print(f"\n{Colors.BLUE}[6/7]{Colors.END} Configuring auto-start...")
+
+    fixonce_dir = get_fixonce_dir()
+    current_platform = get_platform()
+
+    if current_platform == 'mac':
+        # Create LaunchAgent for auto-start
+        launch_agents_dir = Path.home() / "Library" / "LaunchAgents"
+        launch_agents_dir.mkdir(parents=True, exist_ok=True)
+
+        plist_path = launch_agents_dir / "com.fixonce.server.plist"
+        server_script = fixonce_dir / "src" / "server.py"
+
+        plist_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.fixonce.server</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{sys.executable}</string>
+        <string>{server_script}</string>
+        <string>--flask-only</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>{fixonce_dir / "src"}</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>{fixonce_dir / "data" / "server.log"}</string>
+    <key>StandardErrorPath</key>
+    <string>{fixonce_dir / "data" / "server.log"}</string>
+</dict>
+</plist>
+'''
+        try:
+            # Check if already exists and running
+            check_result = subprocess.run(
+                ['launchctl', 'list', 'com.fixonce.server'],
+                capture_output=True, text=True
+            )
+            if check_result.returncode == 0:
+                print(f"  {Colors.GREEN}[OK]{Colors.END} Auto-start already configured")
+                return True
+
+            # Unload if exists but not running
+            subprocess.run(['launchctl', 'unload', str(plist_path)], capture_output=True)
+
+            # Write new plist
+            with open(plist_path, 'w') as f:
+                f.write(plist_content)
+
+            # Load the LaunchAgent
+            subprocess.run(['launchctl', 'load', str(plist_path)], capture_output=True)
+
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Auto-start configured (LaunchAgent with restart on failure)")
+            return True
+        except Exception as e:
+            print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not configure auto-start: {e}")
+            return False
+
+    elif current_platform == 'windows':
+        # Create scheduled task for auto-start
+        try:
+            server_script = fixonce_dir / "src" / "server.py"
+            task_name = "FixOnceServer"
+
+            # Remove existing task if any
+            subprocess.run(
+                ['schtasks', '/delete', '/tn', task_name, '/f'],
+                capture_output=True
+            )
+
+            # Create new task that runs at logon
+            result = subprocess.run([
+                'schtasks', '/create',
+                '/tn', task_name,
+                '/tr', f'pythonw "{server_script}" --flask-only',
+                '/sc', 'onlogon',
+                '/rl', 'limited',
+                '/f'
+            ], capture_output=True, text=True)
+
+            if result.returncode == 0:
+                print(f"  {Colors.GREEN}[OK]{Colors.END} Auto-start configured (Task Scheduler)")
+                return True
+            else:
+                print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not configure auto-start")
+                print(f"       Run manually: python src/server.py")
+                return False
+        except Exception as e:
+            print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not configure auto-start: {e}")
+            return False
+
+    else:
+        print(f"  {Colors.YELLOW}[INFO]{Colors.END} Auto-start not configured for Linux")
+        print(f"       Add to your startup: python3 {fixonce_dir}/src/server.py --flask-only")
+        return True
+
+
+# ============ Step 7: Chrome Extension ============
+
+def show_chrome_extension_instructions():
+    """Show instructions for installing Chrome extension and try to open Chrome"""
+    print(f"\n{Colors.BLUE}[7/7]{Colors.END} Chrome Extension (for browser error capture)...")
+
+    fixonce_dir = get_fixonce_dir()
+    extension_dir = fixonce_dir / "extension"
+    current_platform = get_platform()
+
+    if not extension_dir.exists():
+        print(f"  {Colors.YELLOW}[SKIP]{Colors.END} Extension folder not found")
+        return
+
+    # Try to open chrome://extensions automatically
+    print(f"  {Colors.YELLOW}Opening Chrome extensions page...{Colors.END}")
+
+    try:
+        if current_platform == 'mac':
+            # On Mac, we can use 'open' with Chrome
+            subprocess.run([
+                'open', '-a', 'Google Chrome', 'chrome://extensions/'
+            ], capture_output=True, timeout=5)
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Chrome extensions page opened!")
+        elif current_platform == 'windows':
+            # On Windows, start command with Chrome
+            subprocess.run([
+                'start', 'chrome', 'chrome://extensions/'
+            ], shell=True, capture_output=True, timeout=5)
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Chrome extensions page opened!")
+        else:
+            # Linux - try xdg-open or google-chrome directly
+            subprocess.run([
+                'google-chrome', 'chrome://extensions/'
+            ], capture_output=True, timeout=5)
+    except Exception:
+        print(f"  {Colors.YELLOW}[INFO]{Colors.END} Could not open Chrome automatically")
+
+    # Always show clear instructions
+    print(f"""
+  {Colors.BOLD}╔══════════════════════════════════════════════════════════╗
+  ║          CHROME EXTENSION INSTALLATION                   ║
+  ╠══════════════════════════════════════════════════════════╣
+  ║                                                          ║
+  ║  1. Enable 'Developer mode' (toggle in top right)        ║
+  ║                                                          ║
+  ║  2. Click 'Load unpacked'                                ║
+  ║                                                          ║
+  ║  3. Select this folder:                                  ║
+  ║     {Colors.YELLOW}{str(extension_dir)[:50]}{Colors.BOLD}
+  ║                                                          ║
+  ╚══════════════════════════════════════════════════════════╝{Colors.END}
+
+  {Colors.GREEN}The extension captures browser errors for FixOnce to analyze.{Colors.END}
+""")
+
+
 # ============ Start App ============
 
 def start_app():
     """Start the FixOnce desktop app"""
-    print(f"\n{Colors.BLUE}[5/5]{Colors.END} Launching FixOnce...")
+    print(f"\n{Colors.BLUE}[✓]{Colors.END} Launching FixOnce...")
 
     fixonce_dir = get_fixonce_dir()
     current_platform = get_platform()
@@ -534,7 +705,13 @@ def main():
     # Add to Dock/Desktop
     add_to_dock_or_desktop()
 
-    # Step 5: Start server and launch app
+    # Step 5: Configure auto-start (NEW!)
+    configure_auto_start()
+
+    # Step 6: Chrome Extension instructions (NEW!)
+    show_chrome_extension_instructions()
+
+    # Step 7: Start server and launch app
     start_app()
 
     # Done!

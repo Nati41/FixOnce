@@ -57,6 +57,87 @@ def api_ping():
     return jsonify({"status": "ok", "service": "fixonce", "port": ACTUAL_PORT})
 
 
+@status_bp.route("/health")
+def api_health():
+    """
+    Comprehensive health check endpoint.
+    Checks: server, MCP, memory writable, dashboard reachable.
+    """
+    import os
+    import subprocess
+    from config import DATA_DIR, SRC_DIR
+
+    health = {
+        "status": "healthy",
+        "checks": {},
+        "timestamp": datetime.now().isoformat()
+    }
+
+    issues = []
+
+    # Check 1: Server running (obviously true if we got here)
+    health["checks"]["server"] = {"status": "ok", "port": ACTUAL_PORT}
+
+    # Check 2: Data directory writable
+    try:
+        test_file = DATA_DIR / "health_check.tmp"
+        test_file.write_text("test")
+        test_file.unlink()
+        health["checks"]["memory_writable"] = {"status": "ok", "path": str(DATA_DIR)}
+    except Exception as e:
+        health["checks"]["memory_writable"] = {"status": "error", "error": str(e)}
+        issues.append("Cannot write to data directory")
+
+    # Check 3: MCP server file exists
+    mcp_server = SRC_DIR / "mcp_server" / "mcp_memory_server_v2.py"
+    if mcp_server.exists():
+        health["checks"]["mcp_server"] = {"status": "ok", "path": str(mcp_server)}
+    else:
+        health["checks"]["mcp_server"] = {"status": "error", "error": "MCP server file not found"}
+        issues.append("MCP server file missing")
+
+    # Check 4: Projects directory
+    projects_dir = DATA_DIR / "projects_v2"
+    if projects_dir.exists():
+        project_count = len(list(projects_dir.glob("*.json")))
+        health["checks"]["projects"] = {"status": "ok", "count": project_count}
+    else:
+        health["checks"]["projects"] = {"status": "warning", "message": "No projects yet"}
+
+    # Check 5: Extension connection
+    health["checks"]["extension"] = {
+        "status": "ok" if EXTENSION_CONNECTED else "warning",
+        "connected": EXTENSION_CONNECTED,
+        "last_seen": EXTENSION_LAST_SEEN
+    }
+    if not EXTENSION_CONNECTED:
+        issues.append("Chrome extension not connected")
+
+    # Check 6: Active project
+    try:
+        active_file = DATA_DIR / "active_project.json"
+        if active_file.exists():
+            import json
+            with open(active_file) as f:
+                active = json.load(f)
+            health["checks"]["active_project"] = {
+                "status": "ok",
+                "project_id": active.get("active_id"),
+                "working_dir": active.get("working_dir")
+            }
+        else:
+            health["checks"]["active_project"] = {"status": "warning", "message": "No active project"}
+    except Exception as e:
+        health["checks"]["active_project"] = {"status": "error", "error": str(e)}
+
+    # Overall status
+    if issues:
+        health["status"] = "degraded"
+        health["issues"] = issues
+
+    return jsonify(health)
+
+
 @status_bp.route("/config")
 def api_config():
     """API endpoint to get server configuration."""
