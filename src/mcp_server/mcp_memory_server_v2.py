@@ -76,15 +76,18 @@ class SessionContext:
 
     def mark_decisions_displayed(self):
         self.decisions_displayed = True
+        # Will be synced to global state via _sync_compliance()
 
     def mark_goal_updated(self):
         self.goal_updated = True
+        # Will be synced to global state via _sync_compliance()
 
     def log_tool_call(self, tool_name: str):
         self.tool_calls.append({
             "tool": tool_name,
             "timestamp": datetime.now().isoformat()
         })
+        # Will be synced to global state via _sync_compliance()
 
     def get_compliance_status(self) -> dict:
         """Get protocol compliance status for dashboard."""
@@ -102,6 +105,11 @@ class SessionContext:
 _compliance_state = {
     "last_session_init": None,
     "violations": [],
+    "editor": None,
+    "session_active": False,
+    "initialized_at": None,
+    "project_id": None
+}
 
 
 # Session persistence file (survives MCP restarts)
@@ -141,8 +149,6 @@ def _recover_session() -> Optional[tuple]:
         return None
     except Exception:
         return None
-    "editor": None
-}
 
 
 def _require_session(tool_name: str) -> Optional[str]:
@@ -178,19 +184,65 @@ def _require_session(tool_name: str) -> Optional[str]:
         _compliance_state["violations"] = _compliance_state["violations"][-10:]
 
         return f"""
-❌ PROTOCOL VIOLATION: Session not initialized
+🚨🚨🚨 PROTOCOL VIOLATION 🚨🚨🚨
 
-You MUST call auto_init_session(cwd="...") BEFORE using {tool_name}.
+Tool '{tool_name}' BLOCKED - No session initialized!
 
-This is REQUIRED by FixOnce protocol. Do it now:
-1. Call auto_init_session(cwd="/path/to/project")
-2. Then retry {tool_name}
+YOU MUST DO THIS NOW:
+═══════════════════════════════════════
+1. Call: auto_init_session(cwd="<project_path>")
+2. Then retry: {tool_name}
+═══════════════════════════════════════
 
-⚠️ Continuing without session will lose all context!
+This is NOT optional. FixOnce cannot work without session.
+All your work will be LOST if you continue without init.
+
+DO IT NOW.
 """
 
     session.log_tool_call(tool_name)
+    _sync_compliance()
     return None
+
+
+def _get_browser_errors_reminder() -> str:
+    """Get reminder about browser errors if there are any recent ones."""
+    try:
+        res = requests.get('http://localhost:5000/api/live-errors?since=300', timeout=2)
+        if res.status_code == 200:
+            data = res.json()
+            count = data.get('count', 0)
+            if count > 0:
+                return f"""
+
+🚨 BROWSER ERRORS DETECTED: {count} errors!
+═══════════════════════════════════════
+You MUST call: get_browser_errors()
+DO NOT ignore this - the user sees these errors!
+═══════════════════════════════════════"""
+        return ""
+    except Exception:
+        return ""
+
+
+def _get_protocol_reminder() -> str:
+    """Get periodic protocol reminder."""
+    session = _get_session()
+    if not session.is_active():
+        return ""
+
+    tool_count = len(session.tool_calls)
+
+    # Every 5 tool calls, remind about browser errors
+    if tool_count > 0 and tool_count % 5 == 0:
+        return """
+
+📋 PROTOCOL REMINDER (every 5 actions):
+• Did you check get_browser_errors()?
+• Did you update the goal if task changed?
+• Are you using insights from init, not researching again?"""
+
+    return ""
 
 
 def _track_roi_event(event_type: str):
@@ -372,13 +424,30 @@ def _get_session() -> SessionContext:
 
 
 def _set_session(project_id: str, working_dir: str):
-    """Set session for current thread."""
+    """Set session for current thread and update global state for dashboard."""
     _session_local.session = SessionContext(project_id, working_dir)
+    # Sync to global state for Flask API (different thread)
+    _compliance_state["session_active"] = True
+    _compliance_state["initialized_at"] = datetime.now().isoformat()
+    _compliance_state["project_id"] = project_id
+    _compliance_state["last_session_init"] = datetime.now().isoformat()
 
 
 def _clear_session():
-    """Clear session for current thread."""
+    """Clear session for current thread and global state."""
     _session_local.session = SessionContext()
+    # Clear global state
+    _compliance_state["session_active"] = False
+    _compliance_state["initialized_at"] = None
+    _compliance_state["project_id"] = None
+
+
+def _sync_compliance():
+    """Sync session state to global _compliance_state for dashboard API."""
+    session = _get_session()
+    _compliance_state["decisions_displayed"] = session.decisions_displayed
+    _compliance_state["goal_updated"] = session.goal_updated
+    _compliance_state["tool_calls_count"] = len(session.tool_calls)
 
 
 # ============================================================
@@ -976,6 +1045,7 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
         # Mark decisions as displayed for compliance tracking
         session = _get_session()
         session.mark_decisions_displayed()
+        _sync_compliance()
 
     # INSIGHTS - Check these BEFORE researching anything!
     # Use Memory Decay ranking to show most important insights
@@ -1078,6 +1148,7 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
             # Mark decisions as displayed for compliance tracking
             session = _get_session()
             session.mark_decisions_displayed()
+            _sync_compliance()
 
         # INSIGHTS - Check these BEFORE researching anything!
         # Use Memory Decay ranking to show most important insights
@@ -1294,6 +1365,7 @@ def update_live_record(section: str, data: str) -> str:
     # Track goal updates for compliance
     if section == 'intent':
         session.mark_goal_updated()
+        _sync_compliance()
 
     try:
         update_data = json.loads(data) if isinstance(data, str) else data
@@ -1353,7 +1425,9 @@ def update_live_record(section: str, data: str) -> str:
     lr['updated_at'] = datetime.now().isoformat()
     _save_project(project_id, memory)
 
-    return f"Updated {section}"
+    # Add browser errors reminder if any
+    reminder = _get_browser_errors_reminder()
+    return f"Updated {section}{reminder}"
 
 
 @mcp.tool()
@@ -1810,19 +1884,20 @@ def get_memory_stats() -> str:
 # ============================================================
 
 def get_compliance_for_api() -> dict:
-    """Get compliance status for dashboard API."""
-    session = _get_session()
-    compliance = session.get_compliance_status()
+    """Get compliance status for dashboard API.
 
+    Uses global _compliance_state since Flask runs in different thread than MCP.
+    """
     return {
-        "session_initialized": compliance["session_initialized"],
-        "initialized_at": compliance["initialized_at"],
-        "decisions_displayed": compliance["decisions_displayed"],
-        "goal_updated": compliance["goal_updated"],
-        "tool_calls_count": compliance["tool_calls_count"],
+        "session_initialized": _compliance_state.get("session_active", False),
+        "initialized_at": _compliance_state.get("initialized_at"),
+        "decisions_displayed": _compliance_state.get("decisions_displayed", False),
+        "goal_updated": _compliance_state.get("goal_updated", False),
+        "tool_calls_count": _compliance_state.get("tool_calls_count", 0),
         "last_session_init": _compliance_state.get("last_session_init"),
         "violations": _compliance_state.get("violations", [])[-5:],
-        "editor": _compliance_state.get("editor")
+        "editor": _compliance_state.get("editor"),
+        "project_id": _compliance_state.get("project_id")
     }
 
 
