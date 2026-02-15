@@ -3867,6 +3867,172 @@
             opacity: 1;
         }
 
+        /* ===== WELCOME MODAL ===== */
+        .welcome-modal {
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .welcome-header {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
+        .welcome-subtitle {
+            color: #888;
+            margin-bottom: 24px;
+        }
+
+        .welcome-steps {
+            text-align: left;
+            margin-bottom: 24px;
+        }
+
+        .welcome-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            border-left: 3px solid #81b29a;
+        }
+
+        .welcome-step-number {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #81b29a 0%, #6a9e87 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: #0a0a12;
+            flex-shrink: 0;
+        }
+
+        .welcome-step-content {
+            flex: 1;
+        }
+
+        .welcome-step-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .welcome-step-desc {
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .welcome-test-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #81b29a 0%, #6a9e87 100%);
+            border: none;
+            border-radius: 10px;
+            color: #0a0a12;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+
+        .welcome-test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(129, 178, 154, 0.3);
+        }
+
+        .welcome-skip {
+            background: transparent;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .welcome-skip:hover {
+            color: #999;
+        }
+
+        .test-result {
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 12px;
+            display: none;
+        }
+
+        .test-result.success {
+            background: rgba(129, 178, 154, 0.2);
+            color: #81b29a;
+            display: block;
+        }
+
+        .test-result.error {
+            background: rgba(231, 111, 81, 0.2);
+            color: #e76f51;
+            display: block;
+        }
+
+        /* ===== ROI WIDGET ===== */
+        .roi-widget {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .roi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .roi-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .roi-badge {
+            font-size: 0.7rem;
+            padding: 4px 8px;
+            background: rgba(129, 178, 154, 0.2);
+            color: #81b29a;
+            border-radius: 4px;
+        }
+
+        .roi-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .roi-stat {
+            text-align: center;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+        }
+
+        .roi-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #81b29a;
+        }
+
+        .roi-stat-label {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .roi-stat.highlight .roi-stat-value {
+            color: #ffd93d;
+        }
+
     </style>
 </head>
 <body>
@@ -3954,6 +4120,32 @@
                     <span>📌</span>
                     <span class="hero-stat-value" id="hero-decisions">0</span>
                     <span>החלטות</span>
+                </div>
+            </div>
+
+            <!-- ROI Widget - Value Proof -->
+            <div class="roi-widget" id="roi-widget">
+                <div class="roi-header">
+                    <span class="roi-title">📊 Your AI Memory Value</span>
+                    <span class="roi-badge" id="roi-badge">Today</span>
+                </div>
+                <div class="roi-stats">
+                    <div class="roi-stat highlight">
+                        <div class="roi-stat-value" id="roi-syncs">0</div>
+                        <div class="roi-stat-label">Memory Syncs</div>
+                    </div>
+                    <div class="roi-stat">
+                        <div class="roi-stat-value" id="roi-solutions">0</div>
+                        <div class="roi-stat-label">Solutions Reused</div>
+                    </div>
+                    <div class="roi-stat">
+                        <div class="roi-stat-value" id="roi-time">0</div>
+                        <div class="roi-stat-label">Minutes Saved</div>
+                    </div>
+                    <div class="roi-stat">
+                        <div class="roi-stat-value" id="roi-prevented">0</div>
+                        <div class="roi-stat-label">Errors Prevented</div>
+                    </div>
                 </div>
             </div>
 
@@ -4321,6 +4513,48 @@
             </div>
 
             <button class="modal-close" onclick="closeSessionModal()">Close</button>
+        </div>
+    </div>
+
+    <!-- WELCOME MODAL (First Run Experience) -->
+    <div class="modal-overlay" id="welcome-modal" onclick="if(event.target===this) completeWelcome()">
+        <div class="modal welcome-modal">
+            <div class="welcome-header">🧠 Welcome to FixOnce!</div>
+            <div class="welcome-subtitle">Your AI now has persistent memory</div>
+
+            <div class="welcome-steps">
+                <div class="welcome-step">
+                    <span class="welcome-step-number">1</span>
+                    <div class="welcome-step-content">
+                        <div class="welcome-step-title">Say "היי" or "hello" to your AI</div>
+                        <div class="welcome-step-desc">In Cursor or Claude Code - FixOnce will auto-connect</div>
+                    </div>
+                </div>
+                <div class="welcome-step">
+                    <span class="welcome-step-number">2</span>
+                    <div class="welcome-step-content">
+                        <div class="welcome-step-title">Watch FixOnce work</div>
+                        <div class="welcome-step-desc">The AI will show your project context and past insights</div>
+                    </div>
+                </div>
+                <div class="welcome-step">
+                    <span class="welcome-step-number">3</span>
+                    <div class="welcome-step-content">
+                        <div class="welcome-step-title">Check your dashboard</div>
+                        <div class="welcome-step-desc">See insights, decisions, and memory syncs in real-time</div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="welcome-test-btn" onclick="testConnection()">
+                🔗 Test Connection
+            </button>
+
+            <div class="test-result" id="test-result"></div>
+
+            <button class="welcome-skip" onclick="completeWelcome()">
+                Skip intro - I know what I'm doing
+            </button>
         </div>
     </div>
 
@@ -5377,8 +5611,15 @@
 
         async function loadROI() {
             try {
-                const res = await fetch(API + '/api/memory/roi');
-                roiData = await res.json();
+                // Try new usage_stats endpoint first (has more data)
+                const statsRes = await fetch(API + '/api/system/usage_stats');
+                if (statsRes.ok) {
+                    roiData = await statsRes.json();
+                } else {
+                    // Fallback to old ROI endpoint
+                    const res = await fetch(API + '/api/memory/roi');
+                    roiData = await res.json();
+                }
                 renderROI();
             } catch (e) {
                 console.error('Failed to load ROI:', e);
@@ -5397,6 +5638,75 @@
                                (roiData.solutions_reused || 0) +
                                (roiData.decisions_referenced || 0);
             setText('sync-value', totalSyncs);
+
+            // Update ROI Widget
+            setText('roi-syncs', totalSyncs);
+            setText('roi-solutions', roiData.solutions_reused || 0);
+            setText('roi-time', roiData.time_saved_minutes || 0);
+            setText('roi-prevented', roiData.errors_prevented || 0);
+        }
+
+        // ============ WELCOME MODAL (First Run) ============
+
+        async function checkFirstRun() {
+            try {
+                const res = await fetch(API + '/api/system/first_run');
+                const data = await res.json();
+                if (data.is_first_run) {
+                    showWelcomeModal();
+                }
+            } catch (e) {
+                console.log('First run check failed:', e);
+            }
+        }
+
+        function showWelcomeModal() {
+            document.getElementById('welcome-modal').style.display = 'flex';
+        }
+
+        function closeWelcomeModal() {
+            document.getElementById('welcome-modal').style.display = 'none';
+        }
+
+        async function testConnection() {
+            const resultEl = document.getElementById('test-result');
+            resultEl.className = 'test-result';
+            resultEl.textContent = 'Testing...';
+            resultEl.style.display = 'block';
+
+            try {
+                // Test health endpoint
+                const healthRes = await fetch(API + '/api/health');
+                const health = await healthRes.json();
+
+                if (health.status === 'healthy' || health.status === 'degraded') {
+                    // Test MCP
+                    const mcpOk = health.checks?.mcp_server?.status === 'ok';
+                    const memoryOk = health.checks?.memory_writable?.status === 'ok';
+
+                    if (mcpOk && memoryOk) {
+                        resultEl.className = 'test-result success';
+                        resultEl.innerHTML = '✅ All systems go!<br>MCP server ready, memory writable.<br>Go say "היי" to your AI!';
+                    } else {
+                        resultEl.className = 'test-result success';
+                        resultEl.innerHTML = '✅ Server running!<br>Some features may need setup.<br>Check the dashboard for details.';
+                    }
+                } else {
+                    throw new Error('Health check failed');
+                }
+            } catch (e) {
+                resultEl.className = 'test-result error';
+                resultEl.innerHTML = '❌ Connection issue<br>Make sure FixOnce server is running.';
+            }
+        }
+
+        async function completeWelcome() {
+            try {
+                await fetch(API + '/api/system/first_run/complete', { method: 'POST' });
+            } catch (e) {
+                console.log('Could not mark first run complete:', e);
+            }
+            closeWelcomeModal();
         }
 
         function updateStatus() {
@@ -8119,6 +8429,9 @@ Core principle: Never debug the same bug twice.`,
         (async function initDashboard() {
             await detectServerPort();
             updateFilterButtonsText(); // Set filter button text based on language
+
+            // Check if first run - show welcome modal
+            checkFirstRun();
 
             // Phase 1: Load Hero Card first (Focus Mode)
             loadHeroCard();

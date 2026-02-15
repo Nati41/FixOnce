@@ -543,6 +543,86 @@ search_past_solutions("keywords")
     })
 
 
+@status_bp.route("/system/first_run", methods=["GET"])
+def api_check_first_run():
+    """Check if this is the first run (for welcome guide)."""
+    from config import DATA_DIR
+
+    first_run_file = DATA_DIR / "first_run_complete.json"
+
+    return jsonify({
+        "is_first_run": not first_run_file.exists(),
+        "show_welcome": not first_run_file.exists()
+    })
+
+
+@status_bp.route("/system/first_run/complete", methods=["POST"])
+def api_complete_first_run():
+    """Mark first run as complete."""
+    from config import DATA_DIR
+
+    first_run_file = DATA_DIR / "first_run_complete.json"
+
+    try:
+        with open(first_run_file, 'w') as f:
+            json.dump({
+                "completed_at": datetime.now().isoformat(),
+                "version": "3.1"
+            }, f)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@status_bp.route("/system/usage_stats", methods=["GET"])
+def api_usage_stats():
+    """Get usage statistics for ROI display."""
+    from config import DATA_DIR
+
+    try:
+        # Get ROI data
+        from managers.project_memory_manager import get_roi_stats
+        roi = get_roi_stats()
+
+        # Calculate additional stats
+        total_syncs = (
+            roi.get('sessions_with_context', 0) +
+            roi.get('solutions_reused', 0) +
+            roi.get('decisions_referenced', 0)
+        )
+
+        # Get today's activity count
+        activity_file = DATA_DIR / "activity_log.json"
+        today_activities = 0
+        if activity_file.exists():
+            with open(activity_file, 'r') as f:
+                data = json.load(f)
+            today = datetime.now().date().isoformat()
+            today_activities = sum(
+                1 for a in data.get('activities', [])
+                if a.get('timestamp', '').startswith(today)
+            )
+
+        return jsonify({
+            "total_syncs": total_syncs,
+            "today_syncs": roi.get('sessions_with_context', 0),  # Approximate
+            "solutions_reused": roi.get('solutions_reused', 0),
+            "decisions_referenced": roi.get('decisions_referenced', 0),
+            "errors_prevented": roi.get('errors_prevented', 0),
+            "sessions_with_context": roi.get('sessions_with_context', 0),
+            "tokens_saved": roi.get('tokens_saved', 0),
+            "time_saved_minutes": roi.get('time_saved_minutes', 0),
+            "today_activities": today_activities,
+            "money_saved_usd": round(roi.get('tokens_saved', 0) * 0.00001, 2)  # Rough estimate
+        })
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "total_syncs": 0,
+            "solutions_reused": 0
+        })
+
+
 @status_bp.route("/system/protocol_compliance", methods=["GET"])
 def api_protocol_compliance():
     """
