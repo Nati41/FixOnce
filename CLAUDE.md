@@ -26,8 +26,8 @@ init_session(port=5000)
 פשוט. אין ניחושים.
 
 ```
-/Users/haimdayan/Desktop/FixOnce  →  פרויקט FixOnce
-/Users/haimdayan/Desktop/my-app   →  פרויקט my-app
+~/Desktop/FixOnce  →  פרויקט FixOnce
+~/Desktop/my-app   →  פרויקט my-app
 ```
 
 ---

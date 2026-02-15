@@ -313,8 +313,23 @@ def _get_ranked_insights(insights: list, limit: int = 10) -> list:
 
 
 def _should_archive_insight(insight: dict) -> bool:
-    """Check if an insight should be archived (moved to cold storage)."""
+    """
+    Check if an insight should be archived (moved to cold storage).
+
+    IMPORTANT: Decisions and avoid patterns should NEVER be archived.
+    They are stored separately in memory['decisions'] and memory['avoid'],
+    but this check ensures they're protected even if accidentally mixed in.
+    """
     try:
+        # NEVER archive decisions or avoid patterns - they are permanent institutional knowledge
+        insight_type = insight.get("type", "insight")
+        if insight_type in ("decision", "avoid", "failed_attempt"):
+            return False
+
+        # Never archive high-importance insights
+        if insight.get("importance") == "high":
+            return False
+
         # Never used and older than 30 days
         use_count = insight.get("use_count", 0)
         timestamp = insight.get("timestamp", "")
@@ -331,17 +346,17 @@ def _should_archive_insight(insight: dict) -> bool:
         if use_count == 0 and age_days > 30 and insight.get("importance") == "low":
             return True
 
-        # Archive if: not used in 60 days regardless
+        # Archive if: not used in 60 days regardless (but only for low importance)
         last_used = insight.get("last_used")
         if last_used:
             last = datetime.fromisoformat(last_used.replace('Z', '+00:00'))
             if last.tzinfo:
                 last = last.replace(tzinfo=None)
             unused_days = (datetime.now() - last).days
-            if unused_days > 60:
+            if unused_days > 60 and insight.get("importance") != "medium":
                 return True
-        elif age_days > 60:
-            # Never used and very old
+        elif age_days > 60 and insight.get("importance") == "low":
+            # Never used and very old - only for low importance
             return True
 
         return False
@@ -1304,8 +1319,9 @@ def update_live_record(section: str, data: str) -> str:
             lr['lessons']['insights'].append(new_insight)
 
         if 'failed_attempt' in update_data:
-            # Failed attempts also get metadata
+            # Failed attempts also get metadata - marked as type to prevent decay
             new_attempt = _create_insight(update_data['failed_attempt'])
+            new_attempt['type'] = 'failed_attempt'  # Will NEVER be archived
             lr['lessons']['failed_attempts'].append(new_attempt)
     else:
         # REPLACE mode
@@ -1335,7 +1351,7 @@ def get_live_record() -> str:
 
 @mcp.tool()
 def log_decision(decision: str, reason: str) -> str:
-    """Log an architectural decision."""
+    """Log an architectural decision. Decisions NEVER decay - they are permanent."""
     error = _require_session("log_decision")
     if error:
         return error
@@ -1347,9 +1363,11 @@ def log_decision(decision: str, reason: str) -> str:
         memory['decisions'] = []
 
     memory['decisions'].append({
+        "type": "decision",  # Marked as decision - will NEVER be archived
         "decision": decision,
         "reason": reason,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "importance": "permanent"  # Decisions never decay
     })
 
     _save_project(session.project_id, memory)
@@ -1358,7 +1376,7 @@ def log_decision(decision: str, reason: str) -> str:
 
 @mcp.tool()
 def log_avoid(what: str, reason: str) -> str:
-    """Log something to avoid."""
+    """Log something to avoid. Avoid patterns NEVER decay - they are permanent."""
     error = _require_session("log_avoid")
     if error:
         return error
@@ -1370,9 +1388,11 @@ def log_avoid(what: str, reason: str) -> str:
         memory['avoid'] = []
 
     memory['avoid'].append({
+        "type": "avoid",  # Marked as avoid - will NEVER be archived
         "what": what,
         "reason": reason,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "importance": "permanent"  # Avoid patterns never decay
     })
 
     _save_project(session.project_id, memory)
@@ -1612,9 +1632,15 @@ def run_memory_cleanup() -> str:
     Run memory decay cleanup - archive old/unused insights.
 
     This tool:
-    - Archives insights not used in 60+ days
-    - Archives never-used insights older than 30 days
+    - Archives low-importance insights not used in 60+ days
+    - Archives never-used low-importance insights older than 30 days
     - Shows memory statistics
+
+    PROTECTED (never archived):
+    - Decisions (log_decision) - permanent institutional knowledge
+    - Avoid patterns (log_avoid) - permanent warnings
+    - Failed attempts - prevent repeating mistakes
+    - High-importance insights
 
     Run this periodically to keep memory clean and relevant.
     """
@@ -1655,7 +1681,19 @@ def run_memory_cleanup() -> str:
     # Build stats report
     lines = ["## Memory Cleanup Report\n"]
 
-    lines.append(f"**Active Insights:** {len(still_active)}")
+    # Show protected items count
+    decisions_count = len(memory.get('decisions', []))
+    avoid_count = len(memory.get('avoid', []))
+    failed_count = len(lessons.get('failed_attempts', []))
+
+    lines.append("### 🔒 Protected (Never Archived)")
+    lines.append(f"- **Decisions:** {decisions_count}")
+    lines.append(f"- **Avoid Patterns:** {avoid_count}")
+    lines.append(f"- **Failed Attempts:** {failed_count}")
+    lines.append("")
+
+    lines.append("### 📊 Insights")
+    lines.append(f"**Active:** {len(still_active)}")
     lines.append(f"**Newly Archived:** {len(newly_archived)}")
     lines.append(f"**Total Archived:** {len(lessons['archived'])}")
 

@@ -49,7 +49,10 @@ esac
 # ============================================
 
 # Get active project info from local file (more reliable than API)
-FIXONCE_DATA="/Users/haimdayan/Desktop/FixOnce/data"
+# Detect FixOnce installation directory from hook location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FIXONCE_DIR="$(dirname "$SCRIPT_DIR")"
+FIXONCE_DATA="$FIXONCE_DIR/data"
 ACTIVE_PROJECT_FILE="$FIXONCE_DATA/active_project.json"
 
 PROJECT_ID=""

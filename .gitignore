@@ -40,3 +40,17 @@ build/
 # Project specific
 project_memory.json
 personal_solutions.db
+
+# Installation-specific (generated per user)
+.mcp.json
+.cursorrules
+
+# Data files (generated at runtime, keep folder structure)
+data/activity_log.json
+data/active_project.json
+data/mcp_session.json
+data/boundary_state.json
+data/project_index.json
+data/projects_v2/*
+!data/projects_v2/.gitkeep
+!data/.gitkeep

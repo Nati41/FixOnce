@@ -138,7 +138,7 @@ def api_setup_mcp():
     data = request.get_json(silent=True) or {}
     editor = data.get("editor", "all")
 
-    mcp_server_path = str(SRC_DIR / "mcp_server" / "mcp_memory_server.py")
+    mcp_server_path = str(SRC_DIR / "mcp_server" / "mcp_memory_server_v2.py")
     results = {}
 
     def configure_editor(name, config_path, config_structure):
