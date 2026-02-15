@@ -54,17 +54,299 @@ _session_local = threading.local()
 
 
 class SessionContext:
-    """Thread-safe session context."""
+    """Thread-safe session context with protocol compliance tracking."""
 
     def __init__(self, project_id: str = None, working_dir: str = None):
         self.project_id = project_id
         self.working_dir = working_dir
+        # Protocol compliance tracking
+        self.initialized_at = None
+        self.decisions_displayed = False
+        self.goal_updated = False
+        self.tool_calls = []
 
     def __repr__(self):
         return f"SessionContext(project_id={self.project_id})"
 
     def is_active(self) -> bool:
         return self.project_id is not None
+
+    def mark_initialized(self):
+        self.initialized_at = datetime.now().isoformat()
+
+    def mark_decisions_displayed(self):
+        self.decisions_displayed = True
+
+    def mark_goal_updated(self):
+        self.goal_updated = True
+
+    def log_tool_call(self, tool_name: str):
+        self.tool_calls.append({
+            "tool": tool_name,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    def get_compliance_status(self) -> dict:
+        """Get protocol compliance status for dashboard."""
+        return {
+            "session_initialized": self.is_active(),
+            "initialized_at": self.initialized_at,
+            "decisions_displayed": self.decisions_displayed,
+            "goal_updated": self.goal_updated,
+            "tool_calls_count": len(self.tool_calls),
+            "last_tool": self.tool_calls[-1] if self.tool_calls else None
+        }
+
+
+# Protocol compliance state (shared across threads for dashboard)
+_compliance_state = {
+    "last_session_init": None,
+    "violations": [],
+
+
+# Session persistence file (survives MCP restarts)
+SESSION_FILE = SRC_DIR.parent / "data" / "mcp_session.json"
+
+
+def _persist_session(project_id: str, working_dir: str):
+    """Save current session to file for recovery after restart."""
+    try:
+        data = {
+            "project_id": project_id,
+            "working_dir": working_dir,
+            "timestamp": datetime.now().isoformat()
+        }
+        with open(SESSION_FILE, 'w') as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+
+def _recover_session() -> Optional[tuple]:
+    """Try to recover session from file. Returns (project_id, working_dir) or None."""
+    try:
+        if not SESSION_FILE.exists():
+            return None
+
+        with open(SESSION_FILE, 'r') as f:
+            data = json.load(f)
+
+        # Check if session is recent (within last hour)
+        timestamp = datetime.fromisoformat(data.get("timestamp", ""))
+        age_hours = (datetime.now() - timestamp).total_seconds() / 3600
+
+        if age_hours < 1 and data.get("project_id") and data.get("working_dir"):
+            return (data["project_id"], data["working_dir"])
+
+        return None
+    except Exception:
+        return None
+    "editor": None
+}
+
+
+def _require_session(tool_name: str) -> Optional[str]:
+    """
+    Check if session is active. Returns error message if not.
+    Tries to auto-recover session from file if possible.
+
+    Usage:
+        error = _require_session("tool_name")
+        if error:
+            return error
+    """
+    session = _get_session()
+    if not session.is_active():
+        # Try to recover from persisted session
+        recovered = _recover_session()
+        if recovered:
+            project_id, working_dir = recovered
+            _set_session(project_id, working_dir)
+            session = _get_session()
+            session.mark_initialized()
+            print(f"[FixOnce] Auto-recovered session: {project_id}")
+
+    if not session.is_active():
+        violation = {
+            "type": "NO_SESSION",
+            "tool": tool_name,
+            "timestamp": datetime.now().isoformat(),
+            "message": f"Tool '{tool_name}' called without session"
+        }
+        _compliance_state["violations"].append(violation)
+        # Keep only last 10 violations
+        _compliance_state["violations"] = _compliance_state["violations"][-10:]
+
+        return f"""
+❌ PROTOCOL VIOLATION: Session not initialized
+
+You MUST call auto_init_session(cwd="...") BEFORE using {tool_name}.
+
+This is REQUIRED by FixOnce protocol. Do it now:
+1. Call auto_init_session(cwd="/path/to/project")
+2. Then retry {tool_name}
+
+⚠️ Continuing without session will lose all context!
+"""
+
+    session.log_tool_call(tool_name)
+    return None
+
+
+def _track_roi_event(event_type: str):
+    """
+    Track ROI event via Flask API.
+
+    Events: session_context, solution_reused, decision_used, error_prevented
+    """
+    try:
+        requests.post(
+            "http://localhost:5000/api/memory/roi/track",
+            json={"event": event_type},
+            timeout=2
+        )
+    except Exception:
+        pass  # Silent fail - don't block MCP operations
+
+
+# ============================================================
+# MEMORY DECAY SYSTEM
+# ============================================================
+
+def _create_insight(text: str) -> dict:
+    """Create a new insight with full metadata for decay tracking."""
+    return {
+        "text": text,
+        "timestamp": datetime.now().isoformat(),
+        "use_count": 0,
+        "last_used": None,
+        "importance": "medium"  # low/medium/high - auto-calculated
+    }
+
+
+def _mark_insight_used(insight: dict) -> dict:
+    """Mark an insight as used and update its importance."""
+    insight["use_count"] = insight.get("use_count", 0) + 1
+    insight["last_used"] = datetime.now().isoformat()
+
+    # Auto-calculate importance based on use_count
+    use_count = insight["use_count"]
+    if use_count >= 5:
+        insight["importance"] = "high"
+    elif use_count >= 2:
+        insight["importance"] = "medium"
+    else:
+        insight["importance"] = "low"
+
+    return insight
+
+
+def _normalize_insight(insight) -> dict:
+    """Ensure insight has the new format with metadata."""
+    if isinstance(insight, str):
+        # Old format: just a string
+        return _create_insight(insight)
+    elif isinstance(insight, dict):
+        # Might be old format with just 'text' or new format
+        if "use_count" not in insight:
+            # Old format with text/timestamp but no decay metadata
+            text = insight.get("text", str(insight))
+            new_insight = _create_insight(text)
+            # Preserve original timestamp if it exists
+            if "timestamp" in insight:
+                new_insight["timestamp"] = insight["timestamp"]
+            return new_insight
+        return insight
+    else:
+        return _create_insight(str(insight))
+
+
+def _calculate_insight_score(insight: dict) -> float:
+    """
+    Calculate a score for ranking insights.
+    Higher score = more important/recent.
+    """
+    score = 0.0
+
+    # Importance weight
+    importance = insight.get("importance", "medium")
+    if importance == "high":
+        score += 100
+    elif importance == "medium":
+        score += 50
+    else:
+        score += 10
+
+    # Use count bonus
+    use_count = insight.get("use_count", 0)
+    score += use_count * 10
+
+    # Recency bonus (insights from last 7 days get boost)
+    try:
+        timestamp = insight.get("timestamp", "")
+        if timestamp:
+            created = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            if created.tzinfo:
+                created = created.replace(tzinfo=None)
+            age_days = (datetime.now() - created).days
+            if age_days <= 1:
+                score += 50  # Today
+            elif age_days <= 7:
+                score += 30  # This week
+            elif age_days <= 30:
+                score += 10  # This month
+    except Exception:
+        pass
+
+    return score
+
+
+def _get_ranked_insights(insights: list, limit: int = 10) -> list:
+    """Get top insights ranked by importance/recency/usage."""
+    # Normalize all insights to new format
+    normalized = [_normalize_insight(ins) for ins in insights]
+
+    # Sort by score (highest first)
+    ranked = sorted(normalized, key=_calculate_insight_score, reverse=True)
+
+    return ranked[:limit]
+
+
+def _should_archive_insight(insight: dict) -> bool:
+    """Check if an insight should be archived (moved to cold storage)."""
+    try:
+        # Never used and older than 30 days
+        use_count = insight.get("use_count", 0)
+        timestamp = insight.get("timestamp", "")
+
+        if not timestamp:
+            return False
+
+        created = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        if created.tzinfo:
+            created = created.replace(tzinfo=None)
+        age_days = (datetime.now() - created).days
+
+        # Archive if: never used AND older than 30 days AND importance is low
+        if use_count == 0 and age_days > 30 and insight.get("importance") == "low":
+            return True
+
+        # Archive if: not used in 60 days regardless
+        last_used = insight.get("last_used")
+        if last_used:
+            last = datetime.fromisoformat(last_used.replace('Z', '+00:00'))
+            if last.tzinfo:
+                last = last.replace(tzinfo=None)
+            unused_days = (datetime.now() - last).days
+            if unused_days > 60:
+                return True
+        elif age_days > 60:
+            # Never used and very old
+            return True
+
+        return False
+    except Exception:
+        return False
 
 
 def _get_session() -> SessionContext:
@@ -574,6 +856,21 @@ def _do_init_session(working_dir: str) -> str:
     # Set thread-local session
     _set_session(project_id, working_dir)
 
+    # Persist session to file for recovery after MCP restart
+    _persist_session(project_id, working_dir)
+
+    # Mark session as initialized for compliance tracking
+    session = _get_session()
+    session.mark_initialized()
+    session.log_tool_call("auto_init_session")
+
+    # Update global compliance state for dashboard
+    _compliance_state["last_session_init"] = datetime.now().isoformat()
+    _compliance_state["editor"] = "claude"  # Will be detected properly later
+
+    # Track ROI: session with context
+    _track_roi_event("session_context")
+
     # Check cache first (with git hash validation)
     cached = _get_cached_snapshot(project_id, working_dir)
     if cached and _is_meaningful_snapshot(cached):
@@ -661,18 +958,40 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
         lines.append("---")
         lines.append("")
 
+        # Mark decisions as displayed for compliance tracking
+        session = _get_session()
+        session.mark_decisions_displayed()
+
     # INSIGHTS - Check these BEFORE researching anything!
+    # Use Memory Decay ranking to show most important insights
     insights = data.get('live_record', {}).get('lessons', {}).get('insights', []) if data else []
     if insights:
+        # Get top 5 ranked insights (by importance, use_count, recency)
+        top_insights = _get_ranked_insights(insights, limit=5)
+
         lines.append("---")
         lines.append("## 🧠 STORED INSIGHTS - CHECK BEFORE RESEARCHING")
         lines.append("")
         lines.append("**YOU ARE FORBIDDEN from external research if relevant insight exists below!**")
         lines.append("**If relevant → use it. If not → proceed with research.**")
         lines.append("")
-        for ins in insights[-5:]:  # Show last 5
-            text = ins.get('text', ins) if isinstance(ins, dict) else str(ins)
-            lines.append(f"💡 {text}")
+        for ins in top_insights:
+            text = ins.get('text', '')
+            importance = ins.get('importance', 'medium')
+            use_count = ins.get('use_count', 0)
+
+            # Show importance indicator
+            if importance == 'high':
+                prefix = "🔥"  # Hot/important
+            elif use_count > 0:
+                prefix = "✓"   # Used before
+            else:
+                prefix = "💡"  # Regular
+
+            lines.append(f"{prefix} {text}")
+
+        if len(insights) > 5:
+            lines.append(f"_...and {len(insights) - 5} more. Use `search_past_solutions()` to find specific ones._")
         lines.append("")
         lines.append("---")
         lines.append("")
@@ -741,18 +1060,40 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
             lines.append("---")
             lines.append("")
 
+            # Mark decisions as displayed for compliance tracking
+            session = _get_session()
+            session.mark_decisions_displayed()
+
         # INSIGHTS - Check these BEFORE researching anything!
+        # Use Memory Decay ranking to show most important insights
         insights = lr.get('lessons', {}).get('insights', [])
         if insights:
+            # Get top 5 ranked insights (by importance, use_count, recency)
+            top_insights = _get_ranked_insights(insights, limit=5)
+
             lines.append("---")
             lines.append("## 🧠 STORED INSIGHTS - CHECK BEFORE RESEARCHING")
             lines.append("")
             lines.append("**YOU ARE FORBIDDEN from external research if relevant insight exists below!**")
             lines.append("**If relevant → use it. If not → proceed with research.**")
             lines.append("")
-            for ins in insights[-5:]:  # Show last 5
-                text = ins.get('text', ins) if isinstance(ins, dict) else str(ins)
-                lines.append(f"💡 {text}")
+            for ins in top_insights:
+                text = ins.get('text', '')
+                importance = ins.get('importance', 'medium')
+                use_count = ins.get('use_count', 0)
+
+                # Show importance indicator
+                if importance == 'high':
+                    prefix = "🔥"  # Hot/important
+                elif use_count > 0:
+                    prefix = "✓"   # Used before
+                else:
+                    prefix = "💡"  # Regular
+
+                lines.append(f"{prefix} {text}")
+
+            if len(insights) > 5:
+                lines.append(f"_...and {len(insights) - 5} more. Use `search_past_solutions()` to find specific ones._")
             lines.append("")
             lines.append("---")
             lines.append("")
@@ -764,14 +1105,6 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
         arch = lr.get('architecture', {})
         if arch.get('summary'):
             lines.append(f"**Architecture:** {arch['summary']}")
-
-        lessons = lr.get('lessons', {}).get('insights', [])
-        if lessons:
-            last_insight = lessons[-1]
-            # Handle both string and dict formats
-            if isinstance(last_insight, dict):
-                last_insight = last_insight.get('text', str(last_insight))
-            lines.append(f"**Last Insight:** {last_insight}")
 
         avoid = data.get('avoid', [])
         if avoid:
@@ -938,9 +1271,14 @@ def update_live_record(section: str, data: str) -> str:
 
     For other sections, data REPLACES the section.
     """
+    error = _require_session("update_live_record")
+    if error:
+        return error
+
     session = _get_session()
-    if not session.is_active():
-        return "Error: No active session. Call init_session() first."
+    # Track goal updates for compliance
+    if section == 'intent':
+        session.mark_goal_updated()
 
     try:
         update_data = json.loads(data) if isinstance(data, str) else data
@@ -956,14 +1294,19 @@ def update_live_record(section: str, data: str) -> str:
     lr = memory['live_record']
 
     if section == 'lessons':
-        # APPEND mode
+        # APPEND mode with Memory Decay tracking
         if 'lessons' not in lr:
-            lr['lessons'] = {'insights': [], 'failed_attempts': []}
+            lr['lessons'] = {'insights': [], 'failed_attempts': [], 'archived': []}
 
         if 'insight' in update_data:
-            lr['lessons']['insights'].append(update_data['insight'])
+            # Create insight with full decay metadata
+            new_insight = _create_insight(update_data['insight'])
+            lr['lessons']['insights'].append(new_insight)
+
         if 'failed_attempt' in update_data:
-            lr['lessons']['failed_attempts'].append(update_data['failed_attempt'])
+            # Failed attempts also get metadata
+            new_attempt = _create_insight(update_data['failed_attempt'])
+            lr['lessons']['failed_attempts'].append(new_attempt)
     else:
         # REPLACE mode
         if section not in lr:
@@ -979,10 +1322,11 @@ def update_live_record(section: str, data: str) -> str:
 @mcp.tool()
 def get_live_record() -> str:
     """Get the current Live Record."""
-    session = _get_session()
-    if not session.is_active():
-        return "Error: No active session. Call init_session() first."
+    error = _require_session("get_live_record")
+    if error:
+        return error
 
+    session = _get_session()
     memory = _load_project(session.project_id)
     lr = memory.get('live_record', {})
 
@@ -992,10 +1336,11 @@ def get_live_record() -> str:
 @mcp.tool()
 def log_decision(decision: str, reason: str) -> str:
     """Log an architectural decision."""
-    session = _get_session()
-    if not session.is_active():
-        return "Error: No active session."
+    error = _require_session("log_decision")
+    if error:
+        return error
 
+    session = _get_session()
     memory = _load_project(session.project_id)
 
     if 'decisions' not in memory:
@@ -1014,10 +1359,11 @@ def log_decision(decision: str, reason: str) -> str:
 @mcp.tool()
 def log_avoid(what: str, reason: str) -> str:
     """Log something to avoid."""
-    session = _get_session()
-    if not session.is_active():
-        return "Error: No active session."
+    error = _require_session("log_avoid")
+    if error:
+        return error
 
+    session = _get_session()
     memory = _load_project(session.project_id)
 
     if 'avoid' not in memory:
@@ -1036,9 +1382,11 @@ def log_avoid(what: str, reason: str) -> str:
 @mcp.tool()
 def search_past_solutions(query: str) -> str:
     """Search for past solutions matching the query."""
+    error = _require_session("search_past_solutions")
+    if error:
+        return error
+
     session = _get_session()
-    if not session.is_active():
-        return "Error: No active session."
 
     memory = _load_project(session.project_id)
 
@@ -1050,19 +1398,35 @@ def search_past_solutions(query: str) -> str:
     query_lower = query.lower()
 
     matches = []
-    for insight in insights:
-        # Handle both string and dict formats
-        insight_text = insight.get('text', str(insight)) if isinstance(insight, dict) else str(insight)
+    matched_indices = []  # Track which insights matched for use_count update
+
+    for i, insight in enumerate(insights):
+        # Normalize to new format
+        normalized = _normalize_insight(insight)
+        insight_text = normalized.get('text', '')
+
         if query_lower in insight_text.lower():
             matches.append(f"💡 Insight: {insight_text}")
+            matched_indices.append(i)
+            # Mark as used
+            _mark_insight_used(normalized)
+            insights[i] = normalized  # Update in place
 
     for attempt in failed:
         # Handle both string and dict formats
-        attempt_text = attempt.get('text', str(attempt)) if isinstance(attempt, dict) else str(attempt)
+        normalized = _normalize_insight(attempt)
+        attempt_text = normalized.get('text', '')
+
         if query_lower in attempt_text.lower():
             matches.append(f"❌ Failed: {attempt_text}")
 
+    # Save updated use counts if we had matches
+    if matched_indices:
+        _save_project(session.project_id, memory)
+
     if matches:
+        # Track ROI: solution reused
+        _track_roi_event("solution_reused")
         return "## Found:\n" + '\n'.join(matches)
     else:
         return "No matching solutions found."
@@ -1197,6 +1561,210 @@ def get_browser_errors(limit: int = 10) -> str:
         return "Could not connect to dashboard. Make sure FixOnce server is running on port 5000."
     except Exception as e:
         return f"Error fetching browser errors: {e}"
+
+
+@mcp.tool()
+def get_protocol_compliance() -> str:
+    """
+    Get current protocol compliance status.
+
+    Use this to check if you're following FixOnce protocol correctly.
+    Returns status of: session init, decisions display, goal updates.
+    """
+    session = _get_session()
+    compliance = session.get_compliance_status()
+
+    lines = ["## Protocol Compliance Status\n"]
+
+    # Session
+    if compliance["session_initialized"]:
+        lines.append(f"✅ Session initialized at {compliance['initialized_at']}")
+    else:
+        lines.append("❌ Session NOT initialized - MUST call auto_init_session()")
+
+    # Decisions
+    if compliance["decisions_displayed"]:
+        lines.append("✅ Decisions displayed to user")
+    else:
+        lines.append("⚠️ Decisions not displayed - Show them on session start")
+
+    # Goal
+    if compliance["goal_updated"]:
+        lines.append("✅ Goal updated this session")
+    else:
+        lines.append("⚠️ Goal not updated - Update before starting work")
+
+    # Tool calls
+    lines.append(f"\n📊 Tool calls this session: {compliance['tool_calls_count']}")
+
+    # Violations
+    if _compliance_state["violations"]:
+        lines.append("\n### ⚠️ Recent Violations:")
+        for v in _compliance_state["violations"][-5:]:
+            lines.append(f"- {v['type']}: {v['tool']} at {v['timestamp']}")
+
+    return '\n'.join(lines)
+
+
+@mcp.tool()
+def run_memory_cleanup() -> str:
+    """
+    Run memory decay cleanup - archive old/unused insights.
+
+    This tool:
+    - Archives insights not used in 60+ days
+    - Archives never-used insights older than 30 days
+    - Shows memory statistics
+
+    Run this periodically to keep memory clean and relevant.
+    """
+    error = _require_session("run_memory_cleanup")
+    if error:
+        return error
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+
+    lessons = memory.get('live_record', {}).get('lessons', {})
+    insights = lessons.get('insights', [])
+    archived = lessons.get('archived', [])
+
+    if not insights:
+        return "No insights to process."
+
+    # Normalize all insights
+    normalized = [_normalize_insight(ins) for ins in insights]
+
+    # Separate active from archived
+    still_active = []
+    newly_archived = []
+
+    for ins in normalized:
+        if _should_archive_insight(ins):
+            newly_archived.append(ins)
+        else:
+            still_active.append(ins)
+
+    # Update memory
+    lessons['insights'] = still_active
+    lessons['archived'] = archived + newly_archived
+    memory['live_record']['lessons'] = lessons
+
+    _save_project(session.project_id, memory)
+
+    # Build stats report
+    lines = ["## Memory Cleanup Report\n"]
+
+    lines.append(f"**Active Insights:** {len(still_active)}")
+    lines.append(f"**Newly Archived:** {len(newly_archived)}")
+    lines.append(f"**Total Archived:** {len(lessons['archived'])}")
+
+    if newly_archived:
+        lines.append("\n### Archived Insights:")
+        for ins in newly_archived[:5]:
+            text = ins.get('text', '')[:50]
+            lines.append(f"- {text}...")
+
+    # Show top insights by importance
+    if still_active:
+        lines.append("\n### Top Active Insights:")
+        top = _get_ranked_insights(still_active, limit=3)
+        for ins in top:
+            text = ins.get('text', '')[:50]
+            importance = ins.get('importance', 'medium')
+            use_count = ins.get('use_count', 0)
+            lines.append(f"- 🔥 [{importance}] (used {use_count}x) {text}...")
+
+    return '\n'.join(lines)
+
+
+@mcp.tool()
+def get_memory_stats() -> str:
+    """
+    Get memory statistics for the current project.
+
+    Shows:
+    - Total insights (active vs archived)
+    - Importance distribution
+    - Usage statistics
+    - Recommendations for cleanup
+    """
+    error = _require_session("get_memory_stats")
+    if error:
+        return error
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+
+    lessons = memory.get('live_record', {}).get('lessons', {})
+    insights = lessons.get('insights', [])
+    archived = lessons.get('archived', [])
+    failed = lessons.get('failed_attempts', [])
+    decisions = memory.get('decisions', [])
+
+    lines = ["## Memory Statistics\n"]
+
+    # Totals
+    lines.append(f"**Active Insights:** {len(insights)}")
+    lines.append(f"**Archived Insights:** {len(archived)}")
+    lines.append(f"**Failed Attempts:** {len(failed)}")
+    lines.append(f"**Decisions:** {len(decisions)}")
+
+    if insights:
+        # Normalize for stats
+        normalized = [_normalize_insight(ins) for ins in insights]
+
+        # Importance distribution
+        high = sum(1 for i in normalized if i.get('importance') == 'high')
+        medium = sum(1 for i in normalized if i.get('importance') == 'medium')
+        low = sum(1 for i in normalized if i.get('importance') == 'low')
+
+        lines.append(f"\n**Importance Distribution:**")
+        lines.append(f"- 🔥 High: {high}")
+        lines.append(f"- 💡 Medium: {medium}")
+        lines.append(f"- ⚪ Low: {low}")
+
+        # Usage stats
+        used = sum(1 for i in normalized if i.get('use_count', 0) > 0)
+        never_used = len(normalized) - used
+        total_uses = sum(i.get('use_count', 0) for i in normalized)
+
+        lines.append(f"\n**Usage Statistics:**")
+        lines.append(f"- Used at least once: {used}")
+        lines.append(f"- Never used: {never_used}")
+        lines.append(f"- Total usage count: {total_uses}")
+
+        # Recommendations
+        lines.append(f"\n**Recommendations:**")
+        if never_used > 10:
+            lines.append(f"⚠️ {never_used} insights never used - consider running `run_memory_cleanup()`")
+        if len(insights) > 50:
+            lines.append(f"⚠️ Memory growing large ({len(insights)} insights) - consider cleanup")
+        if never_used == 0 and len(insights) < 50:
+            lines.append("✅ Memory is healthy - no action needed")
+
+    return '\n'.join(lines)
+
+
+# ============================================================
+# COMPLIANCE API (For Dashboard Widget)
+# ============================================================
+
+def get_compliance_for_api() -> dict:
+    """Get compliance status for dashboard API."""
+    session = _get_session()
+    compliance = session.get_compliance_status()
+
+    return {
+        "session_initialized": compliance["session_initialized"],
+        "initialized_at": compliance["initialized_at"],
+        "decisions_displayed": compliance["decisions_displayed"],
+        "goal_updated": compliance["goal_updated"],
+        "tool_calls_count": compliance["tool_calls_count"],
+        "last_session_init": _compliance_state.get("last_session_init"),
+        "violations": _compliance_state.get("violations", [])[-5:],
+        "editor": _compliance_state.get("editor")
+    }
 
 
 if __name__ == "__main__":

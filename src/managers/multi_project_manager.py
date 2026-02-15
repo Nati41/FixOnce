@@ -656,9 +656,12 @@ def get_projects_by_status() -> Dict[str, Any]:
         if status == "active_now":
             # Load full memory for active project
             memory = load_project_memory(project_id)
-            project['current_goal'] = memory.get('live_record', {}).get('intent', {}).get('current_goal', '')
+            intent = memory.get('live_record', {}).get('intent', {})
+            project['current_goal'] = intent.get('current_goal', '')
+            project['intent_updated_at'] = intent.get('updated_at', '')
             project['open_errors'] = len(memory.get('active_issues', []))
             project['insights_count'] = len(memory.get('live_record', {}).get('lessons', {}).get('insights', []))
+            project['ai_session'] = memory.get('ai_session', {})
             active = project
         elif status == "recent":
             recent.append(project)

@@ -460,3 +460,33 @@ search_past_solutions("keywords")
         "results": results,
         "message": "Cursor configured and launched!" if all_ok else "Some steps failed"
     })
+
+
+@status_bp.route("/system/protocol_compliance", methods=["GET"])
+def api_protocol_compliance():
+    """
+    Get protocol compliance status for dashboard widget.
+
+    Returns status of AI protocol compliance:
+    - Session initialized
+    - Decisions displayed
+    - Goal updated
+    - Recent violations
+    """
+    try:
+        # Try to get from MCP server
+        from mcp_server.mcp_memory_server_v2 import get_compliance_for_api
+        return jsonify(get_compliance_for_api())
+    except ImportError:
+        # MCP server not available, return default state
+        return jsonify({
+            "session_initialized": False,
+            "initialized_at": None,
+            "decisions_displayed": False,
+            "goal_updated": False,
+            "tool_calls_count": 0,
+            "last_session_init": None,
+            "violations": [],
+            "editor": None,
+            "error": "MCP server not loaded"
+        })

@@ -568,6 +568,12 @@
             animation: pulse-badge 2s ease-in-out infinite;
         }
 
+        .live-badge.disconnected {
+            background: rgba(150, 150, 150, 0.2);
+            color: #888;
+            animation: none;
+        }
+
         @keyframes pulse-badge {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.6; }
@@ -630,7 +636,13 @@
             border-radius: 12px;
             padding: 16px;
             margin-bottom: 20px;
-            direction: rtl;
+        }
+
+        .hero-goal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
         }
 
         .hero-goal-label {
@@ -638,7 +650,11 @@
             text-transform: uppercase;
             letter-spacing: 1px;
             color: #5e81ac;
-            margin-bottom: 6px;
+        }
+
+        .hero-goal-time {
+            font-size: 0.7rem;
+            color: #888;
         }
 
         .hero-goal-text {
@@ -683,6 +699,73 @@
         .hero-stat.errors .hero-stat-value { color: #ff6b6b; }
         .hero-stat.insights .hero-stat-value { color: #ffd93d; }
         .hero-stat.decisions .hero-stat-value { color: #6bcfff; }
+
+        /* Protocol Compliance Widget */
+        .compliance-widget {
+            background: rgba(30, 30, 35, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+        }
+
+        .compliance-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .compliance-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+        }
+
+        .compliance-status {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .compliance-status.ok {
+            background: rgba(129, 178, 154, 0.2);
+            color: #81b29a;
+        }
+
+        .compliance-status.warning {
+            background: rgba(255, 217, 61, 0.2);
+            color: #ffd93d;
+        }
+
+        .compliance-status.error {
+            background: rgba(231, 111, 81, 0.2);
+            color: #e76f51;
+        }
+
+        .compliance-items {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .compliance-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+        }
+
+        .compliance-item .icon {
+            width: 16px;
+            text-align: center;
+        }
+
+        .compliance-item.ok { color: #81b29a; }
+        .compliance-item.warning { color: #ffd93d; }
+        .compliance-item.error { color: #e76f51; }
 
         .hero-btn {
             width: 100%;
@@ -3837,7 +3920,7 @@
             <div class="hero-status" id="hero-status">
                 <span class="hero-status-dot"></span>
                 <span id="hero-status-text">AI MEMORY ACTIVE</span>
-                <span class="live-badge">LIVE</span>
+                <span class="live-badge" id="live-badge">LIVE</span>
             </div>
             <div class="sync-counter" id="sync-counter" title="הזרקות ידע: כמה פעמים Claude השתמש בזיכרון (פתרונות, החלטות, הקשר)">
                 <span class="sync-icon">⚡</span>
@@ -3850,7 +3933,10 @@
                 <span id="hero-path"></span>
             </div>
             <div class="hero-goal" id="hero-goal" style="display: none;">
-                <div class="hero-goal-label">🎯 המטרה הנוכחית</div>
+                <div class="hero-goal-header">
+                    <span class="hero-goal-label">🎯 Current Goal</span>
+                    <span class="hero-goal-time" id="hero-goal-time"></span>
+                </div>
                 <div class="hero-goal-text" id="hero-goal-text"></div>
             </div>
             <div class="hero-stats" id="hero-stats">
@@ -3870,6 +3956,29 @@
                     <span>החלטות</span>
                 </div>
             </div>
+
+            <!-- Protocol Compliance Widget -->
+            <div class="compliance-widget" id="compliance-widget" style="display: none;">
+                <div class="compliance-header">
+                    <span class="compliance-title">Protocol Compliance</span>
+                    <span class="compliance-status" id="compliance-status">-</span>
+                </div>
+                <div class="compliance-items" id="compliance-items">
+                    <div class="compliance-item" id="comp-session">
+                        <span class="icon">-</span>
+                        <span>Session initialized</span>
+                    </div>
+                    <div class="compliance-item" id="comp-decisions">
+                        <span class="icon">-</span>
+                        <span>Decisions displayed</span>
+                    </div>
+                    <div class="compliance-item" id="comp-goal">
+                        <span class="icon">-</span>
+                        <span>Goal updated</span>
+                    </div>
+                </div>
+            </div>
+
             <button class="hero-btn" id="hero-btn" onclick="openSessionModal()">
                 <span class="hero-btn-icon">🧠</span>
                 <span id="hero-btn-text">Start AI Session</span>
@@ -4515,13 +4624,33 @@
                 // Goal
                 const goalEl = document.getElementById('hero-goal');
                 const goalText = document.getElementById('hero-goal-text');
+                const goalTime = document.getElementById('hero-goal-time');
                 if (active.current_goal) {
                     goalText.textContent = active.current_goal;
                     goalEl.style.display = 'block';
                     document.getElementById('hero-btn-text').textContent = 'Resume AI Session';
+
+                    // Display goal timestamp
+                    if (goalTime && active.intent_updated_at) {
+                        goalTime.textContent = formatGoalTime(active.intent_updated_at);
+                    }
                 } else {
                     goalEl.style.display = 'none';
                     document.getElementById('hero-btn-text').textContent = 'Start AI Session';
+                }
+
+                // Update LIVE badge with connected editor
+                const liveBadge = document.getElementById('live-badge');
+                if (liveBadge && active.ai_session && active.ai_session.active) {
+                    const editor = active.ai_session.editor || 'AI';
+                    const editorName = editor.charAt(0).toUpperCase() + editor.slice(1);
+                    liveBadge.textContent = `LIVE • ${editorName}`;
+                    liveBadge.title = `Connected: ${editorName}`;
+                    liveBadge.classList.remove('disconnected');  // Enable pulsing
+                } else if (liveBadge) {
+                    liveBadge.textContent = 'LIVE';
+                    liveBadge.title = '';
+                    liveBadge.classList.remove('disconnected');  // Still active, just no specific editor
                 }
 
                 // Stats - use browser errors count from allBrowserErrors
@@ -4549,6 +4678,89 @@
             document.getElementById('hero-project-meta').innerHTML = 'Open a project folder to get started';
             document.getElementById('hero-goal').style.display = 'none';
             document.getElementById('hero-btn-text').textContent = 'Start AI Session';
+
+            // Reset LIVE badge - stop animation when disconnected
+            const liveBadge = document.getElementById('live-badge');
+            if (liveBadge) {
+                liveBadge.textContent = 'OFFLINE';
+                liveBadge.title = 'Not connected';
+                liveBadge.classList.add('disconnected');
+            }
+
+            // Hide compliance widget
+            const compWidget = document.getElementById('compliance-widget');
+            if (compWidget) compWidget.style.display = 'none';
+        }
+
+        // Protocol Compliance Widget
+        async function loadComplianceStatus() {
+            try {
+                const res = await fetch(API + '/api/system/protocol_compliance');
+                if (!res.ok) {
+                    hideComplianceWidget();
+                    return;
+                }
+                const data = await res.json();
+                renderComplianceWidget(data);
+            } catch (e) {
+                console.log('Compliance check failed:', e);
+                hideComplianceWidget();
+            }
+        }
+
+        function hideComplianceWidget() {
+            const widget = document.getElementById('compliance-widget');
+            if (widget) widget.style.display = 'none';
+        }
+
+        function renderComplianceWidget(data) {
+            const widget = document.getElementById('compliance-widget');
+            if (!widget) return;
+
+            // Only show if there's an active AI session
+            if (!data.last_session_init && !data.session_initialized) {
+                widget.style.display = 'none';
+                return;
+            }
+
+            widget.style.display = 'block';
+
+            // Update overall status
+            const statusEl = document.getElementById('compliance-status');
+            let okCount = 0;
+            if (data.session_initialized) okCount++;
+            if (data.decisions_displayed) okCount++;
+            if (data.goal_updated) okCount++;
+
+            if (okCount === 3) {
+                statusEl.textContent = '✓ OK';
+                statusEl.className = 'compliance-status ok';
+            } else if (okCount >= 1) {
+                statusEl.textContent = `${okCount}/3`;
+                statusEl.className = 'compliance-status warning';
+            } else {
+                statusEl.textContent = '⚠️ Violations';
+                statusEl.className = 'compliance-status error';
+            }
+
+            // Update individual items
+            updateComplianceItem('comp-session', data.session_initialized);
+            updateComplianceItem('comp-decisions', data.decisions_displayed);
+            updateComplianceItem('comp-goal', data.goal_updated);
+        }
+
+        function updateComplianceItem(id, ok) {
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            const icon = el.querySelector('.icon');
+            if (ok) {
+                icon.textContent = '✓';
+                el.className = 'compliance-item ok';
+            } else {
+                icon.textContent = '✗';
+                el.className = 'compliance-item error';
+            }
         }
 
         function updateCollapseCount(elementId, count, extraClass = '') {
@@ -5348,6 +5560,28 @@
             const hours = d.getHours().toString().padStart(2, '0');
             const mins = d.getMinutes().toString().padStart(2, '0');
             return `${relative} • ${day}/${month} ${hours}:${mins}`;
+        }
+
+        function formatGoalTime(timestamp) {
+            // Returns time for goal display: "Updated 5m ago" or "Updated 14:30"
+            if (!timestamp) return '';
+            const now = new Date();
+            const then = new Date(timestamp);
+            const diff = Math.floor((now - then) / 1000);
+
+            if (diff < 60) return 'just now';
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) {
+                const hours = then.getHours().toString().padStart(2, '0');
+                const mins = then.getMinutes().toString().padStart(2, '0');
+                return `today ${hours}:${mins}`;
+            }
+            // More than a day
+            const day = then.getDate().toString().padStart(2, '0');
+            const month = (then.getMonth() + 1).toString().padStart(2, '0');
+            const hours = then.getHours().toString().padStart(2, '0');
+            const mins = then.getMinutes().toString().padStart(2, '0');
+            return `${day}/${month} ${hours}:${mins}`;
         }
 
         // Session Modal
@@ -7888,6 +8122,7 @@ Core principle: Never debug the same bug twice.`,
 
             // Phase 1: Load Hero Card first (Focus Mode)
             loadHeroCard();
+            loadComplianceStatus();
             loadActivitySection();
             loadInsightsSection();
 
@@ -7904,6 +8139,7 @@ Core principle: Never debug the same bug twice.`,
 
             // Refresh intervals
             setInterval(loadHeroCard, 10000);  // Hero updates every 10s
+            setInterval(loadComplianceStatus, 5000);  // Compliance updates every 5s
             setInterval(loadActivitySection, 10000);
             setInterval(loadInsightsSection, 30000);
 
