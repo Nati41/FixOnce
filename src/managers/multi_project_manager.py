@@ -659,6 +659,7 @@ def get_projects_by_status() -> Dict[str, Any]:
             intent = memory.get('live_record', {}).get('intent', {})
             project['current_goal'] = intent.get('current_goal', '')
             project['intent_updated_at'] = intent.get('updated_at', '')
+            project['goal_history'] = intent.get('goal_history', [])
             project['open_errors'] = len(memory.get('active_issues', []))
             project['insights_count'] = len(memory.get('live_record', {}).get('lessons', {}).get('insights', []))
             project['ai_session'] = memory.get('ai_session', {})

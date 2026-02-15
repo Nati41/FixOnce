@@ -1323,8 +1323,29 @@ def update_live_record(section: str, data: str) -> str:
             new_attempt = _create_insight(update_data['failed_attempt'])
             new_attempt['type'] = 'failed_attempt'  # Will NEVER be archived
             lr['lessons']['failed_attempts'].append(new_attempt)
+    elif section == 'intent':
+        # INTENT mode - track goal history
+        if 'intent' not in lr:
+            lr['intent'] = {}
+
+        # Save previous goal to history before replacing
+        old_goal = lr['intent'].get('current_goal', '')
+        if old_goal and old_goal != update_data.get('current_goal', ''):
+            if 'goal_history' not in lr['intent']:
+                lr['intent']['goal_history'] = []
+            lr['intent']['goal_history'].insert(0, {
+                'goal': old_goal,
+                'completed_at': datetime.now().isoformat()
+            })
+            # Keep only last 5 goals
+            lr['intent']['goal_history'] = lr['intent']['goal_history'][:5]
+
+        # Update intent with new data
+        lr['intent'].update(update_data)
+        # Always update timestamp when intent changes
+        lr['intent']['updated_at'] = datetime.now().isoformat()
     else:
-        # REPLACE mode
+        # REPLACE mode for other sections
         if section not in lr:
             lr[section] = {}
         lr[section].update(update_data)

@@ -664,6 +664,48 @@
             font-weight: 500;
         }
 
+        .hero-goal-history {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .goal-history-label {
+            font-size: 0.75rem;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .goal-history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .goal-history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: #888;
+            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+        }
+
+        .goal-history-item .goal-text {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .goal-history-item .goal-time {
+            font-size: 0.7rem;
+            color: #666;
+            margin-left: 8px;
+        }
+
         .hero-stats {
             display: flex;
             gap: 16px;
@@ -4104,6 +4146,10 @@
                     <span class="hero-goal-time" id="hero-goal-time"></span>
                 </div>
                 <div class="hero-goal-text" id="hero-goal-text"></div>
+                <div class="hero-goal-history" id="hero-goal-history" style="display: none;">
+                    <div class="goal-history-label">Previous:</div>
+                    <div class="goal-history-list" id="goal-history-list"></div>
+                </div>
             </div>
             <div class="hero-stats" id="hero-stats">
                 <div class="hero-stat errors">
@@ -4859,6 +4905,9 @@
                 const goalEl = document.getElementById('hero-goal');
                 const goalText = document.getElementById('hero-goal-text');
                 const goalTime = document.getElementById('hero-goal-time');
+                const goalHistory = document.getElementById('hero-goal-history');
+                const goalHistoryList = document.getElementById('goal-history-list');
+
                 if (active.current_goal) {
                     goalText.textContent = active.current_goal;
                     goalEl.style.display = 'block';
@@ -4867,6 +4916,19 @@
                     // Display goal timestamp
                     if (goalTime && active.intent_updated_at) {
                         goalTime.textContent = formatGoalTime(active.intent_updated_at);
+                    }
+
+                    // Display goal history if available
+                    if (active.goal_history && active.goal_history.length > 0 && goalHistory && goalHistoryList) {
+                        goalHistory.style.display = 'block';
+                        goalHistoryList.innerHTML = active.goal_history.slice(0, 3).map(h => `
+                            <div class="goal-history-item">
+                                <span class="goal-text">${h.goal}</span>
+                                <span class="goal-time">${formatGoalTime(h.completed_at)}</span>
+                            </div>
+                        `).join('');
+                    } else if (goalHistory) {
+                        goalHistory.style.display = 'none';
                     }
                 } else {
                     goalEl.style.display = 'none';
