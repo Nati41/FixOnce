@@ -1666,6 +1666,38 @@ def log_avoid(what: str, reason: str) -> str:
     return f"Logged avoid: {what}"
 
 
+def _calculate_similarity(query: str, text: str) -> int:
+    """Calculate simple word-based similarity percentage."""
+    query_words = set(query.lower().split())
+    text_words = set(text.lower().split())
+    if not query_words:
+        return 0
+    matches = len(query_words & text_words)
+    return min(100, int((matches / len(query_words)) * 100))
+
+
+def _format_smart_override(insight: dict, query: str) -> dict:
+    """Format insight as Smart Override with metadata."""
+    text = insight.get('text', '')
+    timestamp = insight.get('timestamp', insight.get('last_used', ''))
+    use_count = insight.get('use_count', 0)
+
+    # Calculate confidence based on use_count and recency
+    confidence = min(95, 50 + (use_count * 10))
+    similarity = _calculate_similarity(query, text)
+
+    # Extract date
+    date_str = timestamp[:10] if timestamp else "unknown"
+
+    return {
+        "text": text,
+        "confidence": confidence,
+        "similarity": similarity,
+        "date": date_str,
+        "use_count": use_count
+    }
+
+
 @mcp.tool()
 def search_past_solutions(query: str) -> str:
     """Search for past solutions matching the query."""
@@ -1685,38 +1717,61 @@ def search_past_solutions(query: str) -> str:
     query_lower = query.lower()
 
     matches = []
-    matched_indices = []  # Track which insights matched for use_count update
+    matched_insights = []
+    matched_indices = []
 
     for i, insight in enumerate(insights):
-        # Normalize to new format
         normalized = _normalize_insight(insight)
         insight_text = normalized.get('text', '')
 
         if query_lower in insight_text.lower():
-            matches.append(f"💡 Insight: {insight_text}")
+            override = _format_smart_override(normalized, query)
+            matched_insights.append(override)
             matched_indices.append(i)
-            # Mark as used
             _mark_insight_used(normalized)
-            insights[i] = normalized  # Update in place
+            insights[i] = normalized
 
     for attempt in failed:
-        # Handle both string and dict formats
         normalized = _normalize_insight(attempt)
         attempt_text = normalized.get('text', '')
 
         if query_lower in attempt_text.lower():
-            matches.append(f"❌ Failed: {attempt_text}")
+            matches.append(f"❌ Failed attempt: {attempt_text}")
 
-    # Save updated use counts if we had matches
+    # Save updated use counts
     if matched_indices:
         _save_project(session.project_id, memory)
 
-    if matches:
-        # Track ROI: solution reused
+    if matched_insights:
         _track_roi_event("solution_reused")
-        return context + "## Found:\n" + '\n'.join(matches)
+
+        # Build Smart Override Header
+        lines = [context]
+        lines.append("## 🎯 EXISTING SOLUTION FOUND\n")
+
+        for i, m in enumerate(matched_insights[:3]):  # Top 3
+            lines.append(f"### Match #{i+1}")
+            lines.append(f"**Confidence:** {m['confidence']}%")
+            lines.append(f"**Similarity:** {m['similarity']}%")
+            lines.append(f"**Date:** {m['date']}")
+            lines.append(f"**Used:** {m['use_count']} times")
+            lines.append(f"\n> {m['text']}\n")
+
+        lines.append("---")
+        lines.append("**📌 Recommended:** Apply existing solution.")
+        lines.append("**💡 Override:** Only investigate if this doesn't match your case.")
+
+        if matches:
+            lines.append("\n### Also found (failed attempts):")
+            lines.extend(matches)
+
+        return '\n'.join(lines)
+
+    elif matches:
+        return context + "## Found (failed attempts only):\n" + '\n'.join(matches)
+
     else:
-        return context + "No matching solutions found."
+        return context + "No matching solutions found. You may investigate."
 
 
 @mcp.tool()
