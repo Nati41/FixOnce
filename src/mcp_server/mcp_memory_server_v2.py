@@ -1478,12 +1478,27 @@ def update_live_record(section: str, data: str) -> str:
 
     lr = memory['live_record']
 
+    # PRE-ACTION INTELLIGENCE: Track any warnings
+    pre_action_warning = ""
+
     if section == 'lessons':
         # APPEND mode with Memory Decay tracking
         if 'lessons' not in lr:
             lr['lessons'] = {'insights': [], 'failed_attempts': [], 'archived': []}
 
         if 'insight' in update_data:
+            # PRE-ACTION: Check for similar existing insights
+            new_text = update_data['insight'].lower()
+            for existing in lr['lessons'].get('insights', []):
+                existing_text = _normalize_insight(existing).get('text', '').lower()
+                # Check for significant word overlap
+                new_words = set(new_text.split())
+                existing_words = set(existing_text.split())
+                overlap = new_words & existing_words - {'the', 'a', 'is', 'in', 'to', 'and', 'of'}
+                if len(overlap) >= 4:  # At least 4 meaningful words in common
+                    pre_action_warning = f"\n💡 **Similar insight exists:** {existing_text[:50]}..."
+                    break
+
             # Create insight with full decay metadata
             new_insight = _create_insight(update_data['insight'])
             lr['lessons']['insights'].append(new_insight)
@@ -1525,7 +1540,7 @@ def update_live_record(section: str, data: str) -> str:
 
     # Add browser errors reminder if any
     reminder = _get_browser_errors_reminder()
-    return f"Updated {section}{reminder}"
+    return f"Updated {section}{pre_action_warning}{reminder}"
 
 
 @mcp.tool()
@@ -1556,6 +1571,19 @@ def log_decision(decision: str, reason: str) -> str:
     if 'decisions' not in memory:
         memory['decisions'] = []
 
+    # PRE-ACTION INTELLIGENCE: Check for similar/conflicting decisions
+    similar_warning = ""
+    decision_lower = decision.lower()
+    for existing in memory['decisions']:
+        existing_text = existing.get('decision', '').lower()
+        # Check for similar decisions (simple word overlap)
+        decision_words = set(decision_lower.split())
+        existing_words = set(existing_text.split())
+        overlap = decision_words & existing_words
+        if len(overlap) >= 3:  # At least 3 words in common
+            similar_warning = f"\n⚠️ **Similar decision exists:** {existing.get('decision', '')[:60]}..."
+            break
+
     memory['decisions'].append({
         "type": "decision",  # Marked as decision - will NEVER be archived
         "decision": decision,
@@ -1565,7 +1593,7 @@ def log_decision(decision: str, reason: str) -> str:
     })
 
     _save_project(session.project_id, memory)
-    return f"Logged decision: {decision}"
+    return context + f"Logged decision: {decision}" + similar_warning
 
 
 @mcp.tool()
