@@ -18,6 +18,35 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+
+def _detect_editor() -> str:
+    """Detect which editor/AI is running this MCP server."""
+    home = Path.home()
+
+    # Check which config exists and was recently modified
+    cursor_config = home / ".cursor" / "mcp.json"
+    claude_config = home / ".claude" / "mcp.json"
+
+    cursor_exists = cursor_config.exists()
+    claude_exists = claude_config.exists()
+
+    if cursor_exists and claude_exists:
+        # Both exist - check which was modified more recently
+        cursor_mtime = cursor_config.stat().st_mtime
+        claude_mtime = claude_config.stat().st_mtime
+        return "cursor" if cursor_mtime > claude_mtime else "claude"
+    elif cursor_exists:
+        return "cursor"
+    elif claude_exists:
+        return "claude"
+
+    # Fallback: check environment
+    term_program = os.environ.get("TERM_PROGRAM", "").lower()
+    if "cursor" in term_program:
+        return "cursor"
+
+    return "claude"  # Default
+
 # Add src directory to path
 SRC_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SRC_DIR))
@@ -1057,7 +1086,7 @@ def _do_init_session(working_dir: str) -> str:
 
     # Update global compliance state for dashboard
     _compliance_state["last_session_init"] = datetime.now().isoformat()
-    _compliance_state["editor"] = "claude"  # Will be detected properly later
+    _compliance_state["editor"] = _detect_editor()
 
     # Track ROI: session with context
     _track_roi_event("session_context")

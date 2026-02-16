@@ -3160,6 +3160,30 @@
             color: #e0e0e0;
             font-weight: 500;
             flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 280px;
+        }
+
+        .memory-card.expanded .memory-card-title {
+            white-space: normal;
+            overflow: visible;
+            max-width: none;
+        }
+
+        .memory-card.expanded .memory-card-reason {
+            white-space: normal;
+            overflow: visible;
+        }
+
+        .memory-card {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .memory-card:hover {
+            transform: translateX(2px);
         }
 
         .memory-card-badge {
@@ -7844,7 +7868,7 @@
                 items.push({
                     type: 'lesson',
                     html: `
-                        <div class="memory-card lesson glass">
+                        <div class="memory-card lesson glass" onclick="this.classList.toggle('expanded')">
                             <span class="insight-type-dot lesson"></span>
                             <div class="memory-card-header">
                                 <span class="memory-card-title">${esc(text)}</span>
@@ -7862,9 +7886,9 @@
                 items.push({
                     type: 'decision',
                     html: `
-                        <div class="memory-card decision glass">
+                        <div class="memory-card decision glass" onclick="this.classList.toggle('expanded')">
                             <span class="insight-type-dot decision"></span>
-                            ${canDelete ? `<button class="memory-card-delete" onclick="deleteDecision('${d.id}', event)">×</button>` : ''}
+                            ${canDelete ? `<button class="memory-card-delete" onclick="deleteDecision('${d.id}', event); event.stopPropagation();">×</button>` : ''}
                             <div class="memory-card-header">
                                 <span class="memory-card-title">${esc(d.decision)}</span>
                                 <span class="memory-card-badge ${d.used_by_ai ? 'used' : 'unused'}">
@@ -7885,9 +7909,9 @@
                 items.push({
                     type: 'avoid',
                     html: `
-                        <div class="memory-card avoid glass">
+                        <div class="memory-card avoid glass" onclick="this.classList.toggle('expanded')">
                             <span class="insight-type-dot avoid"></span>
-                            ${canDelete ? `<button class="memory-card-delete" onclick="deleteAvoid('${a.id}', event)">×</button>` : ''}
+                            ${canDelete ? `<button class="memory-card-delete" onclick="deleteAvoid('${a.id}', event); event.stopPropagation();">×</button>` : ''}
                             <div class="memory-card-header">
                                 <span class="memory-card-title">${esc(a.what)}</span>
                                 <span class="memory-card-badge ${a.used_by_ai ? 'used' : 'unused'}">
