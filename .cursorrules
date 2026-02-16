@@ -22,9 +22,9 @@ Then display:
 
 ## 🚨 RULE #2: BEFORE ANY CHANGE - CHECK DECISIONS
 
-**BEFORE modifying architecture, storage, or data structures:**
+**BEFORE modifying architecture, storage, data structures, or system design:**
 
-1. CHECK the decisions from auto_init_session()
+1. CHECK the decisions returned from auto_init_session()
 2. IF user request CONTRADICTS a decision:
 
 ```
@@ -32,10 +32,11 @@ Then display:
    "[decision text]"
    Reason: [reason]
 
-This contradicts the decision. Override? (yes/no)
+Your request contradicts this decision.
+Override? (yes/no)
 ```
 
-**YOU ARE FORBIDDEN from contradicting decisions without EXPLICIT approval.**
+**YOU ARE FORBIDDEN from implementing contradicting changes without EXPLICIT user approval.**
 
 ---
 
@@ -45,7 +46,7 @@ This contradicts the decision. Override? (yes/no)
 ```
 update_live_record("intent", {"current_goal": "Brief task description"})
 ```
-**Do this BEFORE working, not after!**
+**Do this BEFORE working, not after!** Keeps dashboard live.
 
 ---
 
@@ -59,25 +60,38 @@ update_live_record("intent", {"current_goal": "Brief task description"})
 
 After updates: `(📌 FixOnce: saved)`
 
-**ALL data MUST be in ENGLISH.**
-
 ---
 
-## 🚨 RULE #5: CHECK Insights BEFORE Any Research
+## 🚨 RULE #5: SEARCH BEFORE DOING ANYTHING
 
-**BEFORE researching or reading docs:**
+**CRITICAL: When user asks about a PROBLEM or ERROR:**
 
-1. **READ the insights shown in init response**
-2. **If relevant insight exists → USE IT:**
-
+### STEP 1: ALWAYS search first
 ```
-(📌 FixOnce: existing insight) "[insight text]"
-Already learned this. Applying...
+search_past_solutions("problem keywords")
 ```
 
-**YOU ARE FORBIDDEN from external research if relevant insight exists.**
+### STEP 2: Check the response
+- **If found** → USE IT IMMEDIATELY:
+```
+(📌 FixOnce: existing solution)
+"[insight text]"
 
-**Only if NO insight → proceed with research.**
+Applying this known solution...
+```
+
+- **If NOT found** → Only then start investigating
+
+### ⛔ FORBIDDEN ACTIONS:
+- Starting to code/debug BEFORE searching
+- Ignoring search results
+- "Investigating" when solution already exists
+
+### Examples:
+❌ WRONG: User asks "why doesn't .app open?" → Start writing C code
+✅ RIGHT: User asks "why doesn't .app open?" → search_past_solutions(".app open click") → Find existing solution → Apply it
+
+**This saves 10+ minutes per problem. DO NOT SKIP.**
 
 ---
 
@@ -98,10 +112,11 @@ Already learned this. Applying...
 ## ENFORCEMENT
 
 1. ALWAYS init at start
-2. ALWAYS display ALL decisions AND insights
+2. ALWAYS display decisions
 3. NEVER contradict decision without approval
-4. ALWAYS update goal BEFORE starting work
-5. FORBIDDEN to research if insight exists - USE IT
-6. ALL data in ENGLISH only
+4. ALWAYS update goal BEFORE starting new work
+5. ALWAYS log insights during work
+6. ALWAYS use relevant insights - don't ignore them
+7. ALWAYS search past solutions before fixing errors
 
 **These are REQUIREMENTS, not suggestions.**
