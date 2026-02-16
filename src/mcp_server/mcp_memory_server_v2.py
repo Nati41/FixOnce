@@ -1114,12 +1114,30 @@ def _get_browser_errors_summary(limit: int = 3) -> Optional[str]:
 
 def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
     """Format init response from cached snapshot."""
-    lines = [
+    lines = []
+
+    # LIVE ERRORS FIRST (Universal Gate principle)
+    live_errors = _get_live_errors()
+    if live_errors:
+        lines.append("═══════════════════════════════════════")
+        lines.append(f"## ⚠️ {len(live_errors)} LIVE ERRORS - FIX BEFORE PROCEEDING")
+        lines.append("═══════════════════════════════════════")
+        for e in live_errors[:3]:
+            msg = e.get('message', 'Unknown error')[:70]
+            lines.append(f"• {msg}")
+        if len(live_errors) > 3:
+            lines.append(f"• ...and {len(live_errors) - 3} more")
+        lines.append("")
+        lines.append("**You MUST address these errors before doing anything else.**")
+        lines.append("")
+
+    # Project info
+    lines.extend([
         f"## Project: {snapshot.get('name', Path(working_dir).name)}",
         f"**Status:** EXISTING",
         f"**Path:** `{working_dir}`",
         ""
-    ]
+    ])
 
     # DECISIONS FIRST - Load from project file (not cached in snapshot)
     project_id = _get_project_id(working_dir)
@@ -1214,12 +1232,30 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
     """Format init session response."""
     project_name = data.get('project_info', {}).get('name', Path(working_dir).name)
 
-    lines = [
+    lines = []
+
+    # LIVE ERRORS FIRST (Universal Gate principle)
+    live_errors = _get_live_errors()
+    if live_errors:
+        lines.append("═══════════════════════════════════════")
+        lines.append(f"## ⚠️ {len(live_errors)} LIVE ERRORS - FIX BEFORE PROCEEDING")
+        lines.append("═══════════════════════════════════════")
+        for e in live_errors[:3]:
+            msg = e.get('message', 'Unknown error')[:70]
+            lines.append(f"• {msg}")
+        if len(live_errors) > 3:
+            lines.append(f"• ...and {len(live_errors) - 3} more")
+        lines.append("")
+        lines.append("**You MUST address these errors before doing anything else.**")
+        lines.append("")
+
+    # Project info
+    lines.extend([
         f"## Project: {project_name}",
         f"**Status:** {status.upper()}",
         f"**Path:** `{working_dir}`",
         ""
-    ]
+    ])
 
     if status == "new":
         lines.append("_This is a new project. Ask: 'רוצה שאסרוק את הפרויקט?'_")
