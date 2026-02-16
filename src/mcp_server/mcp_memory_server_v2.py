@@ -151,58 +151,156 @@ def _recover_session() -> Optional[tuple]:
         return None
 
 
-def _require_session(tool_name: str) -> Optional[str]:
-    """
-    Check if session is active. Returns error message if not.
-    Tries to auto-recover session from file if possible.
+# ============================================================
+# PHASE 2: UNIVERSAL GATE (Inversion of Control)
+# ============================================================
+# FixOnce is in control. Claude executes.
+# - Auto-session: No manual init required
+# - Context injection: Every response includes context
+# - Error gate: Live errors are always visible
+# ============================================================
 
-    Usage:
-        error = _require_session("tool_name")
-        if error:
-            return error
+def _get_active_project_from_api() -> Optional[dict]:
+    """Get active project info from Flask API."""
+    try:
+        res = requests.get('http://localhost:5000/api/projects/active', timeout=2)
+        if res.status_code == 200:
+            return res.json()
+        return None
+    except Exception:
+        return None
+
+
+def _auto_create_session() -> bool:
+    """
+    Automatically create session from active project or last session.
+    Returns True if session was created.
+    """
+    # 1. Try to recover from persisted session
+    recovered = _recover_session()
+    if recovered:
+        project_id, working_dir = recovered
+        _set_session(project_id, working_dir)
+        session = _get_session()
+        session.mark_initialized()
+        print(f"[FixOnce] Auto-session from file: {project_id}")
+        return True
+
+    # 2. Try to get active project from API
+    active = _get_active_project_from_api()
+    if active and active.get('project_id'):
+        project_id = active['project_id']
+        # working_dir is nested in memory.project_info
+        working_dir = active.get('memory', {}).get('project_info', {}).get('working_dir', '')
+        _set_session(project_id, working_dir)
+        session = _get_session()
+        session.mark_initialized()
+        _persist_session(project_id, working_dir)
+        print(f"[FixOnce] Auto-session from API: {project_id}")
+        return True
+
+    return False
+
+
+def _get_live_errors() -> list:
+    """Get unacknowledged browser errors."""
+    try:
+        res = requests.get('http://localhost:5000/api/live-errors?since=600', timeout=2)
+        if res.status_code == 200:
+            data = res.json()
+            return data.get('errors', [])[:5]  # Max 5
+        return []
+    except Exception:
+        return []
+
+
+def _build_context_header() -> str:
+    """
+    Build context header that gets injected into EVERY tool response.
+    This is the core of "FixOnce in control".
+    """
+    lines = []
+    session = _get_session()
+
+    if not session.is_active():
+        return ""
+
+    # Load project data
+    memory = _load_project(session.project_id)
+    if not memory:
+        return ""
+
+    lr = memory.get('live_record', {})
+
+    # 1. LIVE ERRORS (Always first if any)
+    errors = _get_live_errors()
+    if errors:
+        lines.append("═══════════════════════════════════════")
+        lines.append(f"⚠️ **{len(errors)} LIVE ERRORS** - FIX BEFORE PROCEEDING")
+        lines.append("═══════════════════════════════════════")
+        for e in errors[:3]:
+            msg = e.get('message', 'Unknown error')[:80]
+            lines.append(f"  • {msg}")
+        if len(errors) > 3:
+            lines.append(f"  • ...and {len(errors) - 3} more")
+        lines.append("")
+
+    # 2. Current context (compact)
+    project_name = memory.get('project_info', {}).get('name', session.project_id)
+    goal = lr.get('intent', {}).get('current_goal', '')
+
+    lines.append(f"📍 **{project_name}**" + (f" | 🎯 {goal}" if goal else ""))
+
+    # 3. Active decisions (compact, one line)
+    decisions = memory.get('decisions', [])
+    if decisions:
+        recent_dec = decisions[-1]  # Most recent
+        dec_text = recent_dec.get('decision', '')[:50]
+        lines.append(f"🔒 {dec_text}")
+
+    lines.append("───────────────────────────────────────")
+
+    return '\n'.join(lines)
+
+
+def _universal_gate(tool_name: str) -> tuple:
+    """
+    Universal gate for all MCP tools.
+
+    Returns: (error_message, context_header)
+    - If error_message is not None, tool should return it immediately
+    - context_header should be prepended to tool response
+
+    This replaces _require_session with auto-session + context injection.
     """
     session = _get_session()
+
+    # AUTO-SESSION: Create session automatically if not active
     if not session.is_active():
-        # Try to recover from persisted session
-        recovered = _recover_session()
-        if recovered:
-            project_id, working_dir = recovered
-            _set_session(project_id, working_dir)
+        if _auto_create_session():
             session = _get_session()
-            session.mark_initialized()
-            print(f"[FixOnce] Auto-recovered session: {project_id}")
+        else:
+            # Still no session - but don't block, just note it
+            return (None, "⚠️ No active project. Use auto_init_session() for full features.\n")
 
-    if not session.is_active():
-        violation = {
-            "type": "NO_SESSION",
-            "tool": tool_name,
-            "timestamp": datetime.now().isoformat(),
-            "message": f"Tool '{tool_name}' called without session"
-        }
-        _compliance_state["violations"].append(violation)
-        # Keep only last 10 violations
-        _compliance_state["violations"] = _compliance_state["violations"][-10:]
-
-        return f"""
-🚨🚨🚨 PROTOCOL VIOLATION 🚨🚨🚨
-
-Tool '{tool_name}' BLOCKED - No session initialized!
-
-YOU MUST DO THIS NOW:
-═══════════════════════════════════════
-1. Call: auto_init_session(cwd="<project_path>")
-2. Then retry: {tool_name}
-═══════════════════════════════════════
-
-This is NOT optional. FixOnce cannot work without session.
-All your work will be LOST if you continue without init.
-
-DO IT NOW.
-"""
-
+    # Log tool call
     session.log_tool_call(tool_name)
     _sync_compliance()
-    return None
+
+    # BUILD CONTEXT HEADER (injected into response)
+    context = _build_context_header()
+
+    return (None, context)
+
+
+# Legacy function for backward compatibility
+def _require_session(tool_name: str) -> Optional[str]:
+    """
+    DEPRECATED: Use _universal_gate instead.
+    Kept for backward compatibility during transition.
+    """
+    error, _ = _universal_gate(tool_name)
+    return error
 
 
 def _get_browser_errors_reminder() -> str:
@@ -1357,7 +1455,7 @@ def update_live_record(section: str, data: str) -> str:
 
     For other sections, data REPLACES the section.
     """
-    error = _require_session("update_live_record")
+    error, context = _universal_gate("update_live_record")
     if error:
         return error
 
@@ -1433,7 +1531,7 @@ def update_live_record(section: str, data: str) -> str:
 @mcp.tool()
 def get_live_record() -> str:
     """Get the current Live Record."""
-    error = _require_session("get_live_record")
+    error, context = _universal_gate("get_live_record")
     if error:
         return error
 
@@ -1441,13 +1539,14 @@ def get_live_record() -> str:
     memory = _load_project(session.project_id)
     lr = memory.get('live_record', {})
 
-    return json.dumps(lr, indent=2, ensure_ascii=False)
+    # Context header + data
+    return context + json.dumps(lr, indent=2, ensure_ascii=False)
 
 
 @mcp.tool()
 def log_decision(decision: str, reason: str) -> str:
     """Log an architectural decision. Decisions NEVER decay - they are permanent."""
-    error = _require_session("log_decision")
+    error, context = _universal_gate("log_decision")
     if error:
         return error
 
@@ -1472,7 +1571,7 @@ def log_decision(decision: str, reason: str) -> str:
 @mcp.tool()
 def log_avoid(what: str, reason: str) -> str:
     """Log something to avoid. Avoid patterns NEVER decay - they are permanent."""
-    error = _require_session("log_avoid")
+    error, context = _universal_gate("log_avoid")
     if error:
         return error
 
@@ -1497,7 +1596,7 @@ def log_avoid(what: str, reason: str) -> str:
 @mcp.tool()
 def search_past_solutions(query: str) -> str:
     """Search for past solutions matching the query."""
-    error = _require_session("search_past_solutions")
+    error, context = _universal_gate("search_past_solutions")
     if error:
         return error
 
@@ -1542,9 +1641,9 @@ def search_past_solutions(query: str) -> str:
     if matches:
         # Track ROI: solution reused
         _track_roi_event("solution_reused")
-        return "## Found:\n" + '\n'.join(matches)
+        return context + "## Found:\n" + '\n'.join(matches)
     else:
-        return "No matching solutions found."
+        return context + "No matching solutions found."
 
 
 @mcp.tool()
@@ -1631,6 +1730,9 @@ def get_browser_errors(limit: int = 10) -> str:
     Returns:
         Recent browser errors with messages, sources, and timestamps
     """
+    # Use universal gate (no context header needed - this IS the error report)
+    _universal_gate("get_browser_errors")
+
     try:
         # Try to fetch from the dashboard API
         res = requests.get('http://localhost:5000/api/live-errors', timeout=3)
