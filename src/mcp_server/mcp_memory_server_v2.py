@@ -2046,6 +2046,210 @@ def get_memory_stats() -> str:
 
 
 # ============================================================
+# SMART TOOLS - File operations with automatic error checking
+# ============================================================
+# These tools wrap file operations and automatically check for
+# browser errors after each operation. Claude should use these
+# instead of regular Edit/Write when working on web projects.
+# ============================================================
+
+import time
+
+def _get_new_errors_since(timestamp: str) -> list:
+    """Get errors that occurred after the given timestamp."""
+    try:
+        res = requests.get(f'http://localhost:5000/api/live-errors?since=10', timeout=2)
+        if res.status_code == 200:
+            data = res.json()
+            errors = data.get('errors', [])
+            # Filter to errors after timestamp
+            new_errors = []
+            for e in errors:
+                err_time = e.get('timestamp', '')
+                if err_time > timestamp:
+                    new_errors.append(e)
+            return new_errors
+        return []
+    except Exception:
+        return []
+
+
+def _format_error_alert(errors: list) -> str:
+    """Format errors as an alert message."""
+    if not errors:
+        return ""
+
+    lines = [
+        "",
+        "═══════════════════════════════════════",
+        f"🚨 **{len(errors)} NEW ERROR(S) DETECTED!**",
+        "═══════════════════════════════════════"
+    ]
+
+    for e in errors[:5]:
+        msg = e.get('message', 'Unknown error')[:80]
+        source = e.get('source', '')
+        if source:
+            source_short = source.split('/')[-1][:20]
+            lines.append(f"• [{source_short}] {msg}")
+        else:
+            lines.append(f"• {msg}")
+
+    if len(errors) > 5:
+        lines.append(f"• ...and {len(errors) - 5} more")
+
+    lines.append("")
+    lines.append("**⚠️ FIX THESE BEFORE CONTINUING!**")
+    lines.append("═══════════════════════════════════════")
+
+    return '\n'.join(lines)
+
+
+@mcp.tool()
+def smart_file_operation(
+    operation: str,
+    file_path: str,
+    content: str = "",
+    description: str = ""
+) -> str:
+    """
+    Execute a file operation and automatically check for browser errors.
+
+    USE THIS instead of regular Edit/Write when working on web projects!
+    After the operation, waits briefly and checks if any new browser errors appeared.
+
+    Args:
+        operation: "read", "write", "append", or "info"
+        file_path: Path to the file
+        content: Content to write (for write/append operations)
+        description: What this change does (for logging)
+
+    Returns:
+        Operation result + any new browser errors detected
+
+    Example:
+        smart_file_operation("write", "game.js", "function startGame() {...}", "Added start function")
+    """
+    error, context = _universal_gate("smart_file_operation")
+    if error:
+        return error
+
+    # Record timestamp before operation
+    before_time = datetime.now().isoformat()
+
+    result_lines = [context]
+
+    try:
+        path = Path(file_path)
+
+        if operation == "read":
+            if path.exists():
+                content = path.read_text(encoding='utf-8')
+                result_lines.append(f"📄 Read {len(content)} chars from {file_path}")
+                result_lines.append("```")
+                result_lines.append(content[:2000])
+                if len(content) > 2000:
+                    result_lines.append(f"... ({len(content) - 2000} more chars)")
+                result_lines.append("```")
+            else:
+                result_lines.append(f"❌ File not found: {file_path}")
+
+        elif operation == "write":
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding='utf-8')
+            result_lines.append(f"✅ Wrote {len(content)} chars to {file_path}")
+            if description:
+                result_lines.append(f"📝 {description}")
+
+        elif operation == "append":
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, 'a', encoding='utf-8') as f:
+                f.write(content)
+            result_lines.append(f"✅ Appended {len(content)} chars to {file_path}")
+            if description:
+                result_lines.append(f"📝 {description}")
+
+        elif operation == "info":
+            if path.exists():
+                stat = path.stat()
+                result_lines.append(f"📄 {file_path}")
+                result_lines.append(f"   Size: {stat.st_size} bytes")
+                result_lines.append(f"   Modified: {datetime.fromtimestamp(stat.st_mtime).isoformat()}")
+            else:
+                result_lines.append(f"❌ File not found: {file_path}")
+
+        else:
+            result_lines.append(f"❌ Unknown operation: {operation}")
+            return '\n'.join(result_lines)
+
+    except Exception as e:
+        result_lines.append(f"❌ Error: {e}")
+        return '\n'.join(result_lines)
+
+    # Wait for browser to potentially throw errors
+    time.sleep(1.5)
+
+    # Check for new errors
+    new_errors = _get_new_errors_since(before_time)
+
+    if new_errors:
+        result_lines.append(_format_error_alert(new_errors))
+
+        # Log this as a potential issue
+        session = _get_session()
+        if session.is_active():
+            # Track that we caught an error
+            _track_roi_event("error_prevented")
+    else:
+        result_lines.append("")
+        result_lines.append("✅ No new browser errors detected")
+
+    return '\n'.join(result_lines)
+
+
+@mcp.tool()
+def check_and_report() -> str:
+    """
+    Quick check for browser errors and project status.
+
+    Call this periodically while working to catch any errors early.
+    Returns a compact status report.
+    """
+    error, context = _universal_gate("check_and_report")
+    if error:
+        return error
+
+    lines = [context]
+
+    # Check browser errors
+    errors = _get_live_errors()
+
+    if errors:
+        lines.append(f"🚨 **{len(errors)} BROWSER ERRORS:**")
+        for e in errors[:3]:
+            msg = e.get('message', 'Unknown')[:60]
+            lines.append(f"  • {msg}")
+        if len(errors) > 3:
+            lines.append(f"  • ...and {len(errors) - 3} more")
+        lines.append("")
+        lines.append("**Use `get_browser_errors()` for details.**")
+    else:
+        lines.append("✅ No browser errors")
+
+    # Add goal reminder
+    session = _get_session()
+    if session.is_active():
+        memory = _load_project(session.project_id)
+        if memory:
+            goal = memory.get('live_record', {}).get('intent', {}).get('current_goal', '')
+            if goal:
+                lines.append("")
+                lines.append(f"🎯 Current goal: {goal}")
+
+    return '\n'.join(lines)
+
+
+# ============================================================
 # COMPLIANCE API (For Dashboard Widget)
 # ============================================================
 
