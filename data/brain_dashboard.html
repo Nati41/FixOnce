@@ -4169,28 +4169,28 @@
                 </div>
             </div>
 
-            <!-- ROI Widget - Value Proof -->
+            <!-- ROI Widget - Factual Metrics Only -->
             <div class="roi-widget" id="roi-widget">
                 <div class="roi-header">
-                    <span class="roi-title">📊 Your AI Memory Value</span>
-                    <span class="roi-badge" id="roi-badge">Today</span>
+                    <span class="roi-title">📊 FixOnce Impact</span>
+                    <span class="roi-badge" id="roi-badge">Facts</span>
                 </div>
                 <div class="roi-stats">
                     <div class="roi-stat highlight">
-                        <div class="roi-stat-value" id="roi-syncs">0</div>
-                        <div class="roi-stat-label">Memory Syncs</div>
+                        <div class="roi-stat-value" id="roi-insights">0</div>
+                        <div class="roi-stat-label">Insights Used</div>
                     </div>
                     <div class="roi-stat">
                         <div class="roi-stat-value" id="roi-solutions">0</div>
-                        <div class="roi-stat-label">Solutions Reused</div>
+                        <div class="roi-stat-label">Solutions Found</div>
                     </div>
                     <div class="roi-stat">
-                        <div class="roi-stat-value" id="roi-time">0</div>
-                        <div class="roi-stat-label">Minutes Saved</div>
+                        <div class="roi-stat-value" id="roi-errors-live">0</div>
+                        <div class="roi-stat-label">Errors Caught</div>
                     </div>
                     <div class="roi-stat">
                         <div class="roi-stat-value" id="roi-prevented">0</div>
-                        <div class="roi-stat-label">Errors Prevented</div>
+                        <div class="roi-stat-label">Mistakes Blocked</div>
                     </div>
                 </div>
             </div>
@@ -5693,23 +5693,26 @@
         }
 
         function renderROI() {
-            // Real metrics only
-            setText('roi-solutions', roiData.solutions_reused || 0);
+            // Factual metrics only - no time estimates!
+            const insightsUsed = roiData.insights_used || 0;
+            const solutionsReused = roiData.solutions_reused || 0;
+            const errorsCaughtLive = roiData.errors_caught_live || 0;
+            const errorsPrevented = roiData.errors_prevented || 0;
+
+            // Update main ROI widget (factual)
+            setText('roi-insights', insightsUsed);
+            setText('roi-solutions', solutionsReused);
+            setText('roi-errors-live', errorsCaughtLive);
+            setText('roi-prevented', errorsPrevented);
+
+            // Update sync counter (total knowledge uses)
+            const totalUses = insightsUsed + solutionsReused + (roiData.decisions_referenced || 0);
+            setText('sync-value', totalUses);
+
+            // Legacy card (old UI)
             setText('roi-sessions', roiData.sessions_with_context || 0);
             setText('roi-decisions', roiData.decisions_referenced || 0);
-            setText('roi-avoided', roiData.errors_prevented || 0);
-
-            // Update sync counter (total knowledge syncs)
-            const totalSyncs = (roiData.sessions_with_context || 0) +
-                               (roiData.solutions_reused || 0) +
-                               (roiData.decisions_referenced || 0);
-            setText('sync-value', totalSyncs);
-
-            // Update ROI Widget
-            setText('roi-syncs', totalSyncs);
-            setText('roi-solutions', roiData.solutions_reused || 0);
-            setText('roi-time', roiData.time_saved_minutes || 0);
-            setText('roi-prevented', roiData.errors_prevented || 0);
+            setText('roi-avoided', errorsPrevented);
         }
 
         // ============ WELCOME MODAL (First Run) ============

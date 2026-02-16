@@ -1151,28 +1151,56 @@ def track_session_with_context() -> Dict[str, Any]:
         }
 
 
+def track_insight_used() -> Dict[str, Any]:
+    """
+    Track when an insight was used by AI.
+    Call this when AI applies existing knowledge.
+    """
+    with _lock:
+        memory = _load_memory()
+        roi = memory.setdefault('roi', {})
+
+        roi['insights_used'] = roi.get('insights_used', 0) + 1
+
+        _save_memory(memory)
+        return {"status": "ok", "total_roi": roi}
+
+
+def track_error_caught_live() -> Dict[str, Any]:
+    """
+    Track when a browser error was caught in real-time.
+    Call this when AI detects browser error proactively.
+    """
+    with _lock:
+        memory = _load_memory()
+        roi = memory.setdefault('roi', {})
+
+        roi['errors_caught_live'] = roi.get('errors_caught_live', 0) + 1
+
+        _save_memory(memory)
+        return {"status": "ok", "total_roi": roi}
+
+
 def get_roi_stats() -> Dict[str, Any]:
     """
     Get ROI statistics for dashboard display.
+    Returns FACTUAL metrics only - no time estimates.
     """
     with _lock:
         memory = _load_memory()
         roi = memory.get('roi', {})
 
-        # Calculate human-readable values
-        tokens_saved = roi.get('tokens_saved', 0)
-        minutes_saved = roi.get('time_saved_minutes', 0)
-
         return {
+            # Factual metrics - things that actually happened
+            "insights_used": roi.get('insights_used', 0),
             "solutions_reused": roi.get('solutions_reused', 0),
             "decisions_referenced": roi.get('decisions_referenced', 0),
             "errors_prevented": roi.get('errors_prevented', 0),
+            "errors_caught_live": roi.get('errors_caught_live', 0),
             "sessions_with_context": roi.get('sessions_with_context', 0),
-            "tokens_saved": tokens_saved,
-            "tokens_saved_formatted": f"{tokens_saved:,}",
-            "time_saved_minutes": minutes_saved,
-            "time_saved_formatted": _format_time(minutes_saved),
-            "estimated_cost_saved": round(tokens_saved * 0.00001, 2)  # ~$0.01 per 1000 tokens
+            # Legacy fields (kept for backward compatibility)
+            "tokens_saved": roi.get('tokens_saved', 0),
+            "time_saved_minutes": roi.get('time_saved_minutes', 0)
         }
 
 

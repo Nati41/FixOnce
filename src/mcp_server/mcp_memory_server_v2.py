@@ -347,7 +347,13 @@ def _track_roi_event(event_type: str):
     """
     Track ROI event via Flask API.
 
-    Events: session_context, solution_reused, decision_used, error_prevented
+    Events:
+    - session_context: Session started with existing context
+    - solution_reused: Past solution was found and applied
+    - decision_used: Architectural decision was referenced
+    - error_prevented: Avoid pattern prevented a mistake
+    - insight_used: Existing insight was applied
+    - error_caught_live: Browser error detected in real-time
     """
     try:
         requests.post(
@@ -378,6 +384,9 @@ def _mark_insight_used(insight: dict) -> dict:
     """Mark an insight as used and update its importance."""
     insight["use_count"] = insight.get("use_count", 0) + 1
     insight["last_used"] = datetime.now().isoformat()
+
+    # Track ROI: insight was used
+    _track_roi_event("insight_used")
 
     # Auto-calculate importance based on use_count
     use_count = insight["use_count"]
@@ -1808,6 +1817,9 @@ def get_browser_errors(limit: int = 10) -> str:
 
         if not errors:
             return "No browser errors captured."
+
+        # Track ROI: errors caught in real-time
+        _track_roi_event("error_caught_live")
 
         lines = ["## Browser Errors (from Chrome Extension)\n"]
         lines.append("These errors were captured from the user's browser:\n")

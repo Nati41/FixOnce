@@ -221,7 +221,8 @@ def api_track_roi():
     try:
         from managers.project_memory_manager import (
             track_solution_reused, track_decision_used,
-            track_error_prevented, track_session_with_context
+            track_error_prevented, track_session_with_context,
+            track_insight_used, track_error_caught_live
         )
         data = request.get_json() or {}
         event_type = data.get("event")
@@ -234,6 +235,10 @@ def api_track_roi():
             return jsonify(track_error_prevented())
         elif event_type == "session_context":
             return jsonify(track_session_with_context())
+        elif event_type == "insight_used":
+            return jsonify(track_insight_used())
+        elif event_type == "error_caught_live":
+            return jsonify(track_error_caught_live())
         else:
             return jsonify({"status": "error", "message": f"Unknown event type: {event_type}"}), 400
     except Exception as e:
