@@ -1,35 +1,23 @@
 #!/bin/bash
-# FixOnce App Launcher - dynamically detects installation location
 
-# Get the directory where the app bundle is located
-APP_PATH="$(cd "$(dirname "$0")/../../.." && pwd)"
+# Get the absolute path of this script
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+# Navigate up to find the FixOnce directory
+APP_PATH="$(dirname "$(dirname "$(dirname "$SCRIPT_PATH")")")"
 FIXONCE_DIR="$(dirname "$APP_PATH")"
 
-# If app is inside FixOnce folder, use parent. Otherwise check common locations.
-if [ -f "$FIXONCE_DIR/scripts/app_launcher.py" ]; then
-    INSTALL_DIR="$FIXONCE_DIR"
-elif [ -f "$HOME/Desktop/FixOnce/scripts/app_launcher.py" ]; then
-    INSTALL_DIR="$HOME/Desktop/FixOnce"
-elif [ -f "$HOME/FixOnce/scripts/app_launcher.py" ]; then
-    INSTALL_DIR="$HOME/FixOnce"
+# Find python3 - try common locations
+if [ -x "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3" ]; then
+    PYTHON="/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+elif [ -x "/usr/local/bin/python3" ]; then
+    PYTHON="/usr/local/bin/python3"
+elif [ -x "/opt/homebrew/bin/python3" ]; then
+    PYTHON="/opt/homebrew/bin/python3"
 else
-    osascript -e 'display alert "FixOnce not found" message "Could not locate FixOnce installation. Please reinstall."'
-    exit 1
+    PYTHON="python3"
 fi
 
-cd "$INSTALL_DIR"
-
-# Find Python - prefer python3
-if command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
-elif command -v python &> /dev/null; then
-    PYTHON_CMD="python"
-else
-    osascript -e 'display alert "Python not found" message "Please install Python 3 to use FixOnce."'
-    exit 1
-fi
-
-# Launch FixOnce
-"$PYTHON_CMD" "$INSTALL_DIR/scripts/app_launcher.py" &
-sleep 1
-osascript -e 'tell application "System Events" to set frontmost of process "Python" to true'
+# Run the app launcher
+cd "$FIXONCE_DIR"
+exec "$PYTHON" "$FIXONCE_DIR/scripts/app_launcher.py"

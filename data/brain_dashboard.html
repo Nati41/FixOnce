@@ -4223,14 +4223,18 @@
             </button>
         </div>
 
-        <!-- Hidden: Port Detection (auto-connect now) -->
-        <div class="port-detected" id="port-detected" style="display: none;">
+        <!-- Port Detection Banner -->
+        <div class="port-detected" id="port-detected">
             <div class="port-detected-info">
                 <span class="port-detected-icon">🔍</span>
                 <span class="port-detected-text">
                     <span id="port-detected-label">Detected:</span>
                     <span class="port-detected-url" id="port-detected-url">localhost:3000</span>
                 </span>
+            </div>
+            <div class="port-detected-actions">
+                <button class="port-connect-btn" id="port-connect-btn" onclick="connectToDetectedPort()">Connect</button>
+                <button class="port-dismiss-btn" onclick="dismissPortDetection()">✕</button>
             </div>
         </div>
 
@@ -8522,6 +8526,7 @@ Core principle: Never debug the same bug twice.`,
             // setInterval(loadQuickStats, 30000);  // Hidden in Focus Mode
             setInterval(loadMemoryData, 10000);
             setInterval(loadLiveRecord, 5000);
+            setInterval(loadCurrentSite, 3000);  // Check for new ports every 3s
             setInterval(loadSafetyData, 5000);
             setInterval(loadCurrentSite, 10000);
             setInterval(loadActivityFeed, 5000);

@@ -1,92 +1,92 @@
 #!/usr/bin/env python3
 """
-FixOnce Desktop App Launcher
+FixOnce - Native App Launcher
 Opens the dashboard in a native window using pywebview
 """
 
 import subprocess
-import sys
 import time
-import threading
-import requests
+import sys
 import os
 
+# Get the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
+SERVER_DIR = os.path.join(PROJECT_DIR, 'src')
+
 def set_dock_icon():
-    """Set the dock icon on macOS"""
+    """Set the Dock icon on macOS."""
     try:
         from AppKit import NSApplication, NSImage
-        scripts_dir = os.path.dirname(__file__)
-        project_dir = os.path.dirname(scripts_dir)
-        icon_path = os.path.join(project_dir, "data", "FixOnce-Icon.png")
+        icon_path = os.path.join(PROJECT_DIR, 'FixOnce.app', 'Contents', 'Resources', 'AppIcon.icns')
         if os.path.exists(icon_path):
             app = NSApplication.sharedApplication()
             icon = NSImage.alloc().initWithContentsOfFile_(icon_path)
             app.setApplicationIconImage_(icon)
     except:
-        pass  # Not on macOS or pyobjc not installed
+        pass
 
-def check_server_running(port=5000, timeout=10):
-    """Check if server is running, start if not"""
-    for _ in range(timeout):
+def wait_for_server(port=5000, timeout=10):
+    """Wait for the server to be ready."""
+    import urllib.request
+    start = time.time()
+
+    while time.time() - start < timeout:
         try:
-            r = requests.get(f"http://localhost:{port}/", timeout=1)
-            if r.status_code == 200:
-                return port
+            url = f'http://localhost:{port}/'
+            urllib.request.urlopen(url, timeout=1)
+            return port
         except:
             pass
-        time.sleep(1)
+        time.sleep(0.5)
     return None
 
 def start_server():
-    """Start the Flask server in background"""
-    import os
-    scripts_dir = os.path.dirname(os.path.abspath(__file__))
-    project_dir = os.path.dirname(scripts_dir)
-    server_path = os.path.join(project_dir, "src", "server.py")
+    """Start the Flask server in background."""
+    server_script = os.path.join(SERVER_DIR, 'server.py')
 
     subprocess.Popen(
-        [sys.executable, server_path, "--flask-only"],
+        [sys.executable, server_script, '--flask-only'],
+        cwd=SERVER_DIR,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        cwd=os.path.join(project_dir, "src"),
         start_new_session=True
     )
 
-def launch_app():
-    """Launch the desktop app"""
-    try:
-        import webview
-    except ImportError:
-        print("Installing pywebview...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "pywebview", "-q"])
-        import webview
+def main():
+    # Set Dock icon on macOS
+    set_dock_icon()
 
     # Check if server is running
-    port = check_server_running(timeout=2)
+    port = wait_for_server(timeout=2)
 
     if not port:
         print("Starting server...")
         start_server()
-        port = check_server_running(timeout=10)
+        port = wait_for_server(timeout=10)
 
     if not port:
         print("Error: Could not start server")
         return
 
-    # Set dock icon (macOS)
-    set_dock_icon()
+    dashboard_url = f'http://localhost:{port}/'
 
-    # Launch window
-    print(f"Opening FixOnce on port {port}...")
-    webview.create_window(
-        "FixOnce",
-        f"http://localhost:{port}/",
-        width=450,
-        height=800,
-        resizable=True,
-        min_size=(400, 600)
-    )
-    webview.start()
+    # Try native window first, fall back to browser
+    try:
+        import webview
+        window = webview.create_window(
+            'FixOnce',
+            dashboard_url,
+            width=450,
+            height=800,
+            resizable=True
+        )
+        webview.start()
+    except Exception as e:
+        print(f"Native window failed: {e}")
+        print("Opening in browser...")
+        import webbrowser
+        webbrowser.open(dashboard_url)
 
-if __name__ == "__main__":
-    launch_app()
+if __name__ == '__main__':
+    main()
