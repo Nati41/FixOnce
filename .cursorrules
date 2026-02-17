@@ -62,36 +62,16 @@ After updates: `(📌 FixOnce: saved)`
 
 ---
 
-## 🚨 RULE #5: SEARCH BEFORE DOING ANYTHING
+## 🚨 RULE #5: CHECK Insights BEFORE Any Research
 
-**CRITICAL: When user asks about a PROBLEM or ERROR:**
-
-### STEP 1: ALWAYS search first
+**BEFORE researching, YOU MUST:**
 ```
-search_past_solutions("problem keywords")
+search_past_solutions("keywords")
 ```
 
-### STEP 2: Check the response
-- **If found** → USE IT IMMEDIATELY:
-```
-(📌 FixOnce: existing solution)
-"[insight text]"
-
-Applying this known solution...
-```
-
-- **If NOT found** → Only then start investigating
-
-### ⛔ FORBIDDEN ACTIONS:
-- Starting to code/debug BEFORE searching
-- Ignoring search results
-- "Investigating" when solution already exists
-
-### Examples:
-❌ WRONG: User asks "why doesn't .app open?" → Start writing C code
-✅ RIGHT: User asks "why doesn't .app open?" → search_past_solutions(".app open click") → Find existing solution → Apply it
-
-**This saves 10+ minutes per problem. DO NOT SKIP.**
+**YOU ARE FORBIDDEN from external research if relevant insight exists.**
+**If found:** `(📌 FixOnce: existing insight) "[insight]" - Applying...`
+**Only if NO insight → proceed with research.**
 
 ---
 

@@ -21,9 +21,21 @@ from typing import Dict, Any, Optional
 
 def _detect_editor() -> str:
     """Detect which editor/AI is running this MCP server."""
-    home = Path.home()
+    # Priority 1: Check environment variables (most reliable for running process)
+    term_program = os.environ.get("TERM_PROGRAM", "").lower()
+    vscode_pid = os.environ.get("VSCODE_PID", "")
+    cursor_channel = os.environ.get("CURSOR_CHANNEL", "")
 
-    # Check which config exists and was recently modified
+    # Cursor-specific environment variables
+    if cursor_channel or "cursor" in term_program:
+        return "cursor"
+
+    # VS Code / Continue
+    if vscode_pid:
+        return "vscode"
+
+    # Priority 2: Check config file modification times (fallback)
+    home = Path.home()
     cursor_config = home / ".cursor" / "mcp.json"
     claude_config = home / ".claude" / "mcp.json"
 
@@ -31,7 +43,6 @@ def _detect_editor() -> str:
     claude_exists = claude_config.exists()
 
     if cursor_exists and claude_exists:
-        # Both exist - check which was modified more recently
         cursor_mtime = cursor_config.stat().st_mtime
         claude_mtime = claude_config.stat().st_mtime
         return "cursor" if cursor_mtime > claude_mtime else "claude"
@@ -39,11 +50,6 @@ def _detect_editor() -> str:
         return "cursor"
     elif claude_exists:
         return "claude"
-
-    # Fallback: check environment
-    term_program = os.environ.get("TERM_PROGRAM", "").lower()
-    if "cursor" in term_program:
-        return "cursor"
 
     return "claude"  # Default
 
@@ -398,15 +404,30 @@ def _track_roi_event(event_type: str):
 # MEMORY DECAY SYSTEM
 # ============================================================
 
-def _create_insight(text: str) -> dict:
-    """Create a new insight with full metadata for decay tracking."""
-    return {
+def _create_insight(text: str, linked_error: Optional[dict] = None) -> dict:
+    """
+    Create a new insight with full metadata for decay tracking.
+
+    Fix #2: Auto-Link Incidents - if there's an active error, link it to this insight.
+    """
+    insight = {
         "text": text,
         "timestamp": datetime.now().isoformat(),
         "use_count": 0,
         "last_used": None,
         "importance": "medium"  # low/medium/high - auto-calculated
     }
+
+    # Fix #2: Link to active error if provided
+    if linked_error:
+        insight["linked_error"] = {
+            "message": linked_error.get("message", "")[:200],
+            "source": linked_error.get("source", ""),
+            "timestamp": linked_error.get("timestamp", ""),
+            "linked_at": datetime.now().isoformat()
+        }
+
+    return insight
 
 
 def _mark_insight_used(insight: dict) -> dict:
@@ -1094,13 +1115,33 @@ def _do_init_session(working_dir: str) -> str:
     # Check cache first (with git hash validation)
     cached = _get_cached_snapshot(project_id, working_dir)
     if cached and _is_meaningful_snapshot(cached):
+        # Still update ai_session for cached projects
+        detected_editor = _compliance_state.get("editor", "claude")
+        data = _load_project(project_id)
+        if data:
+            data["ai_session"] = {
+                "active": True,
+                "editor": detected_editor,
+                "started_at": datetime.now().isoformat(),
+                "briefing_sent": False
+            }
+            _save_project(project_id, data)
         return _format_from_snapshot(cached, working_dir)
 
     # Load or create project
     data = _load_project(project_id)
     if not data:
         data = _init_project_memory(working_dir)
-        _save_project(project_id, data)
+
+    # Update ai_session with detected editor
+    detected_editor = _compliance_state.get("editor", "claude")
+    data["ai_session"] = {
+        "active": True,
+        "editor": detected_editor,
+        "started_at": datetime.now().isoformat(),
+        "briefing_sent": False
+    }
+    _save_project(project_id, data)
 
     # Determine status
     status = "existing" if _is_meaningful_project(data) else "new"
@@ -1123,7 +1164,7 @@ def _is_meaningful_snapshot(snapshot: Dict[str, Any]) -> bool:
 
 
 def _get_browser_errors_summary(limit: int = 3) -> Optional[str]:
-    """Get summary of recent browser errors for init response."""
+    """Get summary of recent browser errors for init response with auto-injected solutions."""
     try:
         res = requests.get('http://localhost:5000/api/live-errors', timeout=2)
         if res.status_code != 200:
@@ -1136,11 +1177,27 @@ def _get_browser_errors_summary(limit: int = 3) -> Optional[str]:
             return None
 
         lines = ["### ⚠️ Browser Errors Detected"]
+        solutions_found = 0
+        injected_solutions = set()  # Prevent duplicates
+
         for err in errors[:limit]:
-            msg = err.get('message', err.get('error', 'Unknown'))[:60]
+            msg = err.get('message', err.get('error', 'Unknown'))
+            msg_short = msg[:60] if len(msg) > 60 else msg
             source = err.get('source', err.get('url', ''))
             source_short = source.split('/')[-1][:30] if source else 'Browser'
-            lines.append(f"• **{source_short}**: {msg}")
+            lines.append(f"• **{source_short}**: {msg_short}")
+
+            # Auto-Inject Solutions (with quality controls)
+            solution = _find_solution_for_error(msg)
+            if solution:
+                solution_key = solution['text'][:50]
+                if solution_key not in injected_solutions:
+                    solutions_found += 1
+                    injected_solutions.add(solution_key)
+                    lines.append(f"  💡 **Solved before ({solution['similarity']}%):** {solution['text'][:80]}...")
+
+        if solutions_found > 0:
+            lines.append(f"\n✅ **{solutions_found} known fix(es).** Apply them.")
 
         if len(errors) > limit:
             lines.append(f"_...and {len(errors) - limit} more. Use `get_browser_errors()` for full list._")
@@ -1154,19 +1211,39 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
     """Format init response from cached snapshot."""
     lines = []
 
-    # LIVE ERRORS FIRST (Universal Gate principle)
+    # LIVE ERRORS FIRST (Universal Gate principle) + AUTO-INJECT SOLUTIONS
     live_errors = _get_live_errors()
     if live_errors:
         lines.append("═══════════════════════════════════════")
         lines.append(f"## ⚠️ {len(live_errors)} LIVE ERRORS - FIX BEFORE PROCEEDING")
         lines.append("═══════════════════════════════════════")
+
+        solutions_found = 0
+        injected_solutions = set()  # Prevent duplicates
+
         for e in live_errors[:3]:
-            msg = e.get('message', 'Unknown error')[:70]
-            lines.append(f"• {msg}")
+            msg = e.get('message', 'Unknown error')
+            msg_short = msg[:70] if len(msg) > 70 else msg
+            lines.append(f"• {msg_short}")
+
+            # Auto-Inject Solutions (with quality controls)
+            solution = _find_solution_for_error(msg)
+            if solution:
+                solution_key = solution['text'][:50]
+                if solution_key not in injected_solutions:
+                    solutions_found += 1
+                    injected_solutions.add(solution_key)
+                    lines.append(f"  💡 **Solved before ({solution['similarity']}%):** {solution['text'][:100]}...")
+
         if len(live_errors) > 3:
             lines.append(f"• ...and {len(live_errors) - 3} more")
-        lines.append("")
-        lines.append("**You MUST address these errors before doing anything else.**")
+
+        if solutions_found > 0:
+            lines.append("")
+            lines.append(f"✅ **{solutions_found} known fix(es).** Apply them.")
+        else:
+            lines.append("")
+            lines.append("**You MUST address these errors before doing anything else.**")
         lines.append("")
 
     # Project info
@@ -1248,6 +1325,14 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
     if snapshot.get('git_commit_hash'):
         lines.append(f"**Git:** `{snapshot['git_commit_hash']}`")
 
+    # Fix #3: Session State Visibility
+    session = _get_session()
+    if session and session.initialized_at:
+        session_id = hashlib.md5(f"{session.project_id}_{session.initialized_at}".encode()).hexdigest()[:8]
+        start_time = session.initialized_at[:19].replace('T', ' ')
+        tools_count = len(session.tool_calls)
+        lines.append(f"**Session:** `{session_id}` | Started: {start_time} | Tools: {tools_count}")
+
     lines.append("")
     lines.append("_Ask: 'נמשיך מכאן?'_")
 
@@ -1272,19 +1357,39 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
 
     lines = []
 
-    # LIVE ERRORS FIRST (Universal Gate principle)
+    # LIVE ERRORS FIRST (Universal Gate principle) + AUTO-INJECT SOLUTIONS
     live_errors = _get_live_errors()
     if live_errors:
         lines.append("═══════════════════════════════════════")
         lines.append(f"## ⚠️ {len(live_errors)} LIVE ERRORS - FIX BEFORE PROCEEDING")
         lines.append("═══════════════════════════════════════")
+
+        solutions_found = 0
+        injected_solutions = set()  # Prevent duplicates
+
         for e in live_errors[:3]:
-            msg = e.get('message', 'Unknown error')[:70]
-            lines.append(f"• {msg}")
+            msg = e.get('message', 'Unknown error')
+            msg_short = msg[:70] if len(msg) > 70 else msg
+            lines.append(f"• {msg_short}")
+
+            # Auto-Inject Solutions (with quality controls)
+            solution = _find_solution_for_error(msg)
+            if solution:
+                solution_key = solution['text'][:50]
+                if solution_key not in injected_solutions:
+                    solutions_found += 1
+                    injected_solutions.add(solution_key)
+                    lines.append(f"  💡 **Solved before ({solution['similarity']}%):** {solution['text'][:100]}...")
+
         if len(live_errors) > 3:
             lines.append(f"• ...and {len(live_errors) - 3} more")
-        lines.append("")
-        lines.append("**You MUST address these errors before doing anything else.**")
+
+        if solutions_found > 0:
+            lines.append("")
+            lines.append(f"✅ **{solutions_found} known fix(es).** Apply them.")
+        else:
+            lines.append("")
+            lines.append("**You MUST address these errors before doing anything else.**")
         lines.append("")
 
     # Project info
@@ -1294,6 +1399,15 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
         f"**Path:** `{working_dir}`",
         ""
     ])
+
+    # Fix #3: Session State Visibility
+    session = _get_session()
+    if session and session.initialized_at:
+        session_id = hashlib.md5(f"{session.project_id}_{session.initialized_at}".encode()).hexdigest()[:8]
+        start_time = session.initialized_at[:19].replace('T', ' ')
+        tools_count = len(session.tool_calls)
+        lines.append(f"**Session:** `{session_id}` | Started: {start_time} | Tools: {tools_count}")
+        lines.append("")
 
     if status == "new":
         lines.append("_This is a new project. Ask: 'רוצה שאסרוק את הפרויקט?'_")
@@ -1573,9 +1687,17 @@ def update_live_record(section: str, data: str) -> str:
                     pre_action_warning = f"\n💡 **Similar insight exists:** {existing_text[:50]}..."
                     break
 
-            # Create insight with full decay metadata
-            new_insight = _create_insight(update_data['insight'])
+            # Fix #2: Auto-Link Incidents - check for active errors
+            active_errors = _get_live_errors()
+            linked_error = active_errors[0] if active_errors else None
+
+            # Create insight with full decay metadata (+ linked error if exists)
+            new_insight = _create_insight(update_data['insight'], linked_error=linked_error)
             lr['lessons']['insights'].append(new_insight)
+
+            # Fix #2: Notify about the link
+            if linked_error:
+                pre_action_warning += f"\n🔗 **Auto-linked to error:** {linked_error.get('message', '')[:50]}..."
 
         if 'failed_attempt' in update_data:
             # Failed attempts also get metadata - marked as type to prevent decay
@@ -1703,6 +1825,90 @@ def _calculate_similarity(query: str, text: str) -> int:
         return 0
     matches = len(query_words & text_words)
     return min(100, int((matches / len(query_words)) * 100))
+
+
+def _find_solution_for_error(error_message: str, min_similarity: int = 50, min_keyword_matches: int = 2) -> Optional[dict]:
+    """
+    Auto-find a matching solution for an error message.
+
+    This is the core of Fix #1: Auto-Inject Solutions.
+    When an error is detected, automatically search for existing solutions.
+
+    Quality controls:
+    - Requires minimum 2 keyword matches to avoid false positives
+    - Higher similarity threshold (50%) for better precision
+
+    Args:
+        error_message: The error message to search for
+        min_similarity: Minimum similarity % to consider a match (default 50)
+        min_keyword_matches: Minimum keyword matches required (default 2)
+
+    Returns:
+        Dict with solution info if found, None otherwise
+    """
+    session = _get_session()
+    if not session or not session.project_id:
+        return None
+
+    try:
+        memory = _load_project(session.project_id)
+        if not memory:
+            return None
+
+        lessons = memory.get('live_record', {}).get('lessons', {})
+        insights = lessons.get('insights', [])
+
+        if not insights:
+            return None
+
+        # Extract keywords from error message (remove common noise)
+        error_lower = error_message.lower()
+        noise_words = {'error', 'failed', 'cannot', 'undefined', 'null', 'is', 'not',
+                       'the', 'a', 'an', 'to', 'of', 'in', 'at', 'on', 'for', 'with',
+                       'file', 'found', 'could', 'was', 'been', 'has', 'have', 'from'}
+        error_words = set(error_lower.split()) - noise_words
+
+        best_match = None
+        best_score = 0
+        best_keyword_matches = 0
+
+        for insight in insights:
+            normalized = _normalize_insight(insight)
+            text = normalized.get('text', '').lower()
+
+            # Calculate similarity
+            similarity = _calculate_similarity(error_message, text)
+
+            # Count keyword matches (quality gate #1: avoid false positives)
+            text_words = set(text.split())
+            keyword_matches = len(error_words & text_words)
+
+            # Skip if not enough keyword matches
+            if keyword_matches < min_keyword_matches:
+                continue
+
+            bonus = keyword_matches * 10
+            total_score = similarity + bonus
+
+            if total_score > best_score and total_score >= min_similarity:
+                best_score = total_score
+                use_count = normalized.get('use_count', 0)
+                timestamp = normalized.get('timestamp', '')
+                linked_error = normalized.get('linked_error')
+
+                best_match = {
+                    'text': normalized.get('text', ''),
+                    'similarity': min(100, total_score),
+                    'confidence': min(95, 50 + (use_count * 10)),
+                    'date': timestamp[:10] if timestamp else 'unknown',
+                    'use_count': use_count,
+                    'linked_error': linked_error  # Fix #2: Include linked error info
+                }
+
+        return best_match
+
+    except Exception:
+        return None
 
 
 def _format_smart_override(insight: dict, query: str) -> dict:
@@ -1908,6 +2114,9 @@ def get_browser_errors(limit: int = 10) -> str:
         lines = ["## Browser Errors (from Chrome Extension)\n"]
         lines.append("These errors were captured from the user's browser:\n")
 
+        solutions_found = 0
+        injected_solutions = set()  # Quality gate #2: prevent duplicate injections
+
         for err in errors[:limit]:
             msg = err.get('message', err.get('error', 'Unknown error'))
             source = err.get('source', err.get('url', 'Unknown source'))
@@ -1928,9 +2137,28 @@ def get_browser_errors(limit: int = 10) -> str:
             lines.append(f"**Message:** {msg}")
             if timestamp:
                 lines.append(f"**Time:** {timestamp}")
+
+            # 🔥 FIX #1: Auto-Inject Solutions (with quality controls)
+            solution = _find_solution_for_error(msg)
+            if solution:
+                solution_key = solution['text'][:50]  # Use first 50 chars as key
+
+                # Quality gate #2: Don't inject same solution twice
+                if solution_key not in injected_solutions:
+                    solutions_found += 1
+                    injected_solutions.add(solution_key)
+                    _track_roi_event("solution_reused")
+                    lines.append(f"\n**💡 This was solved before ({solution['similarity']}% match):**")
+                    lines.append(f"> {solution['text'][:200]}{'...' if len(solution['text']) > 200 else ''}")
+                    lines.append(f"_Applied {solution['use_count']} times_")
+                else:
+                    lines.append(f"\n_💡 Same solution as above_")
             lines.append("")
 
-        lines.append("\n💡 *Use this information to help debug frontend issues.*")
+        if solutions_found > 0:
+            lines.append(f"\n✅ **{solutions_found} known fix(es) found.** Apply them.")
+        else:
+            lines.append("\n_No existing solutions. Fix and save with `update_live_record()`._")
 
         return '\n'.join(lines)
 

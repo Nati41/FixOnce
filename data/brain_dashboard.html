@@ -3186,6 +3186,22 @@
             transform: translateX(2px);
         }
 
+        /* Modal expandable cards */
+        .modal-decision-card,
+        .modal-insight-card {
+            transition: background 0.2s;
+        }
+        .modal-decision-card:hover,
+        .modal-insight-card:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .modal-decision-card.expanded .modal-card-title,
+        .modal-decision-card.expanded .modal-card-reason,
+        .modal-insight-card.expanded .modal-card-text {
+            white-space: normal !important;
+            overflow: visible !important;
+        }
+
         .memory-card-badge {
             display: flex;
             align-items: center;
@@ -6022,9 +6038,9 @@
                         const text = typeof insight === 'object' ? insight.text : insight;
                         const time = typeof insight === 'object' && insight.timestamp ? formatTimeFull(insight.timestamp) : '';
                         return `
-                            <div style="padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); direction: rtl;">
+                            <div class="modal-insight-card" style="padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); direction: rtl; cursor: pointer;">
                                 <div style="color: #f4a261; font-size: 0.75rem; margin-bottom: 4px;">${time}</div>
-                                <div style="color: #ccc; font-size: 0.85rem; line-height: 1.5;">${esc(text)}</div>
+                                <div class="modal-card-text" style="color: #ccc; font-size: 0.85rem; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(text)}</div>
                             </div>
                         `;
                     }).join('');
@@ -6035,10 +6051,10 @@
                         return;
                     }
                     content.innerHTML = decisions.slice().reverse().map(dec => `
-                        <div style="padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); direction: rtl;">
+                        <div class="modal-decision-card" style="padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); direction: rtl; cursor: pointer;">
                             <div style="color: #81b29a; font-size: 0.75rem; margin-bottom: 4px;">${formatTimeFull(dec.timestamp)}</div>
-                            <div style="color: #fff; font-size: 0.9rem; font-weight: 500; margin-bottom: 4px;">${esc(dec.decision)}</div>
-                            <div style="color: #888; font-size: 0.8rem;">${esc(dec.reason || '')}</div>
+                            <div class="modal-card-title" style="color: #fff; font-size: 0.9rem; font-weight: 500; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(dec.decision)}</div>
+                            <div class="modal-card-reason" style="color: #888; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(dec.reason || '')}</div>
                         </div>
                     `).join('');
                 }
@@ -7734,6 +7750,21 @@
             }
         });
 
+        // Handle click on memory cards to expand/collapse
+        document.addEventListener('click', function(e) {
+            // Old UI cards
+            const card = e.target.closest('.memory-card');
+            if (card && !e.target.closest('.memory-card-delete')) {
+                card.classList.toggle('expanded');
+                return;
+            }
+            // Modal cards (new UI)
+            const modalCard = e.target.closest('.modal-decision-card, .modal-insight-card');
+            if (modalCard) {
+                modalCard.classList.toggle('expanded');
+            }
+        });
+
         function formatTimeAgo(timestamp) {
             if (!timestamp) return '';
             const now = new Date();
@@ -7868,7 +7899,7 @@
                 items.push({
                     type: 'lesson',
                     html: `
-                        <div class="memory-card lesson glass" onclick="this.classList.toggle('expanded')">
+                        <div class="memory-card lesson glass" >
                             <span class="insight-type-dot lesson"></span>
                             <div class="memory-card-header">
                                 <span class="memory-card-title">${esc(text)}</span>
@@ -7886,7 +7917,7 @@
                 items.push({
                     type: 'decision',
                     html: `
-                        <div class="memory-card decision glass" onclick="this.classList.toggle('expanded')">
+                        <div class="memory-card decision glass" >
                             <span class="insight-type-dot decision"></span>
                             ${canDelete ? `<button class="memory-card-delete" onclick="deleteDecision('${d.id}', event); event.stopPropagation();">×</button>` : ''}
                             <div class="memory-card-header">
@@ -7909,7 +7940,7 @@
                 items.push({
                     type: 'avoid',
                     html: `
-                        <div class="memory-card avoid glass" onclick="this.classList.toggle('expanded')">
+                        <div class="memory-card avoid glass" >
                             <span class="insight-type-dot avoid"></span>
                             ${canDelete ? `<button class="memory-card-delete" onclick="deleteAvoid('${a.id}', event); event.stopPropagation();">×</button>` : ''}
                             <div class="memory-card-header">
