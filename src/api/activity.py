@@ -221,6 +221,17 @@ def log_activity():
         file_context = _get_file_type_context(file_path) if file_path else ""
         diff_stats = _get_git_diff_stats(file_path, cwd) if file_path and data.get("tool") in ["Edit", "Write"] else {}
 
+        # Get current editor from ai_session
+        current_editor = "unknown"
+        try:
+            from managers.multi_project_manager import load_project_memory
+            if project_id:
+                memory = load_project_memory(project_id)
+                if memory and memory.get("ai_session"):
+                    current_editor = memory["ai_session"].get("editor", "unknown")
+        except:
+            pass
+
         activity = {
             "id": f"act_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}",
             "type": data.get("type", "unknown"),
@@ -229,6 +240,7 @@ def log_activity():
             "command": data.get("command"),
             "cwd": cwd,
             "project_id": project_id,  # Phase 0: Tag with project
+            "editor": current_editor,  # Track which AI made this action
             "timestamp": data.get("timestamp") or datetime.now().isoformat(),
             "human_name": _get_human_name(data),
             "file_context": file_context,

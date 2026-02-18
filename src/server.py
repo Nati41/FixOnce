@@ -91,6 +91,13 @@ def brain_dashboard():
     return send_file(brain_path)
 
 
+@flask_app.route("/v2")
+def dashboard_v2():
+    """Serve the new Leadership Dashboard (layered architecture)."""
+    v2_path = DATA_DIR / "dashboard_v2.html"
+    return send_file(v2_path)
+
+
 @flask_app.route("/test")
 def test_site():
     """Serve the comprehensive test site."""
@@ -231,7 +238,8 @@ def api_session_launch():
     editor = data.get("editor", "claude")
 
     try:
-        if platform.system() == "Darwin":
+        current_os = platform.system()
+        if current_os == "Darwin":
             if editor == "claude":
                 script = '''
                 tell application "Terminal"
@@ -248,8 +256,18 @@ def api_session_launch():
                 subprocess.run(["open", "-a", "Visual Studio Code"], check=True)
             else:
                 return jsonify({"status": "error", "message": f"Unknown editor: {editor}"}), 400
+        elif current_os == "Windows":
+            if editor == "claude":
+                # Prefer Claude CLI in a visible terminal
+                subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", "claude"])
+            elif editor == "cursor":
+                subprocess.Popen(["cmd", "/c", "start", "", "cursor"])
+            elif editor in ("vscode", "continue"):
+                subprocess.Popen(["cmd", "/c", "start", "", "code"])
+            else:
+                return jsonify({"status": "error", "message": f"Unknown editor: {editor}"}), 400
         else:
-            return jsonify({"status": "error", "message": "Only macOS supported for launch"}), 400
+            return jsonify({"status": "error", "message": "Unsupported OS for launch"}), 400
 
         return jsonify({"status": "ok", "message": f"Launched {editor}"})
     except Exception as e:

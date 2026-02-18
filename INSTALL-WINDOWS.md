@@ -9,8 +9,8 @@
 
 ### Step 2: Run Installer
 1. Open the extracted `FixOnce` folder
-2. **Right-click** on `install.ps1`
-3. Select **"Run with PowerShell"**
+2. Preferred: **Right-click** on `install.ps1` → **"Run with PowerShell"**
+3. Fallback: double-click `install.bat` (uses `py -3` / `python`)
 
 > If you see a security warning, click "Run anyway" or type `Y` to continue.
 
@@ -58,6 +58,11 @@ To capture browser errors:
 ### "Python not found"
 Install Python from https://www.python.org/downloads/
 Make sure to check "Add Python to PATH"!
+
+If `python` still fails, run with launcher:
+```powershell
+py -3 install.py
+```
 
 ### "Script cannot be loaded" (Execution Policy)
 Run PowerShell as Administrator and type:

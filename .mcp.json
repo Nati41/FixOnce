@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "fixonce": {
-      "command": "python3",
+      "command": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
       "args": ["/Users/haimdayan/Desktop/FixOnce/src/mcp_server/mcp_memory_server_v2.py"]
     }
   }
