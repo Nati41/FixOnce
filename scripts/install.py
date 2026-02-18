@@ -62,6 +62,25 @@ def get_platform() -> str:
     else:
         return 'linux'
 
+
+def get_windows_pythonw(executable: str) -> str:
+    """Best-effort resolve pythonw.exe path from current Python executable."""
+    exe = Path(executable)
+    if exe.name.lower() == "pythonw.exe":
+        return str(exe)
+
+    candidates = [
+        exe.with_name("pythonw.exe"),
+        Path(sys.prefix) / "pythonw.exe",
+        Path(sys.base_prefix) / "pythonw.exe",
+    ]
+    for c in candidates:
+        if c.exists():
+            return str(c)
+
+    # Fallback: keep python.exe if pythonw is unavailable
+    return executable
+
 def run_command(cmd: list, silent: bool = False) -> tuple:
     """Run a command and return (success, output)"""
     try:
@@ -136,7 +155,10 @@ def detect_editors() -> dict:
         editors['claude_code'] = success
 
         # Cursor
-        editors['cursor'] = (local_app_data / 'Programs' / 'cursor').exists()
+        editors['cursor'] = (
+            (local_app_data / 'Programs' / 'Cursor').exists() or
+            (local_app_data / 'Programs' / 'cursor').exists()
+        )
 
         # VS Code
         editors['vscode'] = (local_app_data / 'Programs' / 'Microsoft VS Code').exists()
@@ -336,9 +358,10 @@ def start_server_and_open_dashboard() -> bool:
     # Start server in background
     try:
         if current_platform == 'windows':
+            python_cmd = sys.executable
             # Windows: use START command
             subprocess.Popen(
-                f'start /B python "{server_script}" --flask-only',
+                f'start /B "" "{python_cmd}" "{server_script}" --flask-only',
                 shell=True,
                 cwd=str(fixonce_dir / "src")
             )
@@ -364,7 +387,7 @@ def start_server_and_open_dashboard() -> bool:
         if current_platform == 'mac':
             subprocess.run(['open', dashboard_url], capture_output=True)
         elif current_platform == 'windows':
-            subprocess.run(['start', dashboard_url], shell=True, capture_output=True)
+            subprocess.run(f'start "" "{dashboard_url}"', shell=True, capture_output=True)
         else:
             subprocess.run(['xdg-open', dashboard_url], capture_output=True)
 
@@ -398,7 +421,12 @@ python3 scripts/app_launcher.py
     win_content = '''@echo off
 REM FixOnce Launcher for Windows
 cd /d "%~dp0"
-pythonw scripts\\app_launcher.py
+set "PYW=%LOCALAPPDATA%\\Programs\\Python\\Python313\\pythonw.exe"
+if exist "%PYW%" (
+  "%PYW%" scripts\\app_launcher.py
+) else (
+  pyw scripts\\app_launcher.py 2>nul || py -3 scripts\\app_launcher.py
+)
 '''
 
     with open(win_launcher, 'w') as f:
@@ -545,6 +573,7 @@ def configure_auto_start() -> bool:
         try:
             server_script = fixonce_dir / "src" / "server.py"
             task_name = "FixOnceServer"
+            pythonw_cmd = get_windows_pythonw(sys.executable)
 
             # Remove existing task if any
             subprocess.run(
@@ -556,7 +585,7 @@ def configure_auto_start() -> bool:
             result = subprocess.run([
                 'schtasks', '/create',
                 '/tn', task_name,
-                '/tr', f'pythonw "{server_script}" --flask-only',
+                '/tr', f'"{pythonw_cmd}" "{server_script}" --flask-only',
                 '/sc', 'onlogon',
                 '/rl', 'limited',
                 '/f'
@@ -605,9 +634,12 @@ def show_chrome_extension_instructions():
             print(f"  {Colors.GREEN}[OK]{Colors.END} Chrome extensions page opened!")
         elif current_platform == 'windows':
             # On Windows, start command with Chrome
-            subprocess.run([
-                'start', 'chrome', 'chrome://extensions/'
-            ], shell=True, capture_output=True, timeout=5)
+            subprocess.run(
+                'start "" "chrome://extensions/"',
+                shell=True,
+                capture_output=True,
+                timeout=5
+            )
             print(f"  {Colors.GREEN}[OK]{Colors.END} Chrome extensions page opened!")
         else:
             # Linux - try xdg-open or google-chrome directly
@@ -656,8 +688,9 @@ def start_app():
                 subprocess.Popen([sys.executable, str(fixonce_dir / 'scripts' / 'app_launcher.py')])
                 print(f"  {Colors.GREEN}[OK]{Colors.END} FixOnce launched!")
         elif current_platform == 'windows':
+            pythonw_cmd = get_windows_pythonw(sys.executable)
             subprocess.Popen(
-                ['pythonw', str(fixonce_dir / 'scripts' / 'app_launcher.py')],
+                [pythonw_cmd, str(fixonce_dir / 'scripts' / 'app_launcher.py')],
                 creationflags=subprocess.DETACHED_PROCESS
             )
             print(f"  {Colors.GREEN}[OK]{Colors.END} FixOnce launched!")

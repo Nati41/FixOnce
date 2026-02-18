@@ -18,17 +18,20 @@
       "project_id": "FixOnce_e43ce7ce16a6",
       "working_dir": "/Users/haimdayan/Desktop/FixOnce",
       "name": "FixOnce",
-      "git_commit_hash": "1f11be2f9979",
+      "git_commit_hash": "9f5ed44562e5",
       "summary": "AI Memory Layer - שכבת זיכרון persistent ל-AI assistants. מאפשר ל-Claude/Cursor/Copilot לזכור errors, solutions, decisions והקשר בין sessions.",
       "stack": "Python (Flask), FastMCP, JavaScript (Browser Extension), HTML/CSS Dashboard, SQLite",
-      "current_goal": "Find way to show hook messages in conversation",
+      "current_goal": "Build Bootstrap Context Generator - auto-generated context.md for any AI",
       "last_insight": {
-        "text": "פרוטוקול חייב להשתמש בשפה מחייבת כמו FORBIDDEN/MUST - לא הצעות או Review",
-        "timestamp": "2026-02-14T23:38:40.731108"
+        "text": "Bootstrap Context Generator: Every memory change auto-generates .fixonce/CONTEXT.md - a universal context file readable by ANY AI (Codex, CLI agents, VS Code). MCP is just one access channel, not the core. This makes FixOnce editor-agnostic.",
+        "timestamp": "2026-02-18T12:42:41.183001",
+        "use_count": 0,
+        "last_used": null,
+        "importance": "medium"
       },
-      "decisions_count": 4,
+      "decisions_count": 11,
       "avoid_count": 0,
-      "indexed_at": "2026-02-14T23:44:48.146644"
+      "indexed_at": "2026-02-18T13:02:37.240254"
     },
     "tetris-game_eef8bddb1e7b": {
       "project_id": "tetris-game_eef8bddb1e7b",
@@ -42,7 +45,20 @@
       "decisions_count": 0,
       "avoid_count": 0,
       "indexed_at": "2026-02-14T21:01:25.781251"
+    },
+    "tetris-test_5e55dd25aac8": {
+      "project_id": "tetris-test_5e55dd25aac8",
+      "working_dir": "/Users/haimdayan/Desktop/tetris-test",
+      "name": "tetris-test",
+      "git_commit_hash": null,
+      "summary": "",
+      "stack": "",
+      "current_goal": "",
+      "last_insight": "",
+      "decisions_count": 0,
+      "avoid_count": 0,
+      "indexed_at": "2026-02-17T21:42:49.429972"
     }
   },
-  "updated_at": "2026-02-14T23:44:48.146766"
+  "updated_at": "2026-02-18T13:02:37.240321"
 }

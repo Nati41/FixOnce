@@ -835,6 +835,242 @@
             font-size: 1.2rem;
         }
 
+        /* ===== LEADERSHIP DASHBOARD ===== */
+        .leader-status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .leader-status-main {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            color: #e0e0e0;
+        }
+
+        .leader-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .leader-dot.active {
+            background: #81b29a;
+            box-shadow: 0 0 8px rgba(129, 178, 154, 0.5);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .leader-session {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .leader-session-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+
+        .leader-session-item strong {
+            color: #fff;
+        }
+
+        .leader-icon {
+            font-size: 1rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        .leader-goal {
+            background: rgba(129, 178, 154, 0.1);
+            border: 1px solid rgba(129, 178, 154, 0.2);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+        }
+
+        .leader-goal-label {
+            font-size: 0.75rem;
+            color: #81b29a;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .leader-goal-text {
+            font-size: 1rem;
+            color: #fff;
+            line-height: 1.4;
+        }
+
+        .leader-attention {
+            background: rgba(231, 111, 81, 0.1);
+            border: 1px solid rgba(231, 111, 81, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .attention-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .attention-icon {
+            font-size: 1.2rem;
+        }
+
+        .attention-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #e76f51;
+        }
+
+        .attention-error {
+            font-size: 0.95rem;
+            color: #fff;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .attention-solution {
+            font-size: 0.85rem;
+            color: #81b29a;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .attention-solution::before {
+            content: '💡';
+        }
+
+        .attention-action {
+            background: rgba(129, 178, 154, 0.15);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: #81b29a;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .attention-action::before {
+            content: '🎯';
+        }
+
+        .leader-clear {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 16px;
+            background: rgba(129, 178, 154, 0.1);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            color: #81b29a;
+            font-size: 0.95rem;
+        }
+
+        .clear-icon {
+            font-size: 1.2rem;
+        }
+
+        .leader-stats {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            justify-content: center;
+        }
+
+        .leader-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            min-width: 80px;
+        }
+
+        .leader-stat.clickable {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .leader-stat.clickable:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: scale(1.05);
+        }
+
+        .leader-stat-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .leader-stat-label {
+            font-size: 0.7rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .leader-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .leader-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: #ccc;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .leader-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .leader-btn.primary {
+            background: linear-gradient(135deg, #81b29a 0%, #6a9e87 100%);
+            border: none;
+            color: #0a0a12;
+            font-weight: 600;
+        }
+
+        .leader-btn.primary:hover {
+            box-shadow: 0 4px 16px rgba(129, 178, 154, 0.3);
+        }
+
         /* ===== COLLAPSIBLE SECTIONS ===== */
         .collapse-section {
             background: rgba(255, 255, 255, 0.03);
@@ -1423,7 +1659,8 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0,0,0,0.5);
+            background: rgba(10, 10, 20, 0.85);
+            backdrop-filter: blur(4px);
             z-index: 999;
             opacity: 0;
             pointer-events: none;
@@ -1432,6 +1669,14 @@
         .tech-drawer-overlay.open {
             opacity: 1;
             pointer-events: auto;
+        }
+        /* Focus mode: dim everything when drawer is open */
+        body.drawer-open .hero-card,
+        body.drawer-open .changes-card,
+        body.drawer-open .browser-errors-feed {
+            opacity: 0.3;
+            pointer-events: none;
+            transition: opacity 0.3s;
         }
         .tech-drawer-header {
             display: flex;
@@ -2539,6 +2784,11 @@
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-10px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translate(-50%, 20px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
         }
 
         .usage-tip-title {
@@ -4165,102 +4415,99 @@
 
         <!-- HERO CARD (Focus Mode - Phase 1) -->
         <div class="hero-card" id="hero-card">
-            <div class="hero-status" id="hero-status">
-                <span class="hero-status-dot"></span>
-                <span id="hero-status-text">AI MEMORY ACTIVE</span>
+            <!-- Leadership Header: Current Status -->
+            <div class="leader-status" id="leader-status">
+                <div class="leader-status-main">
+                    <span class="leader-dot active"></span>
+                    <span class="leader-text">עובד על: <strong id="leader-project">Loading...</strong></span>
+                </div>
                 <span class="live-badge" id="live-badge">LIVE</span>
             </div>
-            <div class="sync-counter" id="sync-counter" title="הזרקות ידע: כמה פעמים Claude השתמש בזיכרון (פתרונות, החלטות, הקשר)">
-                <span class="sync-icon">⚡</span>
-                <span class="sync-value" id="sync-value">0</span>
-                <span class="sync-label">syncs</span>
-            </div>
-            <div class="hero-project-name" id="hero-project-name">Loading...</div>
-            <div class="hero-project-meta" id="hero-project-meta">
-                <span id="hero-stack"></span>
-                <span id="hero-path"></span>
-            </div>
-            <div class="hero-goal" id="hero-goal" style="display: none;">
-                <div class="hero-goal-header">
-                    <span class="hero-goal-label">🎯 Current Goal</span>
-                    <span class="hero-goal-time" id="hero-goal-time"></span>
+
+            <!-- Session Info: Human-readable -->
+            <div class="leader-session" id="leader-session">
+                <div class="leader-session-item">
+                    <span class="leader-icon">⏱</span>
+                    <span>סשן פעיל: <strong id="leader-duration">0 דקות</strong></span>
                 </div>
-                <div class="hero-goal-text" id="hero-goal-text"></div>
-                <div class="hero-goal-history" id="hero-goal-history" style="display: none;">
-                    <div class="goal-history-label">Previous:</div>
-                    <div class="goal-history-list" id="goal-history-list"></div>
+                <div class="leader-session-item">
+                    <span class="leader-icon">🛠</span>
+                    <span>בוצעו <strong id="leader-actions">0</strong> פעולות</span>
+                </div>
+                <div class="leader-session-item" id="leader-files-row">
+                    <span class="leader-icon">📂</span>
+                    <span>נגעו בקבצים: <strong id="leader-files">-</strong></span>
                 </div>
             </div>
-            <div class="hero-stats" id="hero-stats">
-                <div class="hero-stat errors">
-                    <span>⚠️</span>
-                    <span class="hero-stat-value" id="hero-errors">0</span>
-                    <span>שגיאות</span>
+
+            <!-- Current Goal -->
+            <div class="leader-goal" id="leader-goal" style="display: none;">
+                <div class="leader-goal-label">🎯 המטרה:</div>
+                <div class="leader-goal-text" id="leader-goal-text"></div>
+            </div>
+
+            <!-- Needs Attention: Actionable errors -->
+            <div class="leader-attention" id="leader-attention" style="display: none;">
+                <div class="attention-header">
+                    <span class="attention-icon">⚠️</span>
+                    <span class="attention-title">דורש טיפול עכשיו</span>
                 </div>
-                <div class="hero-stat insights clickable" onclick="openInsightsModal('insights')">
-                    <span>💡</span>
-                    <span class="hero-stat-value" id="hero-insights">0</span>
-                    <span>תובנות</span>
+                <div class="attention-error" id="attention-error"></div>
+                <div class="attention-solution" id="attention-solution"></div>
+                <div class="attention-action" id="attention-action"></div>
+            </div>
+
+            <!-- All Clear state -->
+            <div class="leader-clear" id="leader-clear" style="display: none;">
+                <span class="clear-icon">✅</span>
+                <span class="clear-text">אין שגיאות פתוחות כרגע</span>
+            </div>
+
+            <!-- Quick Stats (compact) -->
+            <div class="leader-stats" id="leader-stats">
+                <div class="leader-stat clickable" onclick="openInsightsModal('insights')">
+                    <span class="leader-stat-value" id="hero-insights">0</span>
+                    <span class="leader-stat-label">תובנות</span>
                 </div>
-                <div class="hero-stat decisions clickable" onclick="openInsightsModal('decisions')">
+                <div class="leader-stat clickable" onclick="openInsightsModal('decisions')">
+                    <span class="leader-stat-value" id="hero-decisions">0</span>
+                    <span class="leader-stat-label">החלטות</span>
+                </div>
+                <div class="leader-stat">
+                    <span class="leader-stat-value" id="hero-errors">0</span>
+                    <span class="leader-stat-label">שגיאות</span>
+                </div>
+            </div>
+
+            <!-- Control Buttons -->
+            <div class="leader-controls" id="leader-controls">
+                <button class="leader-btn primary" onclick="openSessionModal()">
+                    <span>🧠</span>
+                    <span id="hero-btn-text">התחל סשן</span>
+                </button>
+                <button class="leader-btn" onclick="markErrorResolved()">
                     <span>📌</span>
-                    <span class="hero-stat-value" id="hero-decisions">0</span>
-                    <span>החלטות</span>
-                </div>
+                    <span>סמן כטופל</span>
+                </button>
+                <button class="leader-btn" onclick="openAddInsight()">
+                    <span>💡</span>
+                    <span>שמור תובנה</span>
+                </button>
+                <button class="leader-btn" onclick="openSearchModal()">
+                    <span>🔍</span>
+                    <span>חפש פתרון</span>
+                </button>
             </div>
 
-            <!-- ROI Widget - Factual Metrics Only -->
-            <div class="roi-widget" id="roi-widget">
-                <div class="roi-header">
-                    <span class="roi-title">📊 FixOnce Impact</span>
-                    <span class="roi-badge" id="roi-badge">Facts</span>
-                </div>
-                <div class="roi-stats">
-                    <div class="roi-stat highlight">
-                        <div class="roi-stat-value" id="roi-insights">0</div>
-                        <div class="roi-stat-label">Insights Used</div>
-                    </div>
-                    <div class="roi-stat">
-                        <div class="roi-stat-value" id="roi-solutions">0</div>
-                        <div class="roi-stat-label">Solutions Found</div>
-                    </div>
-                    <div class="roi-stat">
-                        <div class="roi-stat-value" id="roi-errors-live">0</div>
-                        <div class="roi-stat-label">Errors Caught</div>
-                    </div>
-                    <div class="roi-stat">
-                        <div class="roi-stat-value" id="roi-prevented">0</div>
-                        <div class="roi-stat-label">Mistakes Blocked</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Protocol Compliance Widget -->
-            <div class="compliance-widget" id="compliance-widget" style="display: none;">
-                <div class="compliance-header">
-                    <span class="compliance-title">Protocol Compliance</span>
-                    <span class="compliance-status" id="compliance-status">-</span>
-                </div>
-                <div class="compliance-items" id="compliance-items">
-                    <div class="compliance-item" id="comp-session">
-                        <span class="icon">-</span>
-                        <span>Session initialized</span>
-                    </div>
-                    <div class="compliance-item" id="comp-decisions">
-                        <span class="icon">-</span>
-                        <span>Decisions displayed</span>
-                    </div>
-                    <div class="compliance-item" id="comp-goal">
-                        <span class="icon">-</span>
-                        <span>Goal updated</span>
-                    </div>
-                </div>
-            </div>
-
-            <button class="hero-btn" id="hero-btn" onclick="openSessionModal()">
-                <span class="hero-btn-icon">🧠</span>
-                <span id="hero-btn-text">Start AI Session</span>
-            </button>
+            <!-- Hidden elements for backward compatibility -->
+            <div id="hero-status" style="display:none;"><span id="hero-status-text"></span></div>
+            <div id="hero-project-name" style="display:none;"></div>
+            <div id="hero-project-meta" style="display:none;"></div>
+            <div id="hero-goal" style="display:none;"><div id="hero-goal-text"></div><div id="hero-goal-time"></div></div>
+            <div id="hero-goal-history" style="display:none;"><div id="goal-history-list"></div></div>
+            <div id="sync-counter" style="display:none;"><span id="sync-value">0</span></div>
+            <div id="roi-widget" style="display:none;"></div>
+            <div id="compliance-widget" style="display:none;"></div>
         </div>
 
         <!-- Port Detection Banner -->
@@ -4962,16 +5209,9 @@
                         goalTime.textContent = formatGoalTime(active.intent_updated_at);
                     }
 
-                    // Display goal history if available
-                    if (active.goal_history && active.goal_history.length > 0 && goalHistory && goalHistoryList) {
-                        goalHistory.style.display = 'block';
-                        goalHistoryList.innerHTML = active.goal_history.slice(0, 3).map(h => `
-                            <div class="goal-history-item">
-                                <span class="goal-text">${h.goal}</span>
-                                <span class="goal-time">${formatGoalTime(h.completed_at)}</span>
-                            </div>
-                        `).join('');
-                    } else if (goalHistory) {
+                    // Goal history - HIDDEN in new leadership dashboard
+                    // (duplicates the leader-goal section)
+                    if (goalHistory) {
                         goalHistory.style.display = 'none';
                     }
                 } else {
@@ -4979,18 +5219,14 @@
                     document.getElementById('hero-btn-text').textContent = 'Start AI Session';
                 }
 
-                // Update LIVE badge with connected editor
+                // Update LIVE badge - simplified (editor detection unreliable)
                 const liveBadge = document.getElementById('live-badge');
                 if (liveBadge && active.ai_session && active.ai_session.active) {
-                    const editor = active.ai_session.editor || 'AI';
-                    const editorName = editor.charAt(0).toUpperCase() + editor.slice(1);
-                    liveBadge.textContent = `LIVE • ${editorName}`;
-                    liveBadge.title = `Connected: ${editorName}`;
-                    liveBadge.classList.remove('disconnected');  // Enable pulsing
+                    liveBadge.textContent = 'LIVE';
+                    liveBadge.classList.remove('disconnected');
                 } else if (liveBadge) {
                     liveBadge.textContent = 'LIVE';
-                    liveBadge.title = '';
-                    liveBadge.classList.remove('disconnected');  // Still active, just no specific editor
+                    liveBadge.classList.remove('disconnected');
                 }
 
                 // Stats - use browser errors count from allBrowserErrors
@@ -5005,31 +5241,330 @@
                 // Update collapse section counts
                 updateCollapseCount('insights-count', insightsCount + decisionsCount, (insightsCount + decisionsCount) > 0 ? 'has-items' : '');
 
+                // Update Leadership Dashboard
+                updateLeadershipDashboard(active, browserErrorsCount);
+
             } catch (e) {
                 console.error('Failed to load hero card:', e);
                 renderHeroDisconnected();
             }
         }
 
-        function renderHeroDisconnected() {
-            document.getElementById('hero-status').classList.add('disconnected');
-            document.getElementById('hero-status-text').textContent = 'Connecting...';
-            document.getElementById('hero-project-name').textContent = 'No Project';
-            document.getElementById('hero-project-meta').innerHTML = 'Open a project folder to get started';
-            document.getElementById('hero-goal').style.display = 'none';
-            document.getElementById('hero-btn-text').textContent = 'Start AI Session';
+        // Session start time tracking
+        let sessionStartTime = null;
+        let sessionActionsCount = 0;
+        let sessionFilesTouched = new Set();
 
-            // Reset LIVE badge - stop animation when disconnected
+        function updateLeadershipDashboard(active, errorsCount) {
+            // Project name
+            const leaderProject = document.getElementById('leader-project');
+            if (leaderProject) {
+                let projectContext = active.name || 'Unknown';
+                if (active.current_goal) {
+                    // Extract short context from goal
+                    const goalWords = active.current_goal.split(' ').slice(0, 4).join(' ');
+                    projectContext = `${active.name} – ${goalWords}...`;
+                }
+                leaderProject.textContent = projectContext;
+            }
+
+            // Session duration - use TODAY's session only
+            const durationEl = document.getElementById('leader-duration');
+            if (durationEl) {
+                const today = new Date().toISOString().split('T')[0];
+                const sessionDate = active.ai_session?.started_at?.split('T')[0];
+
+                // Only use session time if it's from today
+                if (sessionDate === today && active.ai_session?.started_at) {
+                    sessionStartTime = new Date(active.ai_session.started_at);
+                    const mins = Math.round((new Date() - sessionStartTime) / 60000);
+                    if (mins < 60) {
+                        durationEl.textContent = `${mins} דקות`;
+                    } else {
+                        const hours = Math.floor(mins / 60);
+                        const remainMins = mins % 60;
+                        durationEl.textContent = `${hours}:${remainMins.toString().padStart(2, '0')} שעות`;
+                    }
+                } else {
+                    durationEl.textContent = 'עכשיו';
+                }
+            }
+
+            // Actions count (from activity)
+            const actionsEl = document.getElementById('leader-actions');
+            if (actionsEl) {
+                actionsEl.textContent = sessionActionsCount || '0';
+            }
+
+            // Files touched
+            const filesEl = document.getElementById('leader-files');
+            const filesRow = document.getElementById('leader-files-row');
+            if (filesEl && filesRow) {
+                if (sessionFilesTouched.size > 0) {
+                    const filesList = Array.from(sessionFilesTouched).slice(0, 3);
+                    const filesText = filesList.map(f => f.split('/').pop()).join(', ');
+                    filesEl.textContent = filesList.length < sessionFilesTouched.size
+                        ? `${filesText} (+${sessionFilesTouched.size - filesList.length})`
+                        : filesText;
+                    filesRow.style.display = 'flex';
+                } else {
+                    filesRow.style.display = 'none';
+                }
+            }
+
+            // Goal
+            const leaderGoal = document.getElementById('leader-goal');
+            const goalText = document.getElementById('leader-goal-text');
+            if (leaderGoal && goalText) {
+                if (active.current_goal) {
+                    goalText.textContent = active.current_goal;
+                    leaderGoal.style.display = 'block';
+                    document.getElementById('hero-btn-text').textContent = 'המשך סשן';
+                } else {
+                    leaderGoal.style.display = 'none';
+                    document.getElementById('hero-btn-text').textContent = 'התחל סשן';
+                }
+            }
+
+            // Attention section (errors with actionable solutions)
+            const attentionEl = document.getElementById('leader-attention');
+            const clearEl = document.getElementById('leader-clear');
+
+            if (attentionEl && clearEl) {
+                if (errorsCount > 0 && allBrowserErrors?.length > 0) {
+                    const firstError = allBrowserErrors[0];
+                    const errorMsg = firstError.message || 'Unknown error';
+
+                    document.getElementById('attention-error').textContent = errorMsg.substring(0, 100);
+
+                    // Check for matching solution
+                    const solutionEl = document.getElementById('attention-solution');
+                    const actionEl = document.getElementById('attention-action');
+
+                    // Try to find solution from API
+                    findSolutionForError(errorMsg, solutionEl, actionEl);
+
+                    attentionEl.style.display = 'block';
+                    clearEl.style.display = 'none';
+                } else {
+                    attentionEl.style.display = 'none';
+                    clearEl.style.display = 'flex';
+                }
+            }
+
+            // Update stats
+            document.getElementById('hero-insights').textContent = active.insights_count || 0;
+            document.getElementById('hero-decisions').textContent = active.decisions_count || 0;
+            document.getElementById('hero-errors').textContent = errorsCount;
+        }
+
+        function renderHeroDisconnected() {
+            // Legacy support
+            const heroStatus = document.getElementById('hero-status');
+            if (heroStatus) heroStatus.classList.add('disconnected');
+            const heroStatusText = document.getElementById('hero-status-text');
+            if (heroStatusText) heroStatusText.textContent = 'Connecting...';
+
+            // Leadership dashboard
+            const leaderProject = document.getElementById('leader-project');
+            if (leaderProject) leaderProject.textContent = 'מתחבר...';
+
+            const leaderDot = document.querySelector('.leader-dot');
+            if (leaderDot) leaderDot.classList.remove('active');
+
+            const leaderGoal = document.getElementById('leader-goal');
+            if (leaderGoal) leaderGoal.style.display = 'none';
+
+            const leaderAttention = document.getElementById('leader-attention');
+            if (leaderAttention) leaderAttention.style.display = 'none';
+
+            const leaderClear = document.getElementById('leader-clear');
+            if (leaderClear) leaderClear.style.display = 'none';
+
+            document.getElementById('hero-btn-text').textContent = 'התחל סשן';
+
+            // Reset LIVE badge
             const liveBadge = document.getElementById('live-badge');
             if (liveBadge) {
                 liveBadge.textContent = 'OFFLINE';
                 liveBadge.title = 'Not connected';
                 liveBadge.classList.add('disconnected');
             }
+        }
 
-            // Hide compliance widget
-            const compWidget = document.getElementById('compliance-widget');
-            if (compWidget) compWidget.style.display = 'none';
+        // Control button functions
+        function markErrorResolved() {
+            if (allBrowserErrors?.length > 0) {
+                const errorId = allBrowserErrors[0].id || 0;
+                // Remove from local list
+                allBrowserErrors.shift();
+                // Refresh UI
+                loadHeroCard();
+                loadBrowserErrors();
+                // Show feedback
+                showToast('✅ סומן כטופל');
+            } else {
+                showToast('אין שגיאות פתוחות');
+            }
+        }
+
+        function openAddInsight() {
+            // Open existing add insight modal or create quick one
+            const modal = document.getElementById('add-insight-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+            } else {
+                const insight = prompt('💡 הכנס תובנה חדשה:');
+                if (insight && insight.trim()) {
+                    saveQuickInsight(insight.trim());
+                }
+            }
+        }
+
+        async function saveQuickInsight(text) {
+            try {
+                const res = await fetch(API + '/api/memory/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        section: 'lessons',
+                        data: { insight: text }
+                    })
+                });
+                if (res.ok) {
+                    showToast('💡 תובנה נשמרה');
+                    loadHeroCard();
+                    loadInsightsSection();
+                }
+            } catch (e) {
+                console.error('Failed to save insight:', e);
+            }
+        }
+
+        function openSearchModal() {
+            const query = prompt('🔍 חפש פתרון:');
+            if (query && query.trim()) {
+                searchSolutions(query.trim());
+            }
+        }
+
+        async function searchSolutions(query) {
+            try {
+                const res = await fetch(API + '/api/memory/search?q=' + encodeURIComponent(query));
+                const data = await res.json();
+                if (data.results && data.results.length > 0) {
+                    const result = data.results[0];
+                    alert(`💡 נמצא:\n\n${result.text}\n\n(${result.similarity}% התאמה)`);
+                } else {
+                    showToast('לא נמצאו תוצאות');
+                }
+            } catch (e) {
+                console.error('Search failed:', e);
+            }
+        }
+
+        async function findSolutionForError(errorMsg, solutionEl, actionEl) {
+            // Extract keywords from error
+            const keywords = errorMsg.split(/[\s:,]+/)
+                .filter(w => w.length > 3)
+                .slice(0, 4)
+                .join(' ');
+
+            try {
+                const res = await fetch(API + '/api/memory/search?q=' + encodeURIComponent(keywords));
+                const data = await res.json();
+
+                if (data.results && data.results.length > 0 && data.results[0].similarity > 40) {
+                    const solution = data.results[0];
+                    // Extract actionable part from solution
+                    const actionMatch = solution.text.match(/(restart|fix|צריך|פתרון|הפתרון)[^.!]*/i);
+                    const actionText = actionMatch ? actionMatch[0] : solution.text.substring(0, 60);
+
+                    solutionEl.textContent = `נפתרה בעבר (${solution.similarity}% התאמה)`;
+                    actionEl.textContent = `מומלץ: ${actionText}`;
+                    solutionEl.style.display = 'flex';
+                    actionEl.style.display = 'flex';
+                } else {
+                    // No solution found
+                    solutionEl.style.display = 'none';
+                    actionEl.textContent = 'טרם נפתרה - תעד את הפתרון כשתמצא';
+                    actionEl.style.display = 'flex';
+                }
+            } catch (e) {
+                // Fallback: check for common patterns
+                const lowerMsg = errorMsg.toLowerCase();
+                if (lowerMsg.includes('404')) {
+                    solutionEl.textContent = 'נפתרה בעבר';
+                    actionEl.textContent = 'מומלץ: Restart Server';
+                    solutionEl.style.display = 'flex';
+                    actionEl.style.display = 'flex';
+                } else {
+                    solutionEl.style.display = 'none';
+                    actionEl.style.display = 'none';
+                }
+            }
+        }
+
+        function updateSessionTracking(activities) {
+            // Get today's activities only
+            const today = new Date().toISOString().split('T')[0];
+            const todayActivities = activities.filter(act => {
+                const actDate = (act.timestamp || '').split('T')[0];
+                return actDate === today;
+            });
+
+            // Count actions
+            sessionActionsCount = todayActivities.filter(act =>
+                ['Edit', 'Write', 'Bash', 'Read'].includes(act.tool)
+            ).length;
+
+            // Track files touched
+            sessionFilesTouched.clear();
+            todayActivities.forEach(act => {
+                if (act.file_path && ['Edit', 'Write'].includes(act.tool)) {
+                    sessionFilesTouched.add(act.file_path);
+                }
+            });
+
+            // Update UI if loaded
+            const actionsEl = document.getElementById('leader-actions');
+            if (actionsEl) actionsEl.textContent = sessionActionsCount;
+
+            const filesEl = document.getElementById('leader-files');
+            const filesRow = document.getElementById('leader-files-row');
+            if (filesEl && filesRow) {
+                if (sessionFilesTouched.size > 0) {
+                    const filesList = Array.from(sessionFilesTouched).slice(0, 3);
+                    const filesText = filesList.map(f => f.split('/').pop()).join(', ');
+                    filesEl.textContent = filesList.length < sessionFilesTouched.size
+                        ? `${filesText} (+${sessionFilesTouched.size - filesList.length})`
+                        : filesText;
+                    filesRow.style.display = 'flex';
+                } else {
+                    filesRow.style.display = 'none';
+                }
+            }
+        }
+
+        function showToast(message) {
+            // Simple toast notification
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(30, 30, 40, 0.95);
+                color: #fff;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-size: 0.9rem;
+                z-index: 9999;
+                animation: fadeInUp 0.3s ease;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
         }
 
         // Protocol Compliance Widget
@@ -6554,8 +7089,9 @@
                     // Generate project ID from the detected URL
                     const detectedProjectId = generateProjectIdFromUrl(siteData.url || siteData.domain);
 
-                    // If different from active project, show the banner
-                    if (detectedProjectId !== activeProjectId && detectedPortDismissed !== detectedProjectId) {
+                    // Only show banner if NO active project
+                    // (When active project exists, we trust it's correct)
+                    if (!activeProjectId && detectedPortDismissed !== detectedProjectId) {
                         showPortDetection(siteData.domain, siteData.url);
                     } else {
                         hidePortDetection();
@@ -7077,6 +7613,9 @@
                 const actData = await actRes.json();
                 allActivities = actData.activities || [];
 
+                // Update session tracking for leadership dashboard
+                updateSessionTracking(allActivities);
+
                 try {
                     const errData = await errRes.json();
                     const rawErrors = errData.errors || [];
@@ -7570,6 +8109,7 @@
 
             drawer.classList.add('open');
             overlay.classList.add('open');
+            document.body.classList.add('drawer-open');  // Focus mode
         }
 
         function closeDrawer() {
@@ -7577,6 +8117,7 @@
             const overlay = document.getElementById('drawer-overlay');
             if (drawer) drawer.classList.remove('open');
             if (overlay) overlay.classList.remove('open');
+            document.body.classList.remove('drawer-open');  // Exit focus mode
             currentDrawerActivity = null;
         }
 
