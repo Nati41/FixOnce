@@ -390,6 +390,27 @@ def api_mark_avoid_used(avoid_id):
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+# ============ Debug Sessions API ============
+
+@memory_bp.route("/debug-sessions", methods=["GET"])
+def api_get_debug_sessions():
+    """Get all debug sessions."""
+    try:
+        from managers.multi_project_manager import get_active_project, load_project_memory
+        active = get_active_project()
+        if not active:
+            return jsonify({"debug_sessions": []})
+        # get_active_project returns a dict with active_id
+        project_id = active.get('active_id') if isinstance(active, dict) else active
+        if not project_id:
+            return jsonify({"debug_sessions": []})
+        memory = load_project_memory(project_id)
+        sessions = memory.get('debug_sessions', [])
+        return jsonify({"count": len(sessions), "debug_sessions": sessions})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 # ============ Handover API ============
 
 @memory_bp.route("/handover", methods=["GET"])
@@ -600,3 +621,127 @@ def api_get_active_project():
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============ Search API ============
+
+@memory_bp.route("/search", methods=["GET"])
+def api_search_solutions():
+    """Search insights and past solutions.
+
+    Query params:
+        q: Search query (required)
+        limit: Max results (default 5)
+    """
+    query = request.args.get('q', '')
+    limit = int(request.args.get('limit', 5))
+
+    if not query:
+        return jsonify({"status": "error", "message": "Query required"}), 400
+
+    try:
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"results": []})
+
+        memory = load_project_memory(project_id)
+        if not memory:
+            return jsonify({"results": []})
+
+        # Get insights
+        lessons = memory.get('live_record', {}).get('lessons', {})
+        insights = lessons.get('insights', [])
+
+        # Simple keyword matching with scoring
+        query_lower = query.lower()
+        query_words = set(query_lower.split())
+
+        results = []
+        for insight in insights:
+            # Handle both string and dict formats
+            if isinstance(insight, str):
+                text = insight
+            else:
+                text = insight.get('text', insight.get('insight', ''))
+
+            text_lower = text.lower()
+            text_words = set(text_lower.split())
+
+            # Calculate similarity based on word overlap
+            common_words = query_words & text_words
+            if len(common_words) == 0:
+                continue
+
+            similarity = int((len(common_words) / max(len(query_words), 1)) * 100)
+
+            # Bonus for exact substring match
+            if query_lower in text_lower:
+                similarity = min(100, similarity + 30)
+
+            if similarity >= 30:  # Min threshold
+                results.append({
+                    "text": text,
+                    "similarity": similarity,
+                    "type": "insight"
+                })
+
+        # Sort by similarity descending
+        results.sort(key=lambda x: x['similarity'], reverse=True)
+
+        return jsonify({"results": results[:limit]})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@memory_bp.route("/queue-for-ai", methods=["POST"])
+def api_queue_for_ai():
+    """Queue an error or task for the next AI session."""
+    try:
+        from managers.multi_project_manager import (
+            get_active_project_id,
+            load_project_memory,
+            save_project_memory
+        )
+
+        data = request.get_json(silent=True) or {}
+        
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"status": "error", "message": "No active project"}), 400
+
+        memory = load_project_memory(project_id)
+        if not memory:
+            return jsonify({"status": "error", "message": "Project not found"}), 404
+
+        # Initialize queue if not exists
+        if "ai_queue" not in memory:
+            memory["ai_queue"] = []
+
+        # Add to queue
+        queue_item = {
+            "type": data.get("type", "task"),
+            "message": data.get("message", ""),
+            "source": data.get("source", ""),
+            "line": data.get("line", ""),
+            "priority": data.get("priority", "normal"),
+            "queued_at": datetime.now().isoformat(),
+            "status": "pending"
+        }
+        
+        memory["ai_queue"].append(queue_item)
+        
+        # Keep only last 10 items
+        memory["ai_queue"] = memory["ai_queue"][-10:]
+        
+        save_project_memory(project_id, memory)
+
+        return jsonify({
+            "status": "ok",
+            "message": "Queued for AI",
+            "queue_length": len(memory["ai_queue"])
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+

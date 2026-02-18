@@ -21,37 +21,71 @@ from typing import Dict, Any, Optional
 
 def _detect_editor() -> str:
     """Detect which editor/AI is running this MCP server."""
-    # Priority 1: Check environment variables (most reliable for running process)
-    term_program = os.environ.get("TERM_PROGRAM", "").lower()
-    vscode_pid = os.environ.get("VSCODE_PID", "")
+    # Priority 1: Check Cursor-specific environment variables
     cursor_channel = os.environ.get("CURSOR_CHANNEL", "")
-
-    # Cursor-specific environment variables
-    if cursor_channel or "cursor" in term_program:
+    if cursor_channel:
         return "cursor"
 
-    # VS Code / Continue
+    # Priority 1b: Check for Cursor in any env var (Cursor sets several CURSOR_* vars)
+    for key in os.environ:
+        if key.startswith("CURSOR_"):
+            return "cursor"
+
+    # Priority 1c: Check TERM_PROGRAM which Cursor sets to "Cursor"
+    term_program = os.environ.get("TERM_PROGRAM", "")
+    if "cursor" in term_program.lower():
+        return "cursor"
+
+    # Priority 2: Check VS Code - but distinguish from Cursor
+    vscode_pid = os.environ.get("VSCODE_PID", "")
     if vscode_pid:
+        # Double check it's not Cursor by checking process name
+        try:
+            import subprocess
+            result = subprocess.run(['ps', '-p', vscode_pid, '-o', 'comm='],
+                                  capture_output=True, text=True, timeout=1)
+            proc_name = result.stdout.strip().lower()
+            if 'cursor' in proc_name:
+                return "cursor"
+        except:
+            pass
         return "vscode"
 
-    # Priority 2: Check config file modification times (fallback)
+    # Priority 3: Check parent process name for Claude Code
+    # Claude Code runs via 'claude' command in terminal
+    try:
+        import subprocess
+        ppid = os.getppid()
+        result = subprocess.run(['ps', '-p', str(ppid), '-o', 'comm='],
+                              capture_output=True, text=True, timeout=1)
+        parent = result.stdout.strip().lower()
+        if 'claude' in parent or 'node' in parent:
+            # Node is used by Claude Code's MCP client
+            return "claude"
+    except:
+        pass
+
+    # Priority 4: Check if Claude settings exist (indicates Claude Code user)
     home = Path.home()
+    claude_settings = home / ".claude" / "settings.json"
     cursor_config = home / ".cursor" / "mcp.json"
-    claude_config = home / ".claude" / "mcp.json"
 
-    cursor_exists = cursor_config.exists()
-    claude_exists = claude_config.exists()
+    # If Claude settings exist and modified recently, likely Claude Code
+    if claude_settings.exists():
+        try:
+            settings_mtime = claude_settings.stat().st_mtime
+            import time
+            # If modified in last hour, likely active Claude Code session
+            if time.time() - settings_mtime < 3600:
+                return "claude"
+        except:
+            pass
 
-    if cursor_exists and claude_exists:
-        cursor_mtime = cursor_config.stat().st_mtime
-        claude_mtime = claude_config.stat().st_mtime
-        return "cursor" if cursor_mtime > claude_mtime else "claude"
-    elif cursor_exists:
+    # Fallback: check cursor config
+    if cursor_config.exists():
         return "cursor"
-    elif claude_exists:
-        return "claude"
 
-    return "claude"  # Default
+    return "claude"  # Default to claude
 
 # Add src directory to path
 SRC_DIR = Path(__file__).parent.parent
@@ -249,6 +283,45 @@ def _get_live_errors() -> list:
         return []
 
 
+def _get_recent_activities_for_handoff(editor: str, limit: int = 3) -> list:
+    """Get recent activities for handoff summary between AIs."""
+    try:
+        res = requests.get(f'http://localhost:5000/api/activity/feed?limit=20', timeout=2)
+        if res.status_code != 200:
+            return []
+
+        data = res.json()
+        activities = data.get('activities', [])
+
+        # Filter to show what happened (not specific to editor since we track globally)
+        summaries = []
+        for a in activities[:limit * 2]:  # Get more to filter
+            tool = a.get('tool', '')
+            human_name = a.get('human_name', '')
+            file_name = a.get('file', '').split('/')[-1] if a.get('file') else ''
+
+            if tool == 'Edit' and file_name:
+                diff = a.get('diff', {})
+                added = diff.get('added', 0)
+                if added > 0:
+                    summaries.append(f"Edited {file_name} (+{added} lines)")
+                else:
+                    summaries.append(f"Edited {file_name}")
+            elif tool == 'Write' and file_name:
+                summaries.append(f"Created {file_name}")
+            elif tool == 'Bash':
+                cmd = a.get('command', '')[:30]
+                if cmd:
+                    summaries.append(f"Ran: {cmd}...")
+
+            if len(summaries) >= limit:
+                break
+
+        return summaries
+    except Exception:
+        return []
+
+
 def _build_context_header() -> str:
     """
     Build context header that gets injected into EVERY tool response.
@@ -267,17 +340,24 @@ def _build_context_header() -> str:
 
     lr = memory.get('live_record', {})
 
-    # 1. LIVE ERRORS (Always first if any)
+    # 1. LIVE ERRORS (Always first - IMPOSSIBLE TO MISS)
     errors = _get_live_errors()
     if errors:
-        lines.append("═══════════════════════════════════════")
-        lines.append(f"⚠️ **{len(errors)} LIVE ERRORS** - FIX BEFORE PROCEEDING")
-        lines.append("═══════════════════════════════════════")
+        lines.append("")
+        lines.append("🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨")
+        lines.append(f"⚠️ **{len(errors)} LIVE BROWSER ERRORS**")
+        lines.append("🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨")
         for e in errors[:3]:
-            msg = e.get('message', 'Unknown error')[:80]
-            lines.append(f"  • {msg}")
+            msg = e.get('message', 'Unknown error')[:100]
+            lines.append(f"  ❌ {msg}")
+            # Show solution if available
+            solution = e.get('solution')
+            if solution:
+                lines.append(f"     💡 FIX: {solution.get('text', '')[:80]}")
         if len(errors) > 3:
-            lines.append(f"  • ...and {len(errors) - 3} more")
+            lines.append(f"  ...and {len(errors) - 3} more")
+        lines.append("")
+        lines.append("**FIX THESE BEFORE DOING ANYTHING ELSE!**")
         lines.append("")
 
     # 2. Current context (compact)
@@ -322,10 +402,120 @@ def _universal_gate(tool_name: str) -> tuple:
     session.log_tool_call(tool_name)
     _sync_compliance()
 
+    # UPDATE ACTIVE AI on every tool call (lightweight)
+    _update_active_ai()
+
     # BUILD CONTEXT HEADER (injected into response)
     context = _build_context_header()
 
     return (None, context)
+
+
+def _update_active_ai():
+    """
+    Update active_ais on every MCP tool call.
+    MULTI-ACTIVE: Supports multiple AIs working in parallel.
+    An AI is considered "active" if it had activity in last 5 minutes.
+    """
+    try:
+        session = _get_session()
+        if not session.project_id:
+            return
+
+        detected_editor = _detect_editor()
+        now = datetime.now()
+        ACTIVE_TIMEOUT_SECONDS = 300  # 5 minutes
+
+        # Check if we need to update
+        project_id = session.project_id
+        data = _load_project(project_id)
+        if not data:
+            return
+
+        # Initialize active_ais if needed
+        if "active_ais" not in data:
+            data["active_ais"] = {}
+
+        # Get this AI's current state
+        ai_state = data["active_ais"].get(detected_editor, {})
+        last_update = ai_state.get("last_activity", "")
+
+        # Skip if same AI and updated recently (30 seconds)
+        if last_update:
+            try:
+                last_dt = datetime.fromisoformat(last_update.replace('Z', '+00:00'))
+                if last_dt.tzinfo:
+                    last_dt = last_dt.replace(tzinfo=None)
+                if (now - last_dt).total_seconds() < 30:
+                    return  # Skip update - too recent
+            except:
+                pass
+
+        # Update this AI's state
+        if detected_editor not in data["active_ais"]:
+            # New AI joining
+            data["active_ais"][detected_editor] = {
+                "started_at": now.isoformat(),
+                "last_activity": now.isoformat()
+            }
+            print(f"[MCP] AI Joined: {detected_editor}")
+        else:
+            # Existing AI - just update activity
+            data["active_ais"][detected_editor]["last_activity"] = now.isoformat()
+
+        # Clean up inactive AIs (no activity for 5 minutes)
+        inactive_ais = []
+        for ai_name, ai_data in list(data["active_ais"].items()):
+            try:
+                last_act = datetime.fromisoformat(ai_data.get("last_activity", "").replace('Z', '+00:00'))
+                if last_act.tzinfo:
+                    last_act = last_act.replace(tzinfo=None)
+                if (now - last_act).total_seconds() > ACTIVE_TIMEOUT_SECONDS:
+                    inactive_ais.append(ai_name)
+            except:
+                pass
+
+        for ai_name in inactive_ais:
+            print(f"[MCP] AI Inactive (5min timeout): {ai_name}")
+            del data["active_ais"][ai_name]
+
+        # Update ai_session for backward compatibility (most recent AI)
+        if "ai_session" not in data:
+            data["ai_session"] = {}
+
+        old_editor = data["ai_session"].get("editor", "")
+        data["ai_session"]["editor"] = detected_editor
+        data["ai_session"]["last_activity"] = now.isoformat()
+        data["ai_session"]["active"] = True
+
+        # Track handoff only if this is truly a different AI taking over
+        # (not just parallel work)
+        if old_editor and old_editor != detected_editor:
+            # Check if old editor is still active
+            old_ai_data = data["active_ais"].get(old_editor)
+            if not old_ai_data:
+                # Old editor timed out - this is a handoff
+                if "ai_handoffs" not in data:
+                    data["ai_handoffs"] = []
+                data["ai_handoffs"].append({
+                    "from": old_editor,
+                    "to": detected_editor,
+                    "timestamp": now.isoformat()
+                })
+                data["ai_handoffs"] = data["ai_handoffs"][-10:]
+
+                data["ai_session"]["previous_ai"] = {
+                    "editor": old_editor,
+                    "started_at": data["ai_session"].get("started_at", ""),
+                    "ended_at": now.isoformat()
+                }
+                print(f"[MCP] AI Handoff: {old_editor} → {detected_editor}")
+
+        _save_project(project_id, data)
+
+    except Exception as e:
+        # Don't break tool calls if update fails
+        print(f"[MCP] _update_active_ai error: {e}")
 
 
 # Legacy function for backward compatibility
@@ -921,7 +1111,7 @@ def _get_active_port_from_dashboard() -> Optional[int]:
 
 
 @mcp.tool()
-def auto_init_session(cwd: str = "") -> str:
+def auto_init_session(cwd: str = "", sync_to_active: bool = False) -> str:
     """
     Automatically initialize session for the current project.
 
@@ -932,10 +1122,33 @@ def auto_init_session(cwd: str = "") -> str:
 
     Args:
         cwd: Optional current working directory from Claude Code
+        sync_to_active: If True, join the currently active project regardless of cwd.
+                       Use this for Multi-AI sync (e.g., Cursor joining Claude's project)
 
     Returns:
         Session info with project details
     """
+    # Multi-AI Sync: If sync_to_active is True, use the active project
+    if sync_to_active:
+        try:
+            from core.boundary_detector import _load_active_project
+            active = _load_active_project()
+            active_working_dir = active.get("working_dir")
+            if active_working_dir and os.path.isdir(active_working_dir):
+                print(f"[MCP] Multi-AI Sync: Joining active project at {active_working_dir}")
+                with open("/tmp/fixonce_mcp_debug.log", "a") as f:
+                    f.write(f"[{datetime.now().isoformat()}] SYNC_TO_ACTIVE: joining {active_working_dir}\n")
+                return _do_init_session(active_working_dir)
+        except Exception as e:
+            print(f"[MCP] Multi-AI Sync failed: {e}")
+
+    # DEBUG: Log what cwd is received
+    import sys
+    print(f"[MCP DEBUG] auto_init_session called with cwd='{cwd}'", file=sys.stderr)
+    # Also write to file for debugging
+    with open("/tmp/fixonce_mcp_debug.log", "a") as f:
+        f.write(f"[{datetime.now().isoformat()}] auto_init_session cwd='{cwd}'\n")
+
     working_dir = None
     boundary_triggered = False
 
@@ -1109,6 +1322,9 @@ def _do_init_session(working_dir: str) -> str:
     _compliance_state["last_session_init"] = datetime.now().isoformat()
     _compliance_state["editor"] = _detect_editor()
 
+    # Update active_ais for Multi-Active support
+    _update_active_ai()
+
     # Track ROI: session with context
     _track_roi_event("session_context")
 
@@ -1119,12 +1335,37 @@ def _do_init_session(working_dir: str) -> str:
         detected_editor = _compliance_state.get("editor", "claude")
         data = _load_project(project_id)
         if data:
+            # Track previous AI for handoff (Multi-AI Sync) - also in cache path
+            previous_ai = None
+            if data.get("ai_session") and data["ai_session"].get("editor"):
+                prev_editor = data["ai_session"].get("editor")
+                prev_started = data["ai_session"].get("started_at")
+                if prev_editor and prev_started:
+                    previous_ai = {
+                        "editor": prev_editor,
+                        "started_at": prev_started,
+                        "ended_at": datetime.now().isoformat()
+                    }
+
             data["ai_session"] = {
                 "active": True,
                 "editor": detected_editor,
                 "started_at": datetime.now().isoformat(),
-                "briefing_sent": False
+                "briefing_sent": False,
+                "previous_ai": previous_ai
             }
+
+            # Track handoff history
+            if "ai_handoffs" not in data:
+                data["ai_handoffs"] = []
+            if previous_ai and previous_ai["editor"] != detected_editor:
+                data["ai_handoffs"].append({
+                    "from": previous_ai["editor"],
+                    "to": detected_editor,
+                    "timestamp": datetime.now().isoformat()
+                })
+                data["ai_handoffs"] = data["ai_handoffs"][-10:]
+
             _save_project(project_id, data)
         return _format_from_snapshot(cached, working_dir)
 
@@ -1133,14 +1374,40 @@ def _do_init_session(working_dir: str) -> str:
     if not data:
         data = _init_project_memory(working_dir)
 
+    # Track previous AI for handoff (Multi-AI Sync)
+    previous_ai = None
+    if data.get("ai_session") and data["ai_session"].get("editor"):
+        prev_editor = data["ai_session"].get("editor")
+        prev_started = data["ai_session"].get("started_at")
+        if prev_editor and prev_started:
+            previous_ai = {
+                "editor": prev_editor,
+                "started_at": prev_started,
+                "ended_at": datetime.now().isoformat()
+            }
+
     # Update ai_session with detected editor
     detected_editor = _compliance_state.get("editor", "claude")
     data["ai_session"] = {
         "active": True,
         "editor": detected_editor,
         "started_at": datetime.now().isoformat(),
-        "briefing_sent": False
+        "briefing_sent": False,
+        "previous_ai": previous_ai  # Track handoff
     }
+
+    # Keep history of AI handoffs
+    if "ai_handoffs" not in data:
+        data["ai_handoffs"] = []
+    if previous_ai and previous_ai["editor"] != detected_editor:
+        data["ai_handoffs"].append({
+            "from": previous_ai["editor"],
+            "to": detected_editor,
+            "timestamp": datetime.now().isoformat()
+        })
+        # Keep last 10 handoffs
+        data["ai_handoffs"] = data["ai_handoffs"][-10:]
+
     _save_project(project_id, data)
 
     # Determine status
@@ -1325,6 +1592,74 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
     if snapshot.get('git_commit_hash'):
         lines.append(f"**Git:** `{snapshot['git_commit_hash']}`")
 
+    # Multi-AI Handoff Summary
+    ai_session = data.get("ai_session", {}) if data else {}
+    previous_ai = ai_session.get("previous_ai")
+    current_editor = ai_session.get("editor", "unknown")
+
+    if previous_ai and previous_ai.get("editor") != current_editor:
+        prev_editor = previous_ai.get("editor", "unknown").capitalize()
+        prev_started = previous_ai.get("started_at", "")
+
+        # Calculate time ago
+        time_ago = ""
+        if prev_started:
+            try:
+                started_dt = datetime.fromisoformat(prev_started.replace('Z', '+00:00'))
+                diff = datetime.now() - started_dt.replace(tzinfo=None)
+                mins = int(diff.total_seconds() // 60)
+                if mins < 60:
+                    time_ago = f"{mins} min"
+                elif mins < 1440:
+                    time_ago = f"{mins // 60}h"
+                else:
+                    time_ago = f"{mins // 1440}d"
+            except:
+                pass
+
+        lines.append("")
+        lines.append("---")
+        lines.append(f"## 🔄 Handoff from {prev_editor}")
+        if time_ago:
+            lines.append(f"**{prev_editor}** worked here {time_ago} ago.")
+
+        # Show recent activity from previous AI
+        recent_activities = _get_recent_activities_for_handoff(prev_editor.lower(), limit=3)
+        if recent_activities:
+            lines.append("**Last actions:**")
+            for act in recent_activities:
+                lines.append(f"• {act}")
+        lines.append("")
+
+    # AI Queue - errors/tasks sent from dashboard
+    ai_queue = data.get("ai_queue", []) if data else []
+    pending_items = [q for q in ai_queue if q.get("status") == "pending"]
+    if pending_items:
+        lines.append("---")
+        lines.append("## 🎯 QUEUED FOR YOU")
+        for item in pending_items[:3]:
+            item_type = item.get("type", "task")
+            msg = item.get("message", "")[:80]
+            source = item.get("source", "")
+            line_num = item.get("line", "")
+
+            if item_type == "error":
+                lines.append(f"⚠️ **Error:** `{msg}`")
+                if source:
+                    loc = source + (f":{line_num}" if line_num else "")
+                    lines.append(f"   📍 {loc}")
+            else:
+                lines.append(f"📋 **Task:** {msg}")
+
+        lines.append("")
+        lines.append("**Fix these first, then mark as handled.**")
+        lines.append("")
+
+        # Mark items as shown
+        for item in pending_items[:3]:
+            item["status"] = "shown"
+        _save_project(snapshot.get("project_id") or _get_project_id(working_dir), data)
+
     # Fix #3: Session State Visibility
     session = _get_session()
     if session and session.initialized_at:
@@ -1408,6 +1743,78 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
         tools_count = len(session.tool_calls)
         lines.append(f"**Session:** `{session_id}` | Started: {start_time} | Tools: {tools_count}")
         lines.append("")
+
+    # Multi-AI Handoff Summary
+    ai_session = data.get("ai_session", {})
+    previous_ai = ai_session.get("previous_ai")
+    current_editor = ai_session.get("editor", "unknown")
+
+    if previous_ai and previous_ai.get("editor") != current_editor:
+        prev_editor = previous_ai.get("editor", "unknown").capitalize()
+        prev_started = previous_ai.get("started_at", "")
+
+        # Calculate how long ago
+        if prev_started:
+            try:
+                prev_time = datetime.fromisoformat(prev_started.replace('Z', '+00:00'))
+                now = datetime.now()
+                if prev_time.tzinfo:
+                    now = datetime.now(prev_time.tzinfo)
+                diff_mins = int((now - prev_time).total_seconds() / 60)
+
+                if diff_mins < 60:
+                    time_ago = f"{diff_mins} דקות"
+                elif diff_mins < 1440:
+                    time_ago = f"{diff_mins // 60} שעות"
+                else:
+                    time_ago = f"{diff_mins // 1440} ימים"
+
+                lines.append("---")
+                lines.append(f"## 🔄 Handoff from {prev_editor}")
+                lines.append(f"**{prev_editor}** worked here {time_ago} ago.")
+                lines.append("")
+
+                # Show recent activity from that AI
+                recent_activities = _get_recent_activities_for_handoff(prev_editor.lower(), limit=3)
+                if recent_activities:
+                    lines.append("**Last actions:**")
+                    for act in recent_activities:
+                        lines.append(f"• {act}")
+                    lines.append("")
+                lines.append("---")
+                lines.append("")
+            except:
+                pass  # Skip handoff if timestamp parsing fails
+
+    # AI Queue - errors/tasks sent from dashboard
+    ai_queue = data.get("ai_queue", [])
+    pending_items = [q for q in ai_queue if q.get("status") == "pending"]
+    if pending_items:
+        lines.append("---")
+        lines.append("## 🎯 QUEUED FOR YOU")
+        for item in pending_items[:3]:
+            item_type = item.get("type", "task")
+            msg = item.get("message", "")[:80]
+            source = item.get("source", "")
+            line_num = item.get("line", "")
+
+            if item_type == "error":
+                lines.append(f"⚠️ **Error:** `{msg}`")
+                if source:
+                    loc = source + (f":{line_num}" if line_num else "")
+                    lines.append(f"   📍 {loc}")
+            else:
+                lines.append(f"📋 **Task:** {msg}")
+
+        lines.append("")
+        lines.append("**Fix these first, then mark as handled.**")
+        lines.append("")
+
+        # Mark items as shown
+        project_id = _get_project_id(working_dir)
+        for item in pending_items[:3]:
+            item["status"] = "shown"
+        _save_project(project_id, data)
 
     if status == "new":
         lines.append("_This is a new project. Ask: 'רוצה שאסרוק את הפרויקט?'_")
@@ -1736,7 +2143,52 @@ def update_live_record(section: str, data: str) -> str:
 
     # Add browser errors reminder if any
     reminder = _get_browser_errors_reminder()
-    return f"Updated {section}{pre_action_warning}{reminder}"
+
+    # ALWAYS prepend context header (shows live errors!)
+    return context + f"Updated {section}{pre_action_warning}{reminder}"
+
+
+@mcp.tool()
+def sync_to_active_project() -> str:
+    """
+    Sync this AI to the currently active project.
+
+    Use this when:
+    - You're in Cursor but want to join the project Claude is working on
+    - You opened the wrong folder but want to work on the active FixOnce project
+    - You want to enable Multi-AI collaboration
+
+    This will:
+    1. Find the active project from FixOnce dashboard
+    2. Initialize session for that project
+    3. Show handoff info from previous AI (if different)
+
+    Returns:
+        Session info for the active project with handoff summary
+    """
+    try:
+        from core.boundary_detector import _load_active_project
+        active = _load_active_project()
+        active_working_dir = active.get("working_dir")
+        active_id = active.get("active_id")
+
+        if not active_working_dir or not os.path.isdir(active_working_dir):
+            return """❌ No active project found.
+
+Use the FixOnce dashboard to select a project first,
+or call init_session(working_dir="/path/to/project")"""
+
+        # Get current editor
+        detected_editor = _detect_editor()
+
+        # Log the sync
+        print(f"[MCP] Multi-AI Sync: {detected_editor} joining project at {active_working_dir}")
+
+        # Initialize with the active project
+        return _do_init_session(active_working_dir)
+
+    except Exception as e:
+        return f"❌ Sync failed: {str(e)}"
 
 
 @mcp.tool()
@@ -1814,7 +2266,107 @@ def log_avoid(what: str, reason: str) -> str:
     })
 
     _save_project(session.project_id, memory)
-    return f"Logged avoid: {what}"
+    return context + f"Logged avoid: {what}"
+
+
+@mcp.tool()
+def log_debug_session(
+    problem: str,
+    root_cause: str,
+    solution: str,
+    files_changed: str = "",
+    symptoms: str = ""
+) -> str:
+    """
+    Log a completed debug session. Use this when:
+    1. There was a REAL problem (not just a question)
+    2. There was a debugging PROCESS (investigation, trial/error)
+    3. There is a CLEAR solution (not just "it works now")
+    4. Files were CHANGED to fix it
+
+    This creates a structured problem→solution record that prevents
+    repeating the same debugging session in the future.
+
+    Args:
+        problem: Short description of the problem (e.g., "Cursor לא מזהה MCP tools")
+        root_cause: The actual cause found (e.g., "Cursor requires project folder to be open")
+        solution: What fixed it (e.g., "Open project folder, start new chat")
+        files_changed: Comma-separated list of files that were modified
+        symptoms: Comma-separated list of error messages/symptoms seen
+    """
+    error, context = _universal_gate("log_debug_session")
+    if error:
+        return error
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+
+    # Initialize debug_sessions if needed
+    if 'debug_sessions' not in memory:
+        memory['debug_sessions'] = []
+
+    # Parse comma-separated strings to lists
+    files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
+    symptoms_list = [s.strip() for s in symptoms.split(",") if s.strip()] if symptoms else []
+
+    # Create debug session
+    debug_session = {
+        "id": f"debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        "problem": problem,
+        "root_cause": root_cause,
+        "solution": solution,
+        "symptoms": symptoms_list,
+        "files_changed": files_list,
+        "resolved_at": datetime.now().isoformat(),
+        "importance": "high"  # Debug sessions are always important
+    }
+
+    # Check for duplicate/similar debug sessions
+    problem_lower = problem.lower()
+    for existing in memory['debug_sessions']:
+        existing_problem = existing.get('problem', '').lower()
+        # Simple word overlap check
+        problem_words = set(problem_lower.split())
+        existing_words = set(existing_problem.split())
+        overlap = problem_words & existing_words
+        if len(overlap) >= 3:
+            return context + f"⚠️ Similar debug session already exists: '{existing.get('problem', '')[:50]}...'\nNot creating duplicate."
+
+    memory['debug_sessions'].append(debug_session)
+
+    # Mark related insights as consolidated (optional cleanup)
+    # Find insights from today that might be related
+    today = datetime.now().strftime('%Y-%m-%d')
+    consolidated_count = 0
+    if 'live_record' in memory and 'lessons' in memory['live_record']:
+        insights = memory['live_record']['lessons'].get('insights', [])
+        for i, insight in enumerate(insights):
+            if isinstance(insight, dict):
+                insight_time = insight.get('timestamp', '')
+                insight_text = insight.get('text', '').lower()
+                # Check if insight is from today and related to this debug session
+                if today in insight_time:
+                    # Check word overlap with problem or solution
+                    insight_words = set(insight_text.split())
+                    problem_words = set(problem_lower.split())
+                    solution_words = set(solution.lower().split())
+                    if len(insight_words & problem_words) >= 2 or len(insight_words & solution_words) >= 2:
+                        insight['consolidated_into'] = debug_session['id']
+                        consolidated_count += 1
+
+    _save_project(session.project_id, memory)
+
+    result = f"""✅ Debug session logged!
+
+🐛 **Problem:** {problem}
+🎯 **Root cause:** {root_cause}
+✅ **Solution:** {solution}
+📁 **Files:** {', '.join(files_list) if files_list else 'None specified'}
+"""
+    if consolidated_count > 0:
+        result += f"\n📦 Consolidated {consolidated_count} related insights into this session."
+
+    return context + result
 
 
 def _calculate_similarity(query: str, text: str) -> int:
@@ -2571,6 +3123,42 @@ def check_and_report() -> str:
                 lines.append(f"🎯 Current goal: {goal}")
 
     return '\n'.join(lines)
+
+
+@mcp.tool()
+def generate_context() -> str:
+    """
+    Generate the universal context file (.fixonce/CONTEXT.md).
+
+    This file can be read by ANY AI - not just those with MCP access.
+    It's auto-generated on every memory change, but you can also
+    trigger manual generation with this tool.
+
+    Returns:
+        Path to the generated file, or error if failed.
+    """
+    error, context = _universal_gate("generate_context")
+    if error:
+        return error
+
+    session = _get_session()
+    if not session.is_active():
+        return "Error: No active session. Call auto_init_session first."
+
+    memory = _load_project(session.project_id)
+    if not memory:
+        return "Error: Could not load project memory."
+
+    working_dir = memory.get('project_info', {}).get('working_dir', '')
+    if not working_dir:
+        return "Error: No working_dir in project_info."
+
+    try:
+        from core.context_generator import generate_context_file
+        context_path = generate_context_file(memory, working_dir)
+        return f"✅ Context file generated:\n`{context_path}`\n\nAny AI can now read this file to get project context."
+    except Exception as e:
+        return f"Error generating context: {e}"
 
 
 # ============================================================

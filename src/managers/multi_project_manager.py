@@ -8,6 +8,7 @@ V1 (data/projects/) is deprecated and ignored.
 """
 
 import os
+import sys
 import json
 import hashlib
 import threading
@@ -15,6 +16,26 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+
+# Ensure src is in path for imports
+_SRC_DIR = Path(__file__).parent.parent
+_PROJECT_DIR = _SRC_DIR.parent
+if str(_PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_DIR))
+
+# Context generator for universal AI access (lazy import to avoid circular deps)
+_context_generator = None
+
+def _get_context_generator():
+    """Lazy load context generator to avoid import issues."""
+    global _context_generator
+    if _context_generator is None:
+        try:
+            from src.core.context_generator import update_context_on_memory_change
+            _context_generator = update_context_on_memory_change
+        except ImportError:
+            _context_generator = lambda *args, **kwargs: None
+    return _context_generator
 
 # Paths
 SRC_DIR = Path(__file__).parent.parent
@@ -339,6 +360,16 @@ def save_project_memory(project_id: str = None, memory: Dict[str, Any] = None) -
             project_path = get_project_path(project_id)
             with open(project_path, 'w', encoding='utf-8') as f:
                 json.dump(memory, f, ensure_ascii=False, indent=2)
+
+            # Update universal context file (.fixonce/CONTEXT.md)
+            try:
+                context_updater = _get_context_generator()
+                context_path = context_updater(project_id, memory)
+                if context_path:
+                    print(f"[ContextGen] Updated: {context_path}")
+            except Exception as ctx_err:
+                print(f"[ContextGen] Warning: {ctx_err}")
+
             return True
         except Exception as e:
             print(f"[MultiProject] Error saving {project_id}: {e}")
@@ -663,6 +694,7 @@ def get_projects_by_status() -> Dict[str, Any]:
             project['open_errors'] = len(memory.get('active_issues', []))
             project['insights_count'] = len(memory.get('live_record', {}).get('lessons', {}).get('insights', []))
             project['ai_session'] = memory.get('ai_session', {})
+            project['active_ais'] = memory.get('active_ais', {})
             active = project
         elif status == "recent":
             recent.append(project)

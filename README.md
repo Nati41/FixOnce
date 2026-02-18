@@ -6,6 +6,24 @@ FixOnce is an **AI Memory Layer** that gives AI coding assistants (Claude, Curso
 
 ---
 
+## AI Bootstrap (Required)
+
+**If you are an AI agent working on this project:**
+
+Before making any changes, read:
+```
+.fixonce/CONTEXT.md
+```
+
+Then summarize:
+1. Current goal
+2. MUST FOLLOW decisions
+3. Active constraints
+
+*This file contains project memory, architectural decisions, and lessons learned. Following it prevents repeating past mistakes.*
+
+---
+
 ## Why FixOnce?
 
 | Without FixOnce | With FixOnce |

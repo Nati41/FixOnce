@@ -54,3 +54,4 @@ data/project_index.json
 data/projects_v2/*
 !data/projects_v2/.gitkeep
 !data/.gitkeep
+

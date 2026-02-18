@@ -25,6 +25,180 @@ def api_list_projects():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@projects_bp.route("/live-state", methods=["GET"])
+def api_get_live_state():
+    """
+    Fast endpoint for frequently-changing state only.
+    Reads directly from project JSON — no heavy processing.
+    Returns: active_ais, current_goal, next_step, ai_session.
+    Designed to be polled every 3-5 seconds.
+
+    Auto-detects active editor based on MCP config file modification times.
+    """
+    try:
+        from managers.multi_project_manager import get_active_project_id, get_project_path, save_project_memory
+        import json
+        import os
+        from datetime import datetime
+        from pathlib import Path
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"status": "no_project"})
+
+        project_path = get_project_path(project_id)
+        if not project_path.exists():
+            return jsonify({"status": "no_project"})
+
+        with open(project_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        # Auto-detect active editor from MCP config file modification times
+        working_dir = data.get("project_info", {}).get("working_dir", "")
+        with open("/tmp/fixonce_detect.log", "a") as f:
+            f.write(f"Calling detect with working_dir: {working_dir}\n")
+        detected_editor = _detect_active_editor_from_files(working_dir)
+        with open("/tmp/fixonce_detect.log", "a") as f:
+            f.write(f"Result: {detected_editor}\n")
+        if detected_editor:
+            data = _update_active_ais_if_needed(data, detected_editor, project_path)
+
+        live_record = data.get("live_record", {})
+        intent = live_record.get("intent", {})
+
+        return jsonify({
+            "status": "ok",
+            "project_id": project_id,
+            "active_ais": data.get("active_ais", {}),
+            "ai_session": data.get("ai_session", {}),
+            "current_goal": intent.get("current_goal", ""),
+            "next_step": intent.get("next_step", ""),
+            "updated_at": data.get("live_record", {}).get("updated_at", ""),
+            "detected_editor": detected_editor,  # For debugging
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def _detect_active_editor_from_files(working_dir: str) -> str:
+    """
+    Detect active editor based on running processes.
+    Returns: "cursor", "claude", or None
+    """
+    import subprocess
+
+    log_file = "/tmp/fixonce_detect.log"
+
+    cursor_running = False
+    claude_running = False
+
+    # Check if Cursor is running
+    try:
+        result = subprocess.run(['pgrep', '-f', 'Cursor'], capture_output=True, text=True, timeout=2)
+        cursor_running = result.returncode == 0 and bool(result.stdout.strip())
+        with open(log_file, "a") as f:
+            f.write(f"Cursor: returncode={result.returncode}, stdout={result.stdout[:50] if result.stdout else 'empty'}, running={cursor_running}\n")
+    except Exception as e:
+        with open(log_file, "a") as f:
+            f.write(f"Cursor error: {e}\n")
+
+    # Check if Claude Code is running
+    try:
+        result = subprocess.run(['pgrep', '-f', '/claude'], capture_output=True, text=True, timeout=2)
+        claude_running = result.returncode == 0 and bool(result.stdout.strip())
+        with open(log_file, "a") as f:
+            f.write(f"Claude: returncode={result.returncode}, running={claude_running}\n")
+    except Exception as e:
+        with open(log_file, "a") as f:
+            f.write(f"Claude error: {e}\n")
+
+    # Determine result
+    if cursor_running and claude_running:
+        return "both"  # Both are running
+    elif cursor_running:
+        return "cursor"
+    elif claude_running:
+        return "claude"
+
+    return None
+
+
+def _update_active_ais_if_needed(data: dict, detected_editor: str, project_path) -> dict:
+    """
+    Update active_ais if detected editor is not in the list or hasn't been updated recently.
+    """
+    import json
+    from datetime import datetime
+
+    if not detected_editor:
+        return data
+
+    now = datetime.now()
+    ACTIVE_TIMEOUT = 300  # 5 minutes
+
+    if "active_ais" not in data:
+        data["active_ais"] = {}
+
+    # Handle "both" case - update both cursor and claude
+    editors_to_update = ["cursor", "claude"] if detected_editor == "both" else [detected_editor]
+
+    for editor in editors_to_update:
+        # Check if this editor is already tracked and recent
+        if editor in data["active_ais"]:
+            last_activity = data["active_ais"][editor].get("last_activity", "")
+            if last_activity:
+                try:
+                    last_dt = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
+                    if last_dt.tzinfo:
+                        last_dt = last_dt.replace(tzinfo=None)
+                    # If updated in last 60 seconds, skip
+                    if (now - last_dt).total_seconds() < 60:
+                        continue
+                except:
+                    pass
+
+        # Update or add this editor
+        if editor not in data["active_ais"]:
+            data["active_ais"][editor] = {
+                "started_at": now.isoformat(),
+                "last_activity": now.isoformat()
+            }
+            print(f"[AutoDetect] Editor joined: {editor}")
+        else:
+            data["active_ais"][editor]["last_activity"] = now.isoformat()
+
+    # Clean up inactive editors
+    inactive = []
+    for editor, info in list(data["active_ais"].items()):
+        try:
+            last_act = datetime.fromisoformat(info.get("last_activity", "").replace('Z', '+00:00'))
+            if last_act.tzinfo:
+                last_act = last_act.replace(tzinfo=None)
+            if (now - last_act).total_seconds() > ACTIVE_TIMEOUT:
+                inactive.append(editor)
+        except:
+            pass
+
+    for editor in inactive:
+        del data["active_ais"][editor]
+
+    # Update ai_session for backward compatibility (use first editor or "both")
+    if "ai_session" not in data:
+        data["ai_session"] = {}
+    data["ai_session"]["editor"] = detected_editor
+    data["ai_session"]["last_activity"] = now.isoformat()
+    data["ai_session"]["active"] = True
+
+    # Save changes
+    try:
+        with open(project_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[AutoDetect] Failed to save: {e}")
+
+    return data
+
+
 @projects_bp.route("/grouped", methods=["GET"])
 def api_get_projects_grouped():
     """
@@ -264,5 +438,50 @@ def api_get_all_insights():
             "total": len(all_insights) + len(all_decisions) + len(all_avoid),
             "projects_count": len(projects)
         })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@projects_bp.route("/new-session", methods=["POST"])
+def api_start_new_session():
+    """Start a new AI session for the active project."""
+    try:
+        from datetime import datetime
+        import hashlib
+        from managers.multi_project_manager import (
+            get_active_project_id,
+            load_project_memory,
+            save_project_memory
+        )
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"status": "error", "message": "No active project"}), 400
+
+        memory = load_project_memory(project_id)
+        if not memory:
+            return jsonify({"status": "error", "message": "Project not found"}), 404
+
+        # Create new session
+        now = datetime.now()
+        session_hash = hashlib.md5(f"{project_id}{now.isoformat()}".encode()).hexdigest()[:8]
+
+        memory['ai_session'] = {
+            'session_id': session_hash,
+            'started_at': now.isoformat(),
+            'active': True,
+            'editor': 'dashboard',  # Started from dashboard
+            'briefing_sent': False
+        }
+
+        save_project_memory(project_id, memory)
+
+        return jsonify({
+            "status": "ok",
+            "session_id": session_hash,
+            "started_at": now.isoformat(),
+            "message": "New session started"
+        })
+
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
