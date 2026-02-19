@@ -1,0 +1,78 @@
+{
+  "saved_at": "2026-02-19T11:32:33.196250",
+  "run_meta": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+    "page": "http://localhost:5001/test/brutal"
+  },
+  "summary": {
+    "total": 9,
+    "pass": 9,
+    "fail": 0,
+    "warn": 0
+  },
+  "results": [
+    {
+      "id": "context_endpoint_exists",
+      "title": "Context endpoint returns context.md",
+      "expected": "GET /api/context returns status ok and markdown content with non-trivial length.",
+      "status": "PASS",
+      "actual": "context content present"
+    },
+    {
+      "id": "decisions_authority_persists",
+      "title": "Decisions persist and remain queryable",
+      "expected": "POST /api/memory/decisions adds a decision; GET /api/memory/decisions includes it.",
+      "status": "PASS",
+      "actual": "decision persisted"
+    },
+    {
+      "id": "context_regeneration_after_intent_update",
+      "title": "Context regenerates after intent update",
+      "expected": "After PUT /api/memory/live-record/intent, /api/context contains updated goal text.",
+      "status": "PASS",
+      "actual": "context regenerated with new goal"
+    },
+    {
+      "id": "incident_linking_live_and_memory",
+      "title": "Mock live error links to active issues",
+      "expected": "POST /api/test/mock_live_error appears in /api/live-errors and /api/memory/issues.",
+      "status": "PASS",
+      "actual": "inLive=true, inIssues=true"
+    },
+    {
+      "id": "dedup_same_error_signature",
+      "title": "Duplicate errors are deduplicated",
+      "expected": "Injecting same error multiple times results in single active issue with count >= 3.",
+      "status": "PASS",
+      "actual": "count=9"
+    },
+    {
+      "id": "spam_prevention_live_log_bound",
+      "title": "Live error log remains bounded under spam",
+      "expected": "After high-volume inject, /api/live-errors count does not exceed configured ring buffer size.",
+      "status": "PASS",
+      "actual": "live_count=50"
+    },
+    {
+      "id": "solution_matching_robustness_insight_search",
+      "title": "Noisy query still matches recorded insight",
+      "expected": "After storing a unique lesson insight, /api/memory/search with noisy query returns relevant result.",
+      "status": "PASS",
+      "actual": "matched noisy query to stored insight"
+    },
+    {
+      "id": "handoff_meaningfulness",
+      "title": "Handover stores meaningful summary",
+      "expected": "POST /api/memory/handover then GET returns non-empty summary including critical terms.",
+      "status": "PASS",
+      "actual": "meaningful handover stored"
+    },
+    {
+      "id": "avoid_pattern_registration",
+      "title": "Avoid list captures anti-patterns",
+      "expected": "POST /api/memory/avoid persists and is retrievable via GET.",
+      "status": "PASS",
+      "actual": "avoid persisted"
+    }
+  ]
+}

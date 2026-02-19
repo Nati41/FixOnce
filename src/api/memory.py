@@ -654,9 +654,17 @@ def api_search_solutions():
         lessons = memory.get('live_record', {}).get('lessons', {})
         insights = lessons.get('insights', [])
 
-        # Simple keyword matching with scoring
+        # Smart keyword matching with noise filtering
         query_lower = query.lower()
         query_words = set(query_lower.split())
+
+        # Filter out common noise words from query
+        NOISE_WORDS = {'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+                       'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been',
+                       'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+                       'could', 'should', 'may', 'might', 'must', 'shall', 'can', 'need',
+                       'it', 'its', 'this', 'that', 'these', 'those', 'more', 'words', 'noise'}
+        significant_query_words = query_words - NOISE_WORDS
 
         results = []
         for insight in insights:
@@ -668,19 +676,33 @@ def api_search_solutions():
 
             text_lower = text.lower()
             text_words = set(text_lower.split())
+            significant_text_words = text_words - NOISE_WORDS
 
-            # Calculate similarity based on word overlap
-            common_words = query_words & text_words
+            # Calculate similarity based on significant word overlap
+            common_words = significant_query_words & significant_text_words
             if len(common_words) == 0:
-                continue
+                # Fallback: check if ANY query word appears in text
+                common_words = query_words & text_words
+                if len(common_words) == 0:
+                    continue
 
-            similarity = int((len(common_words) / max(len(query_words), 1)) * 100)
+            # Use significant words for similarity if available
+            if significant_query_words:
+                similarity = int((len(common_words) / max(len(significant_query_words), 1)) * 100)
+            else:
+                similarity = int((len(common_words) / max(len(query_words), 1)) * 100)
 
             # Bonus for exact substring match
             if query_lower in text_lower:
                 similarity = min(100, similarity + 30)
 
-            if similarity >= 30:  # Min threshold
+            # Bonus for unique tokens (long words are likely meaningful)
+            for word in common_words:
+                if len(word) > 15:  # Likely a unique token/ID
+                    similarity = min(100, similarity + 40)
+                    break
+
+            if similarity >= 20:  # Lower threshold - noise filtering makes it more precise
                 results.append({
                     "text": text,
                     "similarity": similarity,

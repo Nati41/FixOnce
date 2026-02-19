@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FixOnce Brutal Test Harness</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #eee; margin: 16px; }
+    button { margin-right: 8px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #444; padding: 8px; vertical-align: top; text-align: left; }
+    .PASS { color: #7CFC9A; font-weight: bold; }
+    .FAIL { color: #FF7B7B; font-weight: bold; }
+    .WARN { color: #FFD166; font-weight: bold; }
+    #log { white-space: pre-wrap; background: #1b1b1b; padding: 10px; border: 1px solid #333; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h2>FixOnce Brutal Test Harness</h2>
+  <div>
+    <button id="btn-load">Load Scenarios</button>
+    <button id="btn-reset">Reset Test Data</button>
+    <button id="btn-run">Run All Tests</button>
+  </div>
+  <div id="summary">Summary: not started</div>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Title</th>
+        <th>Status</th>
+        <th>Expected</th>
+        <th>Actual</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="log"></div>
+
+  <script>
+    const API = window.location.origin;
+    const state = { scenarios: [], results: [] };
+
+    function log(msg) {
+      const el = document.getElementById("log");
+      el.textContent += `[${new Date().toISOString()}] ${msg}\n`;
+    }
+
+    function setSummary(text) {
+      document.getElementById("summary").textContent = text;
+    }
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, c => (
+        { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+      ));
+    }
+
+    function renderRows() {
+      const rows = document.getElementById("rows");
+      rows.innerHTML = state.results.map(r => `
+        <tr>
+          <td>${esc(r.id)}</td>
+          <td>${esc(r.title)}</td>
+          <td class="${esc(r.status)}">${esc(r.status)}</td>
+          <td>${esc(r.expected)}</td>
+          <td>${esc(r.actual)}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function jfetch(path, opts = {}) {
+      const res = await fetch(API + path, {
+        headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+        ...opts
+      });
+      const text = await res.text();
+      let data = null;
+      try { data = JSON.parse(text); } catch {}
+      return { ok: res.ok, status: res.status, data, text };
+    }
+
+    async function loadScenarios() {
+      const r = await jfetch("/api/test/scenarios");
+      if (!r.ok || !r.data?.tests) {
+        throw new Error(`failed loading scenarios (${r.status})`);
+      }
+      state.scenarios = r.data.tests;
+      log(`loaded ${state.scenarios.length} scenarios`);
+      return state.scenarios;
+    }
+
+    function resultOf(s, status, actual) {
+      return { id: s.id, title: s.title, expected: s.expected, status, actual };
+    }
+
+    async function test_context_endpoint_exists(s) {
+      const r = await jfetch("/api/context?format=json");
+      if (!r.ok || !r.data?.content) return resultOf(s, "FAIL", `HTTP ${r.status}`);
+      const ok = r.data.content.length > 50;
+      return resultOf(s, ok ? "PASS" : "FAIL", ok ? "context content present" : "content too short");
+    }
+
+    async function test_decisions_authority_persists(s) {
+      const marker = `brutal_decision_${Date.now()}`;
+      const post = await jfetch("/api/memory/decisions", {
+        method: "POST",
+        body: JSON.stringify({ decision: marker, reason: "brutal authority test", context: "tests/brutal" })
+      });
+      if (!post.ok) return resultOf(s, "FAIL", `decision POST failed (${post.status})`);
+      const get = await jfetch("/api/memory/decisions");
+      const found = (get.data?.decisions || []).some(d => String(d.decision || "").includes(marker));
+      return resultOf(s, found ? "PASS" : "FAIL", found ? "decision persisted" : "decision missing");
+    }
+
+    async function test_context_regeneration_after_intent_update(s) {
+      const token = `BRUTAL_GOAL_${Date.now()}`;
+      const put = await jfetch("/api/memory/live-record/intent", {
+        method: "PUT",
+        body: JSON.stringify({ current_goal: token, next_step: "verify regeneration" })
+      });
+      if (!put.ok) return resultOf(s, "FAIL", `intent PUT failed (${put.status})`);
+
+      // Context regeneration may be async, poll briefly
+      for (let i = 0; i < 6; i++) {
+        const ctx = await jfetch("/api/context?format=json");
+        if (ctx.ok && String(ctx.data?.content || "").includes(token)) {
+          return resultOf(s, "PASS", "context regenerated with new goal");
+        }
+        await new Promise(r => setTimeout(r, 300));
+      }
+      return resultOf(s, "WARN", "intent updated but context file not yet refreshed");
+    }
+
+    async function test_incident_linking_live_and_memory(s) {
+      const msg = `Brutal link error ${Date.now()}`;
+      const inject = await jfetch("/api/test/mock_live_error", {
+        method: "POST",
+        body: JSON.stringify({ message: msg, type: "TypeError", severity: "error" })
+      });
+      if (!inject.ok) return resultOf(s, "FAIL", `inject failed (${inject.status})`);
+
+      const live = await jfetch("/api/live-errors");
+      const issues = await jfetch("/api/memory/issues");
+      const inLive = (live.data?.errors || []).some(e => String(e.message || "").includes(msg));
+      const inIssues = (issues.data?.issues || []).some(i => String(i.message || "").includes(msg));
+      return resultOf(s, (inLive && inIssues) ? "PASS" : "FAIL", `inLive=${inLive}, inIssues=${inIssues}`);
+    }
+
+    async function test_dedup_same_error_signature(s) {
+      const msg = `Brutal dedup signature`;
+      for (let i = 0; i < 3; i++) {
+        await jfetch("/api/test/mock_live_error", {
+          method: "POST",
+          body: JSON.stringify({ message: msg, type: "ReferenceError", severity: "error" })
+        });
+      }
+      const issues = await jfetch("/api/memory/issues");
+      const item = (issues.data?.issues || []).find(i => String(i.message || "") === msg);
+      if (!item) return resultOf(s, "FAIL", "issue not found");
+      const ok = Number(item.count || 0) >= 3;
+      return resultOf(s, ok ? "PASS" : "FAIL", `count=${item.count || 0}`);
+    }
+
+    async function test_spam_prevention_live_log_bound(s) {
+      for (let i = 0; i < 65; i++) {
+        await jfetch("/api/test/mock_live_error", {
+          method: "POST",
+          body: JSON.stringify({ message: `Brutal spam ${i} ${Date.now()}`, type: "SpamError", severity: "warning" })
+        });
+      }
+      const live = await jfetch("/api/live-errors");
+      const count = Number(live.data?.count || 0);
+      const ok = count <= 50; // MAX_ERROR_LOG_SIZE default
+      return resultOf(s, ok ? "PASS" : "FAIL", `live_count=${count}`);
+    }
+
+    async function test_solution_matching_robustness_insight_search(s) {
+      const token = `CACHE_BUST_TOKEN_${Date.now()}`;
+      const upd = await jfetch("/api/memory/live-record/lessons", {
+        method: "PUT",
+        body: JSON.stringify({ insight: `When ${token} appears, reset stale context cache.` })
+      });
+      if (!upd.ok) return resultOf(s, "FAIL", `lessons PUT failed (${upd.status})`);
+      const q = encodeURIComponent(`noise words and ${token} and more noise`);
+      const search = await jfetch(`/api/memory/search?q=${q}&limit=5`);
+      const hit = (search.data?.results || []).some(r => String(r.text || "").includes(token));
+      return resultOf(s, hit ? "PASS" : "WARN", hit ? "matched noisy query to stored insight" : "no robust match");
+    }
+
+    async function test_handoff_meaningfulness(s) {
+      const summary = `Critical handoff ${Date.now()}: fixed incident linking, pending spam tuning, next step validate context regeneration and decision authority continuity.`;
+      const save = await jfetch("/api/memory/handover", {
+        method: "POST",
+        body: JSON.stringify({ summary })
+      });
+      if (!save.ok) return resultOf(s, "FAIL", `handover POST failed (${save.status})`);
+      const get = await jfetch("/api/memory/handover");
+      const actual = String(get.data?.handover?.summary || "");
+      const meaningful = actual.length > 40 && actual.includes("Critical handoff");
+      return resultOf(s, meaningful ? "PASS" : "FAIL", meaningful ? "meaningful handover stored" : "handover too weak");
+    }
+
+    async function test_avoid_pattern_registration(s) {
+      const what = `avoid-pattern-${Date.now()}`;
+      const post = await jfetch("/api/memory/avoid", {
+        method: "POST",
+        body: JSON.stringify({ what, reason: "brutal test avoid registration" })
+      });
+      if (!post.ok) return resultOf(s, "FAIL", `avoid POST failed (${post.status})`);
+      const get = await jfetch("/api/memory/avoid");
+      const found = (get.data?.avoid || []).some(a => String(a.what || "").includes(what));
+      return resultOf(s, found ? "PASS" : "FAIL", found ? "avoid persisted" : "avoid missing");
+    }
+
+    const TEST_IMPL = {
+      context_endpoint_exists: test_context_endpoint_exists,
+      decisions_authority_persists: test_decisions_authority_persists,
+      context_regeneration_after_intent_update: test_context_regeneration_after_intent_update,
+      incident_linking_live_and_memory: test_incident_linking_live_and_memory,
+      dedup_same_error_signature: test_dedup_same_error_signature,
+      spam_prevention_live_log_bound: test_spam_prevention_live_log_bound,
+      solution_matching_robustness_insight_search: test_solution_matching_robustness_insight_search,
+      handoff_meaningfulness: test_handoff_meaningfulness,
+      avoid_pattern_registration: test_avoid_pattern_registration
+    };
+
+    async function runAll() {
+      state.results = [];
+      renderRows();
+      setSummary("Running...");
+
+      if (!state.scenarios.length) await loadScenarios();
+
+      for (const s of state.scenarios) {
+        const impl = TEST_IMPL[s.id];
+        if (!impl) {
+          state.results.push(resultOf(s, "WARN", "no test implementation yet"));
+          renderRows();
+          continue;
+        }
+        try {
+          const res = await impl(s);
+          state.results.push(res);
+        } catch (e) {
+          state.results.push(resultOf(s, "FAIL", `exception: ${e.message}`));
+        }
+        renderRows();
+      }
+
+      const summary = {
+        total: state.results.length,
+        pass: state.results.filter(r => r.status === "PASS").length,
+        fail: state.results.filter(r => r.status === "FAIL").length,
+        warn: state.results.filter(r => r.status === "WARN").length
+      };
+      setSummary(`Summary: PASS=${summary.pass} FAIL=${summary.fail} WARN=${summary.warn} TOTAL=${summary.total}`);
+
+      const save = await jfetch("/api/test/results", {
+        method: "POST",
+        body: JSON.stringify({
+          run_meta: { userAgent: navigator.userAgent, page: location.href },
+          summary,
+          results: state.results
+        })
+      });
+      if (save.ok) {
+        log(`results saved: ${save.data?.path || "ok"}`);
+      } else {
+        log(`results save failed: HTTP ${save.status}`);
+      }
+    }
+
+    async function resetData() {
+      const r = await jfetch("/api/test/reset", { method: "POST", body: JSON.stringify({ scope: "brutal" }) });
+      if (r.ok) {
+        state.results = [];
+        renderRows();
+        setSummary("Summary: reset complete");
+        log("test data reset complete");
+      } else {
+        log(`reset failed: HTTP ${r.status} ${r.text}`);
+      }
+    }
+
+    document.getElementById("btn-load").addEventListener("click", async () => {
+      try {
+        await loadScenarios();
+        setSummary(`Summary: loaded ${state.scenarios.length} scenarios`);
+      } catch (e) {
+        setSummary(`Summary: load failed (${e.message})`);
+      }
+    });
+    document.getElementById("btn-run").addEventListener("click", runAll);
+    document.getElementById("btn-reset").addEventListener("click", resetData);
+
+    // Auto-load scenarios
+    loadScenarios()
+      .then(() => setSummary(`Summary: loaded ${state.scenarios.length} scenarios`))
+      .catch(e => setSummary(`Summary: load failed (${e.message})`));
+  </script>
+</body>
+</html>
+

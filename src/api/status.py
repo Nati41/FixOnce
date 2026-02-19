@@ -3,11 +3,12 @@ FixOnce Status Routes
 System status, health, and configuration endpoints.
 """
 
-from flask import jsonify, request
+from flask import jsonify, request, current_app
 from datetime import datetime
 from pathlib import Path
 import sys
 import json
+import os
 
 from . import status_bp
 
@@ -28,6 +29,25 @@ def set_actual_port(port: int):
     """Set the actual port being used."""
     global ACTUAL_PORT
     ACTUAL_PORT = port
+
+
+def _is_dev_mode() -> bool:
+    """Allow test endpoints only in explicit dev/test environments."""
+    env_flag = os.getenv("FIXONCE_DEV_MODE") == "1" or os.getenv("FIXONCE_ALLOW_TEST_API") == "1"
+    flask_env = os.getenv("FLASK_ENV", "").lower() == "development"
+    runtime_flag = bool(current_app.debug or current_app.testing)
+    host = (request.host or "").lower()
+    loopback_host = host.startswith("127.0.0.1") or host.startswith("localhost")
+    return env_flag or flask_env or runtime_flag or loopback_host
+
+
+def _dev_only_guard():
+    if _is_dev_mode():
+        return None
+    return jsonify({
+        "status": "error",
+        "message": "Test endpoint is disabled outside dev mode. Set FIXONCE_DEV_MODE=1."
+    }), 403
 
 
 @status_bp.route("/handshake", methods=["POST"])
@@ -55,6 +75,261 @@ def api_status():
 def api_ping():
     """Simple endpoint for Extension to discover the server."""
     return jsonify({"status": "ok", "service": "fixonce", "port": ACTUAL_PORT})
+
+
+@status_bp.route("/context", methods=["GET"])
+def api_context_file():
+    """
+    Return the universal FixOnce context file.
+    Generates fresh content from current memory state to ensure it's always up-to-date.
+    """
+    from config import PROJECT_DIR
+
+    try:
+        # Get current memory and generate context on-the-fly
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
+        from core.context_generator import _generate_content
+
+        project_id = get_active_project_id()
+        if project_id:
+            memory = load_project_memory(project_id)
+            if memory:
+                content = _generate_content(memory)
+                if request.args.get("format") == "json" or "application/json" in request.headers.get("Accept", ""):
+                    return jsonify({
+                        "status": "ok",
+                        "content": content,
+                        "updated_at": datetime.now().isoformat(),
+                        "source": "generated"
+                    })
+                return content, 200, {"Content-Type": "text/markdown; charset=utf-8"}
+
+        # Fallback: try reading from file
+        context_path = PROJECT_DIR / ".fixonce" / "CONTEXT.md"
+        if context_path.exists():
+            content = context_path.read_text(encoding="utf-8")
+            if request.args.get("format") == "json" or "application/json" in request.headers.get("Accept", ""):
+                return jsonify({
+                    "status": "ok",
+                    "path": str(context_path),
+                    "content": content,
+                    "updated_at": datetime.fromtimestamp(context_path.stat().st_mtime).isoformat(),
+                    "source": "file"
+                })
+            return content, 200, {"Content-Type": "text/markdown; charset=utf-8"}
+
+        return jsonify({
+            "status": "error",
+            "message": "No active project and no context file found"
+        }), 404
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@status_bp.route("/test/scenarios", methods=["GET"])
+def api_test_scenarios():
+    """Return brutal test scenarios JSON file."""
+    from config import PROJECT_DIR
+
+    scenarios_path = PROJECT_DIR / "tests" / "brutal" / "scenarios.json"
+    if not scenarios_path.exists():
+        return jsonify({"status": "error", "message": "scenarios.json not found"}), 404
+    try:
+        with open(scenarios_path, "r", encoding="utf-8") as f:
+            return jsonify(json.load(f))
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@status_bp.route("/test/results", methods=["POST"])
+def api_save_test_results():
+    """Save brutal harness results to tests/brutal/results.json (dev only)."""
+    guard = _dev_only_guard()
+    if guard:
+        return guard
+
+    from config import PROJECT_DIR
+    data = request.get_json(silent=True) or {}
+    results = data.get("results")
+    if not isinstance(results, list):
+        return jsonify({"status": "error", "message": "results[] is required"}), 400
+
+    out_path = PROJECT_DIR / "tests" / "brutal" / "results.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    payload = {
+        "saved_at": datetime.now().isoformat(),
+        "run_meta": data.get("run_meta", {}),
+        "summary": data.get("summary", {}),
+        "results": results
+    }
+    try:
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        return jsonify({"status": "ok", "path": str(out_path), "count": len(results)})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@status_bp.route("/test/reset", methods=["POST"])
+def api_test_reset():
+    """
+    Reset active project test memory safely (dev only).
+    Keeps project identity while clearing volatile memory sections.
+    """
+    guard = _dev_only_guard()
+    if guard:
+        return guard
+
+    from config import DATA_DIR, PROJECT_DIR
+    from managers.multi_project_manager import get_active_project_id, load_project_memory, save_project_memory
+    from core.error_store import clear_errors
+
+    active_id = get_active_project_id()
+    if not active_id:
+        return jsonify({"status": "error", "message": "No active project"}), 400
+
+    memory = load_project_memory(active_id)
+    now = datetime.now().isoformat()
+
+    # Preserve project identity only
+    project_info = memory.get("project_info", {})
+    working_dir = project_info.get("working_dir", "")
+
+    memory["project_info"] = project_info
+    memory["live_record"] = {
+        "gps": {
+            "working_dir": working_dir,
+            "active_ports": [],
+            "url": "",
+            "environment": "dev",
+            "updated_at": now
+        },
+        "architecture": {
+            "summary": "",
+            "stack": "",
+            "key_flows": [],
+            "updated_at": now
+        },
+        "intent": {
+            "current_goal": "",
+            "next_step": "",
+            "blockers": [],
+            "updated_at": now
+        },
+        "lessons": {
+            "insights": [],
+            "failed_attempts": [],
+            "updated_at": now
+        },
+        "updated_at": now
+    }
+    memory["decisions"] = []
+    memory["avoid"] = []
+    memory["active_issues"] = []
+    memory["solutions_history"] = []
+    memory["debug_sessions"] = []
+    memory["handover"] = {}
+    memory["ai_queue"] = []
+    memory["ai_session"] = {}
+    memory["active_ais"] = {}
+    memory["stats"] = {
+        "total_errors_captured": 0,
+        "total_solutions_applied": 0,
+        "last_updated": now
+    }
+    memory["roi"] = {
+        "solutions_reused": 0,
+        "tokens_saved": 0,
+        "errors_prevented": 0,
+        "decisions_referenced": 0,
+        "time_saved_minutes": 0,
+        "sessions_with_context": 0
+    }
+
+    saved = save_project_memory(active_id, memory)
+    cleared_live_errors = clear_errors(active_id)
+
+    # Reset activity file
+    activity_file = DATA_DIR / "activity_log.json"
+    if activity_file.exists():
+        with open(activity_file, "w", encoding="utf-8") as f:
+            json.dump({"activities": [], "sessions": {}}, f, ensure_ascii=False, indent=2)
+
+    # Reset brutal test results file
+    results_path = PROJECT_DIR / "tests" / "brutal" / "results.json"
+    results_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(results_path, "w", encoding="utf-8") as f:
+        json.dump({"saved_at": now, "results": []}, f, ensure_ascii=False, indent=2)
+
+    return jsonify({
+        "status": "ok" if saved else "warning",
+        "active_project": active_id,
+        "cleared_live_errors": cleared_live_errors,
+        "reset_activity": True,
+        "results_path": str(results_path)
+    })
+
+
+@status_bp.route("/test/mock_live_error", methods=["POST"])
+def api_test_mock_live_error():
+    """
+    Inject a mock live error and link it into project memory (dev only).
+    """
+    guard = _dev_only_guard()
+    if guard:
+        return guard
+
+    from core.error_store import add_error
+    from managers.multi_project_manager import get_active_project_id
+
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify({"status": "error", "message": "message is required"}), 400
+
+    active_id = get_active_project_id() or "__global__"
+    now = datetime.now().isoformat()
+    entry = {
+        "type": data.get("type", "mock.error"),
+        "message": message,
+        "severity": data.get("severity", "error"),
+        "url": data.get("url", "http://localhost:5000/v2"),
+        "file": data.get("file", "tests/brutal/mock.js"),
+        "line": data.get("line", 1),
+        "source": "brutal_test",
+        "timestamp": now,
+        "meta": data.get("meta", {})
+    }
+
+    add_error(entry, project_id=active_id)
+
+    issue_result = None
+    try:
+        from managers.project_memory_manager import add_or_update_issue
+        issue_result = add_or_update_issue(
+            error_type=entry["type"],
+            message=entry["message"],
+            url=entry["url"],
+            severity=entry["severity"],
+            file=entry["file"],
+            line=str(entry["line"]),
+            function=data.get("function", "brutal_test"),
+            snippet=data.get("snippet", []),
+            locals_data=data.get("locals", {}),
+            stack=data.get("stack", ""),
+            extra_data={"source": "brutal_test"}
+        )
+    except Exception as e:
+        issue_result = {"status": "warning", "message": f"live-only inject; memory link failed: {e}"}
+
+    return jsonify({
+        "status": "ok",
+        "project_id": active_id,
+        "entry": entry,
+        "issue_result": issue_result
+    })
 
 
 @status_bp.route("/health")

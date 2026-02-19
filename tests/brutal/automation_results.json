@@ -1,0 +1,86 @@
+{
+  "summary": {
+    "pass": 8,
+    "fail": 0,
+    "warn": 1,
+    "total": 9
+  },
+  "dashboardState": {
+    "nowCard": "עכשיו\n            🟢 Claude + Cursor עובד עכשיו\n            התקדמות אחרונה: נוצר קובץ חדש: בדיקות",
+    "stats": [],
+    "visibleText": "FixOnce\n▼\nClaude + Cursor\n—\n↻\nעכשיו\n🟢 Claude + Cursor עובד עכשיו\nהתקדמות אחרונה: נוצר קובץ חדש: בדיקות\nמטרה נוכחית\n-\n✓\nמצב\n0\nהחלטות\n0\nנפתרו\nסיפור עבודה\nכל ההיסטוריה →\n✨\nנוצר קובץ חדש: בדיקות\nעכשיו\n📋\nעוד\n▼\nהיסטוריה\n×\nטוען...\nחיפוש פתרונות\n×\nהקלד לחיפוש...\nהחלטות פעילות\n×\nטוען...\nמה להימנע\n×\nטוען...\n🐛 בעיות שנפתרו\n×\nטוען..."
+  },
+  "tests": [
+    {
+      "id": "context_endpoint_exists",
+      "title": "Context endpoint returns context.md",
+      "status": "PASS",
+      "expected": "GET /api/context returns status ok and markdown content with non-trivial length.",
+      "actual": "context content present"
+    },
+    {
+      "id": "decisions_authority_persists",
+      "title": "Decisions persist and remain queryable",
+      "status": "PASS",
+      "expected": "POST /api/memory/decisions adds a decision; GET /api/memory/decisions includes it.",
+      "actual": "decision persisted"
+    },
+    {
+      "id": "context_regeneration_after_intent_update",
+      "title": "Context regenerates after intent update",
+      "status": "PASS",
+      "expected": "After PUT /api/memory/live-record/intent, /api/context contains updated goal text.",
+      "actual": "context regenerated with new goal"
+    },
+    {
+      "id": "incident_linking_live_and_memory",
+      "title": "Mock live error links to active issues",
+      "status": "PASS",
+      "expected": "POST /api/test/mock_live_error appears in /api/live-errors and /api/memory/issues.",
+      "actual": "inLive=true, inIssues=true"
+    },
+    {
+      "id": "dedup_same_error_signature",
+      "title": "Duplicate errors are deduplicated",
+      "status": "PASS",
+      "expected": "Injecting same error multiple times results in single active issue with count >= 3.",
+      "actual": "count=3"
+    },
+    {
+      "id": "spam_prevention_live_log_bound",
+      "title": "Live error log remains bounded under spam",
+      "status": "PASS",
+      "expected": "After high-volume inject, /api/live-errors count does not exceed configured ring buffer size.",
+      "actual": "live_count=50"
+    },
+    {
+      "id": "solution_matching_robustness_insight_search",
+      "title": "Noisy query still matches recorded insight",
+      "status": "WARN",
+      "expected": "After storing a unique lesson insight, /api/memory/search with noisy query returns relevant result.",
+      "actual": "no robust match"
+    },
+    {
+      "id": "handoff_meaningfulness",
+      "title": "Handover stores meaningful summary",
+      "status": "PASS",
+      "expected": "POST /api/memory/handover then GET returns non-empty summary including critical terms.",
+      "actual": "meaningful handover stored"
+    },
+    {
+      "id": "avoid_pattern_registration",
+      "title": "Avoid list captures anti-patterns",
+      "status": "PASS",
+      "expected": "POST /api/memory/avoid persists and is retrievable via GET.",
+      "actual": "avoid persisted"
+    }
+  ],
+  "consoleLogs": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (NOT FOUND)"
+    }
+  ],
+  "networkErrors": [],
+  "timestamp": "2026-02-18T17:56:38.627Z"
+}
