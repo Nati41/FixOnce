@@ -69,17 +69,26 @@ def main():
         print("Error: Could not start server")
         return
 
-    dashboard_url = f'http://localhost:{port}/'
+    dashboard_url = f'http://localhost:{port}/app'
+
+    # API for JavaScript to call
+    class Api:
+        def open_url(self, url):
+            import webbrowser
+            webbrowser.open(url)
 
     # Try native window first, fall back to browser
     try:
         import webview
+        api = Api()
         window = webview.create_window(
             'FixOnce',
             dashboard_url,
-            width=450,
-            height=800,
-            resizable=True
+            width=380,
+            height=620,
+            resizable=True,
+            min_size=(320, 500),
+            js_api=api
         )
         webview.start()
     except Exception as e:

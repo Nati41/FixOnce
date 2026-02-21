@@ -2,130 +2,147 @@
 
 > **Your AI Never Forgets.**
 
-FixOnce is an **AI Memory Layer** that gives AI coding assistants (Claude, Cursor, Copilot) persistent memory across sessions. Your AI remembers errors, solutions, decisions, and context - picking up exactly where you left off.
+FixOnce gives AI coding assistants (Claude, Cursor) persistent memory across sessions. Your AI remembers decisions, solutions, and context — picking up exactly where you left off.
 
 ---
 
-## AI Bootstrap (Required)
+## Quick Start (60 seconds)
 
-**If you are an AI agent working on this project:**
-
-Before making any changes, read:
-```
-.fixonce/CONTEXT.md
-```
-
-Then summarize:
-1. Current goal
-2. MUST FOLLOW decisions
-3. Active constraints
-
-*This file contains project memory, architectural decisions, and lessons learned. Following it prevents repeating past mistakes.*
-
----
-
-## Why FixOnce?
-
-| Without FixOnce | With FixOnce |
-|----------------|--------------|
-| AI forgets everything each session | Full context persists forever |
-| Debug the same bug repeatedly | AI finds past solutions instantly |
-| Explain project context every time | AI knows your stack & decisions |
-| Manual documentation | Auto-saved insights & lessons |
-
----
-
-## Quick Start
-
-### 1. Install & Run
 ```bash
-# Clone
 git clone https://github.com/Nati41/FixOnce.git
 cd FixOnce
-
-# Run
-python3 src/server.py
+bash setup.sh
 ```
 
-### 2. Open Dashboard
-```
-http://localhost:5000
-```
+That's it. The setup script:
+1. Installs dependencies
+2. Configures MCP for Cursor and Claude Code
+3. Starts the server
 
-### 3. Connect Your AI Editor
+After setup: **Reload Cursor** (Cmd+Shift+P → Reload Window) and start chatting. FixOnce works automatically.
 
-**Claude Code** (Automatic):
+---
+
+## Manual Setup
+
+If you prefer to set things up yourself:
+
+### 1. Install
+
 ```bash
-# Add to ~/.claude/settings.json
+git clone https://github.com/Nati41/FixOnce.git
+cd FixOnce
+pip3 install flask flask-cors requests fastmcp scikit-learn watchdog
+```
+
+### 2. Configure MCP
+
+**Cursor** — add to `~/.cursor/mcp.json`:
+
+```json
 {
   "mcpServers": {
     "fixonce": {
       "command": "python3",
-      "args": ["/path/to/FixOnce/src/mcp_server/mcp_memory_server_v2.py"]
+      "args": ["/absolute/path/to/FixOnce/src/mcp_server/mcp_memory_server_v2.py"]
     }
   }
 }
 ```
 
-**Cursor / GitHub Copilot** (Manual prompts):
-Open Dashboard → Start AI Session → Copy prompts
+**Claude Code** — add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "fixonce": {
+      "command": "python3",
+      "args": ["/absolute/path/to/FixOnce/src/mcp_server/mcp_memory_server_v2.py"]
+    }
+  }
+}
+```
+
+### 3. Start Server
+
+```bash
+python3 src/server.py
+```
+
+### 4. Reload Your Editor
+
+Cursor: Cmd+Shift+P → Reload Window
+
+---
+
+## How It Works
+
+```
+You open a project → AI starts a conversation
+                          │
+                          ▼
+              AI calls auto_init_session()
+                          │
+              ┌───────────┴───────────┐
+              │                       │
+         New project            Existing project
+              │                       │
+     "Want me to scan?"     Shows: goal, decisions,
+              │                insights, avoid patterns
+              ▼                       │
+     AI scans & saves          AI continues with
+     architecture               full context
+```
+
+**If FixOnce isn't running** — AI works normally. No errors, no blocking.
+
+---
+
+## What Gets Remembered
+
+| Category | Example |
+|----------|---------|
+| **Decisions** | "Use JWT instead of sessions — stateless scaling" |
+| **Insights** | "React Query handles caching better than manual fetch" |
+| **Avoid** | "Don't use moment.js — too heavy, use date-fns" |
+| **Architecture** | Stack, structure, key flows |
+| **Goals** | Current task, next steps, blockers |
+
+---
+
+## Dashboard
+
+```
+http://localhost:5000/v3
+```
+
+Three layers:
+- **Overview** — active AI sessions, value metrics, projects, recent changes
+- **Project View** — timeline, insights, decisions, avoid patterns
+- **Advanced** — semantic index, debug tools (hidden by default)
 
 ---
 
 ## Supported Editors
 
-| Editor | Integration | How It Works |
-|--------|-------------|--------------|
-| **Claude Code** | Automatic (MCP) | Just say "היי" - connects automatically |
-| **Cursor** | Copy Prompts | Paste commands from dashboard |
-| **GitHub Copilot** | Copy Prompts | Paste commands from dashboard |
-
----
-
-## Dashboard Features
-
-### Live Activity Feed
-- Real-time tracking of all AI actions
-- **Tool badges** - See who did what (Claude/Cursor/Watcher)
-- **File links** - Click to open in editor
-- **Delete controls** - Remove single or all activities
-
-### Project Memory
-- **Architecture** - Stack, structure, key flows
-- **Intent** - Current goals & next steps
-- **Lessons** - Insights & failed attempts
-- **Decisions** - Why you chose X over Y
-- **Avoid Patterns** - What NOT to do
-
-### Multi-Project Support
-- Switch between projects instantly
-- Each project has isolated memory
-- Auto-detect by port or directory
+| Editor | Integration | Setup |
+|--------|-------------|-------|
+| **Cursor** | MCP (automatic) | `setup.sh` or manual `mcp.json` |
+| **Claude Code** | MCP (automatic) | `setup.sh` or manual `settings.json` |
 
 ---
 
 ## MCP Tools
 
-### Session Start
-```python
-auto_init_session()        # Auto-detect project
-init_session(port=3000)    # By port
-init_session(working_dir="/path")  # By path
-```
-
-### During Work
-```python
-search_past_solutions("error keywords")  # Find past fixes
-update_live_record("lessons", {"insight": "..."})  # Save learning
-log_decision("Use Redis", "Better for our scale")  # Record choice
-log_avoid("moment.js", "Too heavy, use date-fns")  # Record failure
-```
-
-### After Fixing
-```python
-get_live_record()          # See full memory
-get_recent_activity(10)    # Recent file changes
-```
+| Tool | Purpose |
+|------|---------|
+| `auto_init_session` | Initialize session (auto-detect project) |
+| `scan_project` | Scan new project structure |
+| `update_live_record` | Update memory (goal, lessons, architecture) |
+| `log_decision` | Log a decision with reason |
+| `log_avoid` | Log an anti-pattern |
+| `search_past_solutions` | Search past insights and solutions |
+| `get_live_record` | Read current project memory |
 
 ---
 
@@ -134,97 +151,18 @@ get_recent_activity(10)    # Recent file changes
 ```
 FixOnce/
 ├── src/
-│   ├── server.py              # Main Flask server
-│   ├── api/                   # REST endpoints
-│   │   ├── activity.py        # Activity feed
-│   │   ├── memory.py          # Memory management
-│   │   └── projects.py        # Multi-project
+│   ├── server.py                    # Flask server
+│   ├── api/                         # REST endpoints
 │   ├── mcp_server/
-│   │   └── mcp_memory_server_v2.py  # MCP tools
-│   └── managers/
-│       └── multi_project_manager.py
+│   │   └── mcp_memory_server_v2.py  # MCP tools (AI interface)
+│   ├── core/                        # Business logic
+│   └── managers/                    # Project management
 ├── data/
-│   ├── brain_dashboard.html   # Dashboard UI
-│   ├── activity_log.json      # Activity history
-│   └── projects_v2/           # Project memories
-├── hooks/                     # Claude Code hooks
-│   ├── post_tool_use.sh
-│   ├── session_start.sh
-│   └── session_end.sh
+│   ├── dashboard_v3.html            # Dashboard UI
+│   └── projects_v2/                 # Project memories
+├── setup.sh                         # One-command setup
 └── tests/
 ```
-
----
-
-## API Endpoints
-
-### Activity
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/activity/feed` | Get activity feed |
-| POST | `/api/activity/log` | Log new activity |
-| DELETE | `/api/activity/{id}` | Delete single activity |
-| DELETE | `/api/activity/clear` | Clear all activities |
-
-### Memory
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/memory/live-record` | Get project memory |
-| POST | `/api/memory/live-record/{section}` | Update section |
-| GET | `/api/memory/decisions` | Get decisions |
-| GET | `/api/memory/avoid` | Get avoid patterns |
-
-### Projects
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/projects` | List all projects |
-| POST | `/api/projects/switch` | Switch active project |
-| POST | `/api/projects/scan` | Scan new project |
-
----
-
-## How AI Uses FixOnce
-
-### Session Start
-```
-User: "היי"
-AI: [Calls auto_init_session()]
-AI: "🎯 פרויקט: MyApp - React + Node
-     📍 איפה עצרנו: תיקון באג בlogin
-     💡 תובנה: השתמשנו ב-JWT במקום sessions
-     נמשיך מכאן?"
-```
-
-### Before Fixing Errors
-```
-AI: [Calls search_past_solutions("TypeError undefined")]
-AI: "מצאתי שטיפלנו בזה - מחיל את אותו פתרון"
-```
-
-### After Learning Something
-```
-AI: [Calls update_live_record("lessons", {"insight": "..."})]
-AI: "שמרתי את התובנה לזיכרון"
-```
-
----
-
-## Changelog
-
-### v2.1.0 - Multi-Editor Support
-- Added GitHub Copilot support (replaced Windsurf)
-- Copy-to-clipboard buttons for Cursor/Copilot
-- Tool badges in activity feed (Claude/Cursor/Watcher)
-- File path links in activities
-- Activity delete controls (single + clear all)
-- Removed Live Memory Sync (redundant)
-
-### v2.0.0 - AI Memory Layer
-- Complete rewrite with MCP integration
-- Multi-project support
-- Live Record system (GPS, Architecture, Intent, Lessons)
-- Dashboard with real-time activity feed
-- Hebrew-first UI
 
 ---
 
@@ -234,4 +172,4 @@ MIT
 
 ---
 
-**Your AI Never Forgets.** Made with ❤️ for developers who value their time.
+**Your AI Never Forgets.**

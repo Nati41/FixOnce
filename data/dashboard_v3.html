@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FixOnce</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0c0c18;
+            --bg-card: rgba(255,255,255,0.05);
+            --bg-card-hover: rgba(255,255,255,0.08);
+            --bg-overlay: rgba(8,8,20,0.95);
+            --text: rgba(255,255,255,0.92);
+            --text-dim: rgba(255,255,255,0.50);
+            --text-muted: rgba(255,255,255,0.25);
+            --green: #6fcf97;
+            --red: #eb5757;
+            --yellow: #f2cc8f;
+            --blue: #7b9cff;
+            --purple: #b07cff;
+            --border: rgba(255,255,255,0.08);
+            --radius: 16px;
+            --radius-sm: 10px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            background:
+                radial-gradient(ellipse at 20% 15%, rgba(99,85,255,0.14) 0%, transparent 55%),
+                radial-gradient(ellipse at 80% 80%, rgba(56,182,255,0.08) 0%, transparent 55%),
+                var(--bg);
+        }
+
+        .app {
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 32px 16px 80px;
+        }
+
+        /* ===== HEADER ===== */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+        }
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header-logo {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--blue), var(--purple));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .header-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        .project-switch {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 6px 12px;
+            color: var(--text);
+            font-size: 0.78rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .project-switch:hover { background: var(--bg-card-hover); }
+        .project-switch select {
+            background: transparent;
+            border: none;
+            color: var(--text);
+            font-size: 0.78rem;
+            font-family: inherit;
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .project-switch select option {
+            background: #1a1a2e;
+            color: var(--text);
+        }
+
+        /* ===== TOGGLE ===== */
+        .toggle-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 5px 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+            font-size: 0.68rem;
+            font-weight: 500;
+            color: var(--text-dim);
+        }
+        .toggle-btn:hover { background: var(--bg-card-hover); }
+        .toggle-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .toggle-dot.on {
+            background: var(--green);
+            box-shadow: 0 0 6px rgba(111,207,151,0.5);
+        }
+        .toggle-dot.off {
+            background: var(--text-muted);
+        }
+
+        /* ===== IDENTITY CARD ===== */
+        .identity-card {
+            background: linear-gradient(135deg, rgba(123,156,255,0.08), rgba(176,124,255,0.06));
+            border: 1px solid rgba(123,156,255,0.18);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 18px;
+        }
+        .identity-name {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 2px;
+        }
+        .identity-stack {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-bottom: 14px;
+        }
+        .identity-row {
+            display: flex;
+            gap: 8px;
+            align-items: baseline;
+            margin-bottom: 8px;
+        }
+        .identity-row:last-child { margin-bottom: 0; }
+        .identity-label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            flex-shrink: 0;
+            width: 52px;
+        }
+        .identity-label.goal { color: var(--blue); }
+        .identity-label.next { color: var(--purple); }
+        .identity-label.learned { color: var(--green); }
+        .identity-label.avoid-lbl { color: var(--red); }
+        .identity-text {
+            font-size: 0.8rem;
+            line-height: 1.45;
+            color: var(--text);
+        }
+        .identity-text.empty {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+        .identity-summary {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            line-height: 1.5;
+            margin-bottom: 14px;
+        }
+        .identity-counts {
+            display: flex;
+            gap: 14px;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+        .identity-count {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+        }
+        .identity-count strong {
+            color: var(--text);
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ===== CARDS ===== */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 14px;
+            transition: background 0.2s;
+        }
+        .card:hover { background: var(--bg-card-hover); }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .card-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-dim);
+        }
+        .card-action {
+            font-size: 0.68rem;
+            color: var(--blue);
+            cursor: pointer;
+            background: none;
+            border: none;
+            font-family: inherit;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+        .card-action:hover { opacity: 0.7; }
+
+        /* ===== NOW SECTION ===== */
+        .ai-session {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+        }
+        .ai-session + .ai-session {
+            border-top: 1px solid var(--border);
+            margin-top: 4px;
+            padding-top: 12px;
+        }
+        .ai-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .ai-dot.active {
+            background: var(--green);
+            box-shadow: 0 0 8px rgba(111,207,151,0.5);
+            animation: pulse 2s infinite;
+        }
+        .ai-dot.idle { background: var(--text-muted); }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .ai-info { flex: 1; }
+        .ai-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .ai-project {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-top: 1px;
+        }
+        .ai-duration {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            font-variant-numeric: tabular-nums;
+        }
+        .handoff-summary {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+        .no-sessions {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 12px 0;
+        }
+
+        /* ===== VALUE SECTION ===== */
+        .roi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .roi-item {
+            text-align: center;
+        }
+        .roi-icon {
+            font-size: 1.2rem;
+            margin-bottom: 4px;
+        }
+        .roi-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        .roi-label {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+        .roi-story {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            line-height: 1.5;
+            padding: 10px 12px;
+            background: rgba(123,156,255,0.06);
+            border-radius: var(--radius-sm);
+            border-left: 2px solid var(--blue);
+        }
+        .roi-empty {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 10px 0;
+        }
+
+        /* ===== PROJECTS SECTION ===== */
+        .project-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .project-row:hover { opacity: 0.8; }
+        .project-row + .project-row {
+            border-top: 1px solid var(--border);
+        }
+        .project-status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .project-status-dot.active { background: var(--green); }
+        .project-status-dot.recent { background: var(--yellow); }
+        .project-status-dot.stale { background: var(--text-muted); }
+        .project-name {
+            flex: 1;
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+        .project-meta {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        /* ===== ACTIVITY SECTION ===== */
+        .activity-item {
+            display: flex;
+            gap: 10px;
+            padding: 8px 0;
+            font-size: 0.78rem;
+        }
+        .activity-item + .activity-item {
+            border-top: 1px solid var(--border);
+        }
+        .activity-time {
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
+            width: 42px;
+            font-size: 0.72rem;
+        }
+        .activity-text {
+            color: var(--text-dim);
+            line-height: 1.4;
+        }
+        .activity-text strong {
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        /* ===== LAYER 2: PROJECT VIEW OVERLAY ===== */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-overlay);
+            z-index: 100;
+            overflow-y: auto;
+            display: none;
+            animation: fadeIn 0.2s;
+        }
+        .overlay.open { display: block; }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .overlay-content {
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 24px 16px 80px;
+        }
+        .overlay-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .overlay-back {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            font-size: 0.85rem;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .overlay-back:hover { background: var(--bg-card-hover); }
+        .overlay-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+        }
+        .section-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-dim);
+            margin: 20px 0 10px;
+        }
+        .decision-item, .insight-item, .avoid-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }
+        .decision-item .label {
+            font-size: 0.65rem;
+            color: var(--blue);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+        .avoid-item .label {
+            font-size: 0.65rem;
+            color: var(--red);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+        .insight-item .label {
+            font-size: 0.65rem;
+            color: var(--green);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+        .item-reason {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+        .timeline-item {
+            display: flex;
+            gap: 10px;
+            padding: 10px 0;
+            font-size: 0.78rem;
+        }
+        .timeline-item + .timeline-item {
+            border-top: 1px solid var(--border);
+        }
+        .timeline-time {
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
+            width: 90px;
+            font-size: 0.72rem;
+        }
+        .timeline-text {
+            color: var(--text-dim);
+            line-height: 1.4;
+        }
+
+        /* ===== LAYER 3: ADVANCED ===== */
+        .advanced-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .advanced-link button {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.68rem;
+            font-family: inherit;
+            cursor: pointer;
+            padding: 8px 16px;
+            transition: color 0.2s;
+        }
+        .advanced-link button:hover { color: var(--text-dim); }
+
+        .advanced-section {
+            margin-top: 6px;
+            display: none;
+        }
+        .advanced-section.open { display: block; }
+
+        .adv-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .adv-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+        }
+        .adv-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 4px;
+        }
+        .adv-value {
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+        .btn-danger {
+            background: rgba(235,87,87,0.12);
+            border: 1px solid rgba(235,87,87,0.2);
+            color: var(--red);
+            border-radius: var(--radius-sm);
+            padding: 8px 16px;
+            font-size: 0.75rem;
+            font-family: inherit;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 12px;
+            transition: background 0.2s;
+        }
+        .btn-danger:hover { background: rgba(235,87,87,0.2); }
+
+        /* ===== EMPTY / LOADING ===== */
+        .loading {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 20px;
+            font-size: 0.8rem;
+        }
+        .empty-state {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            padding: 16px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-brand">
+                <div class="header-logo">F</div>
+                <div class="header-title">FixOnce</div>
+                <button class="toggle-btn" id="fixonce-toggle" onclick="toggleFixOnce()">
+                    <span class="toggle-dot on" id="toggle-dot"></span>
+                    <span id="toggle-label">On</span>
+                </button>
+            </div>
+            <div class="project-switch">
+                <select id="project-selector" onchange="switchProject(this.value)">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- ===== LAYER 1: OVERVIEW ===== -->
+
+        <!-- 0. PROJECT IDENTITY -->
+        <div class="identity-card" id="card-identity" style="display:none;">
+            <div class="identity-name" id="id-name">—</div>
+            <div class="identity-stack" id="id-stack"></div>
+            <div class="identity-summary" id="id-summary" style="display:none;"></div>
+            <div id="id-rows"></div>
+            <div class="identity-counts" id="id-counts" style="display:none;"></div>
+        </div>
+
+        <!-- 1. NOW -->
+        <div class="card" id="card-now">
+            <div class="card-header">
+                <span class="card-title">Now</span>
+                <button class="card-action" onclick="openProjectView('timeline')">View Timeline</button>
+            </div>
+            <div id="now-content">
+                <div class="loading">Connecting...</div>
+            </div>
+        </div>
+
+        <!-- 2. VALUE -->
+        <div class="card" id="card-value">
+            <div class="card-header">
+                <span class="card-title">Value</span>
+            </div>
+            <div id="value-content">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <!-- 3. PROJECTS -->
+        <div class="card" id="card-projects">
+            <div class="card-header">
+                <span class="card-title">Projects</span>
+            </div>
+            <div id="projects-content">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <!-- 4. WHAT CHANGED -->
+        <div class="card" id="card-activity">
+            <div class="card-header">
+                <span class="card-title">What Changed</span>
+                <button class="card-action" onclick="openProjectView('timeline')">Full Timeline</button>
+            </div>
+            <div id="activity-content">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <!-- ADVANCED TOGGLE -->
+        <div class="advanced-link">
+            <button onclick="toggleAdvanced()">Advanced</button>
+        </div>
+
+        <!-- ===== LAYER 3: ADVANCED ===== -->
+        <div class="advanced-section" id="advanced-section">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Semantic Index</span>
+                </div>
+                <div class="adv-grid" id="adv-semantic">
+                    <div class="adv-item">
+                        <div class="adv-label">Status</div>
+                        <div class="adv-value" id="adv-index-status">—</div>
+                    </div>
+                    <div class="adv-item">
+                        <div class="adv-label">Documents</div>
+                        <div class="adv-value" id="adv-doc-count">—</div>
+                    </div>
+                    <div class="adv-item">
+                        <div class="adv-label">Model</div>
+                        <div class="adv-value" id="adv-model">—</div>
+                    </div>
+                    <div class="adv-item">
+                        <div class="adv-label">Dimensions</div>
+                        <div class="adv-value" id="adv-dimensions">—</div>
+                    </div>
+                </div>
+                <button class="btn-danger" onclick="rebuildIndex()">Rebuild Index</button>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Debug</span>
+                </div>
+                <div id="adv-debug">
+                    <div class="adv-grid">
+                        <div class="adv-item">
+                            <div class="adv-label">Active Project ID</div>
+                            <div class="adv-value" id="adv-project-id" style="font-size:0.7rem;word-break:break-all;">—</div>
+                        </div>
+                        <div class="adv-item">
+                            <div class="adv-label">Working Dir</div>
+                            <div class="adv-value" id="adv-working-dir" style="font-size:0.7rem;word-break:break-all;">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== LAYER 2: PROJECT VIEW OVERLAY ===== -->
+    <div class="overlay" id="project-overlay">
+        <div class="overlay-content">
+            <div class="overlay-header">
+                <button class="overlay-back" onclick="closeProjectView()">← Back</button>
+                <div class="overlay-title" id="overlay-project-name">Project</div>
+            </div>
+
+            <!-- Tabs -->
+            <div style="display:flex;gap:4px;margin-bottom:18px;flex-wrap:wrap;">
+                <button class="card-action" style="padding:6px 12px;border-radius:var(--radius-sm);background:var(--bg-card);border:1px solid var(--border);" onclick="showTab('timeline')" id="tab-timeline">Timeline</button>
+                <button class="card-action" style="padding:6px 12px;border-radius:var(--radius-sm);background:var(--bg-card);border:1px solid var(--border);" onclick="showTab('insights')" id="tab-insights">Insights</button>
+                <button class="card-action" style="padding:6px 12px;border-radius:var(--radius-sm);background:var(--bg-card);border:1px solid var(--border);" onclick="showTab('decisions')" id="tab-decisions">Decisions</button>
+                <button class="card-action" style="padding:6px 12px;border-radius:var(--radius-sm);background:var(--bg-card);border:1px solid var(--border);" onclick="showTab('avoid')" id="tab-avoid">Avoid</button>
+            </div>
+
+            <!-- Tab Contents -->
+            <div id="tab-content-timeline" class="tab-content"></div>
+            <div id="tab-content-insights" class="tab-content" style="display:none;"></div>
+            <div id="tab-content-decisions" class="tab-content" style="display:none;"></div>
+            <div id="tab-content-avoid" class="tab-content" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+    const API = (() => {
+        const params = new URLSearchParams(window.location.search);
+        const port = params.get('port') || window.location.port || '3000';
+        return `http://localhost:${port}`;
+    })();
+
+    let snapshot = null;
+    let refreshTimer = null;
+
+    // =========================================
+    // DATA LOADING
+    // =========================================
+    async function loadSnapshot() {
+        try {
+            const res = await fetch(API + '/api/dashboard_snapshot');
+            const json = await res.json();
+            if (json.status === 'ok') {
+                snapshot = json.snapshot;
+                renderAll();
+            }
+        } catch (e) {
+            console.error('Failed to load snapshot:', e);
+        }
+    }
+
+    function renderAll() {
+        renderIdentity();
+        renderNow();
+        renderValue();
+        renderProjects();
+        renderActivity();
+        renderAdvanced();
+    }
+
+    // =========================================
+    // 0. PROJECT IDENTITY
+    // =========================================
+    function renderIdentity() {
+        const card = document.getElementById('card-identity');
+        const id = snapshot.identity;
+
+        if (!id) {
+            card.style.display = 'none';
+            return;
+        }
+
+        card.style.display = 'block';
+        document.getElementById('id-name').textContent = id.name || 'Unknown Project';
+
+        const stackEl = document.getElementById('id-stack');
+        if (id.stack) {
+            stackEl.textContent = id.stack;
+            stackEl.style.display = 'block';
+        } else {
+            stackEl.style.display = 'none';
+        }
+
+        const summaryEl = document.getElementById('id-summary');
+        if (id.summary) {
+            summaryEl.textContent = id.summary;
+            summaryEl.style.display = 'block';
+        } else {
+            summaryEl.style.display = 'none';
+        }
+
+        let rowsHtml = '';
+
+        if (id.current_goal) {
+            rowsHtml += identityRow('goal', 'Goal', id.current_goal);
+        }
+        if (id.next_step) {
+            rowsHtml += identityRow('next', 'Next', id.next_step);
+        }
+        if (id.last_decision) {
+            rowsHtml += identityRow('learned', 'Decided', id.last_decision.text);
+        }
+        if (id.last_insight) {
+            rowsHtml += identityRow('learned', 'Learned', id.last_insight);
+        }
+        if (id.last_avoid) {
+            rowsHtml += identityRow('avoid-lbl', 'Avoid', id.last_avoid);
+        }
+
+        if (!rowsHtml) {
+            rowsHtml = '<div class="identity-text empty">No goal set yet — start a conversation with AI to fill this in.</div>';
+        }
+
+        document.getElementById('id-rows').innerHTML = rowsHtml;
+
+        const c = id.counts || {};
+        const total = (c.decisions || 0) + (c.insights || 0) + (c.avoids || 0);
+        const countsEl = document.getElementById('id-counts');
+        if (total > 0) {
+            countsEl.innerHTML = `
+                <span class="identity-count"><strong>${c.decisions || 0}</strong> decisions</span>
+                <span class="identity-count"><strong>${c.insights || 0}</strong> insights</span>
+                <span class="identity-count"><strong>${c.avoids || 0}</strong> avoids</span>
+            `;
+            countsEl.style.display = 'flex';
+        } else {
+            countsEl.style.display = 'none';
+        }
+    }
+
+    function identityRow(labelClass, labelText, content) {
+        return `
+            <div class="identity-row">
+                <span class="identity-label ${labelClass}">${labelText}</span>
+                <span class="identity-text">${escapeHtml(content)}</span>
+            </div>
+        `;
+    }
+
+    // =========================================
+    // 1. NOW - Active AI Sessions
+    // =========================================
+    function renderNow() {
+        const el = document.getElementById('now-content');
+        const ais = snapshot.active_ais || [];
+        const handoffs = snapshot.ai_handoffs || [];
+
+        if (ais.length === 0) {
+            el.innerHTML = '<div class="no-sessions">No active AI sessions</div>';
+            return;
+        }
+
+        let html = '';
+        for (const ai of ais) {
+            const name = capitalize(ai.editor || ai.id || 'Unknown');
+            const duration = ai.started_at ? timeSince(ai.started_at) : '';
+            const project = ai.project_name || '';
+
+            html += `
+                <div class="ai-session">
+                    <div class="ai-dot active"></div>
+                    <div class="ai-info">
+                        <div class="ai-name">${name}</div>
+                        ${project ? `<div class="ai-project">${project}</div>` : ''}
+                    </div>
+                    <div class="ai-duration">${duration}</div>
+                </div>
+            `;
+        }
+
+        const todayHandoffs = handoffs.filter(h => isToday(h.timestamp));
+        if (todayHandoffs.length > 0) {
+            html += `
+                <div class="handoff-summary">
+                    ↔ ${todayHandoffs.length} handoff${todayHandoffs.length > 1 ? 's' : ''} today
+                </div>
+            `;
+        }
+
+        el.innerHTML = html;
+    }
+
+    // =========================================
+    // 2. VALUE - ROI Metrics
+    // =========================================
+    function renderValue() {
+        const el = document.getElementById('value-content');
+        const roi = snapshot.roi || {};
+
+        const timeSaved = roi.time_saved_minutes || 0;
+        const reused = roi.solutions_reused || 0;
+        const prevented = roi.errors_prevented || 0;
+        const hasValue = timeSaved > 0 || reused > 0 || prevented > 0;
+
+        if (!hasValue) {
+            el.innerHTML = '<div class="roi-empty">Start logging insights to unlock impact.</div>';
+            return;
+        }
+
+        const hours = timeSaved >= 60 ? (timeSaved / 60).toFixed(1) : null;
+        const timeDisplay = hours ? `${hours}h` : `${timeSaved}m`;
+
+        let html = `
+            <div class="roi-grid">
+                <div class="roi-item">
+                    <div class="roi-icon">⏱</div>
+                    <div class="roi-value">${timeDisplay}</div>
+                    <div class="roi-label">saved</div>
+                </div>
+                <div class="roi-item">
+                    <div class="roi-icon">🧠</div>
+                    <div class="roi-value">${reused}</div>
+                    <div class="roi-label">reuses</div>
+                </div>
+                <div class="roi-item">
+                    <div class="roi-icon">🛡</div>
+                    <div class="roi-value">${prevented}</div>
+                    <div class="roi-label">prevented</div>
+                </div>
+            </div>
+        `;
+
+        // Narrative
+        const story = buildStory(roi);
+        if (story) {
+            html += `<div class="roi-story">${story}</div>`;
+        }
+
+        el.innerHTML = html;
+    }
+
+    function buildStory(roi) {
+        const parts = [];
+        if (roi.time_saved_minutes > 0) parts.push(`${roi.time_saved_minutes} minutes saved`);
+        if (roi.solutions_reused > 0) parts.push(`${roi.solutions_reused} solutions reused`);
+        if (roi.sessions_with_context > 0) parts.push(`${roi.sessions_with_context} sessions loaded with context`);
+        if (parts.length === 0) return '';
+        return parts.join(' · ');
+    }
+
+    // =========================================
+    // 3. PROJECTS
+    // =========================================
+    function renderProjects() {
+        const el = document.getElementById('projects-content');
+        const projects = snapshot.projects || [];
+
+        // Also populate the project selector
+        const selector = document.getElementById('project-selector');
+        selector.innerHTML = '';
+
+        if (projects.length === 0) {
+            el.innerHTML = '<div class="empty-state">No projects yet</div>';
+            selector.innerHTML = '<option>No projects</option>';
+            return;
+        }
+
+        let html = '';
+        for (const p of projects) {
+            const name = p.name || p.project_id;
+            const status = p.status || 'stale';
+            const counts = p.counts || {};
+            const meta = buildProjectMeta(counts);
+
+            html += `
+                <div class="project-row" onclick="openProjectById('${p.project_id}')">
+                    <div class="project-status-dot ${status}"></div>
+                    <div class="project-name">${name}</div>
+                    <div class="project-meta">${meta}</div>
+                </div>
+            `;
+
+            const selected = status === 'active' ? 'selected' : '';
+            selector.innerHTML += `<option value="${p.project_id}" ${selected}>${name}</option>`;
+        }
+
+        el.innerHTML = html;
+    }
+
+    function buildProjectMeta(counts) {
+        const parts = [];
+        if (counts.insights > 0) parts.push(`${counts.insights} insight${counts.insights > 1 ? 's' : ''}`);
+        if (counts.decisions > 0) parts.push(`${counts.decisions} decision${counts.decisions > 1 ? 's' : ''}`);
+        if (counts.avoids > 0) parts.push(`${counts.avoids} avoid${counts.avoids > 1 ? 's' : ''}`);
+        if (parts.length === 0) return 'no data';
+        return parts.join(' · ');
+    }
+
+    // =========================================
+    // 4. WHAT CHANGED
+    // =========================================
+    function renderActivity() {
+        const el = document.getElementById('activity-content');
+        const items = snapshot.activity || [];
+
+        if (items.length === 0) {
+            el.innerHTML = '<div class="empty-state">No recent activity</div>';
+            return;
+        }
+
+        let html = '';
+        const shown = items.slice(0, 8);
+        for (const act of shown) {
+            const time = formatTime(act.timestamp);
+            const text = formatActivity(act);
+            html += `
+                <div class="activity-item">
+                    <div class="activity-time">${time}</div>
+                    <div class="activity-text">${text}</div>
+                </div>
+            `;
+        }
+
+        el.innerHTML = html;
+    }
+
+    function formatActivity(act) {
+        // Don't show "Unknown" as actor - only show known AI names
+        const actorName = act.actor && act.actor !== 'unknown' ? act.actor : '';
+        const actor = actorName ? `<strong>${capitalize(actorName)}</strong> ` : '';
+        const tool = act.tool || '';
+        const file = act.human_name || act.file || '';
+        const actType = act.type || '';
+
+        // MCP tool activities (memory operations)
+        if (actType === 'mcp_tool' || act.file_context === 'memory') {
+            const icon = getMcpIcon(tool);
+            return `${actor}${icon} ${file || tool}`;
+        }
+
+        if (tool === 'handoff') {
+            return `↔ Handoff: ${file}`;
+        }
+        if (file) {
+            const verb = tool === 'create' ? 'created' : tool === 'delete' ? 'deleted' : 'updated';
+            return `${actor}${verb} ${shortPath(file)}`;
+        }
+        if (tool) {
+            return `${actor}${tool}`;
+        }
+        return `${actor}activity`;
+    }
+
+    function getMcpIcon(tool) {
+        const icons = {
+            'update_live_record': '🎯',
+            'log_decision': '🔒',
+            'log_avoid': '⚠️',
+            'search_past_solutions': '🔍',
+            'auto_init_session': '🚀',
+            'scan_project': '📊'
+        };
+        return icons[tool] || '🧠';
+    }
+
+    // =========================================
+    // LAYER 2: PROJECT VIEW
+    // =========================================
+    let currentTab = 'timeline';
+
+    function openProjectView(tab) {
+        currentTab = tab || 'timeline';
+        document.getElementById('project-overlay').classList.add('open');
+        document.getElementById('overlay-project-name').textContent =
+            getActiveProjectName();
+        showTab(currentTab);
+        loadProjectDetails();
+    }
+
+    function closeProjectView() {
+        document.getElementById('project-overlay').classList.remove('open');
+    }
+
+    function openProjectById(projectId) {
+        openProjectView('timeline');
+    }
+
+    function showTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+        document.getElementById('tab-content-' + tab).style.display = 'block';
+
+        document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+            if (btn.id === 'tab-' + tab) {
+                btn.style.background = 'rgba(123,156,255,0.15)';
+                btn.style.color = 'var(--blue)';
+            } else if (btn.id.startsWith('tab-')) {
+                btn.style.background = 'var(--bg-card)';
+                btn.style.color = 'var(--blue)';
+            }
+        });
+
+        loadProjectDetails();
+    }
+
+    async function loadProjectDetails() {
+        if (currentTab === 'timeline') await loadTimeline();
+        if (currentTab === 'decisions') await loadDecisions();
+        if (currentTab === 'avoid') await loadAvoid();
+        if (currentTab === 'insights') await loadInsights();
+    }
+
+    async function loadTimeline() {
+        const el = document.getElementById('tab-content-timeline');
+        try {
+            const res = await fetch(API + '/api/activity/feed?limit=50');
+            const json = await res.json();
+            const items = json.activities || json.feed || [];
+
+            if (items.length === 0) {
+                el.innerHTML = '<div class="empty-state">No activity yet</div>';
+                return;
+            }
+
+            let html = '';
+            for (const act of items.slice(0, 30)) {
+                const time = formatDateTime(act.timestamp);
+                const text = formatActivity(act);
+                html += `
+                    <div class="timeline-item">
+                        <div class="timeline-time">${time}</div>
+                        <div class="timeline-text">${text}</div>
+                    </div>
+                `;
+            }
+            el.innerHTML = html;
+        } catch (e) {
+            el.innerHTML = '<div class="empty-state">Failed to load timeline</div>';
+        }
+    }
+
+    async function loadDecisions() {
+        const el = document.getElementById('tab-content-decisions');
+        try {
+            const res = await fetch(API + '/api/memory/decisions');
+            const json = await res.json();
+            const items = json.decisions || [];
+
+            if (items.length === 0) {
+                el.innerHTML = '<div class="empty-state">No decisions logged yet</div>';
+                return;
+            }
+
+            let html = '';
+            for (const d of items) {
+                html += `
+                    <div class="decision-item">
+                        <div class="label">Decision</div>
+                        ${d.decision || d.text || ''}
+                        <div class="item-reason">${d.reason || ''}</div>
+                    </div>
+                `;
+            }
+            el.innerHTML = html;
+        } catch (e) {
+            el.innerHTML = '<div class="empty-state">Failed to load decisions</div>';
+        }
+    }
+
+    async function loadAvoid() {
+        const el = document.getElementById('tab-content-avoid');
+        try {
+            const res = await fetch(API + '/api/memory/avoid');
+            const json = await res.json();
+            const items = json.avoid || json.avoids || [];
+
+            if (items.length === 0) {
+                el.innerHTML = '<div class="empty-state">No avoid patterns logged</div>';
+                return;
+            }
+
+            let html = '';
+            for (const a of items) {
+                html += `
+                    <div class="avoid-item">
+                        <div class="label">Avoid</div>
+                        ${a.what || a.text || ''}
+                        <div class="item-reason">${a.reason || ''}</div>
+                    </div>
+                `;
+            }
+            el.innerHTML = html;
+        } catch (e) {
+            el.innerHTML = '<div class="empty-state">Failed to load avoid patterns</div>';
+        }
+    }
+
+    async function loadInsights() {
+        const el = document.getElementById('tab-content-insights');
+        try {
+            const res = await fetch(API + '/api/memory/live-record/lessons');
+            const json = await res.json();
+            const lr = json.live_record || json;
+            const insights = (lr.lessons || lr).insights || [];
+
+            if (insights.length === 0) {
+                el.innerHTML = '<div class="empty-state">No insights yet</div>';
+                return;
+            }
+
+            let html = '';
+            for (const ins of [...insights].reverse()) {
+                const text = typeof ins === 'string' ? ins : (ins.text || ins.insight || JSON.stringify(ins));
+                html += `
+                    <div class="insight-item">
+                        <div class="label">Insight</div>
+                        ${escapeHtml(text)}
+                    </div>
+                `;
+            }
+            el.innerHTML = html;
+        } catch (e) {
+            el.innerHTML = '<div class="empty-state">Failed to load insights</div>';
+        }
+    }
+
+    // =========================================
+    // LAYER 3: ADVANCED
+    // =========================================
+    function toggleAdvanced() {
+        document.getElementById('advanced-section').classList.toggle('open');
+    }
+
+    function renderAdvanced() {
+        const projects = snapshot.projects || [];
+        const active = projects.find(p => p.status === 'active');
+
+        if (active) {
+            const sem = active.semantic || {};
+            document.getElementById('adv-index-status').textContent = sem.indexed ? 'Active' : 'Not indexed';
+            document.getElementById('adv-index-status').style.color = sem.indexed ? 'var(--green)' : 'var(--text-muted)';
+            document.getElementById('adv-doc-count').textContent = sem.doc_count || 0;
+            document.getElementById('adv-project-id').textContent = active.project_id || '—';
+        }
+
+        const env = snapshot.environment || {};
+        document.getElementById('adv-working-dir').textContent = env.working_dir || '—';
+    }
+
+    async function rebuildIndex() {
+        try {
+            const res = await fetch(API + '/api/semantic_status');
+            const json = await res.json();
+            alert('Semantic status: ' + JSON.stringify(json, null, 2));
+        } catch (e) {
+            alert('Failed: ' + e.message);
+        }
+    }
+
+    // =========================================
+    // ACTIONS
+    // =========================================
+    async function switchProject(projectId) {
+        if (!projectId) return;
+        try {
+            await fetch(API + '/api/projects/switch/' + projectId, { method: 'POST' });
+            await loadSnapshot();
+        } catch (e) {
+            console.error('Switch failed:', e);
+        }
+    }
+
+    // =========================================
+    // HELPERS
+    // =========================================
+    function capitalize(s) {
+        return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+    }
+
+    function timeSince(isoStr) {
+        try {
+            const started = new Date(isoStr);
+            const now = new Date();
+            const mins = Math.floor((now - started) / 60000);
+            if (mins < 1) return 'just now';
+            if (mins < 60) return mins + 'm';
+            const hrs = Math.floor(mins / 60);
+            if (hrs < 24) return hrs + 'h ' + (mins % 60) + 'm';
+            return Math.floor(hrs / 24) + 'd';
+        } catch { return ''; }
+    }
+
+    function isToday(isoStr) {
+        if (!isoStr) return false;
+        try {
+            const d = new Date(isoStr);
+            const now = new Date();
+            return d.toDateString() === now.toDateString();
+        } catch { return false; }
+    }
+
+    function formatTime(isoStr) {
+        if (!isoStr) return '';
+        try {
+            const d = new Date(isoStr);
+            return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        } catch { return ''; }
+    }
+
+    function formatDateTime(isoStr) {
+        if (!isoStr) return '';
+        try {
+            const d = new Date(isoStr);
+            const now = new Date();
+            const isToday = d.toDateString() === now.toDateString();
+            const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            if (isToday) return time;
+            return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' ' + time;
+        } catch { return ''; }
+    }
+
+    function shortPath(path) {
+        if (!path) return '';
+        const parts = path.split('/');
+        if (parts.length <= 2) return path;
+        return '…/' + parts.slice(-2).join('/');
+    }
+
+    function getActiveProjectName() {
+        if (!snapshot) return 'Project';
+        const active = (snapshot.projects || []).find(p => p.status === 'active');
+        return active ? (active.name || active.project_id) : 'Project';
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // =========================================
+    // INIT & AUTO-REFRESH
+    // =========================================
+    // =========================================
+    // FIXONCE TOGGLE
+    // =========================================
+    let fixonceEnabled = true;
+
+    async function loadToggleState() {
+        try {
+            const res = await fetch(API + '/api/fixonce/status');
+            const json = await res.json();
+            fixonceEnabled = json.enabled !== false;
+            updateToggleUI();
+        } catch (e) {
+            fixonceEnabled = true;
+            updateToggleUI();
+        }
+    }
+
+    async function toggleFixOnce() {
+        try {
+            const res = await fetch(API + '/api/fixonce/toggle', { method: 'POST' });
+            const json = await res.json();
+            fixonceEnabled = json.enabled !== false;
+            updateToggleUI();
+        } catch (e) {
+            console.error('Toggle failed:', e);
+        }
+    }
+
+    function updateToggleUI() {
+        const dot = document.getElementById('toggle-dot');
+        const label = document.getElementById('toggle-label');
+        if (fixonceEnabled) {
+            dot.className = 'toggle-dot on';
+            label.textContent = 'On';
+        } else {
+            dot.className = 'toggle-dot off';
+            label.textContent = 'Off';
+        }
+    }
+
+    // =========================================
+    // INIT & AUTO-REFRESH
+    // =========================================
+    async function init() {
+        await loadToggleState();
+        await loadSnapshot();
+        refreshTimer = setInterval(loadSnapshot, 10000);
+    }
+
+    init();
+    </script>
+</body>
+</html>

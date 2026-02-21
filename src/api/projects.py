@@ -1,10 +1,15 @@
 """
 FixOnce Projects API
 Multi-project management endpoints.
+
+NOTE: These endpoints are primarily for DASHBOARD use.
+They may use active_project.json since they're dashboard-specific.
+MCP tools should NOT use these endpoints - they should use their
+own session state with ProjectContext.from_path().
 """
 
 from flask import jsonify, request
-from . import projects_bp
+from . import projects_bp, get_project_from_request
 
 
 @projects_bp.route("", methods=["GET"])
@@ -223,7 +228,21 @@ def api_get_projects_grouped():
         }
     """
     try:
-        from managers.multi_project_manager import get_projects_by_status
+        from managers.multi_project_manager import get_projects_by_status, get_active_project_id, get_project_path
+        import json
+
+        # Auto-detect active editor before returning data (keeps active_ais fresh)
+        project_id = get_active_project_id()
+        if project_id:
+            project_path = get_project_path(project_id)
+            if project_path.exists():
+                with open(project_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                working_dir = data.get("project_info", {}).get("working_dir", "")
+                detected_editor = _detect_active_editor_from_files(working_dir)
+                if detected_editor:
+                    _update_active_ais_if_needed(data, detected_editor, project_path)
+
         return jsonify(get_projects_by_status())
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500

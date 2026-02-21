@@ -5,6 +5,9 @@ Canonical storage: data/projects_v2/{project_id}.json
 Project ID = {folder_name}_{md5_hash[:12]} derived from working_dir
 
 V1 (data/projects/) is deprecated and ignored.
+
+IMPORTANT: project_id is REQUIRED in load_project_memory and save_project_memory.
+Never fall back to active_project.json for routing - only for dashboard display.
 """
 
 import os
@@ -16,6 +19,10 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+
+# Phase 0: Import ProjectContext for consistent ID generation
+# Note: We keep local generate_project_id_from_path for backward compatibility
+# but new code should use ProjectContext.from_path()
 
 # Ensure src is in path for imports
 _SRC_DIR = Path(__file__).parent.parent
@@ -321,13 +328,28 @@ def init_project_memory(project_id: str, display_name: str = None, working_dir: 
     return memory
 
 
-def load_project_memory(project_id: str = None) -> Dict[str, Any]:
-    """Load memory for a project."""
-    if not project_id:
-        project_id = get_active_project_id()
+def load_project_memory(project_id: str) -> Dict[str, Any]:
+    """
+    Load memory for a project.
 
+    IMPORTANT: project_id is REQUIRED.
+    Never falls back to active_project.json.
+
+    Args:
+        project_id: The project ID (REQUIRED)
+
+    Returns:
+        Project memory dict
+
+    Raises:
+        ValueError: If project_id is not provided
+    """
     if not project_id:
-        return init_project_memory("default", "Default Project")
+        raise ValueError(
+            "project_id is REQUIRED. "
+            "Use ProjectContext.from_path(working_dir) to get it. "
+            "Never rely on active_project.json for routing."
+        )
 
     project_path = get_project_path(project_id)
 
@@ -342,13 +364,29 @@ def load_project_memory(project_id: str = None) -> Dict[str, Any]:
         return init_project_memory(project_id)
 
 
-def save_project_memory(project_id: str = None, memory: Dict[str, Any] = None) -> bool:
-    """Save memory for a project."""
-    if not project_id:
-        project_id = get_active_project_id()
+def save_project_memory(project_id: str, memory: Dict[str, Any] = None) -> bool:
+    """
+    Save memory for a project.
 
+    IMPORTANT: project_id is REQUIRED.
+    Never falls back to active_project.json.
+
+    Args:
+        project_id: The project ID (REQUIRED)
+        memory: The memory dict to save
+
+    Returns:
+        True if saved successfully
+
+    Raises:
+        ValueError: If project_id is not provided
+    """
     if not project_id:
-        project_id = "default"
+        raise ValueError(
+            "project_id is REQUIRED. "
+            "Use ProjectContext.from_path(working_dir) to get it. "
+            "Never rely on active_project.json for routing."
+        )
 
     if not memory:
         return False
@@ -713,17 +751,54 @@ def get_projects_by_status() -> Dict[str, Any]:
 
 
 # ============================================================
-# COMPATIBILITY LAYER
+# COMPATIBILITY LAYER (DEPRECATED - for dashboard only)
 # ============================================================
+#
+# IMPORTANT: These functions use active_project.json as fallback.
+# This is ONLY acceptable for dashboard UI and backward compatibility.
+# MCP tools should NEVER use these - they should use ProjectContext.from_path().
+
+# Guard: Track if we're in dashboard mode
+_DASHBOARD_MODE_CALLERS = {'api.memory', 'api.projects', 'api.status', 'project_memory_manager'}
+
+
+def _is_dashboard_context() -> bool:
+    """Check if call is coming from dashboard context (allowed to use active_project.json)."""
+    import traceback
+    stack = traceback.extract_stack()
+    for frame in stack:
+        for allowed in _DASHBOARD_MODE_CALLERS:
+            if allowed in frame.filename:
+                return True
+    return False
+
 
 def get_project_context() -> Dict[str, Any]:
-    """Compatibility: Get context for active project."""
-    return load_project_memory()
+    """
+    DEPRECATED: Get context for active project.
+
+    For backward compatibility only. Dashboard can use this.
+    MCP tools should use load_project_memory(ProjectContext.from_path(working_dir)).
+    """
+    project_id = get_active_project_id()  # Dashboard fallback
+    if not project_id:
+        print("[WARN] get_project_context() called without active project")
+        return init_project_memory("default", "Default Project")
+    return load_project_memory(project_id)
 
 
 def save_memory(memory: Dict[str, Any]) -> bool:
-    """Compatibility: Save memory for active project."""
-    return save_project_memory(None, memory)
+    """
+    DEPRECATED: Save memory for active project.
+
+    For backward compatibility only. Dashboard can use this.
+    MCP tools should use save_project_memory(project_id, memory).
+    """
+    project_id = get_active_project_id()  # Dashboard fallback
+    if not project_id:
+        print("[WARN] save_memory() called without active project")
+        project_id = "default"
+    return save_project_memory(project_id, memory)
 
 
 def migrate_from_flat_memory() -> Dict[str, Any]:

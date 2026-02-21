@@ -24,7 +24,7 @@ except ImportError as e:
 # Add server directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import VERSION, APP_NAME, DEFAULT_PORT, MAX_PORT_ATTEMPTS, DATA_DIR, PROJECT_DIR
+from config import VERSION, APP_NAME, DEFAULT_PORT, MAX_PORT_ATTEMPTS, DATA_DIR, PROJECT_ROOT as PROJECT_DIR
 from core.db_solutions import init_all_databases, find_solution_hybrid
 from api import register_blueprints, errors_bp
 from core.error_store import get_error_log, get_log_lock
@@ -93,9 +93,41 @@ def brain_dashboard():
 
 @flask_app.route("/v2")
 def dashboard_v2():
-    """Serve the new Leadership Dashboard (layered architecture)."""
+    """Serve the Leadership Dashboard v2."""
     v2_path = DATA_DIR / "dashboard_v2.html"
     return send_file(v2_path)
+
+
+@flask_app.route("/v3")
+def dashboard_v3():
+    """Serve the 3-layer dashboard (human-first, depth-on-demand)."""
+    v3_path = DATA_DIR / "dashboard_v3.html"
+    return send_file(v3_path)
+
+
+@flask_app.route("/next")
+@flask_app.route("/vnext")
+def dashboard_vnext():
+    """Serve the vNext dashboard (Project State Engine - minimalist)."""
+    vnext_path = DATA_DIR / "dashboard_vnext.html"
+    return send_file(vnext_path)
+
+
+@flask_app.route("/app")
+def dashboard_app():
+    """Serve the compact app dashboard (for native window)."""
+    app_path = DATA_DIR / "dashboard_app.html"
+    return send_file(app_path)
+
+
+@flask_app.route("/logo.png")
+def serve_logo():
+    """Serve the FixOnce logo."""
+    logo_path = DATA_DIR / "logo.png"
+    if logo_path.exists():
+        return send_file(logo_path, mimetype='image/png')
+    # Fallback - return 404
+    return "Logo not found", 404
 
 
 @flask_app.route("/test")
@@ -103,6 +135,13 @@ def test_site():
     """Serve the comprehensive test site."""
     test_path = PROJECT_DIR / "tests" / "test-site" / "index.html"
     return send_file(test_path)
+
+
+@flask_app.route("/test/brutal")
+def brutal_test_site():
+    """Serve brutal adversarial test harness."""
+    brutal_path = PROJECT_DIR / "tests" / "brutal" / "brutal_test.html"
+    return send_file(brutal_path)
 
 
 @flask_app.route("/demo")
@@ -536,23 +575,30 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--flask-only", action="store_true", help="Run Flask server only (no MCP)")
+    parser.add_argument("--minimized", action="store_true", help="Start minimized (for Windows startup)")
+    parser.add_argument("--quiet", "-q", action="store_true", help="Suppress startup messages")
     args = parser.parse_args()
 
     # Initialize databases
     init_all_databases()
 
-    print("=" * 60)
-    print(f"  {APP_NAME} v{VERSION} - AI Memory Layer")
-    print("=" * 60)
-    print()
-    print(f"🔥 Flask API: http://localhost:{ACTUAL_PORT}")
-    print(f"📊 Dashboard: http://localhost:{ACTUAL_PORT}/")
-    print("🤖 MCP Tools: get_console_errors, check_mission_log, save_solution")
-    print()
-    if SEMANTIC_ENABLED:
-        print("🧠 Semantic Engine: ENABLED (TF-IDF + Cosine Similarity)")
-    print()
-    print("=" * 60)
+    # Skip banner in quiet/minimized mode
+    if not args.quiet and not args.minimized:
+        print("=" * 60)
+        print(f"  {APP_NAME} v{VERSION} - AI Memory Layer")
+        print("=" * 60)
+        print()
+        print(f"🔥 Flask API: http://localhost:{ACTUAL_PORT}")
+        print(f"📊 Dashboard: http://localhost:{ACTUAL_PORT}/")
+        print("🤖 MCP Tools: get_console_errors, check_mission_log, save_solution")
+        print()
+        if SEMANTIC_ENABLED:
+            print("🧠 Semantic Engine: ENABLED (TF-IDF + Cosine Similarity)")
+        print()
+        print("=" * 60)
+    elif args.minimized:
+        # Minimized mode - just log to file, no console output
+        print(f"FixOnce started on port {ACTUAL_PORT}")
 
     if args.flask_only or not MCP_AVAILABLE:
         if not MCP_AVAILABLE:

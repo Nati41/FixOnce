@@ -282,9 +282,878 @@
             line-height: 1.45;
         }
 
+        .identity-card {
+            padding: 16px 18px;
+        }
+
+        .identity-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 14px;
+        }
+
+        .identity-item {
+            min-width: 0;
+        }
+
+        .identity-item-wide {
+            grid-column: 1 / -1;
+        }
+
+        .identity-key {
+            font-size: 0.66rem;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .identity-val {
+            font-size: 0.84rem;
+            color: var(--text-primary);
+            line-height: 1.35;
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .identity-row {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .identity-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .identity-tag {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .semantic-badge {
+            font-size: 0.6rem;
+            color: var(--accent-blue);
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(123, 156, 255, 0.15);
+            margin-right: 6px;
+            font-weight: 500;
+        }
+
+        .identity-learnings {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .learning-item {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: rgba(123, 156, 255, 0.08);
+            border-right: 3px solid var(--accent-blue);
+            line-height: 1.4;
+        }
+
+        .signature-tags .identity-tag {
+            background: rgba(123, 156, 255, 0.12);
+            border-color: rgba(123, 156, 255, 0.25);
+            color: var(--accent-blue);
+            font-weight: 500;
+        }
+
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
+        }
+
+        /* ===== NEW WIDGETS ===== */
+
+        /* Widget Row (2 widgets side by side) */
+        .widget-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .widget-card {
+            flex: 1;
+            background: var(--bg-glass);
+            backdrop-filter: var(--blur);
+            -webkit-backdrop-filter: var(--blur);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+        }
+
+        .widget-title {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .widget-title-icon {
+            font-size: 0.8rem;
+        }
+
+        /* Multi-AI Widget */
+        .ai-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .ai-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .ai-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-green);
+        }
+
+        .ai-dot.inactive {
+            background: var(--text-muted);
+        }
+
+        .ai-handoffs {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* AI Timeline Widget */
+        .ai-timeline-widget {
+            background: var(--bg-glass);
+            backdrop-filter: var(--blur);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .ai-timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .ai-timeline-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .ai-timeline-period {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+        }
+
+        /* Timeline Track */
+        .ai-timeline-track {
+            position: relative;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .ai-timeline-segment {
+            position: absolute;
+            top: 4px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 500;
+            color: white;
+            min-width: 40px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .ai-timeline-segment:hover {
+            transform: scaleY(1.1);
+            z-index: 10;
+        }
+
+        .ai-timeline-segment.claude {
+            background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+        }
+
+        .ai-timeline-segment.cursor {
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+        }
+
+        .ai-timeline-segment.windsurf {
+            background: linear-gradient(135deg, #0891b2 0%, #22d3ee 100%);
+        }
+
+        .ai-timeline-segment.unknown {
+            background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%);
+        }
+
+        /* Handoff Marker */
+        .ai-timeline-handoff {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: var(--accent-yellow);
+            z-index: 5;
+        }
+
+        .ai-timeline-handoff::after {
+            content: '↔';
+            position: absolute;
+            top: -16px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.7rem;
+            color: var(--accent-yellow);
+        }
+
+        /* Time Labels */
+        .ai-timeline-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+
+        .ai-timeline-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+        }
+
+        /* AI Stats */
+        .ai-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 10px;
+        }
+
+        .ai-stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .ai-stat-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .ai-stat-icon.claude { background: linear-gradient(135deg, #d97706, #f59e0b); }
+        .ai-stat-icon.cursor { background: linear-gradient(135deg, #7c3aed, #a78bfa); }
+        .ai-stat-icon.windsurf { background: linear-gradient(135deg, #0891b2, #22d3ee); }
+
+        .ai-stat-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .ai-stat-name {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .ai-stat-detail {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .ai-stat-time {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-align: left;
+        }
+
+        /* Current AI indicator */
+        .ai-current-badge {
+            font-size: 0.55rem;
+            background: var(--accent-green);
+            color: var(--bg-primary);
+            padding: 1px 5px;
+            border-radius: 4px;
+            margin-right: 4px;
+            font-weight: 600;
+        }
+
+        /* Cross-Project Insights Widget */
+        .cross-project-widget {
+            background: linear-gradient(135deg, rgba(180, 130, 255, 0.08) 0%, rgba(123, 156, 255, 0.08) 100%);
+            border: 1px solid rgba(180, 130, 255, 0.2);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .cross-project-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .cross-project-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .cross-project-stats {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .cross-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-sm);
+            min-width: 60px;
+        }
+
+        .cross-stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .cross-stat-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .cross-insights-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .cross-insight-item {
+            display: flex;
+            gap: 10px;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-sm);
+            border-right: 3px solid var(--accent-blue);
+        }
+
+        .cross-insight-icon {
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .cross-insight-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .cross-insight-text {
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            line-height: 1.4;
+            margin-bottom: 4px;
+        }
+
+        .cross-insight-meta {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .cross-insight-project {
+            background: rgba(180, 130, 255, 0.2);
+            color: #d4b8ff;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+        }
+
+        .cross-timeline {
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+        }
+
+        .cross-timeline-title {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+
+        .cross-timeline-items {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .cross-timeline-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .cross-timeline-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .cross-timeline-dot.fixonce { background: #6fcf97; }
+        .cross-timeline-dot.tetris { background: #f59e0b; }
+        .cross-timeline-dot.test-site { background: #7c3aed; }
+        .cross-timeline-dot.default { background: var(--text-muted); }
+
+        .cross-timeline-project {
+            font-weight: 500;
+            color: var(--text-primary);
+            min-width: 60px;
+        }
+
+        .cross-timeline-action {
+            flex: 1;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .cross-timeline-time {
+            color: var(--text-muted);
+            font-size: 0.65rem;
+        }
+
+        /* ROI Widget - Enhanced */
+        .roi-widget-full {
+            background: linear-gradient(135deg, rgba(111, 207, 151, 0.08) 0%, rgba(123, 156, 255, 0.08) 100%);
+            border: 1px solid rgba(111, 207, 151, 0.2);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .roi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .roi-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .roi-period {
+            font-size: 0.65rem;
+            color: var(--accent-blue);
+            background: rgba(123, 156, 255, 0.15);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .roi-hero {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .roi-hero-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-green);
+            line-height: 1;
+        }
+
+        .roi-hero-unit {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .roi-hero-change {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 6px;
+            margin-right: auto;
+        }
+
+        .roi-hero-change.positive {
+            color: var(--accent-green);
+            background: rgba(111, 207, 151, 0.15);
+        }
+
+        .roi-hero-change.negative {
+            color: var(--accent-red);
+            background: rgba(235, 87, 87, 0.15);
+        }
+
+        .roi-bars {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .roi-bar-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .roi-bar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .roi-bar-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .roi-bar-value {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .roi-bar-track {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .roi-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        .roi-bar-fill.time { background: linear-gradient(90deg, var(--accent-green), #4ade80); }
+        .roi-bar-fill.reused { background: linear-gradient(90deg, var(--accent-blue), #60a5fa); }
+        .roi-bar-fill.prevented { background: linear-gradient(90deg, var(--accent-yellow), #fbbf24); }
+
+        .roi-money {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            background: rgba(111, 207, 151, 0.1);
+            border-radius: var(--radius-sm);
+            margin-bottom: 12px;
+        }
+
+        .roi-money-icon {
+            font-size: 1.2rem;
+        }
+
+        .roi-money-text {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .roi-money-value {
+            font-weight: 600;
+            color: var(--accent-green);
+        }
+
+        .roi-story {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            padding: 10px 12px;
+            background: rgba(123, 156, 255, 0.08);
+            border-radius: var(--radius-sm);
+            border-right: 3px solid var(--accent-blue);
+            line-height: 1.4;
+        }
+
+        .roi-story-highlight {
+            color: var(--accent-blue);
+            font-weight: 500;
+        }
+
+        /* Keep old classes for backward compatibility */
+        .roi-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .roi-stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+        }
+
+        .roi-label {
+            color: var(--text-muted);
+        }
+
+        .roi-value {
+            color: var(--accent-green);
+            font-weight: 600;
+        }
+
+        .roi-value.highlight {
+            color: var(--accent-yellow);
+        }
+
+        /* Projects Grid */
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .project-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .project-card:hover {
+            background: var(--bg-glass-hover);
+            border-color: var(--border-bright);
+        }
+
+        .project-card.active {
+            border-color: var(--accent-green);
+            background: rgba(111, 207, 151, 0.08);
+        }
+
+        .project-card-name {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .project-card-status {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .project-status-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+        }
+
+        .project-status-dot.active { background: var(--accent-green); }
+        .project-status-dot.recent { background: var(--accent-yellow); }
+        .project-status-dot.stale { background: var(--text-muted); }
+
+        .project-card-counts {
+            display: flex;
+            gap: 6px;
+            font-size: 0.6rem;
+            color: var(--text-muted);
+        }
+
+        .project-semantic-badge {
+            font-size: 0.55rem;
+            color: var(--accent-blue);
+            background: rgba(123, 156, 255, 0.15);
+            padding: 1px 4px;
+            border-radius: 3px;
+            margin-top: 4px;
+            display: inline-block;
+        }
+
+        /* Knowledge Widget */
+        .knowledge-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .knowledge-stat {
+            text-align: center;
+        }
+
+        .knowledge-stat-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .knowledge-stat-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+        }
+
+        .knowledge-learnings {
+            border-top: 1px solid var(--border);
+            padding-top: 8px;
+        }
+
+        .knowledge-learning {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+
+        .knowledge-learning:last-child {
+            border-bottom: none;
+        }
+
+        .learning-icon {
+            color: var(--accent-yellow);
+            flex-shrink: 0;
+        }
+
+        .learning-importance {
+            font-size: 0.55rem;
+            color: var(--accent-blue);
+            margin-right: 4px;
+        }
+
+        /* Environment Widget */
+        .env-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .env-item {
+            font-size: 0.7rem;
+        }
+
+        .env-label {
+            color: var(--text-muted);
+            font-size: 0.6rem;
+        }
+
+        .env-value {
+            color: var(--text-secondary);
+            font-family: monospace;
+        }
+
+        .env-ports {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .env-port {
+            background: rgba(123, 156, 255, 0.15);
+            color: var(--accent-blue);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-family: monospace;
+        }
+
+        /* Collapsible sections */
+        .widget-section {
+            margin-bottom: 12px;
+        }
+
+        .widget-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 8px 0;
+        }
+
+        .widget-section-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .widget-section-toggle {
+            font-size: 0.6rem;
+            color: var(--text-muted);
         }
 
         /* Section labels */
@@ -1141,27 +2010,224 @@
                 <span class="session-timer" id="session-timer">—</span>
             </div>
             <div class="header-actions">
-                <button class="icon-btn" onclick="refreshData()" title="רענן">↻</button>
+                <button class="icon-btn" onclick="refreshData()" title="Refresh">↻</button>
             </div>
         </div>
 
         <!-- Project Dropdown -->
         <div class="project-dropdown" id="project-dropdown"></div>
 
-        <!-- Now Card (Immediate project state) -->
-        <div class="main-card now-card" id="now-card">
-            <div class="section-label">עכשיו</div>
-            <div class="now-primary" id="now-primary">טוען מצב נוכחי...</div>
-            <div class="now-secondary" id="now-secondary">—</div>
+        <!-- ===== NEW WIDGETS ===== -->
+
+        <!-- AI Timeline Widget -->
+        <div class="ai-timeline-widget" id="widget-ai-timeline">
+            <div class="ai-timeline-header">
+                <div class="ai-timeline-title">
+                    <span>🤖</span>
+                    <span>AI Timeline</span>
+                </div>
+                <span class="ai-timeline-period" id="ai-timeline-period">Today</span>
+            </div>
+
+            <!-- Visual Timeline Track -->
+            <div class="ai-timeline-track" id="ai-timeline-track">
+                <!-- Segments filled by JS -->
+            </div>
+
+            <!-- Time Labels -->
+            <div class="ai-timeline-labels">
+                <span class="ai-timeline-label" id="timeline-start">00:00</span>
+                <span class="ai-timeline-label" id="timeline-now">Now</span>
+            </div>
+
+            <!-- AI Stats Cards -->
+            <div class="ai-stats-grid" id="ai-stats-grid">
+                <!-- Filled by JS -->
+            </div>
         </div>
 
-        <!-- Main Card (Focus Mode) -->
+        <!-- ROI Widget - Enhanced Full Width -->
+        <div class="roi-widget-full" id="widget-roi">
+            <div class="roi-header">
+                <div class="roi-title">
+                    <span>💰</span>
+                    <span>Value Created</span>
+                </div>
+                <span class="roi-period" id="roi-period">Today</span>
+            </div>
+
+            <!-- Hero Stat -->
+            <div class="roi-hero">
+                <span class="roi-hero-value" id="roi-hero-time">0</span>
+                <span class="roi-hero-unit">minutes saved</span>
+                <span class="roi-hero-change positive" id="roi-change">—</span>
+            </div>
+
+            <!-- Progress Bars -->
+            <div class="roi-bars">
+                <div class="roi-bar-item">
+                    <div class="roi-bar-header">
+                        <span class="roi-bar-label">⏱ Time Saved</span>
+                        <span class="roi-bar-value" id="roi-time-value">0 min</span>
+                    </div>
+                    <div class="roi-bar-track">
+                        <div class="roi-bar-fill time" id="roi-time-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="roi-bar-item">
+                    <div class="roi-bar-header">
+                        <span class="roi-bar-label">🔄 Solutions Reused</span>
+                        <span class="roi-bar-value" id="roi-reused-value">0</span>
+                    </div>
+                    <div class="roi-bar-track">
+                        <div class="roi-bar-fill reused" id="roi-reused-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="roi-bar-item">
+                    <div class="roi-bar-header">
+                        <span class="roi-bar-label">🛡️ Bugs Prevented</span>
+                        <span class="roi-bar-value" id="roi-prevented-value">0</span>
+                    </div>
+                    <div class="roi-bar-track">
+                        <div class="roi-bar-fill prevented" id="roi-prevented-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Money Saved -->
+            <div class="roi-money">
+                <span class="roi-money-icon">💵</span>
+                <span class="roi-money-text">Estimated savings: <span class="roi-money-value" id="roi-money">~$0</span></span>
+            </div>
+
+            <!-- Story -->
+            <div class="roi-story" id="roi-story">
+                <span class="roi-story-highlight">Tip:</span> Use search_past_solutions more to increase savings
+            </div>
+        </div>
+
+        <!-- Projects Grid Widget -->
+        <div class="widget-section" id="widget-projects-section">
+            <div class="widget-section-header" onclick="toggleSection('projects')">
+                <div class="widget-section-title">
+                    <span>📁</span>
+                    <span>Projects</span>
+                    <span id="projects-count-badge" style="font-size:0.6rem; color:var(--text-muted);">(0)</span>
+                </div>
+                <span class="widget-section-toggle" id="projects-toggle">▼</span>
+            </div>
+            <div class="projects-grid" id="projects-grid">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+
+        <!-- Knowledge Base Widget -->
+        <div class="widget-card" id="widget-knowledge" style="margin-bottom: 12px;">
+            <div class="widget-title">
+                <span class="widget-title-icon">🔍</span>
+                <span>Knowledge Base</span>
+                <button onclick="openOverlay('search')" style="margin-right: auto; background: rgba(123,156,255,0.15); border: none; color: var(--accent-blue); padding: 2px 8px; border-radius: 4px; font-size: 0.6rem; cursor: pointer;">Search</button>
+            </div>
+            <div class="knowledge-stats">
+                <div class="knowledge-stat">
+                    <div class="knowledge-stat-value" id="knowledge-insights">0</div>
+                    <div class="knowledge-stat-label">Insights</div>
+                </div>
+                <div class="knowledge-stat">
+                    <div class="knowledge-stat-value" id="knowledge-decisions">0</div>
+                    <div class="knowledge-stat-label">Decisions</div>
+                </div>
+                <div class="knowledge-stat">
+                    <div class="knowledge-stat-value" id="knowledge-avoids">0</div>
+                    <div class="knowledge-stat-label">Avoids</div>
+                </div>
+                <div class="knowledge-stat">
+                    <div class="knowledge-stat-value" id="knowledge-indexed">0</div>
+                    <div class="knowledge-stat-label">Indexed</div>
+                </div>
+            </div>
+            <div class="knowledge-learnings" id="knowledge-learnings">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+
+        <!-- Environment Widget -->
+        <div class="widget-card" id="widget-environment" style="margin-bottom: 12px;">
+            <div class="widget-title">
+                <span class="widget-title-icon">🌐</span>
+                <span>Environment</span>
+            </div>
+            <div class="env-grid">
+                <div class="env-item">
+                    <div class="env-label">Stack</div>
+                    <div class="env-value" id="env-stack">—</div>
+                </div>
+                <div class="env-item">
+                    <div class="env-label">Stage</div>
+                    <div class="env-value" id="env-stage">—</div>
+                </div>
+                <div class="env-item">
+                    <div class="env-label">Ports</div>
+                    <div class="env-ports" id="env-ports">—</div>
+                </div>
+                <div class="env-item">
+                    <div class="env-label">Env</div>
+                    <div class="env-value" id="env-mode">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cross-Project Insights Widget -->
+        <div class="cross-project-widget" id="widget-cross-project">
+            <div class="cross-project-header">
+                <div class="cross-project-title">
+                    <span>🔗</span>
+                    <span>Cross-Project Insights</span>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="cross-project-stats" id="cross-stats">
+                <div class="cross-stat">
+                    <span class="cross-stat-value" id="cross-projects">0</span>
+                    <span class="cross-stat-label">Projects</span>
+                </div>
+                <div class="cross-stat">
+                    <span class="cross-stat-value" id="cross-insights">0</span>
+                    <span class="cross-stat-label">Insights</span>
+                </div>
+                <div class="cross-stat">
+                    <span class="cross-stat-value" id="cross-decisions">0</span>
+                    <span class="cross-stat-label">Decisions</span>
+                </div>
+            </div>
+
+            <!-- Top Insights -->
+            <div class="cross-insights-list" id="cross-insights-list">
+                <!-- Filled by JS -->
+            </div>
+
+            <!-- Recent Activity Timeline -->
+            <div class="cross-timeline">
+                <div class="cross-timeline-title">Recent Activity Across Projects</div>
+                <div class="cross-timeline-items" id="cross-timeline-items">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== END NEW WIDGETS ===== -->
+
+        <!-- Focus Card (Combined goal + status) -->
         <div class="main-card" id="main-card">
-            <div class="section-label">מטרה נוכחית</div>
-            <div class="goal" id="goal">טוען...</div>
+            <div class="now-primary" id="now-primary" style="font-size: 0.85rem; margin-bottom: 10px;">Loading...</div>
+
+            <div class="section-label">Current Goal</div>
+            <div class="goal" id="goal">Loading...</div>
+
+            <div class="now-secondary" id="now-secondary" style="font-size: 0.78rem; color: var(--text-secondary); margin: 8px 0 12px;">—</div>
 
             <div class="target" id="target" style="display: none;">
-                <div class="section-label">צעד הבא</div>
                 <div style="display: flex; align-items: flex-start; gap: 8px;">
                     <span class="target-icon">→</span>
                     <span class="target-text" id="target-text"></span>
@@ -1172,15 +2238,15 @@
             <div class="stats-row">
                 <div class="stat-item">
                     <span class="stat-value ok" id="stat-health">✓</span>
-                    <span class="stat-label">מצב</span>
+                    <span class="stat-label">Status</span>
                 </div>
-                <div class="stat-item clickable" onclick="openOverlay('decisions')" title="החלטות">
+                <div class="stat-item clickable" onclick="openOverlay('decisions')" title="Decisions">
                     <span class="stat-value" id="stat-decisions">0</span>
-                    <span class="stat-label">החלטות</span>
+                    <span class="stat-label">Decisions</span>
                 </div>
-                <div class="stat-item clickable" onclick="openOverlay('debug-sessions')" title="בעיות שנפתרו">
+                <div class="stat-item clickable" onclick="openOverlay('debug-sessions')" title="Resolved">
                     <span class="stat-value" id="stat-resolved">0</span>
-                    <span class="stat-label">נפתרו</span>
+                    <span class="stat-label">Resolved</span>
                 </div>
             </div>
         </div>
@@ -1189,7 +2255,7 @@
         <div class="error-card" id="error-card">
             <div class="error-header">
                 <span class="error-icon">⚠️</span>
-                <span class="error-title">דורש טיפול</span>
+                <span class="error-title">Needs Attention</span>
             </div>
 
             <div class="error-message" id="error-message">-</div>
@@ -1200,8 +2266,8 @@
             </div>
 
             <div class="error-actions">
-                <button class="error-btn primary" onclick="sendErrorToAI()">🤖 שלח לבינה</button>
-                <button class="error-btn secondary" onclick="handleError()">✓ טופל</button>
+                <button class="error-btn primary" onclick="sendErrorToAI()">🤖 Send to AI</button>
+                <button class="error-btn secondary" onclick="handleError()">✓ Handled</button>
                 <button class="error-btn secondary" onclick="dismissError()">✕</button>
             </div>
         </div>
@@ -1209,14 +2275,14 @@
         <!-- Inline Activity Feed -->
         <div class="main-card feed" id="inline-feed">
             <div class="feed-header">
-                <span class="feed-label">סיפור עבודה</span>
-                <button class="feed-all" onclick="openOverlay('history')">כל ההיסטוריה →</button>
+                <span class="feed-label">Activity Feed</span>
+                <button class="feed-all" onclick="openOverlay('history')">All History →</button>
             </div>
             <div id="feed-items">
                 <div class="feed-item">
                     <div class="feed-dot default">·</div>
                     <div class="feed-body">
-                        <div class="feed-text" style="color: var(--text-muted)">טוען...</div>
+                        <div class="feed-text" style="color: var(--text-muted)">Loading...</div>
                     </div>
                 </div>
             </div>
@@ -1227,40 +2293,40 @@
             <div class="more-menu-container">
                 <button class="action-btn" onclick="toggleMoreMenu()">
                     <span>📋</span>
-                    <span>עוד</span>
+                    <span>More</span>
                     <span class="more-badge" id="more-badge" style="display: none;">0</span>
                     <span class="dropdown-arrow">▼</span>
                 </button>
                 <div class="more-menu" id="more-menu">
-                    <div class="more-menu-headline" id="more-menu-headline">בחר פעולה</div>
-                    <div class="more-menu-section-label">פעולות מהירות</div>
+                    <div class="more-menu-headline" id="more-menu-headline">Choose Action</div>
+                    <div class="more-menu-section-label">Quick Actions</div>
                     <div class="more-menu-item" onclick="openOverlay('insight'); closeMoreMenu();">
                         <span class="more-menu-icon">➕</span>
-                        <span>תובנה</span>
+                        <span>Insight</span>
                     </div>
                     <div class="more-menu-item" onclick="openOverlay('search'); closeMoreMenu();">
                         <span class="more-menu-icon">🔍</span>
-                        <span>חפש בזיכרון</span>
+                        <span>Search Memory</span>
                     </div>
                     <div class="more-menu-item" onclick="openOverlay('history'); closeMoreMenu();">
                         <span class="more-menu-icon">📜</span>
-                        <span>היסטוריה</span>
+                        <span>History</span>
                     </div>
                     <div class="more-menu-divider"></div>
-                    <div class="more-menu-section-label">ניהול ידע</div>
+                    <div class="more-menu-section-label">Knowledge Management</div>
                     <div class="more-menu-item" onclick="openOverlay('decisions'); closeMoreMenu();">
                         <span class="more-menu-icon">⚖️</span>
-                        <span>החלטות פעילות</span>
+                        <span>Active Decisions</span>
                         <span class="menu-badge" id="decisions-badge">0</span>
                     </div>
                     <div class="more-menu-item" onclick="openOverlay('avoid'); closeMoreMenu();">
                         <span class="more-menu-icon">🚫</span>
-                        <span>מה להימנע</span>
+                        <span>What to Avoid</span>
                         <span class="menu-badge" id="avoid-badge">0</span>
                     </div>
                     <div class="more-menu-item" onclick="openOverlay('debug-sessions'); closeMoreMenu();">
                         <span class="more-menu-icon">🐛</span>
-                        <span>בעיות שנפתרו</span>
+                        <span>Resolved Issues</span>
                         <span class="menu-badge" id="debug-sessions-badge">0</span>
                     </div>
                 </div>
@@ -1274,26 +2340,26 @@
     <!-- History Panel (side) -->
     <div class="overlay" id="overlay-history">
         <div class="overlay-header">
-            <div class="overlay-title" id="history-title">היסטוריה</div>
+            <div class="overlay-title" id="history-title">History</div>
             <button class="overlay-close" onclick="closeOverlay('history')">×</button>
         </div>
         <div class="overlay-content" id="history-content">
-            <div class="history-empty">טוען...</div>
+            <div class="history-empty">Loading...</div>
         </div>
     </div>
 
     <!-- Search Overlay -->
     <div class="overlay" id="overlay-search">
         <div class="overlay-header">
-            <div class="overlay-title">חיפוש פתרונות</div>
+            <div class="overlay-title">Search Solutions</div>
             <button class="overlay-close" onclick="closeOverlay('search')">×</button>
         </div>
         <div class="overlay-content">
             <input type="text" class="search-input" id="search-input"
-                   placeholder="חפש בתובנות והחלטות..."
+                   placeholder="Search insights and decisions..."
                    oninput="handleSearch(this.value)">
             <div class="search-results" id="search-results">
-                <div class="history-empty">הקלד לחיפוש...</div>
+                <div class="history-empty">Type to search...</div>
             </div>
         </div>
     </div>
@@ -1301,14 +2367,14 @@
     <!-- Add Insight Overlay (full screen) -->
     <div class="overlay full-overlay" id="overlay-insight">
         <div class="overlay-header">
-            <div class="overlay-title">שמור תובנה</div>
+            <div class="overlay-title">Save Insight</div>
             <button class="overlay-close" onclick="closeOverlay('insight')">×</button>
         </div>
         <div class="overlay-content">
             <textarea class="insight-textarea" id="insight-input"
-                      placeholder="מה למדת? מה עבד? מה לא עבד?"></textarea>
+                      placeholder="What did you learn? What worked? What didn't?"></textarea>
             <button class="save-btn" id="save-insight-btn" onclick="saveInsight()">
-                שמור תובנה
+                Save Insight
             </button>
         </div>
     </div>
@@ -1316,33 +2382,33 @@
     <!-- Decisions Panel (side) -->
     <div class="overlay" id="overlay-decisions">
         <div class="overlay-header">
-            <div class="overlay-title">החלטות פעילות</div>
+            <div class="overlay-title">Active Decisions</div>
             <button class="overlay-close" onclick="closeOverlay('decisions')">×</button>
         </div>
         <div class="overlay-content" id="decisions-content">
-            <div class="history-empty">טוען...</div>
+            <div class="history-empty">Loading...</div>
         </div>
     </div>
 
     <!-- Avoid Panel (side) -->
     <div class="overlay" id="overlay-avoid">
         <div class="overlay-header">
-            <div class="overlay-title">מה להימנע</div>
+            <div class="overlay-title">What to Avoid</div>
             <button class="overlay-close" onclick="closeOverlay('avoid')">×</button>
         </div>
         <div class="overlay-content" id="avoid-content">
-            <div class="history-empty">טוען...</div>
+            <div class="history-empty">Loading...</div>
         </div>
     </div>
 
     <!-- Debug Sessions Panel -->
     <div class="overlay" id="overlay-debug-sessions">
         <div class="overlay-header">
-            <div class="overlay-title">🐛 בעיות שנפתרו</div>
+            <div class="overlay-title">🐛 Resolved Issues</div>
             <button class="overlay-close" onclick="closeOverlay('debug-sessions')">×</button>
         </div>
         <div class="overlay-content" id="debug-sessions-content">
-            <div class="history-empty">טוען...</div>
+            <div class="history-empty">Loading...</div>
         </div>
     </div>
 
@@ -1372,14 +2438,491 @@
             return false;
         }
 
+        // ===== NEW WIDGETS UPDATE FUNCTIONS =====
+
+        let _lastSnapshot = null;
+        let _sectionStates = { projects: true };  // Track collapsed sections
+
+        function toggleSection(section) {
+            _sectionStates[section] = !_sectionStates[section];
+            const toggle = document.getElementById(section + '-toggle');
+            const grid = document.getElementById(section + '-grid');
+            if (toggle) toggle.textContent = _sectionStates[section] ? '▼' : '▶';
+            if (grid) grid.style.display = _sectionStates[section] ? 'grid' : 'none';
+        }
+
+        function updateMultiAIWidget(snapshot) {
+            // This function now updates the AI Timeline widget
+            updateAITimeline(snapshot);
+        }
+
+        function updateAITimeline(snapshot) {
+            const track = document.getElementById('ai-timeline-track');
+            const statsGrid = document.getElementById('ai-stats-grid');
+            const periodEl = document.getElementById('ai-timeline-period');
+            const startLabel = document.getElementById('timeline-start');
+
+            if (!track || !statsGrid) return;
+
+            const activeAIs = snapshot.active_ais || [];
+            const handoffs = snapshot.ai_handoffs || [];
+            const activities = snapshot.activity || [];
+
+            const now = new Date();
+            const todayStart = new Date(now);
+            todayStart.setHours(0, 0, 0, 0);
+
+            // Build AI session data from activities and active_ais
+            const aiSessions = {};
+            const aiContributions = {};
+
+            // Process activities to count contributions per AI
+            // Skip 'unknown' entries - they don't add value
+            activities.forEach(act => {
+                let actor = (act.actor || act.editor || '').toLowerCase();
+                // Skip unknown/empty actors
+                if (!actor || actor === 'unknown' || actor === 'both') return;
+
+                if (!aiContributions[actor]) {
+                    aiContributions[actor] = { edits: 0, tools: new Set(), firstSeen: null, lastSeen: null };
+                }
+                aiContributions[actor].edits++;
+                if (act.tool) aiContributions[actor].tools.add(act.tool);
+
+                const ts = new Date(act.timestamp);
+                if (!aiContributions[actor].firstSeen || ts < aiContributions[actor].firstSeen) {
+                    aiContributions[actor].firstSeen = ts;
+                }
+                if (!aiContributions[actor].lastSeen || ts > aiContributions[actor].lastSeen) {
+                    aiContributions[actor].lastSeen = ts;
+                }
+            });
+
+            // Process active_ais for current sessions
+            activeAIs.forEach(ai => {
+                const name = (ai.editor || ai.id || '').toLowerCase();
+                if (!name || name === 'unknown') return;
+
+                if (!aiSessions[name]) {
+                    aiSessions[name] = [];
+                }
+                aiSessions[name].push({
+                    start: new Date(ai.started_at),
+                    end: new Date(ai.last_activity || now),
+                    active: (now - new Date(ai.last_activity || 0)) < 5 * 60 * 1000
+                });
+            });
+
+            // Calculate timeline range (today or last 24h)
+            const timelineStart = todayStart;
+            const timelineEnd = now;
+            const totalMs = timelineEnd - timelineStart;
+
+            // Clear and build track
+            track.innerHTML = '';
+
+            // Create segments for each AI
+            Object.entries(aiSessions).forEach(([aiName, sessions]) => {
+                sessions.forEach(session => {
+                    const segStart = Math.max(session.start.getTime(), timelineStart.getTime());
+                    const segEnd = Math.min(session.end.getTime(), timelineEnd.getTime());
+
+                    if (segEnd > segStart) {
+                        const leftPercent = ((segStart - timelineStart.getTime()) / totalMs) * 100;
+                        const widthPercent = ((segEnd - segStart) / totalMs) * 100;
+
+                        const segment = document.createElement('div');
+                        segment.className = `ai-timeline-segment ${aiName}`;
+                        segment.style.left = `${leftPercent}%`;
+                        segment.style.width = `${Math.max(widthPercent, 5)}%`;
+
+                        const displayName = aiName.charAt(0).toUpperCase() + aiName.slice(1);
+                        const durationMin = Math.round((segEnd - segStart) / 60000);
+
+                        segment.innerHTML = session.active ?
+                            `<span class="ai-current-badge">LIVE</span>${displayName}` :
+                            displayName;
+                        segment.title = `${displayName}: ${durationMin} min`;
+
+                        track.appendChild(segment);
+                    }
+                });
+            });
+
+            // Add handoff markers
+            handoffs.forEach(h => {
+                const ts = new Date(h.timestamp).getTime();
+                if (ts >= timelineStart.getTime() && ts <= timelineEnd.getTime()) {
+                    const leftPercent = ((ts - timelineStart.getTime()) / totalMs) * 100;
+                    const marker = document.createElement('div');
+                    marker.className = 'ai-timeline-handoff';
+                    marker.style.left = `${leftPercent}%`;
+                    marker.title = `Handoff: ${h.from} → ${h.to}`;
+                    track.appendChild(marker);
+                }
+            });
+
+            // If no sessions, show placeholder
+            if (track.children.length === 0) {
+                track.innerHTML = '<div style="color: var(--text-muted); font-size: 0.7rem; display: flex; align-items: center; justify-content: center; height: 100%;">No AI activity today</div>';
+            }
+
+            // Update time labels
+            if (startLabel) {
+                startLabel.textContent = todayStart.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            }
+
+            // Build stats grid - exclude unknown
+            const allAIs = new Set([
+                ...Object.keys(aiSessions),
+                ...Object.keys(aiContributions)
+            ]);
+            allAIs.delete('unknown');
+            allAIs.delete('both');
+            allAIs.delete('');
+
+            if (allAIs.size === 0) {
+                statsGrid.innerHTML = '<div style="color: var(--text-muted); font-size: 0.7rem;">No AI data available</div>';
+                return;
+            }
+
+            statsGrid.innerHTML = Array.from(allAIs).map(aiName => {
+                const contrib = aiContributions[aiName] || { edits: 0, tools: new Set() };
+                const sessions = aiSessions[aiName] || [];
+
+                // Calculate total time
+                let totalMinutes = 0;
+                sessions.forEach(s => {
+                    totalMinutes += Math.round((s.end - s.start) / 60000);
+                });
+
+                // Check if currently active
+                const isActive = sessions.some(s => s.active);
+
+                const displayName = aiName.charAt(0).toUpperCase() + aiName.slice(1);
+                const timeDisplay = totalMinutes > 60 ?
+                    `${Math.floor(totalMinutes/60)}h ${totalMinutes%60}m` :
+                    `${totalMinutes}m`;
+
+                return `
+                    <div class="ai-stat-card">
+                        <div class="ai-stat-icon ${aiName}">
+                            ${displayName.charAt(0)}
+                        </div>
+                        <div class="ai-stat-info">
+                            <div class="ai-stat-name">
+                                ${isActive ? '<span class="ai-current-badge">LIVE</span>' : ''}
+                                ${displayName}
+                            </div>
+                            <div class="ai-stat-detail">
+                                ${contrib.edits} edits • ${contrib.tools.size} tools
+                            </div>
+                        </div>
+                        <div class="ai-stat-time">${timeDisplay}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateROIWidget(snapshot) {
+            const roi = snapshot.roi || {};
+            const knowledge = snapshot.knowledge || {};
+
+            // Values
+            const timeSaved = roi.time_saved_minutes || 0;
+            const reused = roi.solutions_reused || 0;
+            const prevented = roi.errors_prevented || 0;
+            const tokensSaved = roi.tokens_saved || 0;
+            const decisionsRef = roi.decisions_referenced || 0;
+
+            // Calculate money saved (rough: $0.01 per 1000 tokens, + $5 per hour saved)
+            const tokenMoney = tokensSaved * 0.00001;
+            const timeMoney = (timeSaved / 60) * 5; // $5 per hour
+            const totalMoney = tokenMoney + timeMoney;
+
+            // Calculate percentages for bars (max values for visual reference)
+            const maxTime = Math.max(60, timeSaved); // 60 min baseline
+            const maxReused = Math.max(10, reused);
+            const maxPrevented = Math.max(5, prevented);
+
+            const timePercent = Math.min(100, (timeSaved / maxTime) * 100);
+            const reusedPercent = Math.min(100, (reused / maxReused) * 100);
+            const preventedPercent = Math.min(100, (prevented / maxPrevented) * 100);
+
+            // Update hero
+            const heroTime = document.getElementById('roi-hero-time');
+            if (heroTime) heroTime.textContent = timeSaved;
+
+            // Update change badge
+            const changeEl = document.getElementById('roi-change');
+            if (changeEl) {
+                if (timeSaved > 0 || reused > 0) {
+                    const totalActions = reused + prevented + decisionsRef;
+                    changeEl.textContent = `+${totalActions} actions`;
+                    changeEl.className = 'roi-hero-change positive';
+                } else {
+                    changeEl.textContent = 'Start using';
+                    changeEl.className = 'roi-hero-change';
+                }
+            }
+
+            // Update bars
+            const timeValue = document.getElementById('roi-time-value');
+            const timeBar = document.getElementById('roi-time-bar');
+            if (timeValue) timeValue.textContent = timeSaved > 60 ?
+                `${Math.floor(timeSaved/60)}h ${timeSaved%60}m` : `${timeSaved} min`;
+            if (timeBar) timeBar.style.width = timePercent + '%';
+
+            const reusedValue = document.getElementById('roi-reused-value');
+            const reusedBar = document.getElementById('roi-reused-bar');
+            if (reusedValue) reusedValue.textContent = reused;
+            if (reusedBar) reusedBar.style.width = reusedPercent + '%';
+
+            const preventedValue = document.getElementById('roi-prevented-value');
+            const preventedBar = document.getElementById('roi-prevented-bar');
+            if (preventedValue) preventedValue.textContent = prevented;
+            if (preventedBar) preventedBar.style.width = preventedPercent + '%';
+
+            // Update money
+            const moneyEl = document.getElementById('roi-money');
+            if (moneyEl) {
+                moneyEl.textContent = totalMoney > 0 ?
+                    `~$${totalMoney.toFixed(2)}` : '~$0';
+            }
+
+            // Update story
+            const storyEl = document.getElementById('roi-story');
+            if (storyEl) {
+                const totalInsights = knowledge.total_insights || 0;
+                const totalDecisions = knowledge.total_decisions || 0;
+
+                if (reused > 0) {
+                    storyEl.innerHTML = `<span class="roi-story-highlight">💡 ${reused} solutions</span> found and reused instead of researching again`;
+                } else if (prevented > 0) {
+                    storyEl.innerHTML = `<span class="roi-story-highlight">🛡️ ${prevented} bugs</span> prevented thanks to past insights`;
+                } else if (totalInsights > 0) {
+                    storyEl.innerHTML = `You have <span class="roi-story-highlight">${totalInsights} insights</span> and <span class="roi-story-highlight">${totalDecisions} decisions</span> ready for reuse`;
+                } else {
+                    storyEl.innerHTML = `<span class="roi-story-highlight">Tip:</span> Use log_decision and search_past_solutions to build value`;
+                }
+            }
+        }
+
+        function updateProjectsWidget(snapshot) {
+            const grid = document.getElementById('projects-grid');
+            const badge = document.getElementById('projects-count-badge');
+            if (!grid) return;
+
+            const projects = snapshot.projects || [];
+            if (badge) badge.textContent = `(${projects.length})`;
+
+            if (projects.length === 0) {
+                grid.innerHTML = '<div style="color: var(--text-muted); font-size: 0.7rem;">No projects found</div>';
+                return;
+            }
+
+            grid.innerHTML = projects.slice(0, 8).map(p => {
+                const statusClass = p.status || 'stale';
+                const counts = p.counts || {};
+                const semantic = p.semantic || {};
+
+                return `<div class="project-card ${statusClass === 'active' ? 'active' : ''}"
+                             onclick="filterByProject('${p.project_id}')">
+                    <div class="project-card-name" title="${p.name}">${p.name}</div>
+                    <div class="project-card-status">
+                        <span class="project-status-dot ${statusClass}"></span>
+                        ${statusClass === 'active' ? 'Active' : statusClass === 'recent' ? 'Recent' : 'Stale'}
+                    </div>
+                    <div class="project-card-counts">
+                        💡${counts.insights || 0} 🔒${counts.decisions || 0} ⚠️${counts.avoids || 0}
+                    </div>
+                    ${semantic.indexed ? `<span class="project-semantic-badge">🔍 ${semantic.doc_count || 0} indexed</span>` : ''}
+                </div>`;
+            }).join('');
+        }
+
+        function filterByProject(projectId) {
+            // TODO: Filter activity feed by project
+            console.log('Filter by project:', projectId);
+            // For now, just highlight in URL or trigger project switch
+        }
+
+        function updateKnowledgeWidget(snapshot) {
+            const knowledge = snapshot.knowledge || {};
+
+            const insightsEl = document.getElementById('knowledge-insights');
+            const decisionsEl = document.getElementById('knowledge-decisions');
+            const avoidsEl = document.getElementById('knowledge-avoids');
+            const indexedEl = document.getElementById('knowledge-indexed');
+            const learningsEl = document.getElementById('knowledge-learnings');
+
+            if (insightsEl) insightsEl.textContent = knowledge.total_insights || 0;
+            if (decisionsEl) decisionsEl.textContent = knowledge.total_decisions || 0;
+            if (avoidsEl) avoidsEl.textContent = knowledge.total_avoids || 0;
+            if (indexedEl) indexedEl.textContent = knowledge.indexed_docs || 0;
+
+            if (learningsEl) {
+                const learnings = knowledge.top_learnings || [];
+                if (learnings.length === 0) {
+                    learningsEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.65rem; padding: 8px 0;">No learnings yet</div>';
+                } else {
+                    learningsEl.innerHTML = learnings.slice(0, 3).map(l => {
+                        const importance = l.importance || 1;
+                        const stars = '★'.repeat(Math.min(importance, 3)) + '☆'.repeat(3 - Math.min(importance, 3));
+                        return `<div class="knowledge-learning">
+                            <span class="learning-icon">💡</span>
+                            <span class="learning-importance">${stars}</span>
+                            <span>${(l.text || '').substring(0, 80)}${l.text?.length > 80 ? '...' : ''}</span>
+                        </div>`;
+                    }).join('');
+                }
+            }
+        }
+
+        function updateEnvironmentWidget(snapshot) {
+            const env = snapshot.environment || {};
+
+            const stackEl = document.getElementById('env-stack');
+            const stageEl = document.getElementById('env-stage');
+            const portsEl = document.getElementById('env-ports');
+            const modeEl = document.getElementById('env-mode');
+
+            if (stackEl) stackEl.textContent = env.stack || '—';
+            if (stageEl) stageEl.textContent = env.stage || '—';
+            if (modeEl) modeEl.textContent = env.env || 'dev';
+
+            if (portsEl) {
+                const ports = env.ports || [];
+                if (ports.length === 0) {
+                    portsEl.textContent = '—';
+                } else {
+                    portsEl.innerHTML = ports.map(p => `<span class="env-port">${p}</span>`).join('');
+                }
+            }
+        }
+
+        async function updateCrossProjectWidget() {
+            const projectsEl = document.getElementById('cross-projects');
+            const insightsEl = document.getElementById('cross-insights');
+            const decisionsEl = document.getElementById('cross-decisions');
+            const insightsList = document.getElementById('cross-insights-list');
+            const timelineItems = document.getElementById('cross-timeline-items');
+
+            try {
+                const res = await fetch(API + '/api/cross-project/insights');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.status !== 'ok') return;
+
+                const stats = data.knowledge_stats || {};
+                const insights = data.global_insights || [];
+                const activity = data.recent_activity || [];
+                const patterns = data.shared_patterns || [];
+
+                // Update stats
+                if (projectsEl) projectsEl.textContent = stats.projects_with_knowledge || 0;
+                if (insightsEl) insightsEl.textContent = stats.total_insights || 0;
+                if (decisionsEl) decisionsEl.textContent = stats.total_decisions || 0;
+
+                // Update insights list
+                if (insightsList) {
+                    const displayInsights = insights.slice(0, 3);
+                    if (displayInsights.length === 0) {
+                        insightsList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.7rem;">No insights yet. Use log_decision and update_live_record to build knowledge.</div>';
+                    } else {
+                        insightsList.innerHTML = displayInsights.map(insight => {
+                            const icon = insight.importance === 'high' ? '⭐' : '💡';
+                            return `
+                                <div class="cross-insight-item">
+                                    <span class="cross-insight-icon">${icon}</span>
+                                    <div class="cross-insight-content">
+                                        <div class="cross-insight-text">${insight.text}</div>
+                                        <div class="cross-insight-meta">
+                                            <span class="cross-insight-project">${insight.project}</span>
+                                            ${insight.timestamp ? `<span>${formatTimeAgo(insight.timestamp)}</span>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                }
+
+                // Update timeline
+                if (timelineItems) {
+                    const displayActivity = activity.slice(0, 5);
+                    if (displayActivity.length === 0) {
+                        timelineItems.innerHTML = '<div style="color: var(--text-muted); font-size: 0.7rem;">No recent activity</div>';
+                    } else {
+                        timelineItems.innerHTML = displayActivity.map(act => {
+                            const projectName = act.project || 'Unknown';
+                            const projectClass = projectName.toLowerCase().replace(/[^a-z]/g, '') || 'default';
+                            return `
+                                <div class="cross-timeline-item">
+                                    <span class="cross-timeline-dot ${projectClass}"></span>
+                                    <span class="cross-timeline-project">${projectName}</span>
+                                    <span class="cross-timeline-action">${act.file || act.tool || 'Activity'}</span>
+                                    <span class="cross-timeline-time">${formatTimeAgo(act.timestamp)}</span>
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                }
+
+            } catch (e) {
+                console.log('Failed to load cross-project insights:', e);
+            }
+        }
+
+        function formatTimeAgo(timestamp) {
+            if (!timestamp) return '';
+            const now = new Date();
+            const then = new Date(timestamp);
+            const diffMs = now - then;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) return 'now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            return `${diffDays}d ago`;
+        }
+
+        async function loadSnapshot() {
+            try {
+                const res = await fetch(API + '/api/dashboard_snapshot');
+                if (!res.ok) return null;
+                const data = await res.json();
+                _lastSnapshot = data.snapshot;
+
+                // Update all widgets
+                updateMultiAIWidget(_lastSnapshot);
+                updateROIWidget(_lastSnapshot);
+                updateProjectsWidget(_lastSnapshot);
+                updateKnowledgeWidget(_lastSnapshot);
+                updateEnvironmentWidget(_lastSnapshot);
+                updateCrossProjectWidget();  // Separate API call
+
+                return _lastSnapshot;
+            } catch (e) {
+                console.error('Failed to load snapshot:', e);
+                return null;
+            }
+        }
+
         // ===== DATA LOADING =====
         let allProjects = [];
         let _lastErrors = [];
         let _lastActivities = [];
+        let _lastIdentity = null;
 
         async function loadData() {
+            // Load new unified snapshot for widgets
+            loadSnapshot();
+
             // Fetch each source independently — failure of one won't block others
-            const [projectJson, errorsJson, activityJson] = await Promise.all([
+            const [projectJson, errorsJson, activityJson, identityJson] = await Promise.all([
                 fetch(API + '/api/projects/grouped')
                     .then(r => r.ok ? r.json() : null)
                     .catch(() => null),
@@ -1389,13 +2932,16 @@
                 fetch(API + '/api/activity/feed?limit=50')
                     .then(r => r.ok ? r.json() : null)
                     .catch(() => null),
+                fetch(API + '/api/memory/identity')
+                    .then(r => r.ok ? r.json() : null)
+                    .catch(() => null),
             ]);
 
             const connected = projectJson !== null || activityJson !== null;
 
             if (!connected) {
-                document.getElementById('header-project-name').textContent = 'לא מחובר';
-                document.getElementById('goal').textContent = 'בדוק שהשרת פועל';
+                document.getElementById('header-project-name').textContent = 'Not Connected';
+                document.getElementById('goal').textContent = 'Check if server is running';
                 return;
             }
 
@@ -1411,6 +2957,7 @@
 
             const errors = errorsJson?.errors || [];
             const activities = activityJson?.activities || [];
+            _lastIdentity = identityJson?.identity || null;
             _lastErrors = errors;
             _lastActivities = activities;
 
@@ -1432,6 +2979,7 @@
             }
 
             updateNowCard(projectData, _lastErrors, _lastActivities);
+            updateIdentityCard(_lastIdentity, projectData);
 
         }
 
@@ -1450,7 +2998,7 @@
 
         function updateHeader(data) {
             // Project name in header
-            document.getElementById('header-project-name').textContent = data?.name || 'אין פרויקט';
+            document.getElementById('header-project-name').textContent = data?.name || 'No Project';
 
             // Editor tag — show all active AIs
             const activeNames = getActiveEditorNames(data);
@@ -1462,6 +3010,23 @@
                 const editor = data?.ai_session?.editor || 'Claude';
                 editorEl.textContent = editor.charAt(0).toUpperCase() + editor.slice(1);
             }
+        }
+
+        // Cache for canonical latest
+        let _cachedCanonicalLatest = null;
+
+        async function fetchCanonicalLatest() {
+            try {
+                const res = await fetch(API + '/api/changes/latest');
+                const data = await res.json();
+                if (data.status === 'ok' && data.canonical_latest) {
+                    _cachedCanonicalLatest = data.canonical_latest;
+                    return data.canonical_latest;
+                }
+            } catch (e) {
+                console.log('Failed to fetch canonical latest:', e);
+            }
+            return null;
         }
 
         function updateNowCard(data, errors, activities) {
@@ -1481,32 +3046,106 @@
             const hasRecentActivity = (activities || []).some(a =>
                 a?.timestamp && (now - new Date(a.timestamp).getTime()) < (10 * 60 * 1000)
             );
-            const latestGroup = groupActivities(activities || []).slice(0, 1)[0];
 
             if ((errors || []).length > 0) {
-                const msg = (errors[0]?.message || 'שגיאה פתוחה').replace(/\s+/g, ' ').trim();
-                primaryEl.textContent = `🔴 יש ${errors.length} שגיאה פתוחה שדורשת טיפול`;
+                const msg = (errors[0]?.message || 'Open error').replace(/\s+/g, ' ').trim();
+                primaryEl.textContent = `🔴 ${errors.length} open error(s) need attention`;
                 secondaryEl.textContent = `${msg.length > 90 ? msg.slice(0, 90) + '...' : msg}`;
                 return;
             }
 
             if (activeNames.length > 0) {
-                primaryEl.textContent = `🟢 ${activeNames.join(' + ')} עובד עכשיו`;
+                primaryEl.textContent = `🟢 ${activeNames.join(' + ')} working now`;
             } else if (sessionEditor && (sessionIsRecent || hasRecentActivity)) {
-                // Fallback when active_ais heartbeat is stale but session/activity is clearly alive
-                primaryEl.textContent = `🟢 ${sessionEditor} פעיל כרגע`;
+                primaryEl.textContent = `🟢 ${sessionEditor} active`;
             } else if (sessionEditor) {
-                primaryEl.textContent = `🟣 ${sessionEditor} מחובר`;
+                primaryEl.textContent = `🟣 ${sessionEditor} connected`;
             } else {
-                primaryEl.textContent = '🟡 אין עבודה פעילה כרגע';
+                primaryEl.textContent = '🟡 No active work right now';
             }
 
-            if (latestGroup) {
-                secondaryEl.textContent = `התקדמות אחרונה: ${storyNarrative(latestGroup)}`;
-            } else if (sessionEditor) {
-                secondaryEl.textContent = 'מחובר לסשן, ממתין לפעילות חדשה';
+            // Use canonical latest (unified source of truth)
+            fetchCanonicalLatest().then(canonical => {
+                if (canonical && canonical.text) {
+                    const sourceIcon = canonical.source === 'activity' ? '📝' :
+                                       canonical.source === 'git' ? '🔀' :
+                                       canonical.source === 'intent' ? '🎯' : '📊';
+                    secondaryEl.textContent = `${sourceIcon} ${canonical.text}`;
+                } else if (sessionEditor) {
+                    secondaryEl.textContent = 'Connected to session, waiting for activity';
+                } else {
+                    secondaryEl.textContent = 'No recent activity to display';
+                }
+            });
+        }
+
+        function renderIdentityTags(elId, items, emptyText) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            if (!items || !items.length) {
+                el.innerHTML = `<span class="identity-tag">${emptyText}</span>`;
+                return;
+            }
+            el.innerHTML = items.slice(0, 5).map(item =>
+                `<span class="identity-tag">${item}</span>`
+            ).join('');
+        }
+
+        function updateIdentityCard(identity, project) {
+            const aboutEl = document.getElementById('identity-about');
+            const goalEl = document.getElementById('identity-goal');
+            const typeEl = document.getElementById('identity-type');
+            const stageEl = document.getElementById('identity-stage');
+            const nextEl = document.getElementById('identity-next');
+            if (!aboutEl || !goalEl || !typeEl || !stageEl || !nextEl) return;
+
+            const safeIdentity = identity || {};
+            const about = safeIdentity.about || project?.summary || (project?.name ? `Project ${project.name}` : 'Active FixOnce Project');
+            const goal = safeIdentity.goal || project?.current_goal || project?.summary || 'No goal defined';
+            const projectType = safeIdentity.project_type || (project?.stack || 'Not classified');
+            const stage = safeIdentity.stage || 'Not classified';
+            const next = safeIdentity.next_step || project?.next_step || 'Not defined';
+
+            aboutEl.textContent = about;
+            goalEl.textContent = goal;
+            typeEl.textContent = projectType;
+            stageEl.textContent = stage;
+            nextEl.textContent = next;
+
+            const decisionTags = (safeIdentity.critical_decisions || [])
+                .map(d => (typeof d === 'string' ? d : d.decision))
+                .filter(Boolean);
+            const riskTags = safeIdentity.sensitive_points || safeIdentity?.structured_memory?.risks || [];
+
+            renderIdentityTags('identity-decisions', decisionTags, 'No critical decisions');
+            renderIdentityTags('identity-risks', riskTags, 'No sensitive points');
+
+            // Semantic identity section
+            const semantic = safeIdentity.semantic || {};
+            const semanticRow = document.getElementById('identity-semantic-row');
+            const signatureRow = document.getElementById('identity-signature-row');
+            const learningsEl = document.getElementById('identity-learnings');
+            const signatureEl = document.getElementById('identity-signature');
+
+            if (semantic.enabled && (semantic.top_learnings?.length || semantic.signature?.length)) {
+                // Show semantic sections
+                if (semantic.top_learnings?.length && semanticRow && learningsEl) {
+                    semanticRow.style.display = 'block';
+                    learningsEl.innerHTML = semantic.top_learnings.slice(0, 3)
+                        .map(l => `<div class="learning-item">💡 ${l}</div>`)
+                        .join('');
+                }
+
+                if (semantic.signature?.length && signatureRow && signatureEl) {
+                    signatureRow.style.display = 'block';
+                    signatureEl.innerHTML = semantic.signature
+                        .map(s => `<span class="identity-tag">${s}</span>`)
+                        .join('');
+                }
             } else {
-                secondaryEl.textContent = 'אין פעילות אחרונה להצגה';
+                // Hide semantic sections if not available
+                if (semanticRow) semanticRow.style.display = 'none';
+                if (signatureRow) signatureRow.style.display = 'none';
             }
         }
 
@@ -1612,18 +3251,18 @@
             const headline = document.getElementById('more-menu-headline');
             if (!headline) return;
             if (avoidCount > 0) {
-                headline.textContent = `יש ${avoidCount} פריטי "להימנע" שכדאי לבדוק`;
+                headline.textContent = `${avoidCount} "Avoid" items to review`;
                 return;
             }
             if (debugCount > 0) {
-                headline.textContent = `יש ${debugCount} בעיות שנפתרו שאפשר למחזר`;
+                headline.textContent = `${debugCount} Resolved Issues to recycle`;
                 return;
             }
             if (decisionsCount > 0) {
-                headline.textContent = `יש ${decisionsCount} החלטות פעילות לפרויקט`;
+                headline.textContent = `${decisionsCount} Active Decisions for this project`;
                 return;
             }
-            headline.textContent = 'בחר פעולה';
+            headline.textContent = 'Choose Action';
         }
 
         function buildProjectDropdown() {
@@ -1676,7 +3315,7 @@
                 const solutionEl = document.getElementById('error-solution');
                 const solutionText = document.getElementById('error-solution-text');
                 if (currentError.solution) {
-                    solutionText.textContent = currentError.solution.text || 'נמצא פתרון קיים';
+                    solutionText.textContent = currentError.solution.text || 'Found existing solution';
                     solutionEl.style.display = 'flex';
                 } else {
                     findSolution(currentError.message);
@@ -1749,9 +3388,9 @@
                 const diffMins = Math.round((now - ts) / 60000);
 
                 let timeLabel;
-                if (diffMins < 1)       timeLabel = 'עכשיו';
-                else if (diffMins < 60) timeLabel = `לפני ${diffMins} דק׳`;
-                else                    timeLabel = `לפני ${Math.floor(diffMins/60)} שע׳`;
+                if (diffMins < 1)       timeLabel = 'now';
+                else if (diffMins < 60) timeLabel = `${diffMins}m ago`;
+                else                    timeLabel = `${Math.floor(diffMins/60)}h ago`;
 
                 const isFresh = diffMins < 3;
                 // Animate only the top item when it's genuinely new (not first render)
@@ -1768,7 +3407,7 @@
                 `;
             }).join('');
 
-            container.innerHTML = html || '<div class="feed-item"><div class="feed-dot default">·</div><div class="feed-body"><div class="feed-text" style="color:var(--text-muted)">אין פעולות עדיין</div></div></div>';
+            container.innerHTML = html || '<div class="feed-item"><div class="feed-dot default">·</div><div class="feed-body"><div class="feed-text" style="color:var(--text-muted)">No activity yet</div></div></div>';
         }
 
         function updateFeedTimes() {
@@ -1777,9 +3416,9 @@
                 const ts = parseInt(el.dataset.ts);
                 const diffMins = Math.round((now - ts) / 60000);
                 let label;
-                if (diffMins < 1)       label = 'עכשיו';
-                else if (diffMins < 60) label = `לפני ${diffMins} דק׳`;
-                else                    label = `לפני ${Math.floor(diffMins/60)} שע׳`;
+                if (diffMins < 1)       label = 'now';
+                else if (diffMins < 60) label = `${diffMins}m ago`;
+                else                    label = `${Math.floor(diffMins/60)}h ago`;
                 const timeEl = el.querySelector('.feed-time-rel');
                 if (timeEl) timeEl.textContent = label;
             });
@@ -1792,30 +3431,30 @@
 
             // Commands
             if (group.tool === null && group.command) {
-                if (group.command.startsWith('git commit')) return 'נשמרה גרסת עבודה חדשה';
-                if (group.command.startsWith('git')) return 'בוצעה פעולת ניהול גרסה';
-                return 'הורצה פקודה לתחזוקת סביבת העבודה';
+                if (group.command.startsWith('git commit')) return 'Saved a new work version';
+                if (group.command.startsWith('git')) return 'Git operation completed';
+                return 'Executed maintenance command';
             }
 
             if (group.tool === 'Write') {
-                if (ctx === 'תצוגה') return `נבנה מסך חדש: ${name}`;
-                if (ctx === 'קוד') return `נוסף רכיב חדש: ${name}`;
-                return `נוצר קובץ חדש: ${name}`;
+                if (ctx === 'ui') return `Built new screen: ${name}`;
+                if (ctx === 'code') return `Added new component: ${name}`;
+                return `Created new file: ${name}`;
             }
 
-            if (ctx === 'קוד') {
+            if (ctx === 'code') {
                 return group.items.length > 1
-                    ? `בוצע רצף שיפורים ב-${name}`
-                    : `עודכן ${name}`;
+                    ? `Multiple improvements to ${name}`
+                    : `Updated ${name}`;
             }
 
-            if (ctx === 'תצוגה') {
+            if (ctx === 'ui') {
                 return group.items.length > 1
-                    ? `שופרה חוויית המשתמש ב-${name}`
-                    : `עודכן הממשק: ${name}`;
+                    ? `Improved UX in ${name}`
+                    : `Updated interface: ${name}`;
             }
 
-            return `בוצעה התקדמות ב-${name}`;
+            return `Made progress on ${name}`;
         }
 
         function storyNarrative(group) {
@@ -1825,7 +3464,7 @@
         // ===== ERROR HANDLING =====
         async function sendErrorToAI() {
             if (!currentError) {
-                showToast('אין שגיאה לשלוח');
+                showToast('No error to send');
                 return;
             }
 
@@ -1840,7 +3479,7 @@
             modal.innerHTML = `
                 <div class="ai-picker-overlay" onclick="closeAIPicker()"></div>
                 <div class="ai-picker-content">
-                    <div class="ai-picker-title">שלח שגיאה לבינה</div>
+                    <div class="ai-picker-title">Send Error to AI</div>
                     <div class="ai-picker-buttons">
                         <button class="ai-picker-btn" onclick="sendToAI('claude')">
                             <span class="ai-picker-icon">🤖</span>
@@ -1852,7 +3491,7 @@
                         </button>
                         <button class="ai-picker-btn secondary" onclick="copyErrorPrompt()">
                             <span class="ai-picker-icon">📋</span>
-                            <span>העתק בלבד</span>
+                            <span>Copy only</span>
                         </button>
                     </div>
                 </div>
@@ -1969,13 +3608,13 @@
             // Launch AI
             if (aiType === 'claude') {
                 // Open terminal with claude command
-                showToast('🚀 פותח Claude Code...');
+                showToast('🚀 Opening Claude Code...');
                 window.open('fixonce://launch/claude?error=' + encodeURIComponent(errorMsg), '_blank');
                 // Fallback: copy to clipboard
                 await copyErrorPrompt(true);
             } else if (aiType === 'cursor') {
                 // Open Cursor with file - need full path
-                showToast('🚀 פותח Cursor...');
+                showToast('🚀 Opening Cursor...');
                 const rootPath = projectData?.root_path || projectData?.working_dir || '/Users/haimdayan/Desktop/FixOnce';
                 if (source) {
                     const fullPath = source.startsWith('/') ? source : rootPath + '/' + source;
@@ -2011,21 +3650,21 @@
             } catch (e) {}
 
             // Build prompt
-            let prompt = `🔧 **שגיאה לטיפול:**\n\`${errorMsg}\`\n\n`;
+            let prompt = `🔧 **Error to fix:**\n\`${errorMsg}\`\n\n`;
             if (source) {
-                prompt += `📍 **מיקום:** ${source}`;
+                prompt += `📍 **Location:** ${source}`;
                 if (line) prompt += `:${line}`;
                 prompt += `\n\n`;
             }
             if (solutionText) {
-                prompt += `💡 **פתרון קיים:**\n"${solutionText}"\n\n`;
+                prompt += `💡 **Existing solution:**\n"${solutionText}"\n\n`;
             }
-            prompt += `תקן את השגיאה.`;
+            prompt += `Fix this error.`;
 
             // Copy
             try {
                 await navigator.clipboard.writeText(prompt);
-                if (!silent) showToast('📋 הועתק!');
+                if (!silent) showToast('📋 Copied!');
             } catch (e) {
                 const ta = document.createElement('textarea');
                 ta.value = prompt;
@@ -2033,14 +3672,14 @@
                 ta.select();
                 document.execCommand('copy');
                 document.body.removeChild(ta);
-                if (!silent) showToast('📋 הועתק!');
+                if (!silent) showToast('📋 Copied!');
             }
         }
 
         function handleError() {
             // Mark as handled and refresh
             currentError = null;
-            showToast('סומן כטופל ✓');
+            showToast('Marked as Handled ✓');
             loadData();
         }
 
@@ -2066,7 +3705,7 @@
                 historyFilter = opts.filter || 'all';
                 const titleEl = document.getElementById('history-title');
                 if (titleEl) {
-                    titleEl.textContent = historyFilter === 'today' ? 'היסטוריה (היום)' : 'היסטוריה';
+                    titleEl.textContent = historyFilter === 'today' ? 'History (Today)' : 'History';
                 }
                 loadHistory();
             }
@@ -2117,13 +3756,13 @@
                     method: 'POST'
                 });
                 if (res.ok) {
-                    showToast('עברתי לפרויקט');
+                    showToast('Switched to project');
                     loadData();
                 } else {
-                    showToast('שגיאה במעבר');
+                    showToast('Error switching');
                 }
             } catch (e) {
-                showToast('שגיאה במעבר פרויקט');
+                showToast('Error switching project');
             }
         }
 
@@ -2194,7 +3833,7 @@
             const ctx = group.fileContext;
             const durationMs = group.firstTs - group.lastTs;
             const durationMins = Math.round(durationMs / 60000);
-            const durationStr = durationMins > 1 ? ` במשך ${durationMins} דק׳` : '';
+            const durationStr = durationMins > 1 ? ` for ${durationMins}m` : '';
 
             // Calculate total lines added/removed
             let totalAdded = 0, totalRemoved = 0;
@@ -2207,50 +3846,50 @@
 
             // Commands
             if (group.tool === null && group.command) {
-                const cmd = group.command.length > 40 
-                    ? group.command.substring(0, 40) + '...' 
+                const cmd = group.command.length > 40
+                    ? group.command.substring(0, 40) + '...'
                     : group.command;
                 if (group.command.startsWith('git')) {
-                    return `ניהלת גיט: ${cmd}`;
+                    return `Git: ${cmd}`;
                 }
-                return `הרצת: ${cmd}`;
+                return `Ran: ${cmd}`;
             }
 
             // Code files
-            if (ctx === 'קוד') {
+            if (ctx === 'code') {
                 if (totalAdded > 50) {
                     return count === 1
-                        ? `הרחבת את ${name} — ${totalAdded} שורות חדשות`
-                        : `עבדת על ${name} — ${count} שינויים, +${totalAdded} שורות${durationStr}`;
+                        ? `Expanded ${name} — ${totalAdded} new lines`
+                        : `Worked on ${name} — ${count} changes, +${totalAdded} lines${durationStr}`;
                 }
                 return count === 1
-                    ? `ערכת את ${name}`
-                    : `עבדת על ${name} — ${count} שינויים${durationStr}`;
+                    ? `Edited ${name}`
+                    : `Worked on ${name} — ${count} changes${durationStr}`;
             }
 
             // View/design files
-            if (ctx === 'תצוגה') {
-                if (count === 1) return `עדכנת את ה${name}`;
-                if (count <= 3) return `שיפרת את ה${name} — ${count} עדכונים${durationStr}`;
-                return `עיצבת את ה${name} — ${count} עדכונים${durationStr}`;
+            if (ctx === 'ui') {
+                if (count === 1) return `Updated ${name}`;
+                if (count <= 3) return `Improved ${name} — ${count} updates${durationStr}`;
+                return `Styled ${name} — ${count} updates${durationStr}`;
             }
 
             // Write (new file)
             if (group.tool === 'Write') {
-                return `יצרת את ${name}`;
+                return `Created ${name}`;
             }
 
             // Fallback
             if (count === 1) return `${getActivityType(group.items[0])} ${name}`;
-            return `${name} — ${count} פעולות${durationStr}`;
+            return `${name} — ${count} actions${durationStr}`;
         }
 
         function storyIcon(group) {
             const ctx = group.fileContext;
             if (group.command?.startsWith('git')) return { emoji: '🔀', cls: 'git' };
             if (group.tool === null && group.command) return { emoji: '⚡', cls: 'command' };
-            if (ctx === 'קוד') return { emoji: '🛠', cls: 'code' };
-            if (ctx === 'תצוגה') return { emoji: '🎨', cls: 'design' };
+            if (ctx === 'code') return { emoji: '🛠', cls: 'code' };
+            if (ctx === 'ui') return { emoji: '🎨', cls: 'design' };
             if (group.tool === 'Write') return { emoji: '✨', cls: 'code' };
             return { emoji: '📝', cls: '' };
         }
@@ -2261,9 +3900,9 @@
             const today = now.toDateString();
             const yesterday = new Date(now - 86400000).toDateString();
 
-            if (d.toDateString() === today) return 'היום';
-            if (d.toDateString() === yesterday) return 'אתמול';
-            return d.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'short' });
+            if (d.toDateString() === today) return 'Today';
+            if (d.toDateString() === yesterday) return 'Yesterday';
+            return d.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short' });
         }
 
         async function loadHistory() {
@@ -2282,8 +3921,8 @@
 
                 if (filteredActivities.length === 0) {
                     container.innerHTML = historyFilter === 'today'
-                        ? '<div class="history-empty">אין פעולות היום</div>'
-                        : '<div class="history-empty">אין היסטוריה עדיין</div>';
+                        ? '<div class="history-empty">No activity today</div>'
+                        : '<div class="history-empty">No history yet</div>';
                     return;
                 }
 
@@ -2295,9 +3934,9 @@
                 const titleEl = document.getElementById('history-title');
                 if (titleEl) {
                     if (historyFilter === 'today') {
-                        titleEl.textContent = 'היסטוריה (היום)';
+                        titleEl.textContent = 'History (Today)';
                     } else {
-                        titleEl.textContent = 'היסטוריה';
+                        titleEl.textContent = 'History';
                     }
                 }
 
@@ -2311,9 +3950,7 @@
                     const icon = storyIcon(g);
                     const text = storyNarrative(g);
                     const rel = formatTime(new Date(g.firstTs).toISOString());
-                    const timeLabel = rel === 'עכשיו'
-                        ? 'עכשיו'
-                        : (rel.endsWith('דקות') || rel.endsWith('שעות') ? `לפני ${rel}` : rel);
+                    const timeLabel = rel;
 
                     html += `
                         <div class="story-item">
@@ -2331,7 +3968,7 @@
                 container.innerHTML = html;
 
             } catch (e) {
-                container.innerHTML = '<div class="history-empty">שגיאה בטעינה</div>';
+                container.innerHTML = '<div class="history-empty">Error loading</div>';
             }
         }
 
@@ -2344,7 +3981,7 @@
                 const decisions = data.decisions || [];
 
                 if (decisions.length === 0) {
-                    container.innerHTML = '<div class="history-empty">אין החלטות פעילות</div>';
+                    container.innerHTML = '<div class="history-empty">No Active Decisions</div>';
                     return;
                 }
 
@@ -2361,7 +3998,7 @@
                 container.innerHTML = reversed.map(d => `
                     <div class="history-item${isNew(d.timestamp) ? ' new-item' : ''}">
                         <div class="history-item-header">
-                            <span class="history-item-type">החלטה${isNew(d.timestamp) ? ' <span class="new-badge">חדש</span>' : ''}</span>
+                            <span class="history-item-type">Decision${isNew(d.timestamp) ? ' <span class="new-badge">new</span>' : ''}</span>
                             <span class="history-item-time">${formatTime(d.timestamp)}</span>
                         </div>
                         <div class="history-item-text"><strong>${d.decision}</strong></div>
@@ -2371,7 +4008,7 @@
                     </div>
                 `).join('');
             } catch (e) {
-                container.innerHTML = '<div class="history-empty">שגיאה בטעינה</div>';
+                container.innerHTML = '<div class="history-empty">Error loading</div>';
             }
         }
 
@@ -2384,7 +4021,7 @@
                 const avoids = data.avoids || [];
 
                 if (avoids.length === 0) {
-                    container.innerHTML = '<div class="history-empty">אין פריטים להימנעות</div>';
+                    container.innerHTML = '<div class="history-empty">No Avoid items</div>';
                     return;
                 }
 
@@ -2396,7 +4033,7 @@
                 container.innerHTML = reversed.map(a => `
                     <div class="history-item${isNew(a.timestamp) ? ' new-item' : ''}" style="border-right: 3px solid var(--accent-red);">
                         <div class="history-item-header">
-                            <span class="history-item-type">🚫 להימנע${isNew(a.timestamp) ? ' <span class="new-badge">חדש</span>' : ''}</span>
+                            <span class="history-item-type">🚫 Avoid${isNew(a.timestamp) ? ' <span class="new-badge">new</span>' : ''}</span>
                             <span class="history-item-time">${formatTime(a.timestamp)}</span>
                         </div>
                         <div class="history-item-text"><strong>${a.what}</strong></div>
@@ -2406,7 +4043,7 @@
                     </div>
                 `).join('');
             } catch (e) {
-                container.innerHTML = '<div class="history-empty">שגיאה בטעינה</div>';
+                container.innerHTML = '<div class="history-empty">Error loading</div>';
             }
         }
 
@@ -2423,7 +4060,7 @@
                 if (badge) badge.textContent = sessions.length;
 
                 if (sessions.length === 0) {
-                    container.innerHTML = '<div class="history-empty">אין בעיות שנפתרו עדיין</div>';
+                    container.innerHTML = '<div class="history-empty">No Resolved Issues yet</div>';
                     return;
                 }
 
@@ -2436,17 +4073,17 @@
                 container.innerHTML = sessions.map(s => `
                     <div class="history-item debug-session-item${isNew(s.resolved_at || s.timestamp) ? ' new-item' : ''}" style="border-right: 3px solid var(--accent-green);">
                         <div class="history-item-header">
-                            <span class="history-item-type">🐛 בעיה${isNew(s.resolved_at || s.timestamp) ? ' <span class="new-badge">חדש</span>' : ''}</span>
+                            <span class="history-item-type">🐛 Issue${isNew(s.resolved_at || s.timestamp) ? ' <span class="new-badge">new</span>' : ''}</span>
                             <span class="history-item-time">${formatTime(s.resolved_at)}</span>
                         </div>
                         <div class="history-item-text"><strong>${s.problem}</strong></div>
 
                         <div style="margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 6px;">
                             <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">
-                                <span style="color: var(--accent-yellow);">🎯 שורש:</span> ${s.root_cause}
+                                <span style="color: var(--accent-yellow);">🎯 Root cause:</span> ${s.root_cause}
                             </div>
                             <div style="font-size: 0.85rem; color: var(--accent-green);">
-                                <span>✅ פתרון:</span> ${s.solution}
+                                <span>✅ Solution:</span> ${s.solution}
                             </div>
                             ${s.files_changed && s.files_changed.length > 0 ? `
                                 <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
@@ -2455,26 +4092,26 @@
                             ` : ''}
                             ${s.symptoms && s.symptoms.length > 0 ? `
                                 <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
-                                    🔍 סימפטומים: ${s.symptoms.join(', ')}
+                                    🔍 Symptoms: ${s.symptoms.join(', ')}
                                 </div>
                             ` : ''}
                         </div>
                     </div>
                 `).join('');
             } catch (e) {
-                container.innerHTML = '<div class="history-empty">שגיאה בטעינה</div>';
+                container.innerHTML = '<div class="history-empty">Error loading</div>';
             }
         }
 
         function getActivityType(a) {
-            if (a.tool === 'Edit') return 'עריכה';
-            if (a.tool === 'Write') return 'יצירה';
-            if (a.tool === 'Bash') return 'פקודה';
-            if (a.tool === 'Read') return 'קריאה';
-            if (a._isInsight) return 'תובנה';
-            if (a._isDecision) return 'החלטה';
-            if (a._isError) return 'שגיאה';
-            return a.tool || 'פעולה';
+            if (a.tool === 'Edit') return 'Edit';
+            if (a.tool === 'Write') return 'Create';
+            if (a.tool === 'Bash') return 'Command';
+            if (a.tool === 'Read') return 'Read';
+            if (a._isInsight) return 'Insight';
+            if (a._isDecision) return 'Decision';
+            if (a._isError) return 'Error';
+            return a.tool || 'Action';
         }
 
         function getActivityText(a) {
@@ -2492,13 +4129,13 @@
             const diffMs = now - d;
             const diffMins = Math.round(diffMs / 60000);
 
-            if (diffMins < 1) return 'עכשיו';
-            if (diffMins < 60) return diffMins + ' דקות';
+            if (diffMins < 1) return 'now';
+            if (diffMins < 60) return diffMins + 'm ago';
 
             const diffHours = Math.round(diffMins / 60);
-            if (diffHours < 24) return diffHours + ' שעות';
+            if (diffHours < 24) return diffHours + 'h ago';
 
-            return d.toLocaleDateString('he-IL');
+            return d.toLocaleDateString('en-US');
         }
 
         // ===== SEARCH =====
@@ -2510,7 +4147,7 @@
             const container = document.getElementById('search-results');
 
             if (!query || query.length < 2) {
-                container.innerHTML = '<div class="history-empty">הקלד לחיפוש...</div>';
+                container.innerHTML = '<div class="history-empty">Type to search...</div>';
                 return;
             }
 
@@ -2520,19 +4157,19 @@
                     const data = await res.json();
 
                     if (!data.results || data.results.length === 0) {
-                        container.innerHTML = '<div class="history-empty">לא נמצאו תוצאות</div>';
+                        container.innerHTML = '<div class="history-empty">No results found</div>';
                         return;
                     }
 
                     container.innerHTML = data.results.map(r => `
                         <div class="search-result" onclick="useResult('${escapeHtml(r.text)}')">
-                            <div class="search-result-match">${r.similarity}% התאמה</div>
+                            <div class="search-result-match">${r.similarity}% match</div>
                             <div class="search-result-text">${escapeHtml(r.text)}</div>
                         </div>
                     `).join('');
 
                 } catch (e) {
-                    container.innerHTML = '<div class="history-empty">שגיאה בחיפוש</div>';
+                    container.innerHTML = '<div class="history-empty">Search error</div>';
                 }
             }, 300);
         }
@@ -2540,7 +4177,7 @@
         function useResult(text) {
             // Copy to clipboard
             navigator.clipboard.writeText(text);
-            showToast('הועתק ללוח');
+            showToast('Copied to clipboard');
             closeOverlay('search');
         }
 
@@ -2559,7 +4196,7 @@
 
             const btn = document.getElementById('save-insight-btn');
             btn.disabled = true;
-            btn.textContent = 'שומר...';
+            btn.textContent = 'Saving...';
 
             try {
                 const res = await fetch(API + '/api/memory/live-record/lessons', {
@@ -2571,7 +4208,7 @@
                 if (res.ok) {
                     input.value = '';
                     closeOverlay('insight');
-                    showToast('תובנה נשמרה');
+                    showToast('Insight saved');
 
                     // Pulse the main card
                     document.getElementById('main-card').classList.add('success-pulse');
@@ -2579,14 +4216,14 @@
                         document.getElementById('main-card').classList.remove('success-pulse');
                     }, 500);
                 } else {
-                    showToast('שגיאה בשמירה');
+                    showToast('Error saving');
                 }
             } catch (e) {
-                showToast('שגיאה בשמירה');
+                showToast('Error saving');
             }
 
             btn.disabled = false;
-            btn.textContent = 'שמור תובנה';
+            btn.textContent = 'Save Insight';
         }
 
         // ===== UTILITIES =====
@@ -2604,7 +4241,7 @@
 
         function refreshData() {
             loadData();
-            showToast('מרענן...');
+            showToast('Refreshing...');
         }
 
         // ===== AI LAUNCHERS =====
@@ -2616,7 +4253,7 @@
             };
             const editorToLaunch = editor === 'copilot' ? 'vscode' : editor;
 
-            showToast(`מפעיל ${names[editor]}...`);
+            showToast(`Launching ${names[editor]}...`);
 
             try {
                 const res = await fetch(API + '/api/session/launch', {
@@ -2626,14 +4263,14 @@
                 });
 
                 if (res.ok) {
-                    showToast(`${names[editor]} נפתח!`);
+                    showToast(`${names[editor]} launched!`);
                     loadData();
                 } else {
                     const data = await res.json();
-                    showToast(data.message || 'שגיאה בהפעלה');
+                    showToast(data.message || 'Error launching');
                 }
             } catch (e) {
-                showToast('שגיאה בחיבור לשרת');
+                showToast('Server connection error');
             }
         }
 
@@ -2646,11 +4283,11 @@
             if (timerEl && sessionStartTime) {
                 const mins = Math.floor((now - sessionStartTime) / 60000);
                 if (mins < 60) {
-                    timerEl.textContent = `${mins} דק'`;
+                    timerEl.textContent = `${mins}m`;
                 } else {
                     const h = Math.floor(mins / 60);
                     const m = mins % 60;
-                    timerEl.textContent = `${h}ש' ${m > 0 ? m + 'ד' : ''}`;
+                    timerEl.textContent = `${h}h ${m > 0 ? m + 'm' : ''}`;
                 }
             }
 

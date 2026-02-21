@@ -1,14 +1,18 @@
 """
 FixOnce Memory Routes
 Project memory API endpoints for AI context persistence.
+
+Phase 0: Supports X-Project-Root header for explicit project context.
+Dashboard requests can use X-Dashboard: true to fallback to active project.
 """
 
 from flask import jsonify, request, send_file
 from datetime import datetime
 import json
 import io
+import re
 
-from . import memory_bp
+from . import memory_bp, get_project_from_request
 
 
 @memory_bp.route("", methods=["GET"])
@@ -713,6 +717,368 @@ def api_search_solutions():
         results.sort(key=lambda x: x['similarity'], reverse=True)
 
         return jsonify({"results": results[:limit]})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def _to_text(item) -> str:
+    """Normalize mixed insight/handover structures into plain text."""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        for key in ("text", "insight", "summary", "message", "content"):
+            if item.get(key):
+                return str(item.get(key))
+    return ""
+
+
+def _is_test_artifact(text: str) -> bool:
+    """Detect synthetic brutal-test artifacts to keep UI clean."""
+    if not text:
+        return False
+    return bool(
+        re.search(
+            r"(BRUTAL_|brutal_|CACHE_BUST_TOKEN_|avoid-pattern-|Brutal spam|Brutal dedup|Brutal link error|critical handoff \d+|verify regeneration)",
+            text,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _short_text(text: str, limit: int = 140) -> str:
+    """Normalize whitespace and clamp long text for compact UI labels."""
+    if not text:
+        return ""
+    normalized = re.sub(r"\s+", " ", text).strip()
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3].rstrip() + "..."
+
+
+def _extract_signals(text: str) -> dict:
+    """
+    Parse free-text summaries into structured signals.
+    Emoji is a boost signal, not a hard dependency.
+    """
+    lines = [
+        ln.strip("-• \t")
+        for ln in re.split(r"[\n\r]+", text or "")
+        if ln.strip() and not _is_test_artifact(ln)
+    ]
+
+    out = {
+        "solved": [],
+        "decisions": [],
+        "insights": [],
+        "risks": [],
+        "changes": []
+    }
+
+    if not lines:
+        return out
+
+    decision_re = re.compile(r"(החלט|decision|decided|נבחר|בחרנו)", re.IGNORECASE)
+    solved_re = re.compile(r"(תוקנ|נפתר|fixed|resolved|הושלם|✅|closed)", re.IGNORECASE)
+    insight_re = re.compile(r"(תובנה|learned|insight|lesson|💡)", re.IGNORECASE)
+    risk_re = re.compile(r"(סיכון|רגיש|risk|warning|avoid|להימנע|⚠️|⚠)", re.IGNORECASE)
+    change_re = re.compile(r"(שינוי|refactor|migration|עדכון מבני|🔄)", re.IGNORECASE)
+
+    for ln in lines:
+        # Boost from emoji markers, but also support plain text
+        has_decision = "🔒" in ln or bool(decision_re.search(ln))
+        has_solved = "🐛" in ln or "✅" in ln or bool(solved_re.search(ln))
+        has_insight = "💡" in ln or bool(insight_re.search(ln))
+        has_risk = "⚠" in ln or bool(risk_re.search(ln))
+        has_change = "🔄" in ln or bool(change_re.search(ln))
+
+        if has_decision:
+            out["decisions"].append(ln)
+        if has_solved:
+            out["solved"].append(ln)
+        if has_insight:
+            out["insights"].append(ln)
+        if has_risk:
+            out["risks"].append(ln)
+        if has_change:
+            out["changes"].append(ln)
+
+    # De-duplicate while preserving order
+    for key in out:
+        seen = set()
+        uniq = []
+        for item in out[key]:
+            if item not in seen:
+                uniq.append(item)
+                seen.add(item)
+        out[key] = uniq
+    return out
+
+
+def _infer_stage(memory: dict) -> str:
+    intent = memory.get("live_record", {}).get("intent", {}) or {}
+    blockers = intent.get("blockers") or []
+    if blockers:
+        return "חסום"
+    if intent.get("current_goal"):
+        if intent.get("next_step"):
+            return "בביצוע"
+        return "מוגדר"
+    if memory.get("active_issues"):
+        return "דורש ייצוב"
+    return "אתחול"
+
+
+def _extract_semantic_identity(project_id: str) -> dict:
+    """
+    Use semantic search to extract project identity from insights.
+
+    Returns:
+        {
+            "signature": ["key theme 1", "key theme 2", ...],
+            "top_learnings": ["most important insight 1", ...],
+            "semantic_enabled": True/False
+        }
+    """
+    result = {
+        "signature": [],
+        "top_learnings": [],
+        "semantic_enabled": False,
+        "document_count": 0
+    }
+
+    try:
+        from core.project_semantic import search_project, get_project_index_stats
+
+        # Check if we have indexed documents
+        stats = get_project_index_stats(project_id)
+        doc_count = stats.get("document_count", 0)
+        result["document_count"] = doc_count
+
+        if doc_count == 0:
+            return result
+
+        result["semantic_enabled"] = True
+
+        # Search for identity-related concepts
+        identity_queries = [
+            "what this project does main purpose",
+            "important decision architecture choice",
+            "key learning insight discovered",
+            "problem solved fixed bug",
+            "avoid mistake pattern"
+        ]
+
+        all_results = []
+        seen_texts = set()
+
+        for query in identity_queries:
+            try:
+                results = search_project(project_id, query, k=3, min_score=0.3)
+                for r in results:
+                    if r.text not in seen_texts:
+                        all_results.append({
+                            "text": r.text,
+                            "score": r.score,
+                            "type": r.metadata.get("doc_type", "insight"),
+                            "query": query
+                        })
+                        seen_texts.add(r.text)
+            except:
+                continue
+
+        # Sort by score and extract top learnings
+        all_results.sort(key=lambda x: x["score"], reverse=True)
+        result["top_learnings"] = [r["text"] for r in all_results[:5]]
+
+        # Extract signature themes (key concepts from top results)
+        signature_words = set()
+        tech_keywords = {
+            # Languages/Frameworks
+            "python", "javascript", "typescript", "react", "vue", "angular",
+            "node", "flask", "django", "fastapi", "express", "nextjs",
+            # Concepts
+            "api", "auth", "authentication", "database", "cache", "redis",
+            "frontend", "backend", "fullstack", "microservice", "serverless",
+            "test", "testing", "deploy", "ci", "docker", "kubernetes",
+            "security", "performance", "async", "websocket", "graphql", "rest",
+            "mcp", "semantic", "embedding", "vector", "index", "search",
+            "memory", "session", "state", "context", "ai", "llm", "claude"
+        }
+
+        for r in all_results[:10]:
+            # Extract meaningful words
+            text_lower = r["text"].lower()
+            words = text_lower.replace("-", " ").replace("_", " ").split()
+            for word in words:
+                clean_word = ''.join(c for c in word if c.isalnum())
+                if len(clean_word) > 2 and clean_word in tech_keywords:
+                    signature_words.add(clean_word)
+
+        # Also extract doc types as signature elements
+        doc_types = set(r["type"] for r in all_results[:5] if r.get("type"))
+        for dt in doc_types:
+            if dt not in ["insight"]:  # Skip generic ones
+                signature_words.add(dt)
+
+        result["signature"] = list(signature_words)[:8]
+
+    except ImportError:
+        # Semantic search not available
+        pass
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
+
+
+@memory_bp.route("/identity", methods=["GET"])
+def api_get_project_identity():
+    """
+    Read-only derived project identity.
+    Does NOT mutate memory; only synthesizes a clear project snapshot.
+    """
+    try:
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"identity": None, "status": "no_active_project"})
+
+        memory = load_project_memory(project_id) or {}
+        project_info = memory.get("project_info", {}) or {}
+        live = memory.get("live_record", {}) or {}
+        intent = live.get("intent", {}) or {}
+        arch = live.get("architecture", {}) or {}
+
+        decisions = memory.get("decisions", []) or []
+        avoid = memory.get("avoid", []) or []
+        solved_history = memory.get("solutions_history", []) or []
+        handover = memory.get("handover", {}) or {}
+
+        lessons = (live.get("lessons", {}) or {}).get("insights", []) or []
+        lesson_texts = [_to_text(x) for x in lessons if _to_text(x) and not _is_test_artifact(_to_text(x))]
+        handover_text = _to_text(handover)
+        if _is_test_artifact(handover_text):
+            handover_text = ""
+
+        # Parse summary-like sources into structured signals
+        signals = {"solved": [], "decisions": [], "insights": [], "risks": [], "changes": []}
+        for source_text in [handover_text] + lesson_texts[-15:]:
+            s = _extract_signals(source_text)
+            for key in signals:
+                signals[key].extend(s[key])
+
+        # De-duplicate merged signals
+        for key in signals:
+            seen = set()
+            dedup = []
+            for item in signals[key]:
+                if item not in seen:
+                    dedup.append(item)
+                    seen.add(item)
+            signals[key] = dedup[:20]
+
+        # Critical decisions from official decisions list (+ parsed fallback)
+        critical_decisions = []
+        for d in decisions[-8:]:
+            decision_text = _to_text(d.get("decision") if isinstance(d, dict) else d)
+            reason_text = _to_text(d.get("reason") if isinstance(d, dict) else "")
+            if decision_text and not _is_test_artifact(decision_text):
+                critical_decisions.append({
+                    "decision": decision_text,
+                    "reason": "" if _is_test_artifact(reason_text) else reason_text
+                })
+        if not critical_decisions and signals["decisions"]:
+            critical_decisions = [{"decision": x, "reason": ""} for x in signals["decisions"][:5]]
+
+        stack = project_info.get("stack") or arch.get("stack") or ""
+        project_type = stack if stack else "לא סווג"
+        if not stack:
+            name = (project_info.get("name") or "").lower()
+            if any(k in name for k in ["api", "server", "backend"]):
+                project_type = "Backend/API"
+            elif any(k in name for k in ["dashboard", "ui", "frontend"]):
+                project_type = "Frontend/UI"
+
+        about_candidates = [
+            _to_text(project_info.get("description")),
+            _to_text(arch.get("summary")),
+            _to_text(project_info.get("name")),
+        ]
+        about = ""
+        for candidate in about_candidates:
+            if candidate and not _is_test_artifact(candidate):
+                about = _short_text(candidate, 140)
+                break
+        if not about:
+            about = "פרויקט פעיל ב-FixOnce"
+
+        identity = {
+            "name": project_info.get("name") or project_id,
+            "about": about,
+            "goal": (
+                ""
+                if _is_test_artifact(intent.get("current_goal") or "")
+                else intent.get("current_goal")
+            ) or arch.get("summary") or "",
+            "project_type": project_type,
+            "stage": _infer_stage(memory),
+            "critical_decisions": critical_decisions[:6],
+            "sensitive_points": [
+                _to_text(a.get("what") if isinstance(a, dict) else a)
+                for a in avoid[:8]
+                if _to_text(a.get("what") if isinstance(a, dict) else a)
+                and not _is_test_artifact(_to_text(a.get("what") if isinstance(a, dict) else a))
+            ],
+            "next_step": (
+                "" if _is_test_artifact(intent.get("next_step") or "") else (intent.get("next_step") or "")
+            ),
+            "structured_memory": {
+                "solved": signals["solved"][:10],
+                "decisions": signals["decisions"][:10],
+                "insights": signals["insights"][:10],
+                "risks": signals["risks"][:10],
+                "changes": signals["changes"][:10]
+            },
+            "counts": {
+                "active_issues": len(memory.get("active_issues", []) or []),
+                "solutions_history": len(solved_history),
+                "decisions": len(decisions),
+                "avoid": len(avoid),
+                "insights": len(lesson_texts)
+            },
+            "provenance": {
+                "owner": "FixOnce",
+                "computed_by": "/api/memory/identity",
+                "sources": [
+                    "project_info.description",
+                    "live_record.architecture.summary",
+                    "live_record.intent.current_goal",
+                    "live_record.intent.next_step",
+                    "decisions[]",
+                    "avoid[]",
+                    "live_record.lessons.insights[]",
+                    "handover.summary"
+                ]
+            },
+            "updated_at": datetime.now().isoformat()
+        }
+
+        # Add semantic identity extraction
+        semantic_identity = _extract_semantic_identity(project_id)
+        identity["semantic"] = {
+            "enabled": semantic_identity.get("semantic_enabled", False),
+            "signature": semantic_identity.get("signature", []),
+            "top_learnings": semantic_identity.get("top_learnings", []),
+            "document_count": semantic_identity.get("document_count", 0)
+        }
+
+        # If semantic search found better "about" description, use it
+        if semantic_identity.get("top_learnings") and not about:
+            # Use the highest-ranked insight as about
+            identity["about"] = semantic_identity["top_learnings"][0][:140]
+
+        return jsonify({"status": "ok", "identity": identity})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

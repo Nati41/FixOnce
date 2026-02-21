@@ -1,396 +1,54 @@
 {
   "project_info": {
-    "working_dir": "/Users/haimdayan/Desktop/FixOnce",
     "name": "FixOnce",
-    "created_at": "2026-02-09T20:56:57.648570"
+    "working_dir": "",
+    "stack": "",
+    "status": "Active",
+    "description": "",
+    "created_at": "2026-02-20T11:20:41.734306"
   },
   "live_record": {
     "gps": {
-      "working_dir": "/Users/haimdayan/Desktop/FixOnce",
-      "active_ports": [
-        5000
-      ],
-      "url": "http://localhost:5000/",
+      "working_dir": "",
+      "active_ports": [],
+      "url": "",
       "environment": "dev",
-      "current_goal": "הפעלת כלי המיפוי mapper-v3",
-      "ports": [
-        5000
-      ],
-      "host": "localhost",
-      "updated_at": "2026-02-16T10:56:23.027700"
+      "updated_at": "2026-02-20T11:20:41.734306"
     },
     "architecture": {
-      "summary": "AI Memory Layer - שכבת זיכרון persistent ל-AI assistants. מאפשר ל-Claude/Cursor/Copilot לזכור errors, solutions, decisions והקשר בין sessions.",
-      "key_flows": [
-        "Session Start: init_session -> load project context -> warm start",
-        "Error Capture: Browser extension -> Flask API -> error_store -> dedup",
-        "Solution Search: search_past_solutions -> semantic engine -> find similar",
-        "Memory Update: update_live_record -> save to project JSON",
-        "Multi-Project: switch_project -> isolated memory per directory"
-      ],
-      "stack": "Python (Flask), FastMCP, JavaScript (Browser Extension), HTML/CSS Dashboard, SQLite",
-      "structure": [
-        "FixOnce.app/",
-        "Install FixOnce.app/",
-        "data/",
-        "extension/",
-        "hooks/",
-        "scripts/",
-        "src/",
-        "tests/"
-      ],
-      "description": "AI Memory Layer - מערכת שמעניקה ל-AI זיכרון persistent בין sessions",
-      "apps": [
-        "FixOnce.app",
-        "Install FixOnce.app"
-      ],
-      "purpose": "AI Memory Layer - persistent error tracking for AI assistants"
+      "summary": "",
+      "stack": "",
+      "key_flows": [],
+      "updated_at": "2026-02-20T11:20:41.734306"
     },
     "intent": {
-      "current_goal": "Build Bootstrap Context Generator - auto-generated context.md for any AI",
-      "next_step": "Implement grouped layout + smart badge visibility",
-      "blockers": "User has not specified task yet",
-      "updated_at": "2026-02-18T12:38:38.389021",
-      "goal_history": [
-        {
-          "goal": "Polish more-menu into compact grouped popover",
-          "completed_at": "2026-02-18T12:38:38.389003"
-        },
-        {
-          "goal": "Refine dashboard hierarchy with strong Now card and softer history",
-          "completed_at": "2026-02-18T12:28:07.820871"
-        },
-        {
-          "goal": "Chat-style inline activity feed in dashboard",
-          "completed_at": "2026-02-18T12:19:59.072562"
-        },
-        {
-          "goal": "Build Multi-Active AI support - multiple AIs working in parallel",
-          "completed_at": "2026-02-18T11:34:34.967888"
-        },
-        {
-          "goal": "Build Debug Sessions feature - structured problem→solution tracking with deduplication",
-          "completed_at": "2026-02-18T10:48:36.793929"
-        }
-      ]
+      "current_goal": "",
+      "next_step": "",
+      "blockers": [],
+      "updated_at": "2026-02-20T11:20:41.734306"
     },
     "lessons": {
-      "insights": [
-        "Universal Gate Architecture: כל MCP tool עובר דרך _universal_gate שמזריק context, יוצר session אוטומטית, ומציג live errors. FixOnce שולט, Claude מבצע.",
-        "TEST: אם אתה רואה את זה בשיחה חדשה - Universal Gate עובד! השגיאות צריכות להופיע מעל הטקסט הזה.",
-        "Port detection was broken because loadCurrentSite() had no setInterval - only called once on page load. Added 3s refresh interval.",
-        "pywebview לא עובד טוב ב-.app כי הוא דורש להיות ב-main thread ואת ה-GUI framework. הפתרון הפשוט - webbrowser.open() שעובד תמיד.",
-        "FixOnce.app לא נפתח בלחיצה: הבעיה הייתה בסקריפט bash שהריץ Python עם & ברקע + osascript. הפתרון: להשתמש ב-exec (מהמקור) שמחליף את ה-shell process ב-Python, ולהריץ pywebview ב-foreground. גם חשוב: להשתמש בנתיב מלא ל-Python (/Library/Frameworks/Python.framework/...) ולא רק python3.",
-        {
-          "text": "ב-macOS, .app עם CFBundleExecutable שמצביע על סקריפט bash עלול להיכשל בפתיחה דרך Finder/LaunchServices עם ‎kLSNoExecutableErr (-10827). פתרון: לשים Mach-O launcher ב-Contents/MacOS (למשל C קטן שעושה exec ל-python scripts/app_launcher.py), ועדיף גם להוסיף PkgInfo ולעבות Info.plist עם CFBundleInfoDictionaryVersion/NSPrincipalClass.",
-          "timestamp": "2026-02-16T12:52:23.246536",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium"
-        },
-        "CRITICAL FAILURE: Cursor ignored existing insights and spent 10 min writing C launcher code when solution already existed. Protocol must be more aggressive - search_past_solutions() is MANDATORY before any debugging/coding work.",
-        "Smart Override Header: Instead of blocking AI, provide structured metadata (confidence %, similarity %, date, use_count) with 'Recommended: Apply existing solution'. AI stays smart but guided.",
-        "SUCCESS: After updating protocol to be more aggressive about search_past_solutions, Cursor now searches BEFORE working and uses existing insights. Key: (📌 FixOnce: existing insight) format.",
-        "Dashboard editor detection: Check which mcp.json was modified more recently (.cursor vs .claude) to determine active editor. Also added expandable cards - click to show full text.",
-        "Editor detection fix: MCP server needs to update ai_session in project JSON (not just _compliance_state) for dashboard to show correct editor. Also check environment variables FIRST (CURSOR_CHANNEL, TERM_PROGRAM) before mcp.json modification time.",
-        "Flask server crashes when running in background (&) because MCP uses stdio transport. Fix: Use --flask-only flag when running server.py in background, or run it in foreground terminal.",
-        "Fix #1 IMPLEMENTED: Auto-Inject Solutions - כשיש Live Error, המערכת מחפשת אוטומטית פתרונות קיימים ומזריקה אותם לצד השגיאה. עובד ב: get_browser_errors(), _get_browser_errors_summary(), _format_from_snapshot(), _format_init_response()",
-        "Fix #1 Quality Controls: 1) min 2 keyword matches למניעת false positives 2) injected_solutions set למניעת כפילויות 3) ניסוח 'Solved before' במקום 'Found Solution' - יותר ישיר",
-        "Fix #3 IMPLEMENTED: Session State Visibility - כל init מציג session_id, start_time, tools_count. מאפשר debug ומעקב אחר sessions.",
-        "Leadership Dashboard v1: הוחלף hero card עם מצב נוכחי אנושי (session duration, actions, files), errors עם המלצות, וכפתורי שליטה (סמן כטופל, שמור תובנה, חפש)",
-        "Dashboard UX: Focus Mode - כשפותחים Technical Details, שאר המסך מתעמעם (opacity 0.3 + pointer-events none). מונע תחושת שני מוקדים.",
-        "Dashboard search API: הוספתי /api/memory/search endpoint ב-Flask. צריך restart לשרת כדי לטעון.",
-        "Context header injection: Fixed update_live_record and log_avoid to prepend context header with live errors. All MCP tools should return context + result.",
-        {
-          "text": "test",
-          "timestamp": "2026-02-17T12:43:59.221483"
-        },
-        {
-          "text": "History panel: raw activity logs are boring and repetitive. Solution: group consecutive activities by human_name within 5min window, then generate narrative sentences (e.g. 'עיצבת את הדשבורד — 6 עדכונים במשך 8 דק׳'). Much more engaging UX.",
-          "timestamp": "2026-02-17T21:57:57.845102",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium"
-        },
-        {
-          "text": "Mismatch explanation: 'X פעולות' counts raw events filtered by tool & date from the last /api/activity/feed?limit=50, while History shows grouped 'stories' (groupActivities clusters events within 5 minutes by key), so row count won't equal action count. Align date filter to local time and show both counts in History title for clarity.",
-          "timestamp": "2026-02-17T22:14:50.789529",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium"
-        },
-        {
-          "text": "Multi-AI Sync cache path fix: _do_init_session has a cache path that returns early via _format_from_snapshot. The Multi-AI tracking code must be DUPLICATED in the cache path (lines 1201-1230) not just the main path.",
-          "timestamp": "2026-02-17T22:27:27.984707",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium"
-        },
-        {
-          "text": "Dashboard ai_session path bug: API returns ai_session under memory.ai_session, but dashboard looked for ai_session directly on the active project object. Fixed in updateHeader() and loadAIStatus().",
-          "timestamp": "2026-02-18T10:24:49.962622",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium",
-          "consolidated_into": "debug_20260218_104345"
-        },
-        {
-          "text": "Cursor MCP requirement: MCP servers from .cursor/mcp.json only load when the PROJECT FOLDER is open in Cursor AND you start a NEW chat. Unlike Claude Code which works from any directory, Cursor requires the project context to load its MCP tools.",
-          "timestamp": "2026-02-18T10:31:00.102931",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium",
-          "consolidated_into": "debug_20260218_104345"
-        },
-        {
-          "text": "Cursor MCP server name fix: In Cursor IDE, the FixOnce MCP server is named 'user-fixonce' (not 'fixonce'). The .cursorrules must reference 'user-fixonce' as the server name. Using the wrong name causes Tool not found on every session start, breaking active_ais tracking.",
-          "timestamp": "2026-02-18T11:02:19.306141",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium"
-        },
-        {
-          "text": "Dashboard sync fix: activity feed updates constantly (hooks on every file edit), but project data (goal, active_ais) only updates when MCP tools are called. Fix: added /api/projects/live-state endpoint that reads directly from JSON + polls every 3s. Also fixed Promise.all replacing with independent fetches so failure of one doesn't block others.",
-          "timestamp": "2026-02-18T11:09:20.579153",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium"
-        },
-        {
-          "text": "Dashboard clarity improved when top card states immediate now-status (active AI + blocking error) and activity feed uses outcome language instead of raw technical counters.",
-          "timestamp": "2026-02-18T12:21:26.508923",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium"
-        },
-        {
-          "text": "More-menu feels mature when grouped into quick actions vs knowledge management, with badges hidden at zero and a contextual headline for immediate guidance.",
-          "timestamp": "2026-02-18T12:29:24.491956",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium"
-        },
-        {
-          "text": "Replacing stat 'today actions' with 'resolved issues' gives stronger signal of project progress and directs users to reusable debug sessions.",
-          "timestamp": "2026-02-18T12:36:47.825160",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium"
-        },
-        {
-          "text": "Bootstrap Context Generator: Every memory change auto-generates .fixonce/CONTEXT.md - a universal context file readable by ANY AI (Codex, CLI agents, VS Code). MCP is just one access channel, not the core. This makes FixOnce editor-agnostic.",
-          "timestamp": "2026-02-18T12:42:41.183001",
-          "use_count": 0,
-          "last_used": null,
-          "importance": "medium"
-        }
-      ],
+      "insights": [],
       "failed_attempts": [],
-      "updated_at": "2026-02-17T12:43:59.221483"
+      "updated_at": "2026-02-20T11:20:41.734306"
     },
-    "updated_at": "2026-02-18T12:42:41.183013"
+    "updated_at": "2026-02-20T11:20:41.734306"
   },
-  "decisions": [
-    {
-      "decision": "Thread-local session במקום global state",
-      "reason": "מניעת race conditions וזליגת פרויקטים בין threads",
-      "timestamp": "2026-02-12T09:50:37.847563"
-    },
-    {
-      "decision": "projects_v2 הוא ה-canonical storage היחיד",
-      "reason": "פישוט ארכיטקטורה, מניעת כפילות וסנכרונים מורכבים",
-      "timestamp": "2026-02-12T10:06:37.480135"
-    },
-    {
-      "decision": "No auto-switch-back for project boundaries",
-      "reason": "Prevents ping-pong switching. Only switch INTO new projects, return to old project must be manual (dashboard) or explicit working_dir change.",
-      "timestamp": "2026-02-12T20:18:44.371660"
-    },
-    {
-      "id": "dec_20260214_214221",
-      "decision": "PostToolUse hook לבדיקת שגיאות דפדפן",
-      "reason": "התראה אוטומטית בטרמינל כשיש שגיאות חדשות אחרי כל פעולת קובץ",
-      "context": "",
-      "date": "2026-02-14T21:42:21.650019",
-      "used_by_ai": false,
-      "use_count": 0
-    },
-    {
-      "id": "dec_20260215_090246",
-      "decision": "_require_session() for tool validation",
-      "reason": "All MCP tools that need session must use _require_session() helper - returns aggressive error if not initialized",
-      "context": "",
-      "date": "2026-02-15T09:02:46.991707",
-      "used_by_ai": false,
-      "use_count": 0
-    },
-    {
-      "decision": "Inversion of Control - FixOnce שולט, Claude מבצע",
-      "reason": "MCP הוא צינור לא שוטר. במקום לבקש מClaude לעקוב - המערכת מזריקה את ההקשר ומונעת ממנו להתעלם",
-      "timestamp": "2026-02-16T09:41:33.291239"
-    },
-    {
-      "decision": "Auto-Inject Solutions Architecture",
-      "reason": "_find_solution_for_error() searches insights for matching solutions. min_similarity=40% with bonus for keyword matches. Injected in all error display paths.",
-      "timestamp": "2026-02-17T09:44:00.198876"
-    },
-    {
-      "decision": "Session ID = MD5 hash of project_id + initialized_at",
-      "reason": "Short 8-char unique identifier that's reproducible. Using hash instead of UUID because it allows debugging which session belongs to which project.",
-      "timestamp": "2026-02-17T10:33:38.253072"
-    },
-    {
-      "type": "decision",
-      "decision": "FixOnce = שכבת זיכרון אוניברסלית, לא תלוית עורך",
-      "reason": "Codex הוכיח: בינה בלי MCP עדיין רואה את המידע דרך קבצים/API. MCP הוא ערוץ גישה אחד, לא הליבה. אם OpenAI/Cursor משנים משהו - FixOnce חייב להישאר חי. הכוח צריך להיות בפרויקט עצמו.",
-      "timestamp": "2026-02-18T12:37:08.495800",
-      "importance": "permanent"
-    },
-    {
-      "type": "decision",
-      "decision": ".fixonce/CONTEXT.md שייך ל-git, לא ל-gitignore",
-      "reason": "Context הוא חלק מהפרויקט. אם לא רגיש - תן לו להיות ב-git. כל צוות רואה, כל clone מקבל, כל branch יודע איפה הוא. אם נסתיר - זה חוזר להיות תשתית נסתרת.",
-      "timestamp": "2026-02-18T12:50:00.000000",
-      "importance": "permanent"
-    },
-    {
-      "type": "decision",
-      "decision": "AI Bootstrap via README + CONTEXT.md, לא דרך MCP/injection",
-      "reason": "כל AI סורק README אוטומטית. הוספנו section שמפנה ל-.fixonce/CONTEXT.md. עובד עם Codex, Claude, Cursor, כל agent. לא תלוי בכלום - רק קבצים. Codex הוכיח שזה עובד.",
-      "timestamp": "2026-02-18T13:02:37.208513",
-      "importance": "permanent"
-    }
-  ],
+  "decisions": [],
   "avoid": [],
-  "errors": [],
-  "ai_session": {
-    "active": true,
-    "editor": "both",
-    "started_at": "2026-02-18T12:48:24.383674",
-    "briefing_sent": false,
-    "previous_ai": {
-      "editor": "claude",
-      "started_at": "2026-02-18T12:19:37.977906",
-      "ended_at": "2026-02-18T12:48:24.383633"
-    },
-    "last_activity": "2026-02-18T14:01:30.885317"
-  },
+  "active_issues": [],
+  "solutions_history": [],
   "stats": {
-    "last_updated": "2026-02-18T12:19:37.948528"
+    "total_errors_captured": 0,
+    "total_solutions_applied": 0,
+    "last_updated": "2026-02-20T11:20:41.734306"
   },
   "roi": {
-    "sessions_with_context": 33,
-    "tokens_saved": 330000,
-    "time_saved_minutes": 330
-  },
-  "ai_handoffs": [
-    {
-      "from": "cursor",
-      "to": "claude",
-      "timestamp": "2026-02-17T22:26:35.387144"
-    },
-    {
-      "from": "claude",
-      "to": "vscode",
-      "timestamp": "2026-02-17T22:31:14.905220"
-    },
-    {
-      "from": "vscode",
-      "to": "claude",
-      "timestamp": "2026-02-17T23:06:15.134647"
-    },
-    {
-      "from": "claude",
-      "to": "cursor",
-      "timestamp": "2026-02-18T09:51:37.007498"
-    },
-    {
-      "from": "cursor",
-      "to": "claude",
-      "timestamp": "2026-02-18T10:22:15.848081"
-    },
-    {
-      "from": "claude",
-      "to": "cursor",
-      "timestamp": "2026-02-18T10:29:28.478205"
-    },
-    {
-      "from": "cursor",
-      "to": "claude",
-      "timestamp": "2026-02-18T10:31:00.061365"
-    },
-    {
-      "from": "claude",
-      "to": "cursor",
-      "timestamp": "2026-02-18T12:19:37.912827"
-    }
-  ],
-  "ai_queue": [
-    {
-      "type": "error",
-      "message": "TypeError: users.map is not a function",
-      "source": "components/UserList.jsx",
-      "line": "45",
-      "priority": "high",
-      "queued_at": "2026-02-17T22:52:29.394927",
-      "status": "shown"
-    },
-    {
-      "type": "error",
-      "message": "TypeError: users.map is not a function",
-      "source": "components/UserList.jsx",
-      "line": "45",
-      "priority": "high",
-      "queued_at": "2026-02-17T22:52:46.377292",
-      "status": "shown"
-    },
-    {
-      "type": "error",
-      "message": "TypeError: users.map is not a function",
-      "source": "components/UserList.jsx",
-      "line": "45",
-      "priority": "high",
-      "queued_at": "2026-02-17T23:00:30.491668",
-      "status": "shown"
-    },
-    {
-      "type": "error",
-      "message": "TypeError: users.map is not a function",
-      "source": "components/UserList.jsx",
-      "line": "45",
-      "priority": "high",
-      "queued_at": "2026-02-17T23:00:42.356062",
-      "status": "shown"
-    }
-  ],
-  "debug_sessions": [
-    {
-      "id": "debug_20260218_104345",
-      "problem": "Cursor לא מזהה MCP tools - אומר \"I don't have access to auto_init_session\"",
-      "root_cause": "Cursor MCP loads only when: 1) Project folder is OPEN in Cursor 2) You start a NEW chat. Unlike Claude Code which works from any directory.",
-      "solution": "Open the project folder in Cursor first, then start a new chat. The MCP tools will be available.",
-      "symptoms": [
-        "Server 'fixonce' not found",
-        "I don't have access to MCP tool",
-        "auto_init_session command not found"
-      ],
-      "files_changed": [
-        ".mcp.json",
-        ".cursorrules",
-        "claude_desktop_config.json"
-      ],
-      "resolved_at": "2026-02-18T10:43:45.956465",
-      "importance": "high"
-    }
-  ],
-  "active_ais": {
-    "claude": {
-      "started_at": "2026-02-18T12:37:08.457002",
-      "last_activity": "2026-02-18T14:01:30.885317"
-    },
-    "cursor": {
-      "started_at": "2026-02-18T14:01:30.885317",
-      "last_activity": "2026-02-18T14:01:30.885317"
-    }
+    "solutions_reused": 0,
+    "tokens_saved": 0,
+    "errors_prevented": 0,
+    "decisions_referenced": 0,
+    "time_saved_minutes": 0,
+    "sessions_with_context": 0
   }
 }

@@ -3,12 +3,13 @@ FixOnce Error Routes
 Error logging and live error retrieval endpoints.
 
 Phase 0: Added project_id tagging to prevent cross-project leakage.
+Phase 0.1: Use X-Project-Root header for explicit project context.
 """
 
 from flask import jsonify, request
 from datetime import datetime
 
-from . import errors_bp
+from . import errors_bp, get_project_from_request
 from core.notifications import send_desktop_notification
 from core.error_store import get_error_log, get_log_lock, add_error, get_errors, clear_errors
 
@@ -18,7 +19,20 @@ log_lock = get_log_lock()
 
 
 def _get_active_project_id() -> str:
-    """Get the active project ID for error attribution."""
+    """
+    Get the project ID for error attribution.
+
+    Priority:
+    1. X-Project-Root header (if present)
+    2. Active project fallback (for backward compatibility)
+    3. __global__ fallback
+    """
+    # Try X-Project-Root header first
+    project_id, _ = get_project_from_request()
+    if project_id:
+        return project_id
+
+    # Fallback to active project (backward compatibility)
     try:
         from managers.multi_project_manager import get_active_project_id
         pid = get_active_project_id()

@@ -18,6 +18,17 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+# Semantic Search Integration
+_semantic_available = False
+try:
+    from core.project_semantic import (
+        index_insight, index_decision, index_avoid,
+        search_project, rebuild_project_index
+    )
+    _semantic_available = True
+except ImportError:
+    pass  # Semantic search not available, will use fallback
+
 
 def _detect_editor() -> str:
     """Detect which editor/AI is running this MCP server."""
@@ -93,6 +104,9 @@ sys.path.insert(0, str(SRC_DIR))
 
 from fastmcp import FastMCP
 
+# Phase 0: Project isolation - central project context
+from core.project_context import ProjectContext, resolve_project_id
+
 # Phase 1: Boundary detection imports
 try:
     from core.boundary_detector import (
@@ -113,6 +127,20 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Project index file (for caching)
 INDEX_FILE = SRC_DIR.parent / "data" / "project_index.json"
+
+# Global on/off toggle (controlled by dashboard)
+ENABLED_FLAG_FILE = SRC_DIR.parent / "data" / "fixonce_enabled.json"
+
+
+def _is_fixonce_enabled() -> bool:
+    """Check if FixOnce is enabled. Defaults to True if flag file doesn't exist."""
+    try:
+        if not ENABLED_FLAG_FILE.exists():
+            return True
+        with open(ENABLED_FLAG_FILE, 'r') as f:
+            return json.load(f).get("enabled", True)
+    except Exception:
+        return True
 
 
 # ============================================================
@@ -388,6 +416,9 @@ def _universal_gate(tool_name: str) -> tuple:
 
     This replaces _require_session with auto-session + context injection.
     """
+    if not _is_fixonce_enabled():
+        return ("FixOnce is off. Proceed normally without FixOnce tools.", "")
+
     session = _get_session()
 
     # AUTO-SESSION: Create session automatically if not active
@@ -528,6 +559,26 @@ def _require_session(tool_name: str) -> Optional[str]:
     return error
 
 
+def _require_project() -> str:
+    """
+    Get project_id from thread-local session.
+
+    IMPORTANT: This is the NEW way to get project context.
+    It NEVER reads from active_project.json.
+    The session must be initialized via init_session() or auto_init_session().
+
+    Returns:
+        project_id from the current session
+
+    Raises:
+        ValueError: If no session is active
+    """
+    session = _get_session()
+    if not session or not session.working_dir:
+        raise ValueError("No project context. Call init_session(cwd) or auto_init_session() first.")
+    return ProjectContext.from_path(session.working_dir)
+
+
 def _get_browser_errors_reminder() -> str:
     """Get reminder about browser errors if there are any recent ones."""
     try:
@@ -588,6 +639,94 @@ def _track_roi_event(event_type: str):
         )
     except Exception:
         pass  # Silent fail - don't block MCP operations
+
+
+def _log_mcp_activity(tool_name: str, details: dict = None):
+    """
+    Log MCP tool calls as activity for dashboard tracking.
+
+    This enables visibility into AI memory operations like:
+    - update_live_record (goal changes, insights)
+    - log_decision
+    - log_avoid
+    - search_past_solutions
+
+    Args:
+        tool_name: Name of the MCP tool being called
+        details: Optional dict with additional info (section, text, etc.)
+    """
+    try:
+        session = _get_session()
+        project_id = session.project_id if session.is_active() else "__global__"
+        working_dir = session.working_dir if session.is_active() else ""
+
+        # Get editor info
+        detected_editor = _detect_editor()
+
+        # Build activity entry
+        activity = {
+            "type": "mcp_tool",
+            "tool": tool_name,
+            "file": None,  # MCP tools don't have files
+            "command": None,
+            "cwd": working_dir,
+            "project_id": project_id,
+            "editor": detected_editor,
+            "timestamp": datetime.now().isoformat(),
+            "human_name": _get_mcp_human_name(tool_name, details),
+            "file_context": "memory",
+            "mcp_details": details or {}
+        }
+
+        # Send to activity API
+        requests.post(
+            "http://localhost:5000/api/activity/log",
+            json=activity,
+            timeout=2
+        )
+    except Exception as e:
+        # Silent fail - don't block MCP operations
+        print(f"[MCP] Activity log failed: {e}")
+
+
+def _get_mcp_human_name(tool_name: str, details: dict = None) -> str:
+    """Get human-readable name for MCP tool activity."""
+    details = details or {}
+
+    if tool_name == "update_live_record":
+        section = details.get("section", "")
+        if section == "intent":
+            goal = details.get("goal", "")[:30]
+            return f"Goal: {goal}..." if goal else "Updated goal"
+        elif section == "lessons":
+            if details.get("insight"):
+                return "Added insight"
+            elif details.get("failed_attempt"):
+                return "Logged failed attempt"
+            return "Updated lessons"
+        elif section == "architecture":
+            return "Updated architecture"
+        return f"Updated {section}"
+
+    elif tool_name == "log_decision":
+        decision = details.get("decision", "")[:25]
+        return f"Decision: {decision}..." if decision else "Logged decision"
+
+    elif tool_name == "log_avoid":
+        what = details.get("what", "")[:25]
+        return f"Avoid: {what}..." if what else "Logged avoid pattern"
+
+    elif tool_name == "search_past_solutions":
+        query = details.get("query", "")[:20]
+        return f"Search: {query}..." if query else "Searched solutions"
+
+    elif tool_name == "auto_init_session":
+        return "Session initialized"
+
+    elif tool_name == "scan_project":
+        return "Scanned project"
+
+    return tool_name.replace("_", " ").title()
 
 
 # ============================================================
@@ -944,12 +1083,13 @@ def _get_working_dir_from_port(port: int) -> Optional[str]:
 
 
 def _get_project_id(working_dir: str) -> str:
-    """Convert working_dir to a safe project ID."""
-    # Use hash of path for safe filename
-    path_hash = hashlib.md5(working_dir.encode()).hexdigest()[:12]
-    # Also keep readable name
-    name = Path(working_dir).name
-    return f"{name}_{path_hash}"
+    """
+    Convert working_dir to a safe project ID.
+
+    IMPORTANT: This now delegates to ProjectContext.from_path()
+    which is the SINGLE SOURCE OF TRUTH for project ID generation.
+    """
+    return ProjectContext.from_path(working_dir)
 
 
 def _get_project_path(project_id: str) -> Path:
@@ -1032,6 +1172,100 @@ def _is_meaningful_project(data: Dict[str, Any]) -> bool:
         return True
 
     return False
+
+
+def _find_and_migrate_legacy_project(new_project_id: str, working_dir: str) -> Optional[Dict[str, Any]]:
+    """
+    Search for legacy project files with the same name but a different hash.
+
+    Handles ID changes caused by:
+    - git remote URL changes
+    - Migration between hash strategies (path → git_remote, etc.)
+    - Repository renames
+
+    Safety: only migrates if the old file's working_dir is empty or matches.
+
+    Returns migrated data dict, or None if no legacy data found.
+    """
+    name_prefix = new_project_id.rsplit('_', 1)[0]
+    if not name_prefix:
+        return None
+
+    candidates = []
+    for f in DATA_DIR.glob(f"{name_prefix}_*.json"):
+        if '.migrated' in f.name:
+            continue
+        candidate_id = f.stem
+        if candidate_id == new_project_id:
+            continue
+        try:
+            with open(f, 'r', encoding='utf-8') as fh:
+                data = json.load(fh)
+        except Exception:
+            continue
+
+        if not _is_meaningful_project(data):
+            continue
+
+        old_wd = data.get('project_info', {}).get('working_dir', '')
+        old_gps_wd = data.get('live_record', {}).get('gps', {}).get('working_dir', '')
+        effective_old_wd = old_wd or old_gps_wd
+
+        if effective_old_wd and effective_old_wd != working_dir:
+            continue
+
+        decisions = len(data.get('decisions', []))
+        insights = len(data.get('live_record', {}).get('lessons', {}).get('insights', []))
+        solutions = len(data.get('solutions_history', []))
+        candidates.append((f, candidate_id, data, decisions + insights + solutions))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: x[3], reverse=True)
+    best_file, old_id, old_data, _ = candidates[0]
+
+    new_data = _init_project_memory(working_dir)
+
+    for key in ['decisions', 'avoid', 'solutions_history', 'active_issues', 'stats', 'roi']:
+        if old_data.get(key):
+            new_data[key] = old_data[key]
+
+    old_lr = old_data.get('live_record', {})
+    new_lr = new_data['live_record']
+    for section in ['architecture', 'intent', 'lessons']:
+        old_section = old_lr.get(section, {})
+        if section == 'lessons':
+            if old_section.get('insights') or old_section.get('failed_attempts'):
+                new_lr[section] = old_section
+        elif section == 'architecture':
+            if old_section.get('summary') or old_section.get('stack') or old_section.get('key_flows'):
+                new_lr[section] = old_section
+        elif section == 'intent':
+            if old_section.get('current_goal'):
+                new_lr[section] = old_section
+
+    if old_data.get('project_info', {}).get('created_at'):
+        new_data['project_info']['created_at'] = old_data['project_info']['created_at']
+
+    # Migrate embeddings directory if it exists
+    old_embeddings = DATA_DIR / f"{old_id}.embeddings"
+    new_embeddings = DATA_DIR / f"{new_project_id}.embeddings"
+    if old_embeddings.is_dir() and not new_embeddings.exists():
+        try:
+            old_embeddings.rename(new_embeddings)
+        except Exception as e:
+            print(f"[MCP] Failed to migrate embeddings: {e}")
+
+    # Archive old project file
+    try:
+        archive_path = best_file.with_suffix('.migrated.json')
+        best_file.rename(archive_path)
+    except Exception:
+        pass
+
+    print(f"[MCP] Migrated project data: {old_id} → {new_project_id}")
+    return new_data
 
 
 def _get_recent_activity_summary(working_dir: str, limit: int = 5) -> str:
@@ -1128,6 +1362,9 @@ def auto_init_session(cwd: str = "", sync_to_active: bool = False) -> str:
     Returns:
         Session info with project details
     """
+    if not _is_fixonce_enabled():
+        return "FixOnce is off. Proceed normally without FixOnce tools."
+
     # Multi-AI Sync: If sync_to_active is True, use the active project
     if sync_to_active:
         try:
@@ -1369,10 +1606,20 @@ def _do_init_session(working_dir: str) -> str:
             _save_project(project_id, data)
         return _format_from_snapshot(cached, working_dir)
 
-    # Load or create project
+    # Load or create project (with legacy migration)
     data = _load_project(project_id)
-    if not data:
-        data = _init_project_memory(working_dir)
+    migrated = False
+    if not data or not _is_meaningful_project(data):
+        legacy_data = _find_and_migrate_legacy_project(project_id, working_dir)
+        if legacy_data:
+            if data:
+                for key in ('ai_session', 'active_ais', 'ai_handoffs'):
+                    if data.get(key):
+                        legacy_data[key] = data[key]
+            data = legacy_data
+            migrated = True
+        elif not data:
+            data = _init_project_memory(working_dir)
 
     # Track previous AI for handoff (Multi-AI Sync)
     previous_ai = None
@@ -1417,7 +1664,10 @@ def _do_init_session(working_dir: str) -> str:
     _update_snapshot(project_id, working_dir, data)
 
     # Build response
-    return _format_init_response(data, status, working_dir)
+    response = _format_init_response(data, status, working_dir)
+    if migrated:
+        response += "\n\n🔄 **Memory migrated** — project ID changed (git remote/hash strategy). All decisions, insights, and history preserved."
+    return response
 
 
 def _is_meaningful_snapshot(snapshot: Dict[str, Any]) -> bool:
@@ -1921,6 +2171,9 @@ def init_session(working_dir: str = "", port: int = 0) -> str:
     Returns:
         Session info with project_status ('new' or 'existing')
     """
+    if not _is_fixonce_enabled():
+        return "FixOnce is off. Proceed normally without FixOnce tools."
+
     # If port given, detect working_dir from it
     if port and not working_dir:
         detected = _get_working_dir_from_port(port)
@@ -2102,6 +2355,13 @@ def update_live_record(section: str, data: str) -> str:
             new_insight = _create_insight(update_data['insight'], linked_error=linked_error)
             lr['lessons']['insights'].append(new_insight)
 
+            # Auto-index for semantic search
+            if _semantic_available:
+                try:
+                    index_insight(project_id, update_data['insight'])
+                except Exception as e:
+                    print(f"[SemanticIndex] Failed to index insight: {e}")
+
             # Fix #2: Notify about the link
             if linked_error:
                 pre_action_warning += f"\n🔗 **Auto-linked to error:** {linked_error.get('message', '')[:50]}..."
@@ -2140,6 +2400,14 @@ def update_live_record(section: str, data: str) -> str:
 
     lr['updated_at'] = datetime.now().isoformat()
     _save_project(project_id, memory)
+
+    # Log MCP activity for dashboard
+    _log_mcp_activity("update_live_record", {
+        "section": section,
+        "goal": update_data.get("current_goal", "") if section == "intent" else "",
+        "insight": update_data.get("insight", "")[:50] if section == "lessons" else "",
+        "failed_attempt": bool(update_data.get("failed_attempt")) if section == "lessons" else False
+    })
 
     # Add browser errors reminder if any
     reminder = _get_browser_errors_reminder()
@@ -2241,6 +2509,20 @@ def log_decision(decision: str, reason: str) -> str:
     })
 
     _save_project(session.project_id, memory)
+
+    # Log MCP activity for dashboard
+    _log_mcp_activity("log_decision", {
+        "decision": decision[:50],
+        "reason": reason[:50]
+    })
+
+    # Auto-index for semantic search
+    if _semantic_available:
+        try:
+            index_decision(session.project_id, decision, reason)
+        except Exception as e:
+            print(f"[SemanticIndex] Failed to index decision: {e}")
+
     return context + f"Logged decision: {decision}" + similar_warning
 
 
@@ -2266,7 +2548,145 @@ def log_avoid(what: str, reason: str) -> str:
     })
 
     _save_project(session.project_id, memory)
+
+    # Log MCP activity for dashboard
+    _log_mcp_activity("log_avoid", {
+        "what": what[:50],
+        "reason": reason[:50]
+    })
+
+    # Auto-index for semantic search
+    if _semantic_available:
+        try:
+            index_avoid(session.project_id, what, reason)
+        except Exception as e:
+            print(f"[SemanticIndex] Failed to index avoid: {e}")
+
     return context + f"Logged avoid: {what}"
+
+
+@mcp.tool()
+def get_latest_changes() -> str:
+    """
+    Get the latest changes - unified source of truth.
+
+    Returns canonical "latest change" using this priority:
+    1. Activity feed (file edits < 10 min)
+    2. Git commit (< 30 min)
+    3. Current goal (fallback)
+
+    Use this when user asks "what's the latest change" or "what happened recently".
+    """
+    error, context = _universal_gate("get_latest_changes")
+    if error:
+        return error
+
+    session = _get_session()
+    memory = _load_project(session.project_id) if session.project_id else {}
+    now = datetime.now()
+
+    result = {
+        "latest_activity": None,
+        "latest_git": None,
+        "latest_goal": None,
+        "canonical": None
+    }
+
+    # 1. Check activity log
+    try:
+        activity_file = DATA_DIR / "activity_log.json"
+        if activity_file.exists():
+            with open(activity_file, 'r', encoding='utf-8') as f:
+                activity_data = json.load(f)
+            activities = activity_data.get("activities", [])
+            if activities:
+                latest = activities[-1]
+                result["latest_activity"] = {
+                    "file": latest.get("human_name") or latest.get("file"),
+                    "tool": latest.get("tool"),
+                    "timestamp": latest.get("timestamp"),
+                    "actor": latest.get("editor", "unknown")
+                }
+    except:
+        pass
+
+    # 2. Check git
+    try:
+        working_dir = memory.get("project_info", {}).get("working_dir")
+        if working_dir and Path(working_dir).exists():
+            import subprocess
+            git_result = subprocess.run(
+                ["git", "log", "-1", "--format=%s|%ai"],
+                cwd=working_dir,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if git_result.returncode == 0 and git_result.stdout.strip():
+                parts = git_result.stdout.strip().split("|")
+                if len(parts) >= 2:
+                    result["latest_git"] = {
+                        "message": parts[0],
+                        "timestamp": parts[1]
+                    }
+    except:
+        pass
+
+    # 3. Get current goal
+    intent = memory.get("live_record", {}).get("intent", {})
+    result["latest_goal"] = intent.get("current_goal")
+
+    # Determine canonical latest
+    canonical_text = None
+    canonical_source = None
+
+    # Priority 1: Activity (< 10 min)
+    if result["latest_activity"]:
+        try:
+            act_ts = result["latest_activity"]["timestamp"]
+            act_dt = datetime.fromisoformat(act_ts.replace('Z', ''))
+            if (now - act_dt).total_seconds() < 600:
+                canonical_text = f"נערך {result['latest_activity']['file']}"
+                canonical_source = "activity"
+        except:
+            pass
+
+    # Priority 2: Git (< 30 min)
+    if not canonical_text and result["latest_git"]:
+        try:
+            git_ts = result["latest_git"]["timestamp"]
+            git_dt = datetime.strptime(git_ts.split()[0] + " " + git_ts.split()[1], "%Y-%m-%d %H:%M:%S")
+            if (now - git_dt).total_seconds() < 1800:
+                canonical_text = f"commit: {result['latest_git']['message'][:50]}"
+                canonical_source = "git"
+        except:
+            pass
+
+    # Priority 3: Goal (fallback)
+    if not canonical_text and result["latest_goal"]:
+        canonical_text = f"מטרה: {result['latest_goal']}"
+        canonical_source = "intent"
+
+    if not canonical_text:
+        canonical_text = "אין פעילות אחרונה"
+        canonical_source = "none"
+
+    result["canonical"] = {
+        "text": canonical_text,
+        "source": canonical_source
+    }
+
+    # Format output
+    output = f"""📊 Latest Changes (Unified):
+
+🎯 Canonical: {canonical_text}
+   (source: {canonical_source})
+
+📝 Activity: {result['latest_activity']['file'] if result['latest_activity'] else 'None'}
+🔀 Git: {result['latest_git']['message'][:40] if result['latest_git'] else 'None'}
+🎯 Goal: {result['latest_goal'] or 'None'}
+"""
+    return context + output
 
 
 @mcp.tool()
@@ -2493,7 +2913,6 @@ def search_past_solutions(query: str) -> str:
         return error
 
     session = _get_session()
-
     memory = _load_project(session.project_id)
 
     # Search in lessons
@@ -2502,22 +2921,60 @@ def search_past_solutions(query: str) -> str:
     failed = lessons.get('failed_attempts', [])
 
     query_lower = query.lower()
-
     matches = []
     matched_insights = []
     matched_indices = []
 
-    for i, insight in enumerate(insights):
-        normalized = _normalize_insight(insight)
-        insight_text = normalized.get('text', '')
+    # === SEMANTIC SEARCH (if available) ===
+    semantic_results = []
+    if _semantic_available:
+        try:
+            semantic_results = search_project(session.project_id, query, k=5, min_score=0.3)
+            print(f"[SemanticSearch] Found {len(semantic_results)} results for '{query}'")
+        except Exception as e:
+            print(f"[SemanticSearch] Error: {e}, falling back to string match")
+            semantic_results = []
 
-        if query_lower in insight_text.lower():
-            override = _format_smart_override(normalized, query)
-            matched_insights.append(override)
-            matched_indices.append(i)
-            _mark_insight_used(normalized)
-            insights[i] = normalized
+    # If semantic search found results, use them
+    if semantic_results:
+        for result in semantic_results:
+            # Find the original insight to update use count
+            for i, insight in enumerate(insights):
+                normalized = _normalize_insight(insight)
+                if normalized.get('text', '') == result.text:
+                    override = _format_smart_override(normalized, query)
+                    # Add semantic score
+                    override['similarity'] = int(result.score * 100)
+                    matched_insights.append(override)
+                    matched_indices.append(i)
+                    _mark_insight_used(normalized)
+                    insights[i] = normalized
+                    break
+            else:
+                # Result from index but not in current insights (decision/avoid)
+                matched_insights.append({
+                    'text': result.text,
+                    'confidence': 80,
+                    'similarity': int(result.score * 100),
+                    'date': result.metadata.get('created_at', 'unknown')[:10],
+                    'use_count': 0,
+                    'type': result.metadata.get('doc_type', 'insight')
+                })
 
+    # === FALLBACK: String matching (if no semantic results) ===
+    if not matched_insights:
+        for i, insight in enumerate(insights):
+            normalized = _normalize_insight(insight)
+            insight_text = normalized.get('text', '')
+
+            if query_lower in insight_text.lower():
+                override = _format_smart_override(normalized, query)
+                matched_insights.append(override)
+                matched_indices.append(i)
+                _mark_insight_used(normalized)
+                insights[i] = normalized
+
+    # Search failed attempts (always string match)
     for attempt in failed:
         normalized = _normalize_insight(attempt)
         attempt_text = normalized.get('text', '')
@@ -2529,6 +2986,12 @@ def search_past_solutions(query: str) -> str:
     if matched_indices:
         _save_project(session.project_id, memory)
 
+    # Log MCP activity for dashboard
+    _log_mcp_activity("search_past_solutions", {
+        "query": query[:30],
+        "found": len(matched_insights) + len(matches)
+    })
+
     if matched_insights:
         _track_roi_event("solution_reused")
 
@@ -2536,12 +2999,17 @@ def search_past_solutions(query: str) -> str:
         lines = [context]
         lines.append("## 🎯 EXISTING SOLUTION FOUND\n")
 
+        search_method = "🔍 Semantic" if semantic_results else "📝 Keyword"
+        lines.append(f"_Search method: {search_method}_\n")
+
         for i, m in enumerate(matched_insights[:3]):  # Top 3
             lines.append(f"### Match #{i+1}")
             lines.append(f"**Confidence:** {m['confidence']}%")
             lines.append(f"**Similarity:** {m['similarity']}%")
             lines.append(f"**Date:** {m['date']}")
-            lines.append(f"**Used:** {m['use_count']} times")
+            lines.append(f"**Used:** {m.get('use_count', 0)} times")
+            if m.get('type') and m['type'] != 'insight':
+                lines.append(f"**Type:** {m['type']}")
             lines.append(f"\n> {m['text']}\n")
 
         lines.append("---")
@@ -2629,6 +3097,43 @@ def get_recent_activity(limit: int = 10) -> str:
 
     except Exception as e:
         return f"Error reading activity: {e}"
+
+
+@mcp.tool()
+def rebuild_semantic_index() -> str:
+    """
+    Rebuild semantic search index from existing project memory.
+
+    Use this when:
+    - First time enabling semantic search on existing project
+    - Index seems out of sync
+    - After model upgrade
+
+    Returns:
+        Stats about the rebuild
+    """
+    error, context = _universal_gate("rebuild_semantic_index")
+    if error:
+        return error
+
+    if not _semantic_available:
+        return context + "❌ Semantic search not available. Install fastembed: pip install fastembed"
+
+    session = _get_session()
+
+    try:
+        result = rebuild_project_index(session.project_id)
+        if result.get('status') == 'ok':
+            return context + f"""## ✅ Semantic Index Rebuilt
+
+**Project:** {result.get('project_id')}
+**Documents indexed:** {result.get('documents_indexed')}
+
+Index is now ready for semantic search."""
+        else:
+            return context + f"❌ Rebuild failed: {result.get('message', 'Unknown error')}"
+    except Exception as e:
+        return context + f"❌ Error rebuilding index: {e}"
 
 
 @mcp.tool()

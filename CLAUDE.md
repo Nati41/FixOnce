@@ -1,117 +1,46 @@
-# FixOnce Protocol v2
+# FixOnce — AI Memory Layer
 
-## Mission
-אתה **FixOnce-powered**. יש לך זיכרון חי לכל פרויקט.
+> FixOnce never blocks development. It only enhances it.
 
----
+## Disable
 
-## Session Start (MANDATORY)
+If the user says "work without FixOnce" or "no fixonce" — stop calling all MCP tools. Work normally.
 
-בתחילת **כל** שיחה, קרא אחת מהאפשרויות:
+## Session Start
 
-```python
-# אפשרות 1: לפי נתיב (אם יש cwd ברור)
-init_session(working_dir="/absolute/path/to/project")
+Try: `init_session(working_dir="/path/to/project")` or `init_session(port=5000)`
 
-# אפשרות 2: לפי פורט (אם יש שרת רץ)
-init_session(port=5000)
-```
-
-**עדיפות:** אם יש שרת רץ על פורט ידוע, השתמש ב-port - זה יזהה אוטומטית את התיקייה.
+**If it works** — show context and follow rules below.
+**If it fails** — proceed normally.
 
 ---
 
-## Project ID = Working Directory
+## When Active
 
-פשוט. אין ניחושים.
+- **Respect decisions** returned from init. Ask before contradicting.
+- **Update goal** before work: `update_live_record("intent", ...)`
+- **Log insights**: `update_live_record("lessons", ...)`
+- **Log decisions**: `log_decision("...", "...")`
+- **Search first**: `search_past_solutions("...")`
 
-```
-~/Desktop/FixOnce  →  פרויקט FixOnce
-~/Desktop/my-app   →  פרויקט my-app
-```
+## New Project (status: NEW)
 
----
+Ask "Want me to scan?" → `scan_project()` → save with `update_live_record`
 
-## Flow
+## Tools
 
-### פרויקט חדש (status: NEW)
+| Tool | Purpose |
+|------|---------|
+| `auto_init_session` / `init_session` | Start session |
+| `scan_project` | Scan new project |
+| `update_live_record` | Save goal / lessons / architecture |
+| `log_decision` | Record a decision |
+| `log_avoid` | Record an anti-pattern |
+| `search_past_solutions` | Search memory |
+| `get_live_record` | Read memory |
 
-```
-init_session(cwd)
-  → "Status: NEW"
+## 🔒 Active Decisions
 
-אתה: "🆕 פרויקט חדש. רוצה שאסרוק?"
-
-משתמש: "כן"
-
-scan_project()
-  → מקבל מידע
-
-update_live_record("architecture", {"summary": "..."})
-update_live_record("intent", {"current_goal": "...", "next_step": "..."})
-update_live_record("lessons", {"insight": "תובנה ראשונית"})
-
-אתה: "✅ שמרתי. מה תרצה לעשות?"
-```
-
-### פרויקט קיים (status: EXISTING)
-
-```
-init_session(cwd)
-  → "Status: EXISTING"
-  → "Last Goal: ..."
-  → "Architecture: ..."
-
-אתה: "📂 ממשיך לעבוד על [project]
-      🎯 מטרה: [goal]
-      💡 תובנה: [insight]
-
-      ▶️ נמשיך מכאן?"
-
-משתמש: "כן"
-
-→ עבודה רגילה
-```
-
----
-
-## MCP Tools
-
-| כלי | תפקיד |
-|-----|-------|
-| `init_session(working_dir)` או `init_session(port)` | **חובה בהתחלה!** |
-| `detect_project_from_port(port)` | בדיקה איזה פרויקט רץ על פורט |
-| `scan_project()` | סריקה לפרויקט חדש |
-| `update_live_record(section, data)` | עדכון GPS/Architecture/Intent/Lessons |
-| `get_live_record()` | קריאת המצב הנוכחי |
-| `log_decision(decision, reason)` | תיעוד החלטה |
-| `log_avoid(what, reason)` | תיעוד מה להימנע |
-| `search_past_solutions(query)` | חיפוש פתרונות קודמים |
-
----
-
-## Live Record Sections
-
-| Section | Mode | תוכן |
-|---------|------|------|
-| `gps` | REPLACE | working_dir, ports, url, environment |
-| `architecture` | REPLACE | summary, key_flows |
-| `intent` | REPLACE | current_goal, next_step, blockers |
-| `lessons` | APPEND | insights[], failed_attempts[] |
-
----
-
-## Communication Style
-
-- **עברית**, קצר וישיר
-- **AI מוביל** - לא מחכה שהמשתמש ינהל
-- **הוכח חכמה** - "מצאתי ב-lessons שזה נכשל קודם"
-
----
-
-## Key Principles
-
-1. **Project = Directory** - חד-משמעי, בלי ניחושים
-2. **init_session() חובה** - תמיד בהתחלה
-3. **הזיכרון חי** - מעדכנים תוך כדי
-4. **Never debug the same bug twice**
+| Decision | Reason |
+|----------|--------|
+| **Dashboard/UI = English only** | User requested |

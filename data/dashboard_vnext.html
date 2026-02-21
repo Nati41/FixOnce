@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FixOnce</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0a0a0b;
+            --card-bg: #141417;
+            --card-border: #1e1e24;
+            --text-primary: #ffffff;
+            --text-secondary: #8b8b9e;
+            --text-muted: #5a5a6e;
+            --accent: #3b82f6;
+            --accent-green: #22c55e;
+            --accent-orange: #f59e0b;
+            --tag-bg: #1e1e24;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* ========== HEADER ========== */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon-svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #3b82f6, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.warning {
+            background: var(--accent-orange);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.3); }
+            50% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.6); }
+        }
+
+        .recently-updated {
+            animation: glow 2s ease-in-out infinite;
+            border-color: var(--accent) !important;
+        }
+
+        .recently-updated-text {
+            color: var(--accent) !important;
+        }
+
+        .switch-project {
+            background: transparent;
+            border: 1px solid var(--card-border);
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .switch-project:hover {
+            border-color: var(--text-muted);
+            color: var(--text-primary);
+        }
+
+        /* ========== MAIN LAYOUT ========== */
+        main {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 60px 40px;
+            padding-bottom: 100px; /* Space for fixed footer */
+            gap: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+            min-height: calc(100vh - 80px);
+        }
+
+        /* ========== THE CARD ========== */
+        .project-card {
+            flex: 1;
+            max-width: 700px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        /* -- COMPASS SECTION -- */
+        .compass {
+            padding: 40px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .project-name {
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.03em;
+            margin-bottom: 12px;
+        }
+
+        .project-goal {
+            font-size: 16px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .goal-line {
+            margin-bottom: 4px;
+        }
+
+        .goal-focus {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .updated-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 16px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .updated-badge.recent {
+            color: var(--accent);
+        }
+
+        .updated-badge .sparkle {
+            font-size: 10px;
+        }
+
+        /* -- ENGINE ROOM -- */
+        .engine {
+            padding: 32px 40px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .engine-section {
+            margin-bottom: 24px;
+        }
+
+        .engine-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .engine-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .stack-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tag {
+            background: var(--tag-bg);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .decision-text {
+            font-size: 15px;
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .constraint-text {
+            font-size: 14px;
+            color: var(--accent-orange);
+            font-style: italic;
+        }
+
+        .empty-state {
+            font-size: 14px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* -- THE PULSE -- */
+        .pulse {
+            padding: 32px 40px;
+            background: linear-gradient(to bottom, transparent, rgba(59, 130, 246, 0.03));
+        }
+
+        .pulse-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+
+        .pulse-text {
+            font-size: 16px;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* ========== SIDEBAR ========== */
+        .sidebar {
+            width: 200px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-section {
+            margin-bottom: 32px;
+        }
+
+        .sidebar-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        .ai-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .ai-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-green);
+        }
+
+        .ai-dot.inactive {
+            background: var(--text-muted);
+        }
+
+        .ai-name {
+            color: var(--text-primary);
+        }
+
+        .ai-time {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .handoff-note {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 8px;
+            padding-left: 16px;
+        }
+
+        .stats-row {
+            display: flex;
+            gap: 16px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .roi-stat {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+
+        .roi-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--accent-green);
+        }
+
+        .roi-label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .depth-btn {
+            background: transparent;
+            border: 1px solid var(--card-border);
+            color: var(--text-secondary);
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .depth-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Depth Panel Tabs */
+        .depth-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--card-border);
+            background: var(--bg);
+        }
+
+        .depth-tab {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .depth-tab:hover {
+            color: var(--text-secondary);
+            background: var(--card-border);
+        }
+
+        .depth-tab.active {
+            color: var(--text-primary);
+            background: var(--card-border);
+        }
+
+        .depth-content {
+            padding: 20px 24px;
+        }
+
+        .depth-item {
+            padding: 14px 0;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .depth-item:last-child {
+            border-bottom: none;
+        }
+
+        .depth-item-title {
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .depth-item-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .depth-item-reason {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            font-style: italic;
+        }
+
+        .system-info {
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: var(--bg);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+        }
+
+        .system-label {
+            color: var(--text-muted);
+            margin-right: 8px;
+        }
+
+        /* ========== FOOTER - WHAT CHANGED ========== */
+        footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-top: 1px solid var(--card-border);
+            padding: 16px 40px;
+        }
+
+        .changes-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .changes-list {
+            display: flex;
+            gap: 24px;
+        }
+
+        .change-item {
+            font-size: 13px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .change-icon {
+            font-size: 12px;
+        }
+
+        .change-item.goal { color: var(--accent); }
+        .change-item.decision { color: var(--accent-green); }
+        .change-item.avoid { color: var(--accent-orange); }
+
+        /* ========== EMPTY / LOADING ========== */
+        .no-project {
+            text-align: center;
+            padding: 80px 40px;
+        }
+
+        .no-project h2 {
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+
+        .no-project p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* ========== SLIDE PANEL ========== */
+        .slide-panel {
+            position: fixed;
+            top: 0;
+            right: -450px;
+            width: 450px;
+            height: 100vh;
+            background: var(--card-bg);
+            border-left: 1px solid var(--card-border);
+            transition: right 0.3s ease, width 0.3s ease;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        .slide-panel.open {
+            right: 0;
+        }
+
+        .slide-panel.wide {
+            width: 550px;
+            right: -550px;
+        }
+
+        .slide-panel.wide.open {
+            right: 0;
+        }
+
+        .slide-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .slide-panel-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .slide-panel-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .slide-panel-content {
+            padding: 24px;
+        }
+
+        .history-item {
+            padding: 16px 0;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-text {
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .history-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 99;
+        }
+
+        .overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Clickable sections */
+        .clickable {
+            cursor: pointer;
+            transition: background 0.2s;
+            margin: -12px;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .clickable:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        /* ========== RESPONSIVE ========== */
+        @media (max-width: 900px) {
+            main {
+                flex-direction: column;
+                padding: 30px 20px;
+                gap: 24px;
+            }
+
+            .project-card {
+                max-width: 100%;
+            }
+
+            .sidebar {
+                width: 100%;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 24px;
+            }
+
+            .sidebar-section {
+                flex: 1;
+                min-width: 150px;
+                margin-bottom: 0;
+            }
+
+            .compass {
+                padding: 24px;
+            }
+
+            .project-name {
+                font-size: 22px;
+            }
+
+            .engine {
+                padding: 20px 24px;
+            }
+
+            .pulse {
+                padding: 20px 24px;
+            }
+
+            footer {
+                padding: 12px 20px;
+            }
+
+            .changes-list {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            header {
+                padding: 12px 16px;
+            }
+
+            .logo-text {
+                font-size: 16px;
+            }
+
+            main {
+                padding: 20px 16px;
+            }
+
+            .sidebar {
+                flex-direction: column;
+            }
+
+            .stats-row {
+                justify-content: space-around;
+            }
+
+            .slide-panel {
+                width: 100% !important;
+                right: -100% !important;
+            }
+
+            .slide-panel.open {
+                right: 0 !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <header>
+        <div class="logo">
+            <!-- SVG Logo - Shield with F and circuit nodes -->
+            <svg class="logo-icon-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Outer glow circle -->
+                <circle cx="50" cy="50" r="48" stroke="url(#gradient1)" stroke-width="1" opacity="0.3"/>
+
+                <!-- Circuit nodes around -->
+                <circle cx="50" cy="6" r="4" fill="#3b82f6"/>
+                <circle cx="85" cy="25" r="3" fill="#06b6d4"/>
+                <circle cx="94" cy="50" r="3" fill="#3b82f6"/>
+                <circle cx="85" cy="75" r="3" fill="#06b6d4"/>
+                <circle cx="50" cy="94" r="4" fill="#3b82f6"/>
+                <circle cx="15" cy="75" r="3" fill="#06b6d4"/>
+                <circle cx="6" cy="50" r="3" fill="#3b82f6"/>
+                <circle cx="15" cy="25" r="3" fill="#06b6d4"/>
+
+                <!-- Connection lines -->
+                <path d="M50 10 L50 22 M82 27 L72 35 M90 50 L78 50 M82 73 L72 65 M50 90 L50 78 M18 73 L28 65 M10 50 L22 50 M18 27 L28 35"
+                      stroke="url(#gradient1)" stroke-width="1.5" opacity="0.5"/>
+
+                <!-- Shield shape -->
+                <path d="M50 18 L75 28 L75 55 C75 70 50 82 50 82 C50 82 25 70 25 55 L25 28 Z"
+                      fill="url(#gradient2)" stroke="url(#gradient1)" stroke-width="2"/>
+
+                <!-- Letter F -->
+                <text x="50" y="58" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#fff">F</text>
+
+                <!-- Circuit lines inside shield -->
+                <path d="M38 40 L38 45 L45 45" stroke="#06b6d4" stroke-width="1.5" fill="none" opacity="0.6"/>
+                <path d="M62 65 L62 60 L55 60" stroke="#06b6d4" stroke-width="1.5" fill="none" opacity="0.6"/>
+
+                <!-- Gradients -->
+                <defs>
+                    <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#3b82f6"/>
+                        <stop offset="100%" style="stop-color:#06b6d4"/>
+                    </linearGradient>
+                    <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#1e3a5f"/>
+                        <stop offset="100%" style="stop-color:#0f172a"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+            <span class="logo-text">FixOnce</span>
+            <span class="status-dot" id="status-dot" title="System healthy"></span>
+        </div>
+        <button class="switch-project" id="switch-btn">Switch Project</button>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main>
+        <!-- THE CARD -->
+        <div class="project-card" id="project-card">
+            <!-- COMPASS -->
+            <div class="compass">
+                <h1 class="project-name" id="project-name">Loading...</h1>
+                <div class="project-goal">
+                    <div class="goal-line" id="goal-summary">—</div>
+                    <div class="goal-line">Currently focusing on <span class="goal-focus" id="goal-focus">—</span></div>
+                </div>
+                <div class="updated-badge" id="updated-badge">
+                    <span class="sparkle">✨</span>
+                    <span id="updated-time">—</span>
+                </div>
+            </div>
+
+            <!-- ENGINE ROOM -->
+            <div class="engine">
+                <!-- Stack -->
+                <div class="engine-section">
+                    <div class="engine-label">
+                        <span>🏷</span> Stack
+                    </div>
+                    <div class="stack-tags" id="stack-tags">
+                        <span class="tag">—</span>
+                    </div>
+                </div>
+
+                <!-- Latest Decision -->
+                <div class="engine-section">
+                    <div class="engine-label">
+                        <span>🧠</span> Latest Decision
+                    </div>
+                    <div class="decision-text clickable" id="decision-text" onclick="openPanel('decisions')">
+                        No decisions yet
+                    </div>
+                </div>
+
+                <!-- Constraint (optional) -->
+                <div class="engine-section" id="constraint-section" style="display: none;">
+                    <div class="engine-label">
+                        <span>🚫</span> Constraint
+                    </div>
+                    <div class="constraint-text" id="constraint-text"></div>
+                </div>
+            </div>
+
+            <!-- THE PULSE -->
+            <div class="pulse">
+                <div class="pulse-label">Next Step</div>
+                <div class="pulse-text" id="next-step">—</div>
+            </div>
+        </div>
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <!-- Memory Stats -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">📊 Memory</div>
+                <div class="stats-row" id="memory-stats">
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-decisions">0</span>
+                        <span class="stat-label">Decisions</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-insights">0</span>
+                        <span class="stat-label">Insights</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-avoids">0</span>
+                        <span class="stat-label">Avoids</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ROI -->
+            <div class="sidebar-section" id="roi-section" style="display: none;">
+                <div class="sidebar-title">⚡ Value</div>
+                <div class="roi-stat" id="roi-time">
+                    <span class="roi-value">0</span>
+                    <span class="roi-label">min saved</span>
+                </div>
+            </div>
+
+            <!-- Active AI -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">🤖 Active AI</div>
+                <div id="active-ais">
+                    <div class="ai-item">
+                        <span class="ai-dot inactive"></span>
+                        <span class="ai-name">No active AI</span>
+                    </div>
+                </div>
+                <div class="handoff-note" id="handoff-note" style="display: none;">
+                    ↔ <span id="handoff-count">0</span> handoffs today
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- FOOTER - WHAT CHANGED -->
+    <footer>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div class="changes-title">What changed</div>
+                <div class="changes-list" id="changes-list">
+                    <span class="change-item" style="color: var(--text-muted);">No recent changes</span>
+                </div>
+            </div>
+            <button class="depth-btn" onclick="openDepthPanel()">
+                🔍 Deep Dive
+            </button>
+        </div>
+    </footer>
+
+    <!-- SLIDE PANEL -->
+    <div class="overlay" id="overlay" onclick="closePanel()"></div>
+    <div class="slide-panel" id="slide-panel">
+        <div class="slide-panel-header">
+            <span class="slide-panel-title" id="panel-title">History</span>
+            <button class="slide-panel-close" onclick="closePanel()">&times;</button>
+        </div>
+        <div class="slide-panel-content" id="panel-content">
+            <!-- Filled dynamically -->
+        </div>
+    </div>
+
+    <script>
+        let snapshot = null;
+        let liveRecord = null;
+
+        // =========== FETCH DATA ===========
+        async function fetchData() {
+            try {
+                const res = await fetch('/api/dashboard_snapshot');
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    snapshot = data.snapshot;
+                    renderDashboard();
+                }
+            } catch (e) {
+                console.error('Fetch error:', e);
+            }
+        }
+
+        // =========== RENDER ===========
+        function renderDashboard() {
+            if (!snapshot) return;
+
+            // Use identity for project info (this is the correct field from API)
+            const identity = snapshot.identity || {};
+            const env = snapshot.environment || {};
+
+            // Project name
+            const projectName = identity.name || 'FixOnce';
+            document.getElementById('project-name').textContent = projectName;
+
+            // Status dot - green if we have data
+            const dot = document.getElementById('status-dot');
+            dot.className = identity.name ? 'status-dot' : 'status-dot warning';
+
+            // Goal - from identity.current_goal
+            const goal = identity.current_goal || '';
+            const summary = identity.summary || '';
+
+            if (summary || goal) {
+                document.getElementById('goal-summary').textContent = summary || 'Building something great.';
+                document.getElementById('goal-focus').textContent = goal || 'Set a goal to get started';
+            } else {
+                document.getElementById('goal-summary').textContent = 'No active goal';
+                document.getElementById('goal-focus').textContent = 'set one to get started';
+            }
+
+            // Updated badge - use timestamp from snapshot
+            const updatedAt = snapshot.timestamp;
+            if (updatedAt) {
+                const badge = document.getElementById('updated-badge');
+                const ago = timeSince(updatedAt);
+                document.getElementById('updated-time').textContent = `updated ${ago}`;
+
+                // Recent = within 30 min
+                const mins = (Date.now() - new Date(updatedAt).getTime()) / 60000;
+                if (mins < 30) {
+                    badge.classList.add('recent');
+                } else {
+                    badge.classList.remove('recent');
+                }
+            }
+
+            // Apply glow effect to recently updated sections
+            applyGlowEffects();
+
+            // Stack - from identity or environment
+            const stack = identity.stack || env.stack || '';
+            const stackEl = document.getElementById('stack-tags');
+            if (stack) {
+                // Split by comma, clean up
+                const tags = stack.split(',').map(t => t.trim()).filter(t => t.length > 0 && t.length < 30);
+                stackEl.innerHTML = tags.slice(0, 6).map(t => `<span class="tag">${t}</span>`).join('');
+            } else {
+                stackEl.innerHTML = '<span class="tag">Not scanned</span>';
+            }
+
+            // Latest Decision - from identity.last_decision
+            const lastDecision = identity.last_decision;
+            const decisionEl = document.getElementById('decision-text');
+            if (lastDecision && lastDecision.text) {
+                decisionEl.textContent = lastDecision.text;
+                decisionEl.classList.add('clickable');
+            } else {
+                decisionEl.textContent = 'No decisions yet';
+                decisionEl.classList.remove('clickable');
+            }
+
+            // Constraint (latest avoid) - from identity.last_avoid
+            const lastAvoid = identity.last_avoid;
+            const constraintSection = document.getElementById('constraint-section');
+            if (lastAvoid) {
+                constraintSection.style.display = 'block';
+                document.getElementById('constraint-text').textContent = lastAvoid;
+            } else {
+                constraintSection.style.display = 'none';
+            }
+
+            // Next Step - from identity.next_step or last_insight
+            const nextStepEl = document.getElementById('next-step');
+            if (identity.next_step) {
+                nextStepEl.textContent = identity.next_step;
+            } else if (identity.last_insight) {
+                nextStepEl.textContent = identity.last_insight;
+            } else if (identity.current_goal) {
+                nextStepEl.textContent = 'Working on: ' + identity.current_goal.slice(0, 60);
+            } else {
+                nextStepEl.textContent = 'Start by setting a goal';
+            }
+
+            // Memory Stats (counts)
+            const counts = identity.counts || {};
+            document.getElementById('stat-decisions').textContent = counts.decisions || 0;
+            document.getElementById('stat-insights').textContent = counts.insights || 0;
+            document.getElementById('stat-avoids').textContent = counts.avoids || 0;
+
+            // ROI
+            const roi = snapshot.roi || {};
+            const timeSaved = roi.time_saved_minutes || 0;
+            if (timeSaved > 0) {
+                document.getElementById('roi-section').style.display = 'block';
+                document.getElementById('roi-time').innerHTML = `
+                    <span class="roi-value">${timeSaved}</span>
+                    <span class="roi-label">min saved</span>
+                `;
+            }
+
+            // Active AIs
+            renderActiveAIs();
+
+            // What Changed
+            renderChanges();
+        }
+
+        function renderActiveAIs() {
+            const ais = snapshot.active_ais || [];
+            const container = document.getElementById('active-ais');
+
+            if (ais.length === 0) {
+                // Show Claude as default since we're running
+                container.innerHTML = `
+                    <div class="ai-item">
+                        <span class="ai-dot"></span>
+                        <span class="ai-name">Claude</span>
+                        <span class="ai-time">now</span>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            for (const ai of ais) {
+                const name = capitalize(ai.editor || ai.id || 'AI');
+                // Use last_activity if available, otherwise started_at
+                const activityTime = ai.last_activity || ai.started_at;
+                const time = activityTime ? timeSince(activityTime) : 'now';
+
+                html += `
+                    <div class="ai-item">
+                        <span class="ai-dot"></span>
+                        <span class="ai-name">${name}</span>
+                        <span class="ai-time">${time}</span>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+
+            // Handoffs
+            const handoffs = (snapshot.ai_handoffs || []).length;
+            const handoffNote = document.getElementById('handoff-note');
+            if (handoffs > 0) {
+                handoffNote.style.display = 'block';
+                document.getElementById('handoff-count').textContent = handoffs;
+            }
+        }
+
+        function renderChanges() {
+            const activities = snapshot.activity || [];
+            const container = document.getElementById('changes-list');
+
+            // Filter to recent meaningful changes
+            const recent = activities.slice(0, 8);
+
+            if (recent.length === 0) {
+                container.innerHTML = '<span class="change-item" style="color: var(--text-muted);">No recent changes</span>';
+                return;
+            }
+
+            // Group by type and show max 4
+            const shown = [];
+            const types = new Set();
+
+            for (const act of recent) {
+                const type = act.type || 'file_change';
+                const tool = act.tool || '';
+                const humanName = act.human_name || '';
+
+                let itemClass = '';
+                let icon = '•';
+                let text = '';
+
+                if (type === 'mcp_tool' || act.file_context === 'memory') {
+                    if (tool === 'update_live_record') {
+                        // Check what was updated from human_name
+                        if (humanName.includes('Goal')) {
+                            itemClass = 'goal';
+                            icon = '🎯';
+                            text = 'Goal updated';
+                        } else if (humanName.includes('insight') || humanName.includes('Insight')) {
+                            itemClass = 'insight';
+                            icon = '💡';
+                            text = 'Insight added';
+                        } else {
+                            itemClass = 'memory';
+                            icon = '🧠';
+                            text = 'Memory updated';
+                        }
+                    } else if (tool === 'log_decision') {
+                        itemClass = 'decision';
+                        icon = '🔒';
+                        text = 'Decision logged';
+                    } else if (tool === 'log_avoid') {
+                        itemClass = 'avoid';
+                        icon = '⚠️';
+                        text = 'Avoid pattern added';
+                    } else if (tool === 'search_past_solutions') {
+                        itemClass = 'search';
+                        icon = '🔍';
+                        text = 'Searched memory';
+                    } else if (tool === 'auto_init_session') {
+                        itemClass = 'session';
+                        icon = '🚀';
+                        text = 'Session started';
+                    } else {
+                        icon = '🧠';
+                        text = humanName || 'Memory updated';
+                    }
+                } else {
+                    // File changes
+                    icon = '📝';
+                    text = `Edited ${act.human_name || 'file'}`;
+                }
+
+                // Avoid duplicates
+                const key = `${icon}-${text}`;
+                if (!types.has(key)) {
+                    types.add(key);
+                    shown.push({ itemClass, icon, text, timestamp: act.timestamp });
+                }
+
+                if (shown.length >= 4) break;
+            }
+
+            container.innerHTML = shown.map(s =>
+                `<span class="change-item ${s.itemClass}">
+                    <span class="change-icon">${s.icon}</span>
+                    ${s.text}
+                </span>`
+            ).join('');
+        }
+
+        // =========== PANELS ===========
+        async function openPanel(type) {
+            const panel = document.getElementById('slide-panel');
+            const overlay = document.getElementById('overlay');
+            const title = document.getElementById('panel-title');
+            const content = document.getElementById('panel-content');
+
+            if (type === 'decisions') {
+                title.textContent = 'All Decisions';
+                content.innerHTML = '<p class="empty-state">Loading...</p>';
+
+                panel.classList.add('open');
+                overlay.classList.add('open');
+
+                // Fetch full memory to get all decisions
+                try {
+                    const res = await fetch('/api/memory');
+                    const data = await res.json();
+                    const decisions = data.decisions || [];
+
+                    if (decisions.length === 0) {
+                        content.innerHTML = '<p class="empty-state">No decisions logged yet.</p>';
+                    } else {
+                        content.innerHTML = decisions.slice().reverse().map(d => `
+                            <div class="history-item">
+                                <div class="history-text">${d.decision || d.text || '—'}</div>
+                                <div class="history-meta">${d.reason || ''}</div>
+                            </div>
+                        `).join('');
+                    }
+                } catch (e) {
+                    content.innerHTML = '<p class="empty-state">Could not load decisions.</p>';
+                }
+                return;
+            }
+
+            panel.classList.add('open');
+            overlay.classList.add('open');
+        }
+
+        // =========== DEPTH PANEL ===========
+        let depthData = null;
+        let activeDepthTab = 'timeline';
+
+        async function openDepthPanel() {
+            const panel = document.getElementById('slide-panel');
+            const overlay = document.getElementById('overlay');
+            const title = document.getElementById('panel-title');
+            const content = document.getElementById('panel-content');
+
+            title.textContent = 'Deep Dive';
+            content.innerHTML = '<p class="empty-state">Loading...</p>';
+
+            panel.classList.add('open', 'wide');
+            overlay.classList.add('open');
+
+            // Fetch full memory
+            try {
+                const res = await fetch('/api/memory');
+                depthData = await res.json();
+                renderDepthPanel();
+            } catch (e) {
+                content.innerHTML = '<p class="empty-state">Could not load data.</p>';
+            }
+        }
+
+        function renderDepthPanel() {
+            const content = document.getElementById('panel-content');
+
+            // Tabs
+            const tabs = `
+                <div class="depth-tabs">
+                    <button class="depth-tab ${activeDepthTab === 'timeline' ? 'active' : ''}" onclick="switchDepthTab('timeline')">Timeline</button>
+                    <button class="depth-tab ${activeDepthTab === 'decisions' ? 'active' : ''}" onclick="switchDepthTab('decisions')">Decisions</button>
+                    <button class="depth-tab ${activeDepthTab === 'insights' ? 'active' : ''}" onclick="switchDepthTab('insights')">Insights</button>
+                    <button class="depth-tab ${activeDepthTab === 'avoids' ? 'active' : ''}" onclick="switchDepthTab('avoids')">Avoids</button>
+                    <button class="depth-tab ${activeDepthTab === 'system' ? 'active' : ''}" onclick="switchDepthTab('system')">System</button>
+                </div>
+                <div class="depth-content" id="depth-tab-content"></div>
+            `;
+
+            content.innerHTML = tabs;
+            renderDepthTabContent();
+        }
+
+        function switchDepthTab(tab) {
+            activeDepthTab = tab;
+            document.querySelectorAll('.depth-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            renderDepthTabContent();
+        }
+
+        function renderDepthTabContent() {
+            const container = document.getElementById('depth-tab-content');
+            if (!depthData) return;
+
+            let html = '';
+
+            if (activeDepthTab === 'timeline') {
+                const activities = snapshot?.activity || [];
+                if (activities.length === 0) {
+                    html = '<p class="empty-state">No recent activity</p>';
+                } else {
+                    html = activities.slice(0, 30).map(a => {
+                        const icon = a.type === 'mcp_tool' ? '🧠' : '📝';
+                        const time = timeSince(a.timestamp);
+                        const name = a.human_name || a.tool || 'Activity';
+                        return `
+                            <div class="depth-item">
+                                <div class="depth-item-title">${icon} ${name}</div>
+                                <div class="depth-item-meta">${time} · ${a.actor || 'unknown'}</div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            else if (activeDepthTab === 'decisions') {
+                const decisions = depthData.decisions || [];
+                if (decisions.length === 0) {
+                    html = '<p class="empty-state">No decisions logged</p>';
+                } else {
+                    html = decisions.slice().reverse().map(d => `
+                        <div class="depth-item">
+                            <div class="depth-item-title">🔒 ${d.decision || d.text || '—'}</div>
+                            ${d.reason ? `<div class="depth-item-reason">${d.reason}</div>` : ''}
+                            <div class="depth-item-meta">${d.timestamp ? timeSince(d.timestamp) : ''}</div>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            else if (activeDepthTab === 'insights') {
+                const lessons = depthData.live_record?.lessons || {};
+                const insights = lessons.insights || [];
+                if (insights.length === 0) {
+                    html = '<p class="empty-state">No insights logged</p>';
+                } else {
+                    html = insights.slice().reverse().map(i => {
+                        const text = typeof i === 'string' ? i : (i.text || i.insight || '—');
+                        const importance = typeof i === 'object' ? (i.importance || '') : '';
+                        return `
+                            <div class="depth-item">
+                                <div class="depth-item-title">💡 ${text}</div>
+                                ${importance ? `<div class="depth-item-meta">Importance: ${importance}</div>` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            else if (activeDepthTab === 'avoids') {
+                const avoids = depthData.avoid || [];
+                if (avoids.length === 0) {
+                    html = '<p class="empty-state">No avoid patterns logged</p>';
+                } else {
+                    html = avoids.slice().reverse().map(a => `
+                        <div class="depth-item">
+                            <div class="depth-item-title">⚠️ ${a.what || a.text || '—'}</div>
+                            ${a.reason ? `<div class="depth-item-reason">${a.reason}</div>` : ''}
+                        </div>
+                    `).join('');
+                }
+            }
+
+            else if (activeDepthTab === 'system') {
+                const projectInfo = depthData.project_info || {};
+                const env = snapshot?.environment || {};
+                const knowledge = snapshot?.knowledge || {};
+
+                html = `
+                    <div class="system-info">
+                        <div><span class="system-label">Project ID:</span>${snapshot?.projects?.[0]?.project_id || '—'}</div>
+                        <div><span class="system-label">Working Dir:</span>${env.working_dir || '—'}</div>
+                        <div><span class="system-label">Stage:</span>${env.stage || 'dev'}</div>
+                    </div>
+                    <div class="system-info">
+                        <div><span class="system-label">Semantic Index:</span>${knowledge.indexed_docs || 0} docs</div>
+                        <div><span class="system-label">Total Insights:</span>${knowledge.total_insights || 0}</div>
+                        <div><span class="system-label">Total Decisions:</span>${knowledge.total_decisions || 0}</div>
+                    </div>
+                    <button class="depth-btn" style="margin-top: 16px;" onclick="rebuildIndex()">
+                        🔄 Rebuild Index
+                    </button>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        async function rebuildIndex() {
+            const btn = event.target;
+            btn.textContent = 'Rebuilding...';
+            btn.disabled = true;
+
+            try {
+                await fetch('/api/semantic/rebuild', { method: 'POST' });
+                btn.textContent = '✓ Done!';
+                setTimeout(() => {
+                    btn.textContent = '🔄 Rebuild Index';
+                    btn.disabled = false;
+                }, 2000);
+            } catch (e) {
+                btn.textContent = '✗ Failed';
+                btn.disabled = false;
+            }
+        }
+
+        function closePanel() {
+            const panel = document.getElementById('slide-panel');
+            panel.classList.remove('open', 'wide');
+            document.getElementById('overlay').classList.remove('open');
+            activeDepthTab = 'timeline'; // Reset for next time
+        }
+
+        // =========== UTILS ===========
+        function applyGlowEffects() {
+            // Check recent activities (last 30 min) and apply glow to relevant sections
+            const activities = snapshot?.activity || [];
+            const thirtyMinAgo = Date.now() - (30 * 60 * 1000);
+
+            // Reset all glows
+            document.querySelectorAll('.recently-updated, .recently-updated-text').forEach(el => {
+                el.classList.remove('recently-updated', 'recently-updated-text');
+            });
+
+            for (const act of activities) {
+                const actTime = new Date(act.timestamp).getTime();
+                if (actTime < thirtyMinAgo) continue;
+
+                const tool = act.tool || '';
+                const humanName = act.human_name || '';
+
+                // Apply glow based on what was updated
+                if (tool === 'update_live_record') {
+                    if (humanName.includes('Goal')) {
+                        document.getElementById('goal-focus')?.classList.add('recently-updated-text');
+                    }
+                }
+                if (tool === 'log_decision') {
+                    document.getElementById('decision-text')?.classList.add('recently-updated-text');
+                }
+            }
+
+            // Check if any MCP activity in last 10 min - glow the card
+            const tenMinAgo = Date.now() - (10 * 60 * 1000);
+            const recentMCP = activities.some(a =>
+                a.type === 'mcp_tool' && new Date(a.timestamp).getTime() > tenMinAgo
+            );
+            if (recentMCP) {
+                document.querySelector('.project-card')?.classList.add('recently-updated');
+            }
+        }
+
+        function timeSince(dateStr) {
+            const date = new Date(dateStr);
+            const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+            return Math.floor(seconds / 86400) + 'd ago';
+        }
+
+        function capitalize(str) {
+            if (!str) return '';
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // =========== INIT ===========
+        console.log('Dashboard vNext loading...');
+        fetchData().then(() => console.log('Data loaded')).catch(e => console.error('Fetch failed:', e));
+        setInterval(fetchData, 10000); // Refresh every 10s
+
+        // Project switcher
+        document.getElementById('switch-btn').addEventListener('click', () => {
+            const projects = snapshot?.projects || [];
+            if (projects.length === 0) {
+                alert('No projects found');
+                return;
+            }
+
+            let html = '<div style="padding: 20px; background: #141417; border-radius: 12px; max-width: 400px;">';
+            html += '<h3 style="margin-bottom: 16px; color: #fff;">Switch Project</h3>';
+
+            for (const p of projects) {
+                const isActive = p.status === 'active';
+                const statusDot = isActive ? '🟢' : (p.status === 'recent' ? '🟡' : '⚪');
+                const counts = `${p.counts?.decisions || 0}D / ${p.counts?.insights || 0}I`;
+
+                html += `
+                    <div style="padding: 12px; margin: 8px 0; background: ${isActive ? '#1e3a5f' : '#1e1e24'};
+                                border-radius: 8px; cursor: pointer;"
+                         onclick="switchProject('${p.project_id}')">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: #fff; font-weight: 500;">${statusDot} ${p.name}</span>
+                            <span style="color: #5a5a6e; font-size: 12px;">${counts}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+
+            // Show in slide panel
+            const panel = document.getElementById('slide-panel');
+            const overlay = document.getElementById('overlay');
+            document.getElementById('panel-title').textContent = 'Projects';
+            document.getElementById('panel-content').innerHTML = html;
+            panel.classList.add('open');
+            overlay.classList.add('open');
+        });
+
+        async function switchProject(projectId) {
+            try {
+                await fetch(`/api/projects/switch/${projectId}`, {
+                    method: 'POST'
+                });
+                closePanel();
+                fetchData(); // Refresh
+            } catch (e) {
+                console.error('Switch failed:', e);
+            }
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closePanel();
+        });
+    </script>
+</body>
+</html>

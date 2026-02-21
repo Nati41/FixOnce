@@ -36,52 +36,52 @@ except ImportError as e:
 activity_bp = Blueprint('activity', __name__)
 
 
-# File type to Hebrew context mapping
+# File type to context mapping
 FILE_TYPE_CONTEXT = {
     # Styles
-    ".css": "עיצוב",
-    ".scss": "עיצוב",
-    ".sass": "עיצוב",
-    ".less": "עיצוב",
-    ".styled.js": "עיצוב",
-    ".styled.ts": "עיצוב",
+    ".css": "style",
+    ".scss": "style",
+    ".sass": "style",
+    ".less": "style",
+    ".styled.js": "style",
+    ".styled.ts": "style",
 
     # Scripts/Logic
-    ".js": "לוגיקה",
-    ".ts": "לוגיקה",
-    ".jsx": "רכיב",
-    ".tsx": "רכיב",
-    ".vue": "רכיב",
-    ".svelte": "רכיב",
+    ".js": "code",
+    ".ts": "code",
+    ".jsx": "component",
+    ".tsx": "component",
+    ".vue": "component",
+    ".svelte": "component",
 
     # Python
-    ".py": "קוד",
+    ".py": "code",
 
     # Config
-    ".json": "הגדרות",
-    ".yaml": "הגדרות",
-    ".yml": "הגדרות",
-    ".toml": "הגדרות",
-    ".ini": "הגדרות",
-    ".env": "משתני סביבה",
+    ".json": "config",
+    ".yaml": "config",
+    ".yml": "config",
+    ".toml": "config",
+    ".ini": "config",
+    ".env": "env",
 
     # Data/Content
-    ".html": "תצוגה",
-    ".md": "תיעוד",
-    ".txt": "טקסט",
+    ".html": "ui",
+    ".md": "docs",
+    ".txt": "text",
 
     # Tests
-    ".test.js": "בדיקות",
-    ".test.ts": "בדיקות",
-    ".spec.js": "בדיקות",
-    ".spec.ts": "בדיקות",
-    "_test.py": "בדיקות",
-    "test_.py": "בדיקות",
+    ".test.js": "test",
+    ".test.ts": "test",
+    ".spec.js": "test",
+    ".spec.ts": "test",
+    "_test.py": "test",
+    "test_.py": "test",
 }
 
 
 def _get_file_type_context(file_path: str) -> str:
-    """Get Hebrew context word based on file type."""
+    """Get context word based on file type."""
     if not file_path:
         return ""
 
@@ -178,6 +178,65 @@ def _get_project_id_from_cwd(cwd: str) -> str:
         return "__global__"
 
 
+def _get_project_id_from_file(file_path: str) -> str:
+    """
+    Get project_id from file path using boundary detection.
+    Falls back to __global__ if no project found.
+    """
+    if not file_path:
+        return "__global__"
+
+    try:
+        if BOUNDARY_DETECTION_ENABLED:
+            from core.boundary_detector import find_project_root, _get_project_id_from_path
+            project_root, marker, confidence = find_project_root(file_path)
+            if project_root and confidence in ("high", "medium"):
+                return _get_project_id_from_path(project_root)
+
+        # Fallback: use file's parent directory
+        parent = str(Path(file_path).parent)
+        return _get_project_id_from_cwd(parent)
+    except Exception:
+        return "__global__"
+
+
+def _get_project_id_smart(cwd: str, file_path: str) -> str:
+    """
+    Smart project ID detection - tries multiple methods.
+    Priority:
+    1. Boundary detection from file_path
+    2. cwd if valid
+    3. Active project from dashboard
+    4. __global__ as fallback
+    """
+    # 1. Try boundary detection from file_path
+    if file_path:
+        project_id = _get_project_id_from_file(file_path)
+        if project_id != "__global__":
+            return project_id
+
+    # 2. Try cwd if valid (not home directory)
+    if cwd:
+        home = str(Path.home())
+        if cwd != home and Path(cwd).exists():
+            return _get_project_id_from_cwd(cwd)
+
+    # 3. Try active project from dashboard
+    try:
+        active_file = DATA_DIR / "active_project.json"
+        if active_file.exists():
+            import json
+            with open(active_file, 'r') as f:
+                data = json.load(f)
+            active_id = data.get("active_id")
+            if active_id:
+                return active_id
+    except Exception:
+        pass
+
+    return "__global__"
+
+
 @activity_bp.route("/log", methods=["POST"])
 def log_activity():
     """
@@ -194,16 +253,20 @@ def log_activity():
     try:
         data = request.get_json(silent=True) or {}
 
-        # Skip empty/invalid activities
-        if not data.get("file") and not data.get("command") and not data.get("cwd"):
+        # Skip empty/invalid activities (but allow MCP tool activities)
+        is_mcp_activity = data.get("type") == "mcp_tool" or data.get("file_context") == "memory"
+        if not is_mcp_activity and not data.get("file") and not data.get("command") and not data.get("cwd"):
             return jsonify({"status": "skipped", "reason": "no meaningful data"})
 
         file_path = data.get("file")
         cwd = data.get("cwd")
         boundary_transition = None
 
+        # For MCP activities, use the provided project_id directly
+        if is_mcp_activity and data.get("project_id"):
+            project_id = data.get("project_id")
         # Phase 1: Check for boundary violation (file outside active project)
-        if BOUNDARY_DETECTION_ENABLED and file_path and data.get("tool") in ["Edit", "Write", "NotebookEdit"]:
+        elif BOUNDARY_DETECTION_ENABLED and file_path and data.get("tool") in ["Edit", "Write", "NotebookEdit"]:
             boundary_event = detect_boundary_violation(file_path)
             if boundary_event:
                 # High or medium confidence - execute switch
@@ -211,26 +274,40 @@ def log_activity():
                 project_id = new_project_id
                 boundary_transition = boundary_event.to_dict()
             else:
-                # No violation or low confidence - use cwd as before
-                project_id = _get_project_id_from_cwd(cwd)
+                # No violation or low confidence - use smart detection
+                project_id = _get_project_id_smart(cwd, file_path)
         else:
-            # Fallback: Generate project_id from cwd (Phase 0: prevent cross-project leakage)
-            project_id = _get_project_id_from_cwd(cwd)
+            # Fallback: Use smart detection (handles empty cwd)
+            project_id = _get_project_id_smart(cwd, file_path)
 
         # Get enriched data
-        file_context = _get_file_type_context(file_path) if file_path else ""
+        # For MCP activities, use provided file_context; otherwise detect from file
+        if is_mcp_activity:
+            file_context = data.get("file_context", "memory")
+        else:
+            file_context = _get_file_type_context(file_path) if file_path else ""
         diff_stats = _get_git_diff_stats(file_path, cwd) if file_path and data.get("tool") in ["Edit", "Write"] else {}
 
-        # Get current editor from ai_session
-        current_editor = "unknown"
-        try:
-            from managers.multi_project_manager import load_project_memory
-            if project_id:
-                memory = load_project_memory(project_id)
-                if memory and memory.get("ai_session"):
-                    current_editor = memory["ai_session"].get("editor", "unknown")
-        except:
-            pass
+        # Get current editor - use provided editor for MCP activities
+        if is_mcp_activity and data.get("editor"):
+            current_editor = data.get("editor")
+        else:
+            # Try to get from project memory
+            current_editor = None
+            try:
+                from managers.multi_project_manager import load_project_memory
+                if project_id and project_id != "__global__":
+                    memory = load_project_memory(project_id)
+                    if memory and memory.get("ai_session"):
+                        current_editor = memory["ai_session"].get("editor")
+            except:
+                pass
+
+            # Fallback: if this is from hooks (Edit/Write/Read tools), assume Claude Code
+            if not current_editor and data.get("tool") in ["Edit", "Write", "Read", "NotebookEdit"]:
+                current_editor = "claude"
+            elif not current_editor:
+                current_editor = "unknown"
 
         activity = {
             "id": f"act_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}",
@@ -256,7 +333,7 @@ def log_activity():
 
         _save_activity(log)
 
-        print(f"[Activity] {activity['type']}: {activity.get('file') or activity.get('command', '')[:50]}")
+        print(f"[Activity] {activity['type']}: {activity.get('file') or (activity.get('command') or '')[:50] or activity.get('human_name', '')}")
 
         return jsonify({"status": "ok", "activity": activity})
 
@@ -398,10 +475,15 @@ def _get_human_name(data):
     Convert file path to human-readable component name.
     Uses the components module for comprehensive mapping.
     """
+    # If human_name is already provided (e.g., MCP activities), use it
+    if data.get("human_name"):
+        return data.get("human_name")
+
     file_path = data.get("file", "")
 
     if not file_path:
-        return data.get("command", "")[:30] if data.get("command") else ""
+        command = data.get("command")
+        return command[:30] if command else ""
 
     try:
         from .components import get_component_name

@@ -262,12 +262,15 @@ def _generate_issue_id(error_type: str, message: str) -> str:
 
 
 def _load_memory() -> Dict[str, Any]:
-    """Load project memory - uses multi-project manager if available."""
+    """
+    Load project memory - uses multi-project manager if available.
+
+    Uses get_project_context() compatibility function which handles
+    the active project lookup for dashboard use cases.
+    """
     try:
-        from managers.multi_project_manager import load_project_memory, get_active_project_id
-        # If we have an active project, use multi-project system
-        if get_active_project_id():
-            return load_project_memory()
+        from managers.multi_project_manager import get_project_context
+        return get_project_context()
     except ImportError:
         pass
 
@@ -283,12 +286,15 @@ def _load_memory() -> Dict[str, Any]:
 
 
 def _save_memory(memory: Dict[str, Any]) -> bool:
-    """Save project memory - uses multi-project manager if available."""
+    """
+    Save project memory - uses multi-project manager if available.
+
+    Uses save_memory() compatibility function which handles
+    the active project lookup for dashboard use cases.
+    """
     try:
-        from managers.multi_project_manager import save_project_memory, get_active_project_id
-        # If we have an active project, use multi-project system
-        if get_active_project_id():
-            return save_project_memory(None, memory)
+        from managers.multi_project_manager import save_memory as mm_save_memory
+        return mm_save_memory(memory)
     except ImportError:
         pass
 

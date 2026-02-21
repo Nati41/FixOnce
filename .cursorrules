@@ -1,126 +1,38 @@
-# ⛔ STOP - READ THIS FIRST ⛔
+# FixOnce — AI Memory Layer
 
-**BEFORE YOU RESPOND TO ANYTHING - even "hi" or "hello":**
+> FixOnce never blocks development. It only enhances it.
 
-You MUST call this MCP tool FIRST:
-- **Server:** `user-fixonce`
-- **Tool:** `auto_init_session`
-- **Parameters:** `{"cwd": "/Users/haimdayan/Desktop/FixOnce"}`
+## Disable
 
-NO EXCEPTIONS. Do not greet the user. Do not respond. Call the tool FIRST.
+If the user says "work without FixOnce" or "no fixonce" — stop calling all MCP tools for the rest of the session. Work as a normal AI assistant.
 
-If you respond without calling `auto_init_session` first, you are BREAKING THE RULES.
+## Session Start
 
----
-
-# FixOnce Protocol - MANDATORY RULES
-
-You are FixOnce-powered. You have persistent memory through MCP tools. ALL RULES ARE MANDATORY.
-
-**IMPORTANT:** All FixOnce tools are MCP tools from the `user-fixonce` MCP server. They are NOT bash/shell commands. Use them as MCP tool calls.
-
----
-
-## 🚨 RULE #1: Session Start - REQUIRED
-
-On EVERY conversation start, IMMEDIATELY use the MCP tool `auto_init_session` from the `user-fixonce` server:
+Try to initialize FixOnce:
 
 **MCP Tool:** `user-fixonce` → `auto_init_session`
-**Parameters:** `{"cwd": "/Users/haimdayan/Desktop/FixOnce"}`
+**Parameters:** `{"cwd": "<workspace_root_path>"}`
 
-⚠️ This is an MCP tool, NOT a bash command. Do not run in terminal.
-
-Then display:
-- 🧠 FixOnce header
-- 📍 Last goal
-- 💡 ALL insights from response
-- 🔒 ALL decisions from response
-- ⚠️ Avoid patterns (if any)
+**If it works** — show the returned context and follow the rules below.
+**If it fails** — proceed normally. No retries, no errors, no warnings.
 
 ---
 
-## 🚨 RULE #2: BEFORE ANY CHANGE - CHECK DECISIONS
+## When Active
 
-**BEFORE modifying architecture, storage, data structures, or system design:**
+- **Respect decisions** — if init returned decisions, ask before contradicting them.
+- **Update goal** — call `update_live_record("intent", ...)` before starting work.
+- **Log insights** — call `update_live_record("lessons", ...)` when you learn something.
+- **Log decisions** — call `log_decision(...)` for architectural choices.
+- **Search first** — call `search_past_solutions(...)` before researching from scratch.
 
-1. CHECK the decisions returned from auto_init_session()
-2. IF user request CONTRADICTS a decision:
+## Tools
 
-```
-🛑 STOP - Existing decision in FixOnce:
-   "[decision text]"
-   Reason: [reason]
-
-Your request contradicts this decision.
-Override? (yes/no)
-```
-
-**YOU ARE FORBIDDEN from implementing contradicting changes without EXPLICIT user approval.**
-
----
-
-## 🚨 RULE #3: Update Goal BEFORE Starting Work
-
-**When user gives a NEW task, use MCP tool:**
-
-**MCP Tool:** `user-fixonce` → `update_live_record`
-**Parameters:** `{"section": "intent", "data": {"current_goal": "Brief task description"}}`
-
-**Do this BEFORE working, not after!** Keeps dashboard live.
-
----
-
-## 🚨 RULE #4: Logging During Work - REQUIRED
-
-Use these MCP tools from `user-fixonce` server:
-
-| Event | MCP Tool | Parameters |
-|-------|----------|------------|
-| Learned something | `update_live_record` | `{section: "lessons", data: {insight: "..."}}` |
-| Decision made | `log_decision` | `{decision: "...", reason: "..."}` |
-| Something to avoid | `log_avoid` | `{what: "...", reason: "..."}` |
-
-After updates: `(📌 FixOnce: saved)`
-
----
-
-## 🚨 RULE #5: CHECK Insights BEFORE Any Research
-
-**BEFORE researching, YOU MUST use MCP tool:**
-
-**MCP Tool:** `user-fixonce` → `search_past_solutions`
-**Parameters:** `{"query": "relevant keywords"}`
-
-**YOU ARE FORBIDDEN from external research if relevant insight exists.**
-**If found:** `(📌 FixOnce: existing insight) "[insight]" - Applying...`
-**Only if NO insight → proceed with research.**
-
----
-
-## MCP Tools (from `user-fixonce` server)
-
-⚠️ **These are MCP tools - NOT bash commands!** Use them via MCP tool calling.
-
-| MCP Tool | Parameters | Purpose |
-|----------|------------|---------|
-| `auto_init_session` | `{cwd: string}` | **REQUIRED first!** |
-| `update_live_record` | `{section: string, data: object}` | Update memory |
-| `log_decision` | `{decision: string, reason: string}` | Log decision |
-| `log_avoid` | `{what: string, reason: string}` | Log anti-pattern |
-| `search_past_solutions` | `{query: string}` | Search solutions |
-| `get_browser_errors` | `{limit?: number}` | Check browser errors |
-| `get_live_record` | `{}` | Read all insights |
-
----
-
-## ENFORCEMENT
-
-1. ALWAYS init at start
-2. ALWAYS display decisions
-3. NEVER contradict decision without approval
-4. ALWAYS update goal BEFORE starting new work
-5. ALWAYS log insights during work
-6. ALWAYS use relevant insights - don't ignore them
-7. ALWAYS search past solutions before fixing errors
-
-**These are REQUIREMENTS, not suggestions.**
+| Tool | Purpose |
+|------|---------|
+| `auto_init_session` | Start session |
+| `update_live_record` | Save goal / lessons / architecture |
+| `log_decision` | Record a decision |
+| `log_avoid` | Record an anti-pattern |
+| `search_past_solutions` | Search memory |
+| `get_live_record` | Read memory |
