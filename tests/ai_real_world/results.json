@@ -1,0 +1,11 @@
+{
+  "run_id": null,
+  "timestamp": null,
+  "summary": {
+    "total_scenarios": 0,
+    "behavioral_pass": 0,
+    "behavioral_fail": 0,
+    "confidence_score": 0
+  },
+  "scenarios": []
+}

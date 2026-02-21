@@ -1,0 +1,113 @@
+{
+  "suite": "FixOnce Behavioral Memory Audit",
+  "version": "1.0.0",
+  "description": "Tests whether AI actually behaves differently because of FixOnce memory.",
+
+  "critical_questions": {
+    "q1_unprompted_recall": "Did AI mention stored info WITHOUT being reminded?",
+    "q2_avoided_forbidden": "Did AI avoid a pattern that was marked as 'avoid'?",
+    "q3_self_corrected": "Did AI self-correct based on a previous decision?",
+    "q4_session_continuity": "Did new session continue context from previous?"
+  },
+
+  "scenarios": [
+    {
+      "id": "cross_session_memory",
+      "name": "Cross-Session Memory Retention",
+      "description": "Memory persists when starting fresh AI session",
+      "setup": [
+        "Session A: Set goal 'Build authentication system'",
+        "Add decision: 'Use JWT, not sessions'",
+        "Add avoid: 'Never store passwords in plain text'",
+        "Close session completely"
+      ],
+      "test_action": [
+        "Start Session B (fresh)",
+        "Ask: 'What should I work on?'",
+        "Ask: 'How should I handle user login?'"
+      ],
+      "success_criteria": {
+        "q1_unprompted_recall": "AI mentions 'authentication' or goal without prompting",
+        "q2_avoided_forbidden": "AI warns about password security",
+        "q3_self_corrected": "AI recommends JWT (from decision)",
+        "q4_session_continuity": "AI knows project context immediately"
+      }
+    },
+    {
+      "id": "constraint_protection",
+      "name": "Long-Term Constraint Protection",
+      "description": "AI respects stored avoid patterns",
+      "setup": [
+        "Add avoid: 'Do not use var in JavaScript'",
+        "Add avoid: 'Never commit .env files'"
+      ],
+      "test_action": [
+        "Ask: 'Write a simple counter function'",
+        "Ask: 'Help me commit all my changes'"
+      ],
+      "success_criteria": {
+        "q1_unprompted_recall": "AI mentions coding standards",
+        "q2_avoided_forbidden": "AI uses const/let, warns about .env",
+        "q3_self_corrected": "N/A",
+        "q4_session_continuity": "N/A"
+      }
+    },
+    {
+      "id": "decision_override_attempt",
+      "name": "Decision Override Resistance",
+      "description": "AI resists contradicting stored decisions",
+      "setup": [
+        "Add decision: 'Use PostgreSQL for database'",
+        "Add decision: 'All API responses in JSON'"
+      ],
+      "test_action": [
+        "Ask: 'Should we use MongoDB instead?'",
+        "Ask: 'Can you return XML from this endpoint?'"
+      ],
+      "success_criteria": {
+        "q1_unprompted_recall": "AI references existing DB decision",
+        "q2_avoided_forbidden": "N/A",
+        "q3_self_corrected": "AI pushes back citing decision",
+        "q4_session_continuity": "N/A"
+      }
+    },
+    {
+      "id": "semantic_recall",
+      "name": "Semantic Memory Recall",
+      "description": "AI finds past solutions with different phrasing",
+      "setup": [
+        "Store insight: 'Fixed map error by checking if array exists before iterating'",
+        "Store debug session: 'TypeError reading property - solution: null check'"
+      ],
+      "test_action": [
+        "Encounter error: 'Cannot read property forEach of undefined'",
+        "Ask: 'I have an iteration bug'"
+      ],
+      "success_criteria": {
+        "q1_unprompted_recall": "AI mentions past similar fix",
+        "q2_avoided_forbidden": "N/A",
+        "q3_self_corrected": "AI applies learned pattern",
+        "q4_session_continuity": "N/A"
+      }
+    },
+    {
+      "id": "multi_ai_handoff",
+      "name": "Multi-AI Handoff Integrity",
+      "description": "Memory survives switching between Claude/Cursor/CLI",
+      "setup": [
+        "In Claude: Set goal, add 2 decisions",
+        "Switch to Cursor (or vice versa)"
+      ],
+      "test_action": [
+        "In new AI: Ask about current task",
+        "In new AI: Make a decision that conflicts with stored one"
+      ],
+      "success_criteria": {
+        "q1_unprompted_recall": "New AI knows the goal",
+        "q2_avoided_forbidden": "New AI respects avoid patterns",
+        "q3_self_corrected": "New AI defers to existing decisions",
+        "q4_session_continuity": "Full context transfer"
+      }
+    }
+  ]
+}

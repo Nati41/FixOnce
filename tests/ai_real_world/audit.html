@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FixOnce Behavioral Audit</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      margin: 0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 { color: #58a6ff; margin-bottom: 8px; }
+    .subtitle { color: #8b949e; margin-bottom: 24px; }
+
+    .controls { margin-bottom: 20px; }
+    button {
+      background: #238636;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-left: 8px;
+    }
+    button:hover { background: #2ea043; }
+    button.secondary { background: #30363d; }
+    button.secondary:hover { background: #484f58; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .scenario-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .scenario-card.active { border-color: #58a6ff; }
+    .scenario-card.completed { border-color: #238636; }
+    .scenario-card.failed { border-color: #f85149; }
+
+    .scenario-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .scenario-name { font-size: 18px; font-weight: 600; color: #58a6ff; }
+    .scenario-status {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .status-pending { background: #30363d; color: #8b949e; }
+    .status-testing { background: #1f6feb; color: white; }
+    .status-pass { background: #238636; color: white; }
+    .status-fail { background: #f85149; color: white; }
+
+    .scenario-description { color: #8b949e; margin-bottom: 16px; }
+
+    .setup-section, .test-section {
+      background: #0d1117;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .section-title { font-weight: 600; color: #7ee787; margin-bottom: 8px; }
+    .section-title.test { color: #ffa657; }
+    ul { margin: 0; padding-right: 20px; }
+    li { margin-bottom: 4px; }
+
+    .questions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .question-card {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .question-card.answered-yes { border-color: #238636; background: rgba(35, 134, 54, 0.1); }
+    .question-card.answered-no { border-color: #f85149; background: rgba(248, 81, 73, 0.1); }
+
+    .question-label {
+      font-size: 13px;
+      color: #8b949e;
+      margin-bottom: 8px;
+    }
+    .question-text {
+      font-weight: 500;
+      margin-bottom: 12px;
+    }
+    .question-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    .question-buttons button {
+      flex: 1;
+      padding: 8px;
+      font-size: 13px;
+    }
+    .btn-yes { background: #238636; }
+    .btn-no { background: #f85149; }
+    .btn-na { background: #30363d; }
+    .btn-yes.selected, .btn-no.selected, .btn-na.selected {
+      box-shadow: 0 0 0 2px #58a6ff;
+    }
+
+    .notes-section {
+      margin-top: 16px;
+    }
+    .notes-section textarea {
+      width: 100%;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      padding: 12px;
+      font-family: inherit;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 80px;
+    }
+    .notes-section textarea:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+
+    .summary-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #161b22;
+      border-top: 1px solid #30363d;
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .score-display {
+      display: flex;
+      gap: 24px;
+    }
+    .score-item {
+      text-align: center;
+    }
+    .score-value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .score-value.pass { color: #7ee787; }
+    .score-value.fail { color: #f85149; }
+    .score-label { font-size: 12px; color: #8b949e; }
+
+    .confidence-meter {
+      width: 200px;
+      height: 8px;
+      background: #30363d;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .confidence-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #f85149, #ffa657, #7ee787);
+      transition: width 0.3s;
+    }
+
+    .hidden { display: none; }
+
+    @media (max-width: 768px) {
+      .questions-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <h1>FixOnce Behavioral Audit</h1>
+  <p class="subtitle">בדיקת התנהגות אמיתית של AI עם זיכרון FixOnce</p>
+
+  <div class="controls">
+    <button id="btn-load">טען תרחישים</button>
+    <button id="btn-reset" class="secondary">אפס הכל</button>
+    <button id="btn-save" class="secondary">שמור תוצאות</button>
+  </div>
+
+  <div id="scenarios-container"></div>
+
+  <div class="summary-bar">
+    <div class="score-display">
+      <div class="score-item">
+        <div class="score-value pass" id="pass-count">0</div>
+        <div class="score-label">PASS</div>
+      </div>
+      <div class="score-item">
+        <div class="score-value fail" id="fail-count">0</div>
+        <div class="score-label">FAIL</div>
+      </div>
+      <div class="score-item">
+        <div class="score-value" id="pending-count">0</div>
+        <div class="score-label">ממתין</div>
+      </div>
+    </div>
+    <div>
+      <div style="margin-bottom: 4px; text-align: center;">
+        <span id="confidence-value">0%</span> Confidence Score
+      </div>
+      <div class="confidence-meter">
+        <div class="confidence-fill" id="confidence-fill" style="width: 0%"></div>
+      </div>
+    </div>
+    <button id="btn-export">ייצא דוח</button>
+  </div>
+
+  <div style="height: 100px"></div>
+
+  <script>
+    const API = window.location.origin;
+    const state = {
+      scenarios: [],
+      results: {},
+      runId: new Date().toISOString()
+    };
+
+    const QUESTIONS = {
+      q1: { key: 'q1_unprompted_recall', label: 'Q1', text: 'האם הבינה הזכירה מידע ישן בלי שהזכרת לה?' },
+      q2: { key: 'q2_avoided_forbidden', label: 'Q2', text: 'האם היא נמנעה מדפוס שנאסר?' },
+      q3: { key: 'q3_self_corrected', label: 'Q3', text: 'האם היא תיקנה את עצמה בגלל החלטה קודמת?' },
+      q4: { key: 'q4_session_continuity', label: 'Q4', text: 'האם פתיחת שיחה חדשה ממשיכה קונטקסט?' }
+    };
+
+    async function loadScenarios() {
+      try {
+        const res = await fetch(API + '/api/test/ai-scenarios');
+        const data = await res.json();
+        state.scenarios = data.scenarios || [];
+
+        // Initialize results
+        state.scenarios.forEach(s => {
+          if (!state.results[s.id]) {
+            state.results[s.id] = {
+              status: 'pending',
+              answers: { q1: null, q2: null, q3: null, q4: null },
+              notes: '',
+              criteria: s.success_criteria
+            };
+          }
+        });
+
+        renderScenarios();
+        updateSummary();
+      } catch (e) {
+        alert('שגיאה בטעינת תרחישים: ' + e.message);
+      }
+    }
+
+    function renderScenarios() {
+      const container = document.getElementById('scenarios-container');
+      container.innerHTML = state.scenarios.map(s => renderScenario(s)).join('');
+      attachEventListeners();
+    }
+
+    function renderScenario(scenario) {
+      const result = state.results[scenario.id] || { status: 'pending', answers: {}, notes: '' };
+      const statusClass = result.status === 'pending' ? 'status-pending' :
+                          result.status === 'testing' ? 'status-testing' :
+                          result.status === 'pass' ? 'status-pass' : 'status-fail';
+
+      return `
+        <div class="scenario-card ${result.status}" data-id="${scenario.id}">
+          <div class="scenario-header">
+            <div class="scenario-name">${scenario.name}</div>
+            <div class="scenario-status ${statusClass}">${result.status.toUpperCase()}</div>
+          </div>
+          <div class="scenario-description">${scenario.description}</div>
+
+          <div class="setup-section">
+            <div class="section-title">Setup</div>
+            <ul>${scenario.setup.map(s => `<li>${s}</li>`).join('')}</ul>
+          </div>
+
+          <div class="test-section">
+            <div class="section-title test">Test Actions</div>
+            <ul>${scenario.test_action.map(t => `<li>${t}</li>`).join('')}</ul>
+          </div>
+
+          <div class="questions-grid">
+            ${Object.entries(QUESTIONS).map(([qKey, q]) => {
+              const answer = result.answers[qKey];
+              const criteria = scenario.success_criteria[q.key] || '';
+              const cardClass = answer === true ? 'answered-yes' : answer === false ? 'answered-no' : '';
+              return `
+                <div class="question-card ${cardClass}" data-scenario="${scenario.id}" data-question="${qKey}">
+                  <div class="question-label">${q.label}: ${q.text}</div>
+                  <div class="question-text">${criteria}</div>
+                  <div class="question-buttons">
+                    <button class="btn-yes ${answer === true ? 'selected' : ''}" data-answer="true">כן ✓</button>
+                    <button class="btn-no ${answer === false ? 'selected' : ''}" data-answer="false">לא ✗</button>
+                    <button class="btn-na ${answer === 'na' ? 'selected' : ''}" data-answer="na">N/A</button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+
+          <div class="notes-section">
+            <textarea placeholder="הערות על ההתנהגות שנצפתה..." data-scenario="${scenario.id}">${result.notes}</textarea>
+          </div>
+        </div>
+      `;
+    }
+
+    function attachEventListeners() {
+      // Question buttons
+      document.querySelectorAll('.question-buttons button').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const card = e.target.closest('.question-card');
+          const scenarioId = card.dataset.scenario;
+          const questionKey = card.dataset.question;
+          let answer = e.target.dataset.answer;
+
+          if (answer === 'true') answer = true;
+          else if (answer === 'false') answer = false;
+          else answer = 'na';
+
+          state.results[scenarioId].answers[questionKey] = answer;
+          state.results[scenarioId].status = 'testing';
+
+          // Check if all questions answered
+          checkScenarioCompletion(scenarioId);
+          renderScenarios();
+          updateSummary();
+        });
+      });
+
+      // Notes
+      document.querySelectorAll('.notes-section textarea').forEach(textarea => {
+        textarea.addEventListener('input', (e) => {
+          const scenarioId = e.target.dataset.scenario;
+          state.results[scenarioId].notes = e.target.value;
+        });
+      });
+    }
+
+    function checkScenarioCompletion(scenarioId) {
+      const result = state.results[scenarioId];
+      const answers = Object.values(result.answers);
+      const answered = answers.filter(a => a !== null);
+
+      if (answered.length === 4) {
+        // Count true answers (excluding N/A)
+        const trueCount = answers.filter(a => a === true).length;
+        const falseCount = answers.filter(a => a === false).length;
+        const naCount = answers.filter(a => a === 'na').length;
+        const relevantCount = 4 - naCount;
+
+        // Pass if more than half of relevant questions are true
+        if (relevantCount > 0) {
+          result.status = (trueCount / relevantCount) >= 0.5 ? 'pass' : 'fail';
+          result.score = relevantCount > 0 ? trueCount / relevantCount : 0;
+        } else {
+          result.status = 'pass'; // All N/A = pass by default
+          result.score = 1;
+        }
+      }
+    }
+
+    function updateSummary() {
+      const results = Object.values(state.results);
+      const pass = results.filter(r => r.status === 'pass').length;
+      const fail = results.filter(r => r.status === 'fail').length;
+      const pending = results.filter(r => r.status === 'pending' || r.status === 'testing').length;
+      const total = results.length;
+
+      document.getElementById('pass-count').textContent = pass;
+      document.getElementById('fail-count').textContent = fail;
+      document.getElementById('pending-count').textContent = pending;
+
+      const completed = pass + fail;
+      const confidence = completed > 0 ? Math.round((pass / completed) * 100) : 0;
+      document.getElementById('confidence-value').textContent = confidence + '%';
+      document.getElementById('confidence-fill').style.width = confidence + '%';
+    }
+
+    async function saveResults() {
+      const payload = {
+        run_id: state.runId,
+        timestamp: new Date().toISOString(),
+        project_id: 'fixonce',
+        ai_agent: 'manual_audit',
+        summary: {
+          total_scenarios: state.scenarios.length,
+          behavioral_pass: Object.values(state.results).filter(r => r.status === 'pass').length,
+          behavioral_fail: Object.values(state.results).filter(r => r.status === 'fail').length,
+          confidence_score: calculateConfidence()
+        },
+        scenarios: state.scenarios.map(s => ({
+          id: s.id,
+          name: s.name,
+          ...state.results[s.id]
+        }))
+      };
+
+      try {
+        const res = await fetch(API + '/api/test/ai-results', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          alert('תוצאות נשמרו!');
+        } else {
+          throw new Error('Save failed');
+        }
+      } catch (e) {
+        alert('שגיאה בשמירה: ' + e.message);
+      }
+    }
+
+    function calculateConfidence() {
+      const results = Object.values(state.results).filter(r => r.status === 'pass' || r.status === 'fail');
+      if (results.length === 0) return 0;
+      const pass = results.filter(r => r.status === 'pass').length;
+      return Math.round((pass / results.length) * 100) / 100;
+    }
+
+    function exportReport() {
+      const report = {
+        title: 'FixOnce Behavioral Audit Report',
+        run_id: state.runId,
+        timestamp: new Date().toISOString(),
+        confidence_score: calculateConfidence(),
+        scenarios: state.scenarios.map(s => ({
+          name: s.name,
+          status: state.results[s.id]?.status || 'pending',
+          answers: state.results[s.id]?.answers || {},
+          notes: state.results[s.id]?.notes || ''
+        }))
+      };
+
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fixonce-audit-${Date.now()}.json`;
+      a.click();
+    }
+
+    function resetAll() {
+      if (!confirm('האם לאפס את כל התוצאות?')) return;
+      state.results = {};
+      state.runId = new Date().toISOString();
+      loadScenarios();
+    }
+
+    // Event listeners
+    document.getElementById('btn-load').addEventListener('click', loadScenarios);
+    document.getElementById('btn-reset').addEventListener('click', resetAll);
+    document.getElementById('btn-save').addEventListener('click', saveResults);
+    document.getElementById('btn-export').addEventListener('click', exportReport);
+
+    // Auto-load
+    loadScenarios();
+  </script>
+</body>
+</html>
