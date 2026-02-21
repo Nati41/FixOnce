@@ -396,8 +396,20 @@ def save_project_memory(project_id: str, memory: Dict[str, Any] = None) -> bool:
 
         try:
             project_path = get_project_path(project_id)
-            with open(project_path, 'w', encoding='utf-8') as f:
-                json.dump(memory, f, ensure_ascii=False, indent=2)
+
+            # Use atomic write for crash safety
+            try:
+                from core.safe_file import atomic_json_write
+                success = atomic_json_write(str(project_path), memory)
+            except ImportError:
+                # Fallback to regular write if safe_file not available
+                with open(project_path, 'w', encoding='utf-8') as f:
+                    json.dump(memory, f, ensure_ascii=False, indent=2)
+                success = True
+
+            if not success:
+                print(f"[MultiProject] Atomic write failed for {project_id}")
+                return False
 
             # Update universal context file (.fixonce/CONTEXT.md)
             try:
