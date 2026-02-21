@@ -71,10 +71,21 @@ class BoundaryEvent:
 
 
 def _get_project_id_from_path(working_dir: str) -> str:
-    """Generate project ID from path (same logic as multi_project_manager)."""
-    path_hash = hashlib.md5(working_dir.encode()).hexdigest()[:12]
-    name = Path(working_dir).name
-    return f"{name}_{path_hash}"
+    """
+    Generate project ID from path.
+
+    IMPORTANT: Delegates to ProjectContext.from_path() which is the
+    SINGLE SOURCE OF TRUTH for project ID generation.
+
+    Uses hybrid strategy: Git Remote > Git Local > UUID
+    """
+    try:
+        # Try relative import first (when running as part of package)
+        from .project_context import ProjectContext
+    except ImportError:
+        # Fallback for absolute import (when running standalone)
+        from core.project_context import ProjectContext
+    return ProjectContext.from_path(working_dir)
 
 
 def _load_active_project() -> Dict[str, Any]:

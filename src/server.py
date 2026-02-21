@@ -79,23 +79,9 @@ register_blueprints(flask_app)
 # ---------------------------------------------------------------------------
 @flask_app.route("/")
 def dashboard():
-    """Serve the dashboard HTML page."""
-    dashboard_path = DATA_DIR / "brain_dashboard.html"
+    """Serve the main dashboard (vNext)."""
+    dashboard_path = DATA_DIR / "dashboard_vnext.html"
     return send_file(dashboard_path)
-
-
-@flask_app.route("/brain")
-def brain_dashboard():
-    """Serve the Brain Dashboard (AI Memory sidebar)."""
-    brain_path = DATA_DIR / "brain_dashboard.html"
-    return send_file(brain_path)
-
-
-@flask_app.route("/v2")
-def dashboard_v2():
-    """Serve the Leadership Dashboard v2."""
-    v2_path = DATA_DIR / "dashboard_v2.html"
-    return send_file(v2_path)
 
 
 @flask_app.route("/v3")

@@ -5,21 +5,40 @@
       "project_id": "FixOnce_e3921f743904",
       "working_dir": "/Users/haimdayan/Desktop/FixOnce",
       "name": "FixOnce",
-      "git_commit_hash": "50f4d840ab35",
+      "git_commit_hash": "11873fae1b8d",
       "summary": "FixOnce is a persistent memory layer for AI coding assistants (Claude Code, Cursor). It remembers decisions, solutions, insights, and context across sessions so AI never forgets previous work.",
       "stack": "Python 3, Flask, FastMCP (MCP protocol), Chrome Extension (JS), NumPy, scikit-learn (TF-IDF embeddings), SQLite, JSON storage",
-      "current_goal": "Windows Portable EXE packaging with PyInstaller",
+      "current_goal": "Windows packaging complete - ready for testing on real Windows machine",
       "last_insight": {
-        "text": "Inno Setup installer: fixonce_setup.iss handles registry startup, AppData permissions, shortcuts, clean uninstall with data preservation option. build_installer.bat runs full build process.",
-        "timestamp": "2026-02-21T21:51:20.504725",
+        "text": "OpenAI adapter (openai_adapter.py) provides 8 functions: init_session, search_solutions, log_decision, log_avoid, update_goal, log_insight, get_context, get_browser_errors. Compatible with both old 'functions' and new 'tools' format.",
+        "timestamp": "2026-02-21T22:29:25.395134",
         "use_count": 0,
         "last_used": null,
         "importance": "medium"
       },
-      "decisions_count": 3,
+      "decisions_count": 6,
       "avoid_count": 0,
-      "indexed_at": "2026-02-21T21:51:20.532220"
+      "indexed_at": "2026-02-21T22:29:25.424035"
+    },
+    "tetris-game_57755ff050fb": {
+      "project_id": "tetris-game_57755ff050fb",
+      "working_dir": "/Users/haimdayan/Desktop/tetris-game",
+      "name": "tetris-game",
+      "git_commit_hash": null,
+      "summary": "Classic Tetris game - single HTML file with embedded CSS and JavaScript",
+      "stack": "HTML, CSS, JavaScript (Vanilla)",
+      "current_goal": "Investigate and fix duplicate project ID bug in auto_init_session",
+      "last_insight": {
+        "text": "After fixing Python source files, must delete __pycache__/*.pyc files and restart server for changes to take effect",
+        "timestamp": "2026-02-21T22:33:57.098019",
+        "use_count": 0,
+        "last_used": null,
+        "importance": "medium"
+      },
+      "decisions_count": 1,
+      "avoid_count": 0,
+      "indexed_at": "2026-02-21T22:33:57.098772"
     }
   },
-  "updated_at": "2026-02-21T21:51:20.532275"
+  "updated_at": "2026-02-21T22:33:57.098785"
 }

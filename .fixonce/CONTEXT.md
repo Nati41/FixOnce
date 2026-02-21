@@ -1,7 +1,7 @@
 # FixOnce Context
 
 > **Auto-generated file.** Do not edit manually.
-> Last updated: 2026-02-21 21:37
+> Last updated: 2026-02-21 22:09
 
 ---
 
@@ -9,7 +9,9 @@
 
 ## Current Goal
 
-**Dashboard vNext - minimalist redesign with Deep Dive panel, logo integration, and all v3 features accessible**
+**Windows packaging complete - ready for testing on real Windows machine**
+
+Next step: Test EXE build on Windows, verify MCP connection works, test Inno Setup installer
 
 ---
 
@@ -29,6 +31,10 @@
 ### Display opening message and conversation in user's language, but store all data in English
 
 *Reason:* Storage must be consistent (English) for search and dashboard. But AI should present information to user in whatever language they're speaking for better UX.
+
+### Windows distribution uses PyInstaller + Inno Setup with AppData storage
+
+*Reason:* PyInstaller creates standalone EXE without Python dependency. Data stored in %APPDATA%/FixOnce for persistence across updates. Inno Setup handles registry startup, shortcuts, clean uninstall. Extension deployed to AppData for Chrome loading.
 
 ---
 
@@ -63,6 +69,7 @@ FixOnce is a persistent memory layer for AI coding assistants (Claude Code, Curs
 - Dashboard activity now shows MCP tool calls (update_live_record, log_decision, log_avoid) with smart project detection when cwd is empty
 - Testing MCP activity logging after server restart
 - Dashboard vNext complete: SVG logo, Deep Dive panel with tabs (Timeline/Decisions/Insights/Avoids/System), MCP icons in What Changed, Glow effect for recent updates, ROI auto-calculated
+- Windows EXE packaging: fixonce.spec + windows_bootstrap.py handle AppData paths, build_windows.bat for building. Extension deployed to %APPDATA%/FixOnce/extension/
 
 ---
 
