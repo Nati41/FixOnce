@@ -33,6 +33,18 @@ SKIP_PATHS = [
     '/private/var',
 ]
 
+# Folder name patterns that indicate a build/output folder (not a real project)
+BUILD_FOLDER_PATTERNS = [
+    '-build',
+    '-dist',
+    '-output',
+    '-release',
+    '-package',
+    '_build',
+    '_dist',
+    '_output',
+]
+
 # Cooldown between switches (seconds)
 SWITCH_COOLDOWN_SECONDS = 5
 
@@ -127,6 +139,54 @@ def _is_skip_path(path: str) -> bool:
     if path == home:
         return True
     return False
+
+
+def _is_build_or_derivative_folder(new_folder: str, active_folder: str) -> bool:
+    """
+    Check if new_folder is likely a build/derivative of active_folder.
+
+    Examples:
+    - FixOnce-Windows-Build is derivative of FixOnce
+    - MyApp-dist is derivative of MyApp
+    - ProjectName_build is derivative of ProjectName
+    """
+    if not new_folder or not active_folder:
+        return False
+
+    new_name = Path(new_folder).name.lower()
+    active_name = Path(active_folder).name.lower()
+
+    # Check if new folder name contains active project name + build suffix
+    for pattern in BUILD_FOLDER_PATTERNS:
+        if new_name == f"{active_name}{pattern}":
+            return True
+        if new_name.startswith(active_name) and pattern in new_name:
+            return True
+
+    # Check if same parent directory (sibling folders)
+    new_parent = Path(new_folder).parent
+    active_parent = Path(active_folder).parent
+    if new_parent == active_parent:
+        # Sibling folder - check if name starts with active project name
+        if new_name.startswith(active_name) and new_name != active_name:
+            return True
+
+    return False
+
+
+def _is_newly_created_folder(folder_path: str, max_age_seconds: int = 60) -> bool:
+    """Check if folder was created very recently (likely by current AI session)."""
+    try:
+        folder = Path(folder_path)
+        if not folder.exists():
+            return True  # Doesn't exist yet = definitely new
+
+        # Check creation/modification time
+        stat = folder.stat()
+        age = datetime.now().timestamp() - stat.st_mtime
+        return age < max_age_seconds
+    except Exception:
+        return False
 
 
 def find_project_root(file_path: str) -> tuple[Optional[str], str, str]:
@@ -385,6 +445,20 @@ def detect_boundary_violation(file_path: str) -> Optional[BoundaryEvent]:
     if not new_root:
         print(f"  Action: SKIP (no project root found)")
         return None
+
+    # Check if new folder is a build/derivative of active project
+    if _is_build_or_derivative_folder(new_root, active_working_dir):
+        print(f"  Action: SKIP (build/derivative folder of active project)")
+        return None
+
+    # Check if folder was just created (likely by current session copying files)
+    if _is_newly_created_folder(new_root, max_age_seconds=120):
+        # Extra caution: if folder is brand new AND related to active project, skip
+        new_name = Path(new_root).name.lower()
+        active_name = Path(active_working_dir).name.lower()
+        if active_name in new_name or new_name in active_name:
+            print(f"  Action: SKIP (newly created folder related to active project)")
+            return None
 
     # Check cooldown
     state = _load_boundary_state()
