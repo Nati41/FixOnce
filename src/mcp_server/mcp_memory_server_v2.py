@@ -32,6 +32,21 @@ except ImportError:
 
 def _detect_editor() -> str:
     """Detect which editor/AI is running this MCP server."""
+    # Priority 0: Check for Codex CLI (OpenAI)
+    codex_home = os.environ.get("CODEX_HOME", "")
+    if codex_home:
+        return "codex"
+    # Check parent process for codex/fastmcp (Codex uses fastmcp to run MCP servers)
+    try:
+        ppid = os.getppid()
+        result = subprocess.run(['ps', '-p', str(ppid), '-o', 'comm='],
+                              capture_output=True, text=True, timeout=1)
+        parent = result.stdout.strip().lower()
+        if 'codex' in parent or 'fastmcp' in parent:
+            return "codex"
+    except:
+        pass
+
     # Priority 1: Check Cursor-specific environment variables
     cursor_channel = os.environ.get("CURSOR_CHANNEL", "")
     if cursor_channel:
