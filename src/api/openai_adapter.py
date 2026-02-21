@@ -332,11 +332,14 @@ def get_openai_schema():
 def _handle_init_session(args: dict) -> dict:
     """Handle init_session function call."""
     from managers.multi_project_manager import (
-        get_or_create_project,
+        generate_project_id_from_path,
+        project_exists,
+        init_project_memory,
         set_active_project,
         load_project_memory
     )
     from core.boundary_detector import find_project_root
+    from pathlib import Path
 
     working_dir = args.get('working_dir', '')
     if not working_dir:
@@ -348,7 +351,11 @@ def _handle_init_session(args: dict) -> dict:
         root = working_dir
 
     # Get or create project
-    project_id = get_or_create_project(root)
+    project_id = generate_project_id_from_path(root)
+    if not project_exists(project_id):
+        display_name = Path(root).name
+        init_project_memory(project_id, display_name, root)
+
     set_active_project(project_id, detected_from="openai", working_dir=root)
 
     # Load memory

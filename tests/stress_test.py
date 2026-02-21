@@ -59,6 +59,12 @@ LOAD_TEST_OPS_PER_THREAD = 100
 CONCURRENT_TEST_THREADS = 5
 TIMEOUT_SECONDS = 5
 
+# IMPORTANT: Use dedicated test project, NOT active project
+TEST_PROJECT_DIR = "/tmp/fixonce_stress_test_project"
+
+# Store original active project to restore after tests
+ORIGINAL_ACTIVE_PROJECT = None
+
 
 @dataclass
 class TestResult:
@@ -129,6 +135,107 @@ def wait_for_server(timeout: int = 30) -> bool:
     return False
 
 
+def setup_test_project() -> bool:
+    """
+    Create and initialize a dedicated test project.
+    IMPORTANT: This prevents tests from polluting real project data.
+    """
+    global ORIGINAL_ACTIVE_PROJECT
+
+    # Save original active project to restore later
+    active_file = Path(__file__).parent.parent / "data" / "active_project.json"
+    if active_file.exists():
+        try:
+            with open(active_file, 'r') as f:
+                ORIGINAL_ACTIVE_PROJECT = json.load(f)
+            print(f"📋 Saved original active project: {ORIGINAL_ACTIVE_PROJECT.get('active_id', 'unknown')}")
+        except Exception:
+            pass
+
+    # Create test project directory
+    test_dir = Path(TEST_PROJECT_DIR)
+    if test_dir.exists():
+        shutil.rmtree(test_dir)
+    test_dir.mkdir(parents=True)
+
+    # Create minimal project marker
+    (test_dir / ".git").mkdir()
+    (test_dir / "package.json").write_text('{"name": "stress-test-project"}')
+
+    # Initialize with FixOnce
+    try:
+        resp = requests.post(
+            f"{OPENAI_URL}/call",
+            json={"name": "fixonce_init_session", "arguments": {
+                "working_dir": str(test_dir)
+            }},
+            timeout=TIMEOUT_SECONDS
+        )
+        if resp.status_code == 200:
+            print(f"✅ Test project initialized: {test_dir}")
+            return True
+        else:
+            print(f"❌ Failed to init test project: {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ Error initializing test project: {e}")
+        return False
+
+
+def cleanup_test_project():
+    """Clean up test project after tests - both folder AND data files."""
+    global ORIGINAL_ACTIVE_PROJECT
+
+    # Clean temp folder
+    test_dir = Path(TEST_PROJECT_DIR)
+    if test_dir.exists():
+        try:
+            shutil.rmtree(test_dir)
+            print(f"🧹 Cleaned up test folder: {test_dir}")
+        except Exception as e:
+            print(f"⚠️  Could not clean up folder: {e}")
+
+    # Clean project data files from FixOnce data directory
+    data_dir = Path(__file__).parent.parent / "data" / "projects_v2"
+    if data_dir.exists():
+        test_patterns = ["fixonce_stress_test_project_", "subproject_", "project_a-build_"]
+        for json_file in data_dir.glob("*.json"):
+            if any(pattern in json_file.name for pattern in test_patterns):
+                try:
+                    json_file.unlink()
+                    print(f"🧹 Cleaned up data file: {json_file.name}")
+                except Exception as e:
+                    print(f"⚠️  Could not delete {json_file.name}: {e}")
+
+    # Restore original active project
+    if ORIGINAL_ACTIVE_PROJECT:
+        active_file = Path(__file__).parent.parent / "data" / "active_project.json"
+        try:
+            with open(active_file, 'w') as f:
+                json.dump(ORIGINAL_ACTIVE_PROJECT, f, indent=2)
+            print(f"🔄 Restored original active project: {ORIGINAL_ACTIVE_PROJECT.get('active_id', 'unknown')}")
+        except Exception as e:
+            print(f"⚠️  Could not restore active project: {e}")
+
+
+def ensure_test_project_active() -> bool:
+    """
+    Ensure the test project is the active project before operations.
+    This prevents writing to real user projects.
+    """
+    try:
+        resp = requests.post(
+            f"{OPENAI_URL}/call",
+            json={"name": "fixonce_init_session", "arguments": {
+                "working_dir": TEST_PROJECT_DIR
+            }},
+            timeout=TIMEOUT_SECONDS
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
 # ============================================================================
 # Test 1: Load Test (Memory Explosion)
 # ============================================================================
@@ -145,6 +252,16 @@ def test_load_high_volume() -> TestResult:
     print("\n" + "="*60)
     print("TEST 1: Load Test (High Volume Operations)")
     print("="*60)
+
+    # CRITICAL: Ensure we're writing to test project, not real project!
+    if not ensure_test_project_active():
+        return TestResult(
+            name="Load Test (High Volume)",
+            passed=False,
+            duration=0,
+            details="Could not activate test project",
+            errors=["Failed to ensure test project is active"]
+        )
 
     start_time = time.time()
     errors = []
@@ -258,10 +375,20 @@ def test_crash_recovery() -> TestResult:
     print("TEST 2: Crash Recovery (Atomic Write Verification)")
     print("="*60)
 
+    # CRITICAL: Ensure we're writing to test project, not real project!
+    if not ensure_test_project_active():
+        return TestResult(
+            name="Crash Recovery (Atomic Write)",
+            passed=False,
+            duration=0,
+            details="Could not activate test project",
+            errors=["Failed to ensure test project is active"]
+        )
+
     start_time = time.time()
     errors = []
 
-    # Create test project
+    # Using test project (already activated above)
     test_id = f"crash_test_{random_string(8)}"
 
     try:
@@ -336,6 +463,16 @@ def test_concurrent_access() -> TestResult:
     print("\n" + "="*60)
     print("TEST 3: Concurrent Access (Race Condition Test)")
     print("="*60)
+
+    # CRITICAL: Ensure we're writing to test project, not real project!
+    if not ensure_test_project_active():
+        return TestResult(
+            name="Concurrent Access (Race Condition)",
+            passed=False,
+            duration=0,
+            details="Could not activate test project",
+            errors=["Failed to ensure test project is active"]
+        )
 
     start_time = time.time()
     errors = []
@@ -542,6 +679,16 @@ def test_ux_edge_cases() -> TestResult:
     print("TEST 5: UX Edge Cases")
     print("="*60)
 
+    # CRITICAL: Ensure we're writing to test project, not real project!
+    if not ensure_test_project_active():
+        return TestResult(
+            name="UX Edge Cases",
+            passed=False,
+            duration=0,
+            details="Could not activate test project",
+            errors=["Failed to ensure test project is active"]
+        )
+
     start_time = time.time()
     errors = []
     tests_run = 0
@@ -654,6 +801,12 @@ def run_all_tests() -> StressTestReport:
 
     print("\n✅ Server is running")
 
+    # Set up dedicated test project (IMPORTANT: Don't pollute real data!)
+    print("\n📁 Setting up dedicated test project...")
+    if not setup_test_project():
+        print("❌ Could not set up test project. Aborting.")
+        sys.exit(1)
+
     start_time = time.time()
     results = []
 
@@ -712,6 +865,10 @@ def run_all_tests() -> StressTestReport:
                     print(f"     • {e[:60]}")
 
     print("\n" + "="*70)
+
+    # Clean up test project
+    print("\n🧹 Cleaning up test project...")
+    cleanup_test_project()
 
     # Save report
     report_path = Path(__file__).parent / "stress_test_results.json"
