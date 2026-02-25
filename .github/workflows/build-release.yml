@@ -1,0 +1,74 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller
+          pip install -r requirements.txt
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --name FixOnce --icon=assets/FixOnce.ico --add-data "data/dashboard_vnext.html;data" --add-data "data/logo.png;data" --add-data "CLAUDE.md;." src/server.py
+
+      - name: Create installer package
+        run: |
+          mkdir release
+          copy dist\FixOnce.exe release\
+          copy CLAUDE.md release\
+          copy README.md release\
+          powershell Compress-Archive -Path release\* -DestinationPath FixOnce-Windows.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FixOnce-Windows
+          path: FixOnce-Windows.zip
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller
+          pip install -r requirements.txt
+
+      - name: Build App
+        run: |
+          pyinstaller --onefile --name FixOnce --icon=assets/FixOnce.icns --add-data "data/dashboard_vnext.html:data" --add-data "data/logo.png:data" --add-data "CLAUDE.md:." src/server.py
+
+      - name: Create package
+        run: |
+          mkdir release
+          cp dist/FixOnce release/
+          cp CLAUDE.md release/
+          cp README.md release/
+          zip -r FixOnce-macOS.zip release/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FixOnce-macOS
+          path: FixOnce-macOS.zip
