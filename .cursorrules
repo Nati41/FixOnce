@@ -25,6 +25,7 @@ Try to initialize FixOnce:
 - **Log insights** — call `update_live_record("lessons", ...)` when you learn something.
 - **Log decisions** — call `log_decision(...)` for architectural choices.
 - **Search first** — call `search_past_solutions(...)` before researching from scratch.
+- **Update components** — call `update_component_status(name, status)` after completing tasks.
 
 ## Tools
 
@@ -35,4 +36,13 @@ Try to initialize FixOnce:
 | `log_decision` | Record a decision |
 | `log_avoid` | Record an anti-pattern |
 | `search_past_solutions` | Search memory |
+| `update_component_status` | **REQUIRED** Update System Tree after tasks |
 | `get_live_record` | Read memory |
+
+## Component Status (MANDATORY)
+
+After completing ANY task, update the relevant component:
+
+```
+update_component_status("Component Name", "done|in_progress|not_started|blocked", "optional description")
+```

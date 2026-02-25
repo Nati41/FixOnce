@@ -218,5 +218,12 @@ document.getElementById('open-dashboard-btn').addEventListener('click', () => {
   chrome.tabs.create({ url: API + '/brain' });
 });
 
+// Select Element button
+document.getElementById('select-element-btn').addEventListener('click', async () => {
+  // Close popup and activate picker on the page
+  chrome.runtime.sendMessage({ action: 'START_PICKER' });
+  window.close();
+});
+
 // Initialize
 updateUI();

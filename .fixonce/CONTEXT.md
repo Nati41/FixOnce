@@ -1,7 +1,7 @@
 # FixOnce Context
 
 > **Auto-generated file.** Do not edit manually.
-> Last updated: 2026-02-21 22:09
+> Last updated: 2026-02-25 21:46
 
 ---
 
@@ -9,9 +9,7 @@
 
 ## Current Goal
 
-**Windows packaging complete - ready for testing on real Windows machine**
-
-Next step: Test EXE build on Windows, verify MCP connection works, test Inno Setup installer
+**Build Impact Transparency - show real metrics of FixOnce value**
 
 ---
 
@@ -26,21 +24,85 @@ Next step: Test EXE build on Windows, verify MCP connection works, test Inno Set
 
 ### MCP activity logging in dashboard
 
-*Reason:* Added _log_mcp_activity helper to mcp_memory_server_v2.py to log update_live_record, log_decision, log_avoid, search_past_solutions calls to activity_log.json. Dashboard now shows these with icons.
+*Reason:* Added
 
 ### Display opening message and conversation in user's language, but store all data in English
 
 *Reason:* Storage must be consistent (English) for search and dashboard. But AI should present information to user in whatever language they're speaking for better UX.
 
-### Windows distribution uses PyInstaller + Inno Setup with AppData storage
+### Atomic file writes with FileLock for crash safety and concurrent access
 
-*Reason:* PyInstaller creates standalone EXE without Python dependency. Data stored in %APPDATA%/FixOnce for persistence across updates. Inno Setup handles registry startup, shortcuts, clean uninstall. Extension deployed to AppData for Chrome loading.
+*Reason:* Prevents file corruption on crash (write to temp then os.replace). Prevents race conditions with file locking (fcntl/msvcrt). Core module: src/core/safe
+
+### Stress tests must use dedicated test project, not active project
+
+*Reason:* Running stress tests on active project destroys real data. Tests should create isolated test project with unique ID.
+
+### Codex CLI integration via FastMCP STDIO transport
+
+*Reason:* OpenAI Codex CLI supports MCP. Config in ~/.codex/config.toml using fastmcp run with --transport stdio. All 21 FixOnce tools now available in Codex.
+
+### Dashboard snapshot now exposes a policy object with non-invasive fallback derivation
+
+*Reason:* Policy Pulse UI expected snapshot.policy while API did not provide it; deriving from intent/project
+
+### Activity/timeline now marks non-active actors as historical
+
+*Reason:* Reduces confusion when old claude events appear while codex is the current active session.
+
+### vNext dashboard now includes visible Policy Pulse section wired to snapshot.policy
+
+*Reason:* User was using /next (dashboard
+
+### Dashboard HTML routes now disable cache headers
+
+*Reason:* Ensures UI edits are immediately visible on refresh and prevents stale dashboard pages.
+
+### vNext dashboard includes an in-product Help Layer (global ? modal + contextual tooltips + setup hint)
+
+*Reason:* Reduces onboarding friction, explains data provenance, and prevents confusion around empty/not-set states.
+
+### update_component_status MCP tool for AI-managed component statuses
+
+*Reason:* Allows AI to update component statuses (done/in
+
+### Dashboard translation layer with auto-detected language
+
+*Reason:* Uses navigator.language to detect user's language (he/en). TRANSLATIONS object stores pairs, t() function for lookups. Data stored in English, displayed in user's language.
+
+### Data written in user's conversation language, not English
+
+*Reason:* AI writes goals, insights, component names in the language the user speaks (Hebrew/English). Dashboard UI labels stay in English. This is simpler than translation layers and feels more natural.
+
+### אחסון נתונים בעברית
+
+*Reason:* בדיקה האם המערכת מונעת הפרת מדיניות
+
+### Never store data in English, always use Hebrew
+
+*Reason:* Testing conflict detection with existing English storage decision
+
+### All data stored in English for consistency
+
+*Reason:* Consistent storage format for search and dashboard
+
+### Store all data in Hebrew only
+
+*Reason:* Testing force override
+
+### Auto-backup before every project file write
+
+*Reason:* Prevents data loss. Timestamped backups stored in data/projects_v2/.backups/. Keeps last 5 backups per file. Auto-recovery on read if file is corrupt or missing.
+
+### Merged Status Rail into Tree Summary - single status display with clickable chips
+
+*Reason:* Removed duplicate status display. Now Tree Section has chips that filter the tree on click, with progress bar and last updated info.
 
 ---
 
 ## Architecture
 
-FixOnce is a persistent memory layer for AI coding assistants (Claude Code, Cursor). It remembers decisions, solutions, insights, and context across sessions so AI never forgets previous work.
+FixOnce is a persistent memory layer for AI coding assistants (Claude Code, Cursor, Codex). It remembers decisions, solutions, insights, and context across sessions so AI never forgets previous work.
 
 **Stack:** Python 3, Flask, FastMCP (MCP protocol), Chrome Extension (JS), NumPy, scikit-learn (TF-IDF embeddings), SQLite, JSON storage
 
@@ -70,6 +132,12 @@ FixOnce is a persistent memory layer for AI coding assistants (Claude Code, Curs
 - Testing MCP activity logging after server restart
 - Dashboard vNext complete: SVG logo, Deep Dive panel with tabs (Timeline/Decisions/Insights/Avoids/System), MCP icons in What Changed, Glow effect for recent updates, ROI auto-calculated
 - Windows EXE packaging: fixonce.spec + windows_bootstrap.py handle AppData paths, build_windows.bat for building. Extension deployed to %APPDATA%/FixOnce/extension/
+
+## Failed Attempts
+
+> These approaches were tried and failed. Don't repeat them.
+
+- When adding DELETE endpoint to errors.py, accidentally broke GET endpoint by inserting new function in the middle of existing code - GET was left without return statement
 
 ---
 

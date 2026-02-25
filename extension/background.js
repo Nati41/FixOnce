@@ -11,6 +11,7 @@ let SERVER_URL = 'http://localhost:5000/api/log_error';
 let BATCH_URL = 'http://localhost:5000/api/log_errors_batch';
 let HANDSHAKE_URL = 'http://localhost:5000/api/handshake';
 let CURRENT_SITE_URL = 'http://localhost:5000/api/current-site';
+let BROWSER_CONTEXT_URL = 'http://localhost:5000/api/browser-context';
 const BATCH_SIZE = 10;
 const BATCH_INTERVAL = 1000;
 
@@ -30,6 +31,7 @@ async function discoverServer() {
           BATCH_URL = `http://localhost:${port}/api/log_errors_batch`;
           HANDSHAKE_URL = `http://localhost:${port}/api/handshake`;
           CURRENT_SITE_URL = `http://localhost:${port}/api/current-site`;
+          BROWSER_CONTEXT_URL = `http://localhost:${port}/api/browser-context`;
           console.log(`[FixOnce] Server found on port ${port}`);
           return true;
         }
@@ -259,6 +261,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Handle whitelist updates from popup
   if (message.type === 'WHITELIST_UPDATED') {
     console.log('[FixOnce] Whitelist updated:', message.domain, message.action);
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // Handle element selection from picker - always as array
+  if (message.action === 'ELEMENT_SELECTED' && message.payload) {
+    const payload = Array.isArray(message.payload) ? message.payload : [message.payload];
+    const count = payload.length;
+
+    console.log(`[FixOnce BG] Received ${count} element(s)`);
+
+    // Send to server - always as multiple
+    const body = {
+      type: 'multiple_elements',
+      element: payload,
+      multiple: true
+    };
+
+    fetch(BROWSER_CONTEXT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(response => {
+      console.log('[FixOnce BG] Server response status:', response.status);
+      return response.json();
+    }).then(data => {
+      console.log('[FixOnce BG] Server response:', data);
+    }).catch(err => {
+      console.error('[FixOnce BG] Failed to send element:', err);
+    });
+
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // Handle clearing browser context
+  if (message.action === 'ELEMENT_CLEARED') {
+    fetch(BROWSER_CONTEXT_URL, { method: 'DELETE' })
+      .then(() => console.log('[FixOnce BG] Context cleared'))
+      .catch(err => console.error('[FixOnce BG] Failed to clear:', err));
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // Handle picker activation request
+  if (message.action === 'START_PICKER') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, { action: 'ACTIVATE_PICKER' });
+      }
+    });
     sendResponse({ success: true });
     return true;
   }

@@ -38,4 +38,20 @@ Respond EXACTLY like this:
 
 NO searches. NO commands. Just this response.
 
+---
+
+## MCP Tools (If Available)
+
+| Tool | Purpose |
+|------|---------|
+| `auto_init_session` | Start session |
+| `update_component_status` | **REQUIRED** Update System Tree after tasks |
+| `log_decision` | Record a decision |
+| `search_past_solutions` | Search memory |
+
+### MANDATORY: After completing tasks, update component status:
+```
+update_component_status("Component Name", "done|in_progress|not_started|blocked")
+```
+
 <!-- FIXONCE-END -->

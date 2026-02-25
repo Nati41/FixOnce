@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 from datetime import datetime
 
-from flask import Flask, send_file, jsonify, request
+from flask import Flask, send_file, jsonify, request, make_response
 from flask_cors import CORS
 
 # MCP import - may fail if mcp package has issues
@@ -77,18 +77,20 @@ register_blueprints(flask_app)
 # ---------------------------------------------------------------------------
 # Dashboard & Static Routes
 # ---------------------------------------------------------------------------
+def _send_dashboard_file(path):
+    """Serve dashboard HTML without browser caching."""
+    response = make_response(send_file(path))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 @flask_app.route("/")
 def dashboard():
     """Serve the main dashboard (vNext)."""
     dashboard_path = DATA_DIR / "dashboard_vnext.html"
-    return send_file(dashboard_path)
-
-
-@flask_app.route("/v3")
-def dashboard_v3():
-    """Serve the 3-layer dashboard (human-first, depth-on-demand)."""
-    v3_path = DATA_DIR / "dashboard_v3.html"
-    return send_file(v3_path)
+    return _send_dashboard_file(dashboard_path)
 
 
 @flask_app.route("/next")
@@ -96,14 +98,14 @@ def dashboard_v3():
 def dashboard_vnext():
     """Serve the vNext dashboard (Project State Engine - minimalist)."""
     vnext_path = DATA_DIR / "dashboard_vnext.html"
-    return send_file(vnext_path)
+    return _send_dashboard_file(vnext_path)
 
 
 @flask_app.route("/app")
 def dashboard_app():
     """Serve the compact app dashboard (for native window)."""
     app_path = DATA_DIR / "dashboard_app.html"
-    return send_file(app_path)
+    return _send_dashboard_file(app_path)
 
 
 @flask_app.route("/logo.png")

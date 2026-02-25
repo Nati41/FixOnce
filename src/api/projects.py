@@ -38,14 +38,11 @@ def api_get_live_state():
     Returns: active_ais, current_goal, next_step, ai_session.
     Designed to be polled every 3-5 seconds.
 
-    Auto-detects active editor based on MCP config file modification times.
+    Note: Active AI state is read-only here and comes from MCP tool calls.
     """
     try:
-        from managers.multi_project_manager import get_active_project_id, get_project_path, save_project_memory
+        from managers.multi_project_manager import get_active_project_id, get_project_path
         import json
-        import os
-        from datetime import datetime
-        from pathlib import Path
 
         project_id = get_active_project_id()
         if not project_id:
@@ -58,15 +55,9 @@ def api_get_live_state():
         with open(project_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        # Auto-detect active editor from MCP config file modification times
+        # Optional debug signal only (no writes, no source-of-truth impact)
         working_dir = data.get("project_info", {}).get("working_dir", "")
-        with open("/tmp/fixonce_detect.log", "a") as f:
-            f.write(f"Calling detect with working_dir: {working_dir}\n")
         detected_editor = _detect_active_editor_from_files(working_dir)
-        with open("/tmp/fixonce_detect.log", "a") as f:
-            f.write(f"Result: {detected_editor}\n")
-        if detected_editor:
-            data = _update_active_ais_if_needed(data, detected_editor, project_path)
 
         live_record = data.get("live_record", {})
         intent = live_record.get("intent", {})
@@ -87,121 +78,59 @@ def api_get_live_state():
 
 def _detect_active_editor_from_files(working_dir: str) -> str:
     """
-    Detect active editor based on running processes.
-    Returns: "cursor", "claude", or None
+    Best-effort debug detection based on local running processes.
+    This must NOT mutate project memory and must NOT be treated as source of truth.
+    Returns:
+    - "cursor" / "claude" / "codex"
+    - "multi:editor1,editor2,..." for multi-editor combinations
+    - None
     """
     import subprocess
 
-    log_file = "/tmp/fixonce_detect.log"
-
     cursor_running = False
     claude_running = False
+    codex_running = False
 
     # Check if Cursor is running
     try:
         result = subprocess.run(['pgrep', '-f', 'Cursor'], capture_output=True, text=True, timeout=2)
         cursor_running = result.returncode == 0 and bool(result.stdout.strip())
-        with open(log_file, "a") as f:
-            f.write(f"Cursor: returncode={result.returncode}, stdout={result.stdout[:50] if result.stdout else 'empty'}, running={cursor_running}\n")
-    except Exception as e:
-        with open(log_file, "a") as f:
-            f.write(f"Cursor error: {e}\n")
+    except Exception:
+        pass
 
     # Check if Claude Code is running
     try:
         result = subprocess.run(['pgrep', '-f', '/claude'], capture_output=True, text=True, timeout=2)
         claude_running = result.returncode == 0 and bool(result.stdout.strip())
-        with open(log_file, "a") as f:
-            f.write(f"Claude: returncode={result.returncode}, running={claude_running}\n")
-    except Exception as e:
-        with open(log_file, "a") as f:
-            f.write(f"Claude error: {e}\n")
+    except Exception:
+        pass
+
+    # Check if Codex CLI is running
+    try:
+        result = subprocess.run(['pgrep', '-f', 'codex'], capture_output=True, text=True, timeout=2)
+        codex_running = result.returncode == 0 and bool(result.stdout.strip())
+    except Exception:
+        pass
 
     # Determine result
-    if cursor_running and claude_running:
-        return "both"  # Both are running
-    elif cursor_running:
+    running = []
+    if cursor_running:
+        running.append("cursor")
+    if claude_running:
+        running.append("claude")
+    if codex_running:
+        running.append("codex")
+
+    if len(running) > 1:
+        return f"multi:{','.join(running)}"
+    if cursor_running:
         return "cursor"
-    elif claude_running:
+    if claude_running:
         return "claude"
+    if codex_running:
+        return "codex"
 
     return None
-
-
-def _update_active_ais_if_needed(data: dict, detected_editor: str, project_path) -> dict:
-    """
-    Update active_ais if detected editor is not in the list or hasn't been updated recently.
-    """
-    import json
-    from datetime import datetime
-
-    if not detected_editor:
-        return data
-
-    now = datetime.now()
-    ACTIVE_TIMEOUT = 300  # 5 minutes
-
-    if "active_ais" not in data:
-        data["active_ais"] = {}
-
-    # Handle "both" case - update both cursor and claude
-    editors_to_update = ["cursor", "claude"] if detected_editor == "both" else [detected_editor]
-
-    for editor in editors_to_update:
-        # Check if this editor is already tracked and recent
-        if editor in data["active_ais"]:
-            last_activity = data["active_ais"][editor].get("last_activity", "")
-            if last_activity:
-                try:
-                    last_dt = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
-                    if last_dt.tzinfo:
-                        last_dt = last_dt.replace(tzinfo=None)
-                    # If updated in last 60 seconds, skip
-                    if (now - last_dt).total_seconds() < 60:
-                        continue
-                except:
-                    pass
-
-        # Update or add this editor
-        if editor not in data["active_ais"]:
-            data["active_ais"][editor] = {
-                "started_at": now.isoformat(),
-                "last_activity": now.isoformat()
-            }
-            print(f"[AutoDetect] Editor joined: {editor}")
-        else:
-            data["active_ais"][editor]["last_activity"] = now.isoformat()
-
-    # Clean up inactive editors
-    inactive = []
-    for editor, info in list(data["active_ais"].items()):
-        try:
-            last_act = datetime.fromisoformat(info.get("last_activity", "").replace('Z', '+00:00'))
-            if last_act.tzinfo:
-                last_act = last_act.replace(tzinfo=None)
-            if (now - last_act).total_seconds() > ACTIVE_TIMEOUT:
-                inactive.append(editor)
-        except:
-            pass
-
-    for editor in inactive:
-        del data["active_ais"][editor]
-
-    # Update ai_session for backward compatibility (use first editor or "both")
-    if "ai_session" not in data:
-        data["ai_session"] = {}
-    data["ai_session"]["editor"] = detected_editor
-    data["ai_session"]["last_activity"] = now.isoformat()
-    data["ai_session"]["active"] = True
-
-    # Save changes
-    try:
-        with open(project_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"[AutoDetect] Failed to save: {e}")
-
-    return data
 
 
 @projects_bp.route("/grouped", methods=["GET"])
@@ -228,21 +157,7 @@ def api_get_projects_grouped():
         }
     """
     try:
-        from managers.multi_project_manager import get_projects_by_status, get_active_project_id, get_project_path
-        import json
-
-        # Auto-detect active editor before returning data (keeps active_ais fresh)
-        project_id = get_active_project_id()
-        if project_id:
-            project_path = get_project_path(project_id)
-            if project_path.exists():
-                with open(project_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                working_dir = data.get("project_info", {}).get("working_dir", "")
-                detected_editor = _detect_active_editor_from_files(working_dir)
-                if detected_editor:
-                    _update_active_ais_if_needed(data, detected_editor, project_path)
-
+        from managers.multi_project_manager import get_projects_by_status
         return jsonify(get_projects_by_status())
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -384,6 +299,26 @@ def api_delete_project(project_id):
     try:
         from managers.multi_project_manager import delete_project
         return jsonify(delete_project(project_id))
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@projects_bp.route("/<project_id>/archive", methods=["POST"])
+def api_archive_project(project_id):
+    """Archive a project (hide from active list)."""
+    try:
+        from managers.multi_project_manager import archive_project
+        return jsonify(archive_project(project_id))
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@projects_bp.route("/<project_id>/unarchive", methods=["POST"])
+def api_unarchive_project(project_id):
+    """Unarchive a project (restore to active list)."""
+    try:
+        from managers.multi_project_manager import unarchive_project
+        return jsonify(unarchive_project(project_id))
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

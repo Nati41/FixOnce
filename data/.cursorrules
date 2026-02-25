@@ -1,29 +1,48 @@
-# FixOnce Live Memory - Project
-# Auto-synced: 2026-02-07 20:36
-# Stack: 
+# FixOnce — AI Memory Layer
 
-## ✅ ALWAYS USE
+> FixOnce never blocks development. It only enhances it.
 
-- **שימוש ב-Optional Chaining לכל גישה לנתונים**
-  - Reason: מונע TypeError כש-data עדיין לא נטען
+## Disable
+
+If the user says "work without FixOnce" or "no fixonce" — stop calling all MCP tools for the rest of the session. Work as a normal AI assistant.
+
+## Session Start
+
+Try to initialize FixOnce:
+
+**MCP Tool:** `user-fixonce` → `auto_init_session`
+**Parameters:** `{"cwd": "<workspace_root_path>"}`
+
+**If it works** — show the returned context and follow the rules below.
+**If it fails** — proceed normally. No retries, no errors, no warnings.
 
 ---
 
-## 📋 FixOnce Protocol
+## When Active
 
-When user says 'FixOnce', 'טען הקשר', or '/start':
-1. Read the sections above carefully
-2. Present context in Hebrew:
-   ```
-   היי! אני מחובר ל-Project.
-   
-   🎯 הקשר: [from CURRENT CONTEXT]
-   📜 חוק בית: [one item from NEVER DO AGAIN or ALWAYS USE]
-   
-   מאיפה ממשיכים?
-   ```
+- **Respect decisions** — if init returned decisions, ask before contradicting them.
+- **Update goal** — call `update_live_record("intent", ...)` before starting work.
+- **Log insights** — call `update_live_record("lessons", ...)` when you learn something.
+- **Log decisions** — call `log_decision(...)` for architectural choices.
+- **Search first** — call `search_past_solutions(...)` before researching from scratch.
+- **Update components** — call `update_component_status(name, status)` after completing tasks.
 
-Before fixing errors: Check PROVEN SOLUTIONS first.
-Respect all rules in NEVER DO AGAIN and ALWAYS USE.
+## Tools
 
-**Style:** Hebrew preferred, short responses, no robotic AI-speak.
+| Tool | Purpose |
+|------|---------|
+| `auto_init_session` | Start session |
+| `update_live_record` | Save goal / lessons / architecture |
+| `log_decision` | Record a decision |
+| `log_avoid` | Record an anti-pattern |
+| `search_past_solutions` | Search memory |
+| `update_component_status` | **REQUIRED** Update System Tree after tasks |
+| `get_live_record` | Read memory |
+
+## Component Status (MANDATORY)
+
+After completing ANY task, update the relevant component:
+
+```
+update_component_status("Component Name", "done|in_progress|not_started|blocked", "optional description")
+```

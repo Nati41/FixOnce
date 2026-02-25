@@ -5,20 +5,20 @@
       "project_id": "FixOnce_e3921f743904",
       "working_dir": "/Users/haimdayan/Desktop/FixOnce",
       "name": "FixOnce",
-      "git_commit_hash": "11873fae1b8d",
-      "summary": "FixOnce is a persistent memory layer for AI coding assistants (Claude Code, Cursor). It remembers decisions, solutions, insights, and context across sessions so AI never forgets previous work.",
+      "git_commit_hash": "109cf7c15265",
+      "summary": "FixOnce is a persistent memory layer for AI coding assistants (Claude Code, Cursor, Codex). It remembers decisions, solutions, insights, and context across sessions so AI never forgets previous work.",
       "stack": "Python 3, Flask, FastMCP (MCP protocol), Chrome Extension (JS), NumPy, scikit-learn (TF-IDF embeddings), SQLite, JSON storage",
-      "current_goal": "Windows packaging complete - ready for testing on real Windows machine",
+      "current_goal": "Build minimal Installer - macOS one-click, Windows basic, auto-port, health check",
       "last_insight": {
-        "text": "OpenAI adapter (openai_adapter.py) provides 8 functions: init_session, search_solutions, log_decision, log_avoid, update_goal, log_insight, get_context, get_browser_errors. Compatible with both old 'functions' and new 'tools' format.",
-        "timestamp": "2026-02-21T22:29:25.395134",
+        "text": "Installer has: auto-port detection (tries 5000-5009), health check via /api/health, checks if already running, LaunchAgent (Mac) / Task Scheduler (Windows) for auto-start",
+        "timestamp": "2026-02-25T22:03:14.547357",
         "use_count": 0,
         "last_used": null,
         "importance": "medium"
       },
-      "decisions_count": 6,
+      "decisions_count": 21,
       "avoid_count": 0,
-      "indexed_at": "2026-02-21T22:29:25.424035"
+      "indexed_at": "2026-02-25T22:03:32.475160"
     },
     "tetris-game_57755ff050fb": {
       "project_id": "tetris-game_57755ff050fb",
@@ -38,7 +38,26 @@
       "decisions_count": 1,
       "avoid_count": 0,
       "indexed_at": "2026-02-21T22:33:57.098772"
+    },
+    "FixOnce-Tests_2307bc0e50c2": {
+      "project_id": "FixOnce-Tests_2307bc0e50c2",
+      "working_dir": "/Users/haimdayan/Desktop/FixOnce-Tests",
+      "name": "FixOnce-Tests",
+      "git_commit_hash": null,
+      "summary": "Test project for FixOnce QA",
+      "stack": "JavaScript",
+      "current_goal": "Third goal to verify history",
+      "last_insight": {
+        "text": "בדיקת עברית עם אימוג'י 🎉 ותווים מיוחדים: <script>alert('xss')</script> ו-JSON: {\"key\": \"value\"}",
+        "timestamp": "2026-02-25T21:49:35.918316",
+        "use_count": 0,
+        "last_used": null,
+        "importance": "medium"
+      },
+      "decisions_count": 4,
+      "avoid_count": 1,
+      "indexed_at": "2026-02-25T21:56:19.220302"
     }
   },
-  "updated_at": "2026-02-21T22:33:57.098785"
+  "updated_at": "2026-02-25T22:03:32.475225"
 }

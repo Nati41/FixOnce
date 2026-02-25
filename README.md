@@ -113,7 +113,7 @@ You open a project → AI starts a conversation
 ## Dashboard
 
 ```
-http://localhost:5000/v3
+http://localhost:5000
 ```
 
 Three layers:
@@ -158,7 +158,7 @@ FixOnce/
 │   ├── core/                        # Business logic
 │   └── managers/                    # Project management
 ├── data/
-│   ├── dashboard_v3.html            # Dashboard UI
+│   ├── dashboard_vnext.html          # Dashboard UI
 │   └── projects_v2/                 # Project memories
 ├── setup.sh                         # One-command setup
 └── tests/

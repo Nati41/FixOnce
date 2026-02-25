@@ -20,6 +20,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
+# Safe file operations (auto-backup, atomic writes)
+try:
+    from core.safe_file import atomic_json_write, atomic_json_read
+    SAFE_FILE_AVAILABLE = True
+except ImportError:
+    SAFE_FILE_AVAILABLE = False
+
 # Phase 0: Import ProjectContext for consistent ID generation
 # Note: We keep local generate_project_id_from_path for backward compatibility
 # but new code should use ProjectContext.from_path()
@@ -250,8 +257,12 @@ def set_active_project(
             "working_dir": actual_working_dir  # Phase 1: Store for boundary detection
         }
 
-        with open(ACTIVE_PROJECT_FILE, 'w', encoding='utf-8') as f:
-            json.dump(active_info, f, ensure_ascii=False, indent=2)
+        # Use safe write for active project file
+        if SAFE_FILE_AVAILABLE:
+            atomic_json_write(str(ACTIVE_PROJECT_FILE), active_info, create_backup=False)
+        else:
+            with open(ACTIVE_PROJECT_FILE, 'w', encoding='utf-8') as f:
+                json.dump(active_info, f, ensure_ascii=False, indent=2)
 
         print(f"[MultiProject] Switched to: {project_id} (from {detected_from})")
         return active_info
@@ -321,8 +332,13 @@ def init_project_memory(project_id: str, display_name: str = None, working_dir: 
     }
 
     project_path = get_project_path(project_id)
-    with open(project_path, 'w', encoding='utf-8') as f:
-        json.dump(memory, f, ensure_ascii=False, indent=2)
+
+    # Use safe write with auto-backup
+    if SAFE_FILE_AVAILABLE:
+        atomic_json_write(str(project_path), memory, create_backup=False)  # No backup for new files
+    else:
+        with open(project_path, 'w', encoding='utf-8') as f:
+            json.dump(memory, f, ensure_ascii=False, indent=2)
 
     print(f"[MultiProject] Initialized: {project_id}")
     return memory
@@ -354,11 +370,30 @@ def load_project_memory(project_id: str) -> Dict[str, Any]:
     project_path = get_project_path(project_id)
 
     if not project_path.exists():
+        # Check for backup before creating new
+        if SAFE_FILE_AVAILABLE:
+            from core.safe_file import get_latest_backup
+            backup = get_latest_backup(str(project_path))
+            if backup and backup.exists():
+                print(f"[MultiProject] Found backup for missing project: {backup.name}")
+                # Auto-recover from backup
+                from core.safe_file import restore_from_backup
+                if restore_from_backup(str(project_path)):
+                    print(f"[MultiProject] Auto-recovered from backup!")
+                    return atomic_json_read(str(project_path), default={})
         return init_project_memory(project_id)
 
     try:
-        with open(project_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        # Use safe read with auto-recovery
+        if SAFE_FILE_AVAILABLE:
+            memory = atomic_json_read(str(project_path), default=None, auto_recover=True)
+            if memory is None:
+                print(f"[MultiProject] Recovery failed, reinitializing {project_id}")
+                return init_project_memory(project_id)
+            return memory
+        else:
+            with open(project_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
     except Exception as e:
         print(f"[MultiProject] Error loading {project_id}: {e}")
         return init_project_memory(project_id)
@@ -451,6 +486,69 @@ def delete_project(project_id: str) -> Dict[str, Any]:
         return {"status": "error", "message": str(e)}
 
 
+def archive_project(project_id: str) -> Dict[str, Any]:
+    """Archive a project (hide from active list)."""
+    project_path = get_project_path(project_id)
+
+    if not project_path.exists():
+        return {"status": "error", "message": "Project not found"}
+
+    try:
+        # Use safe read
+        if SAFE_FILE_AVAILABLE:
+            memory = atomic_json_read(str(project_path), default={})
+        else:
+            with open(project_path, 'r', encoding='utf-8') as f:
+                memory = json.load(f)
+
+        # Set archived flag
+        if 'project_info' not in memory:
+            memory['project_info'] = {}
+        memory['project_info']['archived'] = True
+
+        # Use safe write with auto-backup
+        if SAFE_FILE_AVAILABLE:
+            atomic_json_write(str(project_path), memory)
+        else:
+            with open(project_path, 'w', encoding='utf-8') as f:
+                json.dump(memory, f, indent=2, ensure_ascii=False)
+
+        return {"status": "ok", "message": f"Archived: {project_id}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+def unarchive_project(project_id: str) -> Dict[str, Any]:
+    """Unarchive a project (restore to active list)."""
+    project_path = get_project_path(project_id)
+
+    if not project_path.exists():
+        return {"status": "error", "message": "Project not found"}
+
+    try:
+        # Use safe read
+        if SAFE_FILE_AVAILABLE:
+            memory = atomic_json_read(str(project_path), default={})
+        else:
+            with open(project_path, 'r', encoding='utf-8') as f:
+                memory = json.load(f)
+
+        # Remove archived flag
+        if 'project_info' in memory:
+            memory['project_info']['archived'] = False
+
+        # Use safe write with auto-backup
+        if SAFE_FILE_AVAILABLE:
+            atomic_json_write(str(project_path), memory)
+        else:
+            with open(project_path, 'w', encoding='utf-8') as f:
+                json.dump(memory, f, indent=2, ensure_ascii=False)
+
+        return {"status": "ok", "message": f"Unarchived: {project_id}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 # ============================================================
 # LIST PROJECTS
 # ============================================================
@@ -481,7 +579,8 @@ def list_projects() -> List[Dict[str, Any]]:
                 "last_updated": stats.get('last_updated', ''),
                 "decisions_count": len(memory.get('decisions', [])),
                 "avoid_count": len(memory.get('avoid', [])),
-                "issues_count": len(memory.get('active_issues', []))
+                "issues_count": len(memory.get('active_issues', [])),
+                "archived": info.get('archived', False)
             })
         except Exception as e:
             print(f"[MultiProject] Error reading {project_file.name}: {e}")

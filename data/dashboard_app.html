@@ -341,8 +341,8 @@
                 <div class="stat-label">Avoids</div>
             </div>
             <div class="stat" id="roi-stat" style="display: none;">
-                <div class="stat-value" id="stat-roi">0</div>
-                <div class="stat-label">Min Saved</div>
+                <div class="stat-value" id="stat-reused">0</div>
+                <div class="stat-label">Reused</div>
             </div>
         </div>
 
@@ -419,11 +419,11 @@
             document.getElementById('stat-insights').textContent = counts.insights || 0;
             document.getElementById('stat-avoids').textContent = counts.avoids || 0;
 
-            // ROI
-            const timeSaved = roi.time_saved_minutes || 0;
-            if (timeSaved > 0) {
+            // ROI - show reused count
+            const reused = roi.solutions_reused || 0;
+            if (reused > 0) {
                 document.getElementById('roi-stat').style.display = 'block';
-                document.getElementById('stat-roi').textContent = timeSaved;
+                document.getElementById('stat-reused').textContent = reused;
             }
 
             // Decision

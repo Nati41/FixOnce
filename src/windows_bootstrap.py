@@ -52,7 +52,7 @@ def ensure_appdata_setup() -> Path:
         shutil.copy2(template_src, template_dst)
 
     # Copy dashboard files (always update to latest version)
-    for dashboard in ['dashboard_vnext.html', 'dashboard_v3.html', 'logo.png']:
+    for dashboard in ['dashboard_vnext.html', 'logo.png']:
         src = bundled_dir / 'data' / dashboard
         dst = appdata_dir / dashboard
         if src.exists():

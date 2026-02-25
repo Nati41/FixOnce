@@ -210,6 +210,16 @@
       background: rgba(255,255,255,0.05);
     }
 
+    .picker-btn {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(99, 102, 241, 0.25));
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+
+    .picker-btn:hover {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(99, 102, 241, 0.35));
+      border-color: rgba(59, 130, 246, 0.6);
+    }
+
     .footer {
       margin-top: 16px;
       padding-top: 12px;
@@ -273,13 +283,16 @@
         <div class="stat-label">Solved</div>
       </div>
     </div>
+    <button class="action-btn picker-btn" id="select-element-btn">
+      <span style="margin-right: 6px;">🎯</span> Select Element for AI
+    </button>
     <button class="action-btn" id="open-dashboard-btn">Open Dashboard</button>
     <button class="secondary-btn" id="disable-btn">Disable on this site</button>
     <div class="whitelist-info auto" id="active-info"></div>
   </div>
 
   <div class="footer">
-    <span>v2.0</span>
+    <span>v3.0</span>
     <a href="http://localhost:5000/brain" target="_blank">Dashboard</a>
   </div>
 

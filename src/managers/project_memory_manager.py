@@ -1274,7 +1274,9 @@ def _ensure_live_record(memory: Dict[str, Any]) -> Dict[str, Any]:
             },
             "architecture": {
                 "summary": "",
+                "stack": "",
                 "key_flows": [],
+                "components": [],
                 "updated_at": now
             },
             "lessons": {
@@ -1476,10 +1478,17 @@ def update_live_record(section: str, data: Dict[str, Any]) -> Dict[str, Any]:
             elif section == 'architecture':
                 if 'summary' in data:
                     live_record['architecture']['summary'] = data['summary']
+                if 'stack' in data:
+                    live_record['architecture']['stack'] = data['stack']
                 if 'key_flows' in data:
                     flows = data['key_flows']
                     if isinstance(flows, list):
                         live_record['architecture']['key_flows'] = flows[-MAX_KEY_FLOWS:]
+                if 'components' in data:
+                    components = data['components']
+                    if isinstance(components, list):
+                        # Each component: {"name": "...", "status": "done|in_progress|not_started", "desc": "..."}
+                        live_record['architecture']['components'] = components[:20]  # Max 20 components
                 live_record['architecture']['updated_at'] = now
 
             elif section == 'intent':
@@ -1631,7 +1640,9 @@ def clear_live_record_section(section: str) -> Dict[str, Any]:
         elif section == 'architecture':
             memory['live_record']['architecture'] = {
                 "summary": "",
+                "stack": "",
                 "key_flows": [],
+                "components": [],
                 "updated_at": now
             }
         elif section == 'lessons':

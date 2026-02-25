@@ -308,3 +308,297 @@ def api_feedback():
         return jsonify({"status": "ok", "message": f"Feedback recorded: {feedback}"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============================================================
+# BROWSER CONTEXT - Element Selection for AI Vision
+# ============================================================
+
+# Store selected element (in-memory, per project)
+_browser_context = {}
+
+@errors_bp.route("/api/browser-context", methods=["POST"])
+def api_browser_context_post():
+    """Receive selected element(s) from Chrome extension."""
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({"status": "error", "message": "No JSON body"}), 400
+
+        project_id = _get_active_project_id()
+
+        # Support both single element and multiple elements
+        element_data = data.get("element", {})
+        is_multiple = data.get("multiple", False)
+
+        if is_multiple and isinstance(element_data, list):
+            # Multiple elements
+            elements = []
+            for el in element_data[:5]:  # Limit to 5 elements
+                html_val = el.get("html") or ""
+                text_val = el.get("innerText") or ""
+                elements.append({
+                    "selector": el.get("selector", ""),
+                    "tagName": el.get("tagName", ""),
+                    "id": el.get("id"),
+                    "classes": el.get("classes", []),
+                    "html": html_val[:2000],
+                    "innerText": text_val[:200],
+                    "css": el.get("css", {}),
+                    "rect": el.get("rect", {}),
+                    "url": el.get("url", ""),
+                    "timestamp": el.get("timestamp", datetime.now().isoformat()),
+                })
+
+            context_entry = {
+                "type": "multiple_elements",
+                "elements": elements,
+                "count": len(elements),
+                "project_id": project_id,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            _browser_context[project_id] = context_entry
+            print(f"[BrowserContext] {len(elements)} elements selected")
+            return jsonify({"status": "ok", "count": len(elements)})
+
+        else:
+            # Single element (backward compatible)
+            html_val = element_data.get("html") or ""
+            text_val = element_data.get("innerText") or ""
+            context_entry = {
+                "type": data.get("type", "element_selection"),
+                "element": {
+                    "selector": element_data.get("selector", ""),
+                    "tagName": element_data.get("tagName", ""),
+                    "id": element_data.get("id"),
+                    "classes": element_data.get("classes", []),
+                    "html": html_val[:2000],
+                    "innerText": text_val[:200],
+                    "css": element_data.get("css", {}),
+                    "rect": element_data.get("rect", {}),
+                },
+                "url": element_data.get("url", ""),
+                "timestamp": element_data.get("timestamp", datetime.now().isoformat()),
+                "project_id": project_id
+            }
+
+            _browser_context[project_id] = context_entry
+            print(f"[BrowserContext] Element selected: {context_entry['element']['selector']}")
+            return jsonify({"status": "ok", "selector": context_entry['element']['selector']})
+
+    except Exception as e:
+        print(f"[BrowserContext] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@errors_bp.route("/api/browser-context", methods=["GET"])
+def api_browser_context_get():
+    """Get current browser context (selected element + recent errors)."""
+    project_id = _get_active_project_id()
+
+    # Get selected element
+    selected = _browser_context.get(project_id)
+
+    # Get recent errors (last 5 minutes)
+    since_seconds = 300
+    cutoff = datetime.now().timestamp() - since_seconds
+    with log_lock:
+        recent_errors = []
+        for error in list(error_log)[-10:]:  # Last 10 errors max
+            try:
+                error_time = datetime.fromisoformat(error.get('timestamp', '')).timestamp()
+                if error_time >= cutoff:
+                    recent_errors.append({
+                        "message": error.get("message", "")[:200],
+                        "type": error.get("type", "error"),
+                        "url": error.get("url", ""),
+                        "timestamp": error.get("timestamp", "")
+                    })
+            except:
+                pass
+
+    return jsonify({
+        "selected_element": selected,
+        "recent_errors": recent_errors,
+        "has_context": selected is not None
+    })
+
+
+@errors_bp.route("/api/browser-context", methods=["DELETE"])
+def api_browser_context_clear():
+    """Clear the selected element from browser context."""
+    project_id = _get_active_project_id()
+
+    if project_id in _browser_context:
+        del _browser_context[project_id]
+        print(f"[BrowserContext] Cleared for project: {project_id}")
+
+    return jsonify({"status": "ok", "message": "Browser context cleared"})
+
+
+# ============================================================
+# PROJECT URL CHECKING - For Extension to Know When to Show FAB
+# ============================================================
+
+@errors_bp.route("/api/check-project-url", methods=["POST"])
+def api_check_project_url():
+    """Check if a URL belongs to the active project."""
+    data = request.get_json(silent=True)
+    if not data or "url" not in data:
+        return jsonify({"belongs_to_project": False, "reason": "no_url"}), 200
+
+    url = data.get("url", "")
+    project_id = _get_active_project_id()
+
+    if project_id == "__global__":
+        return jsonify({"belongs_to_project": False, "reason": "no_active_project"}), 200
+
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        domain = parsed.netloc
+
+        # Check if it's a dev domain (localhost, 127.0.0.1, etc.)
+        dev_patterns = ['localhost', '127.0.0.1', '0.0.0.0']
+        is_dev = any(p in domain for p in dev_patterns)
+
+        if is_dev:
+            return jsonify({
+                "belongs_to_project": True,
+                "project_id": project_id,
+                "reason": "dev_domain"
+            }), 200
+
+        # Check against project's base URL if configured
+        try:
+            from managers.multi_project_manager import get_active_project_path
+            from pathlib import Path
+            import json
+
+            project_path = get_active_project_path()
+            if project_path:
+                config_file = Path(project_path) / ".fixonce" / "config.json"
+                if config_file.exists():
+                    config = json.loads(config_file.read_text())
+                    allowed_domains = config.get("allowed_domains", [])
+                    base_url = config.get("base_url", "")
+
+                    if any(d in domain for d in allowed_domains):
+                        return jsonify({
+                            "belongs_to_project": True,
+                            "project_id": project_id,
+                            "reason": "allowed_domain"
+                        }), 200
+
+                    if base_url and base_url in url:
+                        return jsonify({
+                            "belongs_to_project": True,
+                            "project_id": project_id,
+                            "reason": "base_url_match"
+                        }), 200
+        except Exception as e:
+            print(f"[CheckProjectURL] Config check error: {e}")
+
+        return jsonify({"belongs_to_project": False, "reason": "not_matching"}), 200
+
+    except Exception as e:
+        print(f"[CheckProjectURL] Error: {e}")
+        return jsonify({"belongs_to_project": False, "reason": "error"}), 200
+
+
+# ============================================================
+# AI HIGHLIGHT - AI-Initiated Element Highlighting
+# ============================================================
+
+# Store pending highlights (in-memory, TTL handled by extension)
+_pending_highlights = {}
+# Store last highlight sent (for dashboard display)
+_last_highlight_sent = {}
+
+@errors_bp.route("/api/highlight-element", methods=["POST"])
+def api_highlight_element_post():
+    """AI sends a highlight command for the extension to execute."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"status": "error", "message": "No JSON body"}), 400
+
+    selector = data.get("selector", "")
+    message = data.get("message", "")
+
+    if not selector:
+        return jsonify({"status": "error", "message": "No selector provided"}), 400
+
+    project_id = _get_active_project_id()
+
+    highlight_entry = {
+        "selector": selector,
+        "message": message[:100] if message else "",
+        "timestamp": datetime.now().isoformat(),
+        "consumed": False
+    }
+
+    _pending_highlights[project_id] = highlight_entry
+
+    # Track last highlight for dashboard
+    _last_highlight_sent[project_id] = {
+        "selector": selector,
+        "message": message[:100] if message else "",
+        "timestamp": datetime.now().isoformat()
+    }
+
+    print(f"[AIHighlight] Queued: {selector} - {message[:50] if message else 'no message'}")
+
+    return jsonify({"status": "ok", "selector": selector})
+
+
+@errors_bp.route("/api/highlight-element", methods=["GET"])
+def api_highlight_element_get():
+    """Extension polls for pending highlight commands."""
+    project_id = _get_active_project_id()
+
+    highlight = _pending_highlights.get(project_id)
+
+    if highlight and not highlight.get("consumed"):
+        # Mark as consumed
+        _pending_highlights[project_id]["consumed"] = True
+
+        return jsonify({
+            "has_highlight": True,
+            "selector": highlight["selector"],
+            "message": highlight["message"],
+            "timestamp": highlight["timestamp"]
+        })
+
+    return jsonify({"has_highlight": False})
+
+
+@errors_bp.route("/api/highlight-element", methods=["DELETE"])
+def api_highlight_element_clear():
+    """Clear pending highlight."""
+    project_id = _get_active_project_id()
+
+    if project_id in _pending_highlights:
+        del _pending_highlights[project_id]
+
+    return jsonify({"status": "ok"})
+
+
+@errors_bp.route("/api/last-highlight", methods=["GET"])
+def api_last_highlight():
+    """Get the last highlight sent (for dashboard display)."""
+    project_id = _get_active_project_id()
+
+    last = _last_highlight_sent.get(project_id)
+
+    if last:
+        return jsonify({
+            "has_highlight": True,
+            "selector": last["selector"],
+            "message": last["message"],
+            "timestamp": last["timestamp"]
+        })
+
+    return jsonify({"has_highlight": False})

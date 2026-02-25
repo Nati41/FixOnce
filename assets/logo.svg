@@ -1,0 +1,44 @@
+<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background circle -->
+    <circle cx="50" cy="50" r="50" fill="#0f172a"/>
+
+    <!-- Outer glow circle -->
+    <circle cx="50" cy="50" r="48" stroke="url(#gradient1)" stroke-width="1" opacity="0.3"/>
+
+    <!-- Circuit nodes around -->
+    <circle cx="50" cy="6" r="4" fill="#3b82f6"/>
+    <circle cx="85" cy="25" r="3" fill="#06b6d4"/>
+    <circle cx="94" cy="50" r="3" fill="#3b82f6"/>
+    <circle cx="85" cy="75" r="3" fill="#06b6d4"/>
+    <circle cx="50" cy="94" r="4" fill="#3b82f6"/>
+    <circle cx="15" cy="75" r="3" fill="#06b6d4"/>
+    <circle cx="6" cy="50" r="3" fill="#3b82f6"/>
+    <circle cx="15" cy="25" r="3" fill="#06b6d4"/>
+
+    <!-- Connection lines -->
+    <path d="M50 10 L50 22 M82 27 L72 35 M90 50 L78 50 M82 73 L72 65 M50 90 L50 78 M18 73 L28 65 M10 50 L22 50 M18 27 L28 35"
+          stroke="url(#gradient1)" stroke-width="1.5" opacity="0.5"/>
+
+    <!-- Shield shape -->
+    <path d="M50 18 L75 28 L75 55 C75 70 50 82 50 82 C50 82 25 70 25 55 L25 28 Z"
+          fill="url(#gradient2)" stroke="url(#gradient1)" stroke-width="2"/>
+
+    <!-- Letter F -->
+    <text x="50" y="58" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#fff">F</text>
+
+    <!-- Circuit lines inside shield -->
+    <path d="M38 40 L38 45 L45 45" stroke="#06b6d4" stroke-width="1.5" fill="none" opacity="0.6"/>
+    <path d="M62 65 L62 60 L55 60" stroke="#06b6d4" stroke-width="1.5" fill="none" opacity="0.6"/>
+
+    <!-- Gradients -->
+    <defs>
+        <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#3b82f6"/>
+            <stop offset="100%" style="stop-color:#06b6d4"/>
+        </linearGradient>
+        <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#1e3a5f"/>
+            <stop offset="100%" style="stop-color:#0f172a"/>
+        </linearGradient>
+    </defs>
+</svg>
