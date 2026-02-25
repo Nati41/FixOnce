@@ -18,7 +18,7 @@ try:
     MCP_AVAILABLE = True
 except ImportError as e:
     MCP_AVAILABLE = False
-    print(f"⚠️ FastMCP not available: {e}")
+    print(f"[WARNING] FastMCP not available: {e}")
     print("   Running in Flask-only mode")
 
 # Add server directory to path for imports
@@ -57,10 +57,10 @@ def find_available_port(start_port: int = DEFAULT_PORT, max_attempts: int = MAX_
 try:
     from core.semantic_engine import SemanticEngine, get_engine, reset_engine
     SEMANTIC_ENABLED = True
-    print("🧠 Semantic Engine loaded successfully")
+    print("[OK] Semantic Engine loaded successfully")
 except ImportError as e:
     SEMANTIC_ENABLED = False
-    print(f"⚠️ Semantic Engine not available: {e}")
+    print(f"[WARNING] Semantic Engine not available: {e}")
     print("   Falling back to exact/LIKE matching")
 
 
@@ -407,7 +407,7 @@ def save_solution(error_message: str, solution_text: str, scope: str = "personal
 
     if scope == "team":
         if not TEAM_DB_PATH:
-            return "❌ Team database is not configured. Set TEAM_DB_PATH in config.py"
+            return "[ERROR] Team database is not configured. Set TEAM_DB_PATH in config.py"
         db_path = TEAM_DB_PATH
         db_name = "Team"
     else:
@@ -420,7 +420,7 @@ def save_solution(error_message: str, solution_text: str, scope: str = "personal
     except:
         db_save_solution(error_message, solution_text, db_path)
 
-    return f"✅ Solution saved to {db_name} database! Error pattern stored for future reference."
+    return f"[OK] Solution saved to {db_name} database! Error pattern stored for future reference."
 
 
 @mcp_tool()
@@ -539,7 +539,7 @@ def _run_flask():
     try:
         ACTUAL_PORT = find_available_port(DEFAULT_PORT)
     except RuntimeError as e:
-        print(f"⚠️  {e}")
+        print(f"[WARNING] {e}")
         print("   Kill other processes or free up a port.")
         return
 
@@ -551,7 +551,7 @@ def _run_flask():
     port_file.write_text(str(ACTUAL_PORT))
 
     if ACTUAL_PORT != DEFAULT_PORT:
-        print(f"⚠️  Port {DEFAULT_PORT} is in use, using port {ACTUAL_PORT} instead")
+        print(f"[WARNING] Port {DEFAULT_PORT} is in use, using port {ACTUAL_PORT} instead")
 
     flask_app.run(host="0.0.0.0", port=ACTUAL_PORT, debug=False, use_reloader=False)
 
@@ -576,12 +576,12 @@ if __name__ == "__main__":
         print(f"  {APP_NAME} v{VERSION} - AI Memory Layer")
         print("=" * 60)
         print()
-        print(f"🔥 Flask API: http://localhost:{ACTUAL_PORT}")
-        print(f"📊 Dashboard: http://localhost:{ACTUAL_PORT}/")
-        print("🤖 MCP Tools: get_console_errors, check_mission_log, save_solution")
+        print(f"[API] Flask API: http://localhost:{ACTUAL_PORT}")
+        print(f"[UI] Dashboard: http://localhost:{ACTUAL_PORT}/")
+        print("[MCP] Tools: get_console_errors, check_mission_log, save_solution")
         print()
         if SEMANTIC_ENABLED:
-            print("🧠 Semantic Engine: ENABLED (TF-IDF + Cosine Similarity)")
+            print("[SEMANTIC] Engine: ENABLED (TF-IDF + Cosine Similarity)")
         print()
         print("=" * 60)
     elif args.minimized:
@@ -590,9 +590,9 @@ if __name__ == "__main__":
 
     if args.flask_only or not MCP_AVAILABLE:
         if not MCP_AVAILABLE:
-            print("🌐 Running Flask-only mode (MCP not available)")
+            print("[MODE] Running Flask-only mode (MCP not available)")
         else:
-            print("🌐 Running Flask-only mode (no MCP)")
+            print("[MODE] Running Flask-only mode (no MCP)")
         _run_flask()
     else:
         flask_thread = threading.Thread(target=_run_flask, daemon=True)
