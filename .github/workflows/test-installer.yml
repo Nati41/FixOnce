@@ -59,11 +59,11 @@ jobs:
       - name: Test server starts
         shell: pwsh
         run: |
-          cd src
-          $job = Start-Job { python server.py --flask-only }
+          # Start server as background process
+          $serverProcess = Start-Process -FilePath python -ArgumentList "src/server.py", "--flask-only" -PassThru -NoNewWindow -RedirectStandardOutput "server_out.txt" -RedirectStandardError "server_err.txt"
 
           # Wait for server with retry
-          $maxAttempts = 15
+          $maxAttempts = 20
           $success = $false
 
           for ($i = 1; $i -le $maxAttempts; $i++) {
@@ -80,8 +80,19 @@ jobs:
             }
           }
 
-          Stop-Job $job -ErrorAction SilentlyContinue
-          Remove-Job $job -ErrorAction SilentlyContinue
+          # Show server output for debugging
+          if (Test-Path "server_err.txt") {
+            $errContent = Get-Content "server_err.txt" -Raw
+            if ($errContent) {
+              Write-Host "Server stderr:"
+              Write-Host $errContent
+            }
+          }
+
+          # Clean up
+          if ($serverProcess -and !$serverProcess.HasExited) {
+            Stop-Process -Id $serverProcess.Id -Force -ErrorAction SilentlyContinue
+          }
 
           if (-not $success) {
             Write-Host "[FAIL] Windows: Server did not start in time"
