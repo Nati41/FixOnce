@@ -28,7 +28,7 @@ def init_db(db_path: Path, db_name: str = "Database"):
     """)
     conn.commit()
     conn.close()
-    print(f"📚 {db_name} initialized at {db_path}")
+    print(f"[DB] {db_name} initialized at {db_path}")
 
 
 def get_all_solutions(db_path: Path) -> list[dict]:
