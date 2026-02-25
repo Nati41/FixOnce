@@ -24,10 +24,24 @@ jobs:
       - name: Test server starts
         run: |
           cd src
-          timeout 10 python server.py --flask-only &
-          sleep 5
-          curl -f http://localhost:5000/api/health || exit 1
-          echo "✅ Mac: Server health check passed"
+          # Start server in background
+          python server.py --flask-only &
+          SERVER_PID=$!
+
+          # Wait for server with retry
+          for i in {1..15}; do
+            if curl -sf http://localhost:5000/api/health > /dev/null 2>&1; then
+              echo "[OK] Mac: Server health check passed"
+              kill $SERVER_PID 2>/dev/null || true
+              exit 0
+            fi
+            echo "Waiting for server... attempt $i/15"
+            sleep 1
+          done
+
+          echo "[FAIL] Mac: Server did not start in time"
+          kill $SERVER_PID 2>/dev/null || true
+          exit 1
 
   test-windows:
     runs-on: windows-latest
@@ -47,17 +61,32 @@ jobs:
         run: |
           cd src
           $job = Start-Job { python server.py --flask-only }
-          Start-Sleep -Seconds 5
-          try {
-            $response = Invoke-WebRequest -Uri "http://localhost:5000/api/health" -UseBasicParsing
-            if ($response.StatusCode -eq 200) {
-              Write-Host "✅ Windows: Server health check passed"
+
+          # Wait for server with retry
+          $maxAttempts = 15
+          $success = $false
+
+          for ($i = 1; $i -le $maxAttempts; $i++) {
+            Start-Sleep -Seconds 1
+            try {
+              $response = Invoke-WebRequest -Uri "http://localhost:5000/api/health" -UseBasicParsing -TimeoutSec 2
+              if ($response.StatusCode -eq 200) {
+                Write-Host "[OK] Windows: Server health check passed"
+                $success = $true
+                break
+              }
+            } catch {
+              Write-Host "Waiting for server... attempt $i/$maxAttempts"
             }
-          } catch {
-            Write-Host "❌ Windows: Health check failed"
+          }
+
+          Stop-Job $job -ErrorAction SilentlyContinue
+          Remove-Job $job -ErrorAction SilentlyContinue
+
+          if (-not $success) {
+            Write-Host "[FAIL] Windows: Server did not start in time"
             exit 1
           }
-          Stop-Job $job
 
   test-installer-script:
     runs-on: ${{ matrix.os }}
@@ -75,4 +104,4 @@ jobs:
       - name: Test install.py imports
         run: |
           cd scripts
-          python -c "import install; print('✅ install.py imports OK')"
+          python -c "import install; print('[OK] install.py imports successfully')"
