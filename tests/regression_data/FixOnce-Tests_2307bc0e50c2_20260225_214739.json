@@ -1,0 +1,114 @@
+{
+  "project_info": {
+    "working_dir": "/Users/haimdayan/Desktop/FixOnce-Tests",
+    "name": "FixOnce-Tests",
+    "created_at": "2026-02-25T21:46:57.787273"
+  },
+  "live_record": {
+    "gps": {
+      "working_dir": "/Users/haimdayan/Desktop/FixOnce-Tests",
+      "active_ports": [],
+      "url": "",
+      "environment": "dev"
+    },
+    "architecture": {
+      "summary": "Test project for FixOnce QA",
+      "stack": "JavaScript",
+      "key_flows": [
+        "Test all MCP tools",
+        "Verify dashboard updates",
+        "Check edge cases"
+      ],
+      "components": [
+        {
+          "name": "API Server",
+          "status": "in_progress",
+          "desc": "Main API server for tests",
+          "created_at": "2026-02-25T21:47:34.665227",
+          "updated_at": "2026-02-25T21:47:34.665297",
+          "updated_by": "claude",
+          "update_source": "parent_process"
+        },
+        {
+          "name": "Database",
+          "status": "not_started",
+          "desc": "SQLite database layer",
+          "created_at": "2026-02-25T21:47:35.325789",
+          "updated_at": "2026-02-25T21:47:35.325833",
+          "updated_by": "claude",
+          "update_source": "parent_process"
+        },
+        {
+          "name": "Auth Module",
+          "status": "blocked",
+          "desc": "Waiting for API Server",
+          "created_at": "2026-02-25T21:47:36.238083",
+          "updated_at": "2026-02-25T21:47:36.238128",
+          "updated_by": "claude",
+          "update_source": "parent_process"
+        }
+      ],
+      "updated_at": "2026-02-25T21:47:36.238140"
+    },
+    "intent": {
+      "current_goal": "Run comprehensive FixOnce tests",
+      "next_step": "",
+      "blockers": [],
+      "updated_at": "2026-02-25T21:47:20.008521"
+    },
+    "lessons": {
+      "insights": [
+        {
+          "text": "This is a test insight to verify dashboard updates",
+          "timestamp": "2026-02-25T21:47:25.489759",
+          "use_count": 1,
+          "last_used": "2026-02-25T21:47:39.733072",
+          "importance": "low"
+        }
+      ],
+      "failed_attempts": []
+    },
+    "updated_at": "2026-02-25T21:47:25.489772"
+  },
+  "decisions": [
+    {
+      "type": "decision",
+      "decision": "Use Jest for testing",
+      "reason": "Standard testing framework for JavaScript",
+      "timestamp": "2026-02-25T21:47:24.625525",
+      "importance": "permanent",
+      "forced": null
+    }
+  ],
+  "avoid": [
+    {
+      "type": "avoid",
+      "what": "Using console.log for production logging",
+      "reason": "Use proper logging library instead",
+      "timestamp": "2026-02-25T21:47:29.073980",
+      "importance": "permanent"
+    }
+  ],
+  "errors": [],
+  "ai_session": {
+    "active": true,
+    "editor": "claude",
+    "started_at": "2026-02-25T21:46:57.805379",
+    "briefing_sent": false,
+    "actor_source": "parent_process",
+    "actor_confidence": 0.9,
+    "previous_ai": null,
+    "last_activity": "2026-02-25T21:47:19.166096"
+  },
+  "ai_handoffs": [],
+  "active_ais": {
+    "claude": {
+      "started_at": "2026-02-25T21:47:19.166096",
+      "last_activity": "2026-02-25T21:47:19.166096",
+      "is_primary": true,
+      "actor_source": "parent_process",
+      "actor_confidence": 0.9,
+      "tool_calls": 2
+    }
+  }
+}

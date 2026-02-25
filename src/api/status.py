@@ -66,9 +66,20 @@ def api_handshake():
 @status_bp.route("/status")
 def api_status():
     """Return system health status for the dashboard wizard."""
+    # Count today's events from error store
+    events_today = 0
+    try:
+        from core.error_store import get_all_errors
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        all_errors = get_all_errors()
+        events_today = sum(1 for e in all_errors if e.get('timestamp', '').startswith(today_str) or e.get('_added_at', '').startswith(today_str))
+    except Exception:
+        pass
+
     return jsonify({
         "extension_connected": EXTENSION_CONNECTED,
         "extension_last_seen": EXTENSION_LAST_SEEN,
+        "events_today": events_today,
         "server_running": True,
         "port": ACTUAL_PORT
     })
@@ -1047,6 +1058,12 @@ def api_dashboard_snapshot():
             "working_dir": None,
             "stage": None
         },
+        "policy": {
+            "mode": None,
+            "persona": None,
+            "compliance_percent": None,
+            "reason": None
+        },
         "identity": None,
         "activity": [],
         "timestamp": datetime.now().isoformat()
@@ -1063,14 +1080,68 @@ def api_dashboard_snapshot():
                 project_memory = load_project_memory(active_project_id) or {}
 
                 # Active AIs
-                active_ais = project_memory.get("active_ais", {})
+                active_ais = project_memory.get("active_ais", {}) or {}
+                normalized_ais = []
+                now = datetime.now()
                 for ai_name, ai_data in active_ais.items():
-                    snapshot["active_ais"].append({
+                    last_activity = ai_data.get("last_activity")
+                    if last_activity:
+                        try:
+                            last_dt = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
+                            if last_dt.tzinfo:
+                                last_dt = last_dt.replace(tzinfo=None)
+                            # Hide stale AI rows from dashboard view.
+                            if (now - last_dt).total_seconds() > 300:
+                                continue
+                        except Exception:
+                            pass
+                    normalized_ais.append({
                         "id": ai_name,
                         "editor": ai_name,  # ai_name IS the editor name
                         "started_at": ai_data.get("started_at"),
-                        "last_activity": ai_data.get("last_activity")
+                        "last_activity": ai_data.get("last_activity"),
+                        "is_primary": ai_data.get("is_primary", False),
+                        "actor_source": ai_data.get("actor_source", "unknown"),
+                        "actor_confidence": ai_data.get("actor_confidence", 0.0),
+                        "tool_calls": ai_data.get("tool_calls", 0),
                     })
+
+                # Conservative fallback: include ai_session only when it was produced by
+                # an MCP call source and has very recent activity.
+                ai_session = project_memory.get("ai_session", {}) or {}
+                session_editor = ai_session.get("editor")
+                session_source = ai_session.get("actor_source", "unknown")
+                session_last_activity = ai_session.get("last_activity")
+                is_recent_session = False
+                if session_last_activity:
+                    try:
+                        sess_dt = datetime.fromisoformat(session_last_activity.replace('Z', '+00:00'))
+                        if sess_dt.tzinfo:
+                            sess_dt = sess_dt.replace(tzinfo=None)
+                        is_recent_session = (now - sess_dt).total_seconds() <= 120
+                    except Exception:
+                        is_recent_session = False
+                if (
+                    session_editor
+                    and session_source in {"client_actor", "runtime_env"}
+                    and is_recent_session
+                    and not any(ai.get("editor") == session_editor for ai in normalized_ais)
+                ):
+                    normalized_ais.append({
+                        "id": session_editor,
+                        "editor": session_editor,
+                        "started_at": ai_session.get("started_at"),
+                        "last_activity": session_last_activity,
+                        "is_primary": bool(ai_session.get("active", False)),
+                        "actor_source": session_source,
+                        "actor_confidence": ai_session.get("actor_confidence", 0.0),
+                    })
+
+                # Ensure at least one primary for UI ordering if any AI exists
+                if normalized_ais and not any(ai.get("is_primary") for ai in normalized_ais):
+                    normalized_ais[0]["is_primary"] = True
+
+                snapshot["active_ais"] = normalized_ais
 
                 # AI Handoffs (last 10)
                 handoffs = project_memory.get("ai_handoffs", [])
@@ -1086,6 +1157,9 @@ def api_dashboard_snapshot():
                 "solutions_reused": roi.get("solutions_reused", 0),
                 "decisions_referenced": roi.get("decisions_referenced", 0),
                 "errors_prevented": roi.get("errors_prevented", 0),
+                "errors_caught_live": roi.get("errors_caught_live", 0),
+                "sessions_with_context": roi.get("sessions_with_context", 0),
+                "insights_used": roi.get("insights_used", 0),
                 "time_saved_minutes": roi.get("time_saved_minutes", 0),
                 "tokens_saved": roi.get("tokens_saved", 0)
             }
@@ -1151,7 +1225,10 @@ def api_dashboard_snapshot():
                     snapshot["projects"].append({
                         "project_id": pid,
                         "name": project_info.get("name") or pid.split("_")[0],
+                        "working_dir": project_info.get("working_dir", ""),
                         "status": status,
+                        "last_updated": last_updated,
+                        "archived": project_info.get("archived", False),
                         "counts": {
                             "insights": insights_count,
                             "decisions": decisions_count,
@@ -1290,6 +1367,87 @@ def api_dashboard_snapshot():
                         "avoids": len(avoids),
                     }
                 }
+
+                # Architecture for system tree
+                snapshot["architecture"] = {
+                    "summary": arch.get("summary") or "",
+                    "stack": arch.get("stack") or "",
+                    "key_flows": arch.get("key_flows") or [],
+                    "components": arch.get("components") or []
+                }
+
+                # Policy profile (non-invasive): read explicit fields if present,
+                # otherwise derive safe defaults from existing snapshot signals.
+                def first_present(*values):
+                    for value in values:
+                        if value is not None and value != "":
+                            return value
+                    return None
+
+                mode = first_present(
+                    intent.get("mode"),
+                    intent.get("project_mode"),
+                    project_info.get("mode"),
+                    project_info.get("project_mode"),
+                    snapshot["environment"].get("stage")
+                )
+
+                persona = first_present(
+                    intent.get("persona"),
+                    intent.get("ai_persona"),
+                    project_info.get("persona"),
+                    project_info.get("ai_persona")
+                )
+
+                explicit_compliance = first_present(
+                    intent.get("compliance_percent"),
+                    intent.get("policy_compliance"),
+                    project_info.get("compliance_percent"),
+                    project_info.get("policy_compliance")
+                )
+                explicit_reason = first_present(
+                    intent.get("policy_reason"),
+                    intent.get("reason"),
+                    project_info.get("policy_reason"),
+                    project_info.get("reason")
+                )
+
+                compliance_percent = None
+                reason = explicit_reason
+                if explicit_compliance is not None:
+                    try:
+                        compliance_percent = max(0, min(100, int(round(float(explicit_compliance)))))
+                        if not reason:
+                            reason = "From stored policy profile."
+                    except (TypeError, ValueError):
+                        compliance_percent = None
+
+                if compliance_percent is None:
+                    try:
+                        from mcp_server.mcp_memory_server_v2 import get_compliance_for_api
+                        compliance = get_compliance_for_api()
+                        checks = [
+                            bool(compliance.get("session_initialized")),
+                            bool(compliance.get("decisions_displayed")),
+                            bool(compliance.get("goal_updated"))
+                        ]
+                        compliance_percent = int(round((sum(checks) / len(checks)) * 100))
+                        reason = "Derived from protocol compliance checks."
+                    except Exception:
+                        compliance_percent = None
+                        reason = "Policy data unavailable."
+
+                if not persona:
+                    active_ais = snapshot.get("active_ais") or []
+                    if active_ais:
+                        persona = active_ais[0].get("editor")
+
+                snapshot["policy"] = {
+                    "mode": mode,
+                    "persona": persona,
+                    "compliance_percent": compliance_percent,
+                    "reason": reason
+                }
         except Exception:
             pass
 
@@ -1334,9 +1492,8 @@ def api_dashboard_snapshot():
                             "file_context": act.get("file_context", "")  # Include context
                         })
 
-                # Limit and reverse to show newest first
+                # Limit to 30 activities (already in newest-first order)
                 snapshot["activity"] = snapshot["activity"][:30]
-                snapshot["activity"].reverse()
         except Exception:
             pass
 
@@ -1345,6 +1502,64 @@ def api_dashboard_snapshot():
     except Exception as e:
         snapshot["error"] = str(e)
         return jsonify({"status": "error", "snapshot": snapshot, "message": str(e)}), 500
+
+
+@status_bp.route("/dashboard/policy", methods=["POST"])
+def api_dashboard_policy_update():
+    """Update lightweight policy profile for dashboard rendering."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        mode = payload.get("mode")
+        persona = payload.get("persona")
+        compliance = payload.get("compliance_percent")
+        reason = payload.get("reason")
+
+        from managers.multi_project_manager import (
+            get_active_project_id,
+            load_project_memory,
+            save_project_memory
+        )
+
+        active_id = get_active_project_id()
+        if not active_id:
+            return jsonify({"status": "error", "message": "No active project"}), 404
+
+        memory = load_project_memory(active_id) or {}
+        live_record = memory.setdefault("live_record", {})
+        intent = live_record.setdefault("intent", {})
+
+        if mode is not None:
+            intent["mode"] = str(mode).strip() or None
+        if persona is not None:
+            intent["persona"] = str(persona).strip() or None
+        if reason is not None:
+            intent["policy_reason"] = str(reason).strip() or None
+
+        if compliance is not None and compliance != "":
+            try:
+                parsed = max(0, min(100, int(round(float(compliance)))))
+                intent["compliance_percent"] = parsed
+            except (TypeError, ValueError):
+                return jsonify({"status": "error", "message": "Invalid compliance_percent"}), 400
+
+        intent["updated_at"] = datetime.now().isoformat()
+        live_record["updated_at"] = datetime.now().isoformat()
+        memory["last_updated"] = datetime.now().isoformat()
+
+        save_project_memory(active_id, memory)
+
+        return jsonify({
+            "status": "ok",
+            "project_id": active_id,
+            "policy": {
+                "mode": intent.get("mode"),
+                "persona": intent.get("persona"),
+                "compliance_percent": intent.get("compliance_percent"),
+                "reason": intent.get("policy_reason")
+            }
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # ============ Unified Latest Changes ============
@@ -1797,3 +2012,76 @@ def api_fixonce_toggle():
         return jsonify({"enabled": new_state})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============================================================
+# AUTO DISCOVERY - Automatic component detection
+# ============================================================
+
+@status_bp.route("/api/auto-discover", methods=["POST"])
+def api_auto_discover():
+    """
+    Scan codebase and discover components automatically.
+
+    Request body (optional):
+        {
+            "project_path": "/path/to/project",  # defaults to active project
+            "apply": false  # if true, add suggestions to tree
+        }
+
+    Returns:
+        {
+            "suggestions": [...],
+            "scan_summary": {...},
+            "comparison": {...}
+        }
+    """
+    try:
+        from core.auto_discovery import suggest_components
+        from managers.multi_project_manager import get_active_project_path, get_active_project_id, load_project_memory, save_project_memory
+
+        data = request.get_json(silent=True) or {}
+        project_path = data.get("project_path") or get_active_project_path()
+        apply_changes = data.get("apply", False)
+
+        if not project_path:
+            return jsonify({"error": "No active project"}), 400
+
+        # Get existing components
+        project_id = get_active_project_id()
+        memory = load_project_memory(project_id) or {}
+        existing = memory.get("live_record", {}).get("architecture", {}).get("components", [])
+
+        # Run discovery
+        result = suggest_components(project_path, existing)
+
+        if "error" in result:
+            return jsonify(result), 400
+
+        # Apply if requested
+        if apply_changes and result.get("suggestions"):
+            arch = memory.setdefault("live_record", {}).setdefault("architecture", {})
+            components = arch.setdefault("components", [])
+
+            for suggestion in result["suggestions"]:
+                new_comp = {
+                    "name": suggestion["name"],
+                    "status": suggestion.get("suggested_status", "done"),
+                    "desc": suggestion.get("suggested_desc", "Auto-discovered"),
+                    "source": suggestion.get("source", ""),
+                    "created_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat(),
+                    "auto_discovered": True
+                }
+                components.append(new_comp)
+
+            arch["updated_at"] = datetime.now().isoformat()
+            save_project_memory(project_id, memory)
+            result["applied"] = len(result["suggestions"])
+
+        return jsonify(result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500

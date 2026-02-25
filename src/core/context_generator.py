@@ -85,8 +85,10 @@ def _generate_content(memory: Dict[str, Any]) -> str:
     lines.append("---")
     lines.append("")
 
-    # DECISIONS - Most important section
-    decisions = memory.get('decisions', [])
+    # DECISIONS - Most important section (filter out superseded)
+    all_decisions = memory.get('decisions', [])
+    decisions = [d for d in all_decisions if not d.get('superseded', False)]
+
     if decisions:
         lines.append("## Decisions (MUST FOLLOW)")
         lines.append("")

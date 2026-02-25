@@ -1,0 +1,78 @@
+name: Test Installer
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  test-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Test server starts
+        run: |
+          cd src
+          timeout 10 python server.py --flask-only &
+          sleep 5
+          curl -f http://localhost:5000/api/health || exit 1
+          echo "✅ Mac: Server health check passed"
+
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Test server starts
+        shell: pwsh
+        run: |
+          cd src
+          $job = Start-Job { python server.py --flask-only }
+          Start-Sleep -Seconds 5
+          try {
+            $response = Invoke-WebRequest -Uri "http://localhost:5000/api/health" -UseBasicParsing
+            if ($response.StatusCode -eq 200) {
+              Write-Host "✅ Windows: Server health check passed"
+            }
+          } catch {
+            Write-Host "❌ Windows: Health check failed"
+            exit 1
+          }
+          Stop-Job $job
+
+  test-installer-script:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Test install.py imports
+        run: |
+          cd scripts
+          python -c "import install; print('✅ install.py imports OK')"

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 FixOnce - Native App Launcher
-Opens the dashboard in a native window using pywebview
+Supports two modes:
+- Default: Menu bar app (always visible in menu bar)
+- --window: Opens dashboard in a native window
 """
 
 import subprocess
@@ -13,6 +15,7 @@ import os
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 SERVER_DIR = os.path.join(PROJECT_DIR, 'src')
+
 
 def set_dock_icon():
     """Set the Dock icon on macOS."""
@@ -26,20 +29,25 @@ def set_dock_icon():
     except:
         pass
 
-def wait_for_server(port=5000, timeout=10):
-    """Wait for the server to be ready."""
+
+def wait_for_server(start_port=5000, timeout=10):
+    """Wait for the server to be ready. Tries multiple ports."""
     import urllib.request
     start = time.time()
+    ports_to_try = [start_port + i for i in range(10)]  # Try 5000-5009
 
     while time.time() - start < timeout:
-        try:
-            url = f'http://localhost:{port}/'
-            urllib.request.urlopen(url, timeout=1)
-            return port
-        except:
-            pass
+        for port in ports_to_try:
+            try:
+                url = f'http://localhost:{port}/api/health'
+                req = urllib.request.urlopen(url, timeout=1)
+                if req.status == 200:
+                    return port
+            except:
+                pass
         time.sleep(0.5)
     return None
+
 
 def start_server():
     """Start the Flask server in background."""
@@ -53,8 +61,26 @@ def start_server():
         start_new_session=True
     )
 
-def main():
-    # Set Dock icon on macOS
+
+def run_menubar_app():
+    """Run the menu bar app."""
+    try:
+        import rumps
+    except ImportError:
+        print("Menu bar mode requires 'rumps'. Install with: pip install rumps")
+        print("Falling back to window mode...")
+        run_window_mode()
+        return
+
+    # Import and run the menu bar app
+    sys.path.insert(0, SCRIPT_DIR)
+    from menubar_app import FixOnceMenuBar
+    app = FixOnceMenuBar()
+    app.run()
+
+
+def run_window_mode():
+    """Run in window mode (opens dashboard in native window)."""
     set_dock_icon()
 
     # Check if server is running
@@ -69,7 +95,7 @@ def main():
         print("Error: Could not start server")
         return
 
-    dashboard_url = f'http://localhost:{port}/app'
+    dashboard_url = f'http://localhost:{port}/next'
 
     # API for JavaScript to call
     class Api:
@@ -84,10 +110,10 @@ def main():
         window = webview.create_window(
             'FixOnce',
             dashboard_url,
-            width=380,
-            height=620,
+            width=480,
+            height=800,
             resizable=True,
-            min_size=(320, 500),
+            min_size=(400, 650),
             js_api=api
         )
         webview.start()
@@ -96,6 +122,26 @@ def main():
         print("Opening in browser...")
         import webbrowser
         webbrowser.open(dashboard_url)
+
+
+def main():
+    """Main entry point."""
+    # Parse arguments
+    if '--menubar' in sys.argv or '-m' in sys.argv:
+        run_menubar_app()
+    elif '--help' in sys.argv or '-h' in sys.argv:
+        print("FixOnce App Launcher")
+        print("")
+        print("Usage: python app_launcher.py [OPTIONS]")
+        print("")
+        print("Options:")
+        print("  (default)    Run in window mode (dashboard)")
+        print("  --menubar, -m Run as menu bar app")
+        print("  --help, -h   Show this help")
+    else:
+        # Default: window mode
+        run_window_mode()
+
 
 if __name__ == '__main__':
     main()

@@ -18,6 +18,14 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+# Safe File Operations (auto-backup, atomic writes)
+_safe_file_available = False
+try:
+    from core.safe_file import atomic_json_write, atomic_json_read
+    _safe_file_available = True
+except ImportError:
+    pass  # Safe file not available, will use regular json
+
 # Semantic Search Integration
 _semantic_available = False
 try:
@@ -29,95 +37,157 @@ try:
 except ImportError:
     pass  # Semantic search not available, will use fallback
 
+# Policy Enforcement Engine - imported later after sys.path is set
+_policy_available = False
+_policy_error = None
 
-def _detect_editor() -> str:
-    """Detect which editor/AI is running this MCP server."""
-    # Priority 0: Check for Codex CLI (OpenAI)
+
+def _detect_editor_with_confidence() -> tuple:
+    """
+    Detect which editor/AI is running this MCP server.
+    Returns: (editor_name, detection_source, confidence)
+    - confidence: 1.0 = certain, 0.7 = high, 0.5 = medium, 0.3 = low, 0.0 = unknown
+    """
+    # Priority 0: Check for Codex CLI (OpenAI) - HIGH confidence
+    if any(key.startswith("CODEX_") for key in os.environ):
+        return ("codex", "env_var", 1.0)
+
     codex_home = os.environ.get("CODEX_HOME", "")
     if codex_home:
-        return "codex"
-    # Check parent process for codex/fastmcp (Codex uses fastmcp to run MCP servers)
+        return ("codex", "env_var", 1.0)
+
+    # Check parent process for codex/fastmcp
     try:
         ppid = os.getppid()
-        result = subprocess.run(['ps', '-p', str(ppid), '-o', 'comm='],
+        result = subprocess.run(['ps', '-p', str(ppid), '-o', 'command='],
                               capture_output=True, text=True, timeout=1)
-        parent = result.stdout.strip().lower()
-        if 'codex' in parent or 'fastmcp' in parent:
-            return "codex"
+        parent_cmd = result.stdout.strip().lower()
+        if 'codex' in parent_cmd:
+            return ("codex", "parent_process", 0.9)
+        if 'fastmcp' in parent_cmd:
+            return ("codex", "parent_process", 0.7)
     except:
         pass
 
-    # Priority 1: Check Cursor-specific environment variables
+    # Priority 1: Check Cursor env vars - HIGH confidence
     cursor_channel = os.environ.get("CURSOR_CHANNEL", "")
     if cursor_channel:
-        return "cursor"
+        return ("cursor", "env_var", 1.0)
 
-    # Priority 1b: Check for Cursor in any env var (Cursor sets several CURSOR_* vars)
     for key in os.environ:
         if key.startswith("CURSOR_"):
-            return "cursor"
+            return ("cursor", "env_var", 0.9)
 
-    # Priority 1c: Check TERM_PROGRAM which Cursor sets to "Cursor"
     term_program = os.environ.get("TERM_PROGRAM", "")
     if "cursor" in term_program.lower():
-        return "cursor"
+        return ("cursor", "term_program", 0.8)
 
-    # Priority 2: Check VS Code - but distinguish from Cursor
+    # Priority 2: Check VS Code
     vscode_pid = os.environ.get("VSCODE_PID", "")
     if vscode_pid:
-        # Double check it's not Cursor by checking process name
         try:
-            import subprocess
             result = subprocess.run(['ps', '-p', vscode_pid, '-o', 'comm='],
                                   capture_output=True, text=True, timeout=1)
             proc_name = result.stdout.strip().lower()
             if 'cursor' in proc_name:
-                return "cursor"
+                return ("cursor", "vscode_pid_check", 0.8)
         except:
             pass
-        return "vscode"
+        return ("vscode", "env_var", 0.9)
 
-    # Priority 3: Check parent process name for Claude Code
-    # Claude Code runs via 'claude' command in terminal
+    # Priority 3: Check parent process for Claude Code - HIGH confidence
     try:
-        import subprocess
         ppid = os.getppid()
-        result = subprocess.run(['ps', '-p', str(ppid), '-o', 'comm='],
+        result = subprocess.run(['ps', '-p', str(ppid), '-o', 'command='],
                               capture_output=True, text=True, timeout=1)
-        parent = result.stdout.strip().lower()
-        if 'claude' in parent or 'node' in parent:
-            # Node is used by Claude Code's MCP client
-            return "claude"
+        parent_cmd = result.stdout.strip().lower()
+        if 'claude' in parent_cmd:
+            return ("claude", "parent_process", 0.9)
     except:
         pass
 
-    # Priority 4: Check if Claude settings exist (indicates Claude Code user)
+    # Priority 4: Check config files - MEDIUM confidence (heuristic)
     home = Path.home()
     claude_settings = home / ".claude" / "settings.json"
     cursor_config = home / ".cursor" / "mcp.json"
 
-    # If Claude settings exist and modified recently, likely Claude Code
     if claude_settings.exists():
         try:
             settings_mtime = claude_settings.stat().st_mtime
             import time
-            # If modified in last hour, likely active Claude Code session
             if time.time() - settings_mtime < 3600:
-                return "claude"
+                return ("claude", "config_file", 0.5)
         except:
             pass
 
-    # Fallback: check cursor config
     if cursor_config.exists():
-        return "cursor"
+        return ("cursor", "config_file", 0.3)
 
-    return "claude"  # Default to claude
+    return ("unknown", "none", 0.0)
+
+
+def _detect_editor() -> str:
+    """Detect which editor/AI is running this MCP server. Returns name only."""
+    editor, _, _ = _detect_editor_with_confidence()
+    return editor
+
+
+def _resolve_actor_identity() -> Dict[str, Any]:
+    """
+    Resolve actor identity for this MCP call with provenance metadata.
+
+    Priority:
+    1. Explicit client-provided actor env vars (confidence: 1.0)
+    2. Runtime environment detection (confidence from detector)
+    """
+    allowed = {"codex", "claude", "cursor", "vscode"}
+
+    # Priority 1: Explicit client-provided actor
+    explicit_actor = (
+        os.environ.get("FIXONCE_ACTOR", "")
+        or os.environ.get("MCP_CLIENT_ACTOR", "")
+        or os.environ.get("FIXONCE_EDITOR", "")
+    ).strip().lower()
+
+    if explicit_actor in allowed:
+        return {
+            "editor": explicit_actor,
+            "source": "client_actor",
+            "confidence": 1.0,
+        }
+
+    # Priority 2: Runtime detection with actual confidence
+    editor, source, confidence = _detect_editor_with_confidence()
+    if editor in allowed:
+        return {
+            "editor": editor,
+            "source": source,
+            "confidence": confidence,
+        }
+
+    return {
+        "editor": "unknown",
+        "source": "none",
+        "confidence": 0.0,
+    }
 
 # Add src directory to path
 SRC_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SRC_DIR))
 
 from fastmcp import FastMCP
+
+# Policy Enforcement Engine - must be after sys.path is set
+try:
+    from core.policy_engine import (
+        detect_conflicts, validate_decision, check_blocked_components,
+        supersede_decision as do_supersede, get_active_decisions, format_policy_status
+    )
+    _policy_available = True
+    print("[FixOnce] Policy engine loaded successfully")
+except ImportError as e:
+    _policy_error = str(e)
+    print(f"[FixOnce] Policy engine not available: {e}")
 
 # Phase 0: Project isolation - central project context
 from core.project_context import ProjectContext, resolve_project_id
@@ -175,6 +245,9 @@ class SessionContext:
         self.initialized_at = None
         self.decisions_displayed = False
         self.goal_updated = False
+        self.search_performed = False
+        self.component_updated = False
+        self.decision_logged = False
         self.tool_calls = []
 
     def __repr__(self):
@@ -188,18 +261,31 @@ class SessionContext:
 
     def mark_decisions_displayed(self):
         self.decisions_displayed = True
-        # Will be synced to global state via _sync_compliance()
 
     def mark_goal_updated(self):
         self.goal_updated = True
-        # Will be synced to global state via _sync_compliance()
+
+    def mark_search_performed(self):
+        self.search_performed = True
+
+    def mark_component_updated(self):
+        self.component_updated = True
+
+    def mark_decision_logged(self):
+        self.decision_logged = True
 
     def log_tool_call(self, tool_name: str):
         self.tool_calls.append({
             "tool": tool_name,
             "timestamp": datetime.now().isoformat()
         })
-        # Will be synced to global state via _sync_compliance()
+        # Track specific tool calls for compliance
+        if tool_name == "search_past_solutions":
+            self.search_performed = True
+        elif tool_name == "update_component_status":
+            self.component_updated = True
+        elif tool_name == "log_decision":
+            self.decision_logged = True
 
     def get_compliance_status(self) -> dict:
         """Get protocol compliance status for dashboard."""
@@ -208,8 +294,39 @@ class SessionContext:
             "initialized_at": self.initialized_at,
             "decisions_displayed": self.decisions_displayed,
             "goal_updated": self.goal_updated,
+            "search_performed": self.search_performed,
+            "component_updated": self.component_updated,
+            "decision_logged": self.decision_logged,
             "tool_calls_count": len(self.tool_calls),
             "last_tool": self.tool_calls[-1] if self.tool_calls else None
+        }
+
+    def get_compliance_score(self) -> dict:
+        """Calculate compliance score with detailed breakdown."""
+        rules = [
+            {"id": "session_init", "name": "Session initialized", "passed": self.is_active(), "required": True},
+            {"id": "goal_updated", "name": "Goal updated", "passed": self.goal_updated, "required": True},
+            {"id": "search_first", "name": "Search before debug", "passed": self.search_performed, "required": False},
+            {"id": "component_status", "name": "Component status updated", "passed": self.component_updated, "required": False},
+        ]
+
+        # Calculate score (required rules count double)
+        total_weight = 0
+        earned_weight = 0
+        for rule in rules:
+            weight = 2 if rule["required"] else 1
+            total_weight += weight
+            if rule["passed"]:
+                earned_weight += weight
+
+        score = int((earned_weight / total_weight) * 100) if total_weight > 0 else 0
+
+        return {
+            "score": score,
+            "rules": rules,
+            "passed": sum(1 for r in rules if r["passed"]),
+            "total": len(rules),
+            "tool_calls": len(self.tool_calls)
         }
 
 
@@ -226,6 +343,27 @@ _compliance_state = {
 
 # Session persistence file (survives MCP restarts)
 SESSION_FILE = SRC_DIR.parent / "data" / "mcp_session.json"
+COMPLIANCE_FILE = SRC_DIR.parent / "data" / "mcp_compliance.json"
+
+
+def _persist_compliance():
+    """Save compliance state to file for Flask API access."""
+    try:
+        with open(COMPLIANCE_FILE, 'w') as f:
+            json.dump(_compliance_state, f)
+    except Exception:
+        pass
+
+
+def _load_compliance() -> dict:
+    """Load compliance state from file."""
+    try:
+        if COMPLIANCE_FILE.exists():
+            with open(COMPLIANCE_FILE, 'r') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
 
 
 def _persist_session(project_id: str, working_dir: str):
@@ -444,12 +582,16 @@ def _universal_gate(tool_name: str) -> tuple:
             # Still no session - but don't block, just note it
             return (None, "⚠️ No active project. Use auto_init_session() for full features.\n")
 
+    # Resolve actor for this tool call
+    actor_identity = _resolve_actor_identity()
+    _compliance_state["editor"] = actor_identity["editor"]
+
     # Log tool call
     session.log_tool_call(tool_name)
     _sync_compliance()
 
     # UPDATE ACTIVE AI on every tool call (lightweight)
-    _update_active_ai()
+    _update_active_ai(actor_identity)
 
     # BUILD CONTEXT HEADER (injected into response)
     context = _build_context_header()
@@ -457,20 +599,25 @@ def _universal_gate(tool_name: str) -> tuple:
     return (None, context)
 
 
-def _update_active_ai():
+def _update_active_ai(actor_identity: Optional[Dict[str, Any]] = None):
     """
     Update active_ais on every MCP tool call.
-    MULTI-ACTIVE: Supports multiple AIs working in parallel.
-    An AI is considered "active" if it had activity in last 5 minutes.
+    PRIMARY MODEL: Only one AI is "primary" (currently active).
+    Other AIs are marked as "historical" when a new AI takes over.
     """
     try:
         session = _get_session()
         if not session.project_id:
             return
 
-        detected_editor = _detect_editor()
+        actor_identity = actor_identity or _resolve_actor_identity()
+        detected_editor = actor_identity.get("editor", "unknown")
+        actor_source = actor_identity.get("source", "fallback")
+        actor_confidence = actor_identity.get("confidence", 0.0)
+        if detected_editor == "unknown":
+            return
         now = datetime.now()
-        ACTIVE_TIMEOUT_SECONDS = 300  # 5 minutes
+        HISTORICAL_TIMEOUT_SECONDS = 60  # 1 minute to become historical
 
         # Check if we need to update
         project_id = session.project_id
@@ -486,8 +633,8 @@ def _update_active_ai():
         ai_state = data["active_ais"].get(detected_editor, {})
         last_update = ai_state.get("last_activity", "")
 
-        # Skip if same AI and updated recently (30 seconds)
-        if last_update:
+        # Skip if same AI, already primary, and updated recently (30 seconds)
+        if last_update and ai_state.get("is_primary"):
             try:
                 last_dt = datetime.fromisoformat(last_update.replace('Z', '+00:00'))
                 if last_dt.tzinfo:
@@ -497,32 +644,51 @@ def _update_active_ai():
             except:
                 pass
 
-        # Update this AI's state
+        # Mark ALL other AIs as non-primary (historical)
+        for ai_name in data["active_ais"]:
+            if ai_name != detected_editor:
+                data["active_ais"][ai_name]["is_primary"] = False
+
+        # Get session tool calls count
+        session = _get_session()
+        session_tool_calls = len(session.tool_calls) if session else 0
+
+        # Update this AI's state - make it PRIMARY
         if detected_editor not in data["active_ais"]:
             # New AI joining
             data["active_ais"][detected_editor] = {
                 "started_at": now.isoformat(),
-                "last_activity": now.isoformat()
+                "last_activity": now.isoformat(),
+                "is_primary": True,
+                "actor_source": actor_source,
+                "actor_confidence": actor_confidence,
+                "tool_calls": session_tool_calls,
             }
-            print(f"[MCP] AI Joined: {detected_editor}")
+            print(f"[MCP] AI Joined (primary): {detected_editor}")
         else:
-            # Existing AI - just update activity
+            # Existing AI - update activity and make primary
             data["active_ais"][detected_editor]["last_activity"] = now.isoformat()
+            data["active_ais"][detected_editor]["is_primary"] = True
+            data["active_ais"][detected_editor]["actor_source"] = actor_source
+            data["active_ais"][detected_editor]["actor_confidence"] = actor_confidence
+            data["active_ais"][detected_editor]["tool_calls"] = session_tool_calls
 
-        # Clean up inactive AIs (no activity for 5 minutes)
-        inactive_ais = []
+        # Clean up old historical AIs (no activity for 1 minute AND not primary)
+        remove_ais = []
         for ai_name, ai_data in list(data["active_ais"].items()):
+            if ai_data.get("is_primary"):
+                continue  # Never remove primary
             try:
                 last_act = datetime.fromisoformat(ai_data.get("last_activity", "").replace('Z', '+00:00'))
                 if last_act.tzinfo:
                     last_act = last_act.replace(tzinfo=None)
-                if (now - last_act).total_seconds() > ACTIVE_TIMEOUT_SECONDS:
-                    inactive_ais.append(ai_name)
+                if (now - last_act).total_seconds() > HISTORICAL_TIMEOUT_SECONDS:
+                    remove_ais.append(ai_name)
             except:
                 pass
 
-        for ai_name in inactive_ais:
-            print(f"[MCP] AI Inactive (5min timeout): {ai_name}")
+        for ai_name in remove_ais:
+            print(f"[MCP] AI Removed (historical timeout): {ai_name}")
             del data["active_ais"][ai_name]
 
         # Update ai_session for backward compatibility (most recent AI)
@@ -533,6 +699,8 @@ def _update_active_ai():
         data["ai_session"]["editor"] = detected_editor
         data["ai_session"]["last_activity"] = now.isoformat()
         data["ai_session"]["active"] = True
+        data["ai_session"]["actor_source"] = actor_source
+        data["ai_session"]["actor_confidence"] = actor_confidence
 
         # Track handoff only if this is truly a different AI taking over
         # (not just parallel work)
@@ -675,8 +843,9 @@ def _log_mcp_activity(tool_name: str, details: dict = None):
         project_id = session.project_id if session.is_active() else "__global__"
         working_dir = session.working_dir if session.is_active() else ""
 
-        # Get editor info
-        detected_editor = _detect_editor()
+        # Get actor info
+        actor_identity = _resolve_actor_identity()
+        detected_editor = actor_identity.get("editor", "unknown")
 
         # Build activity entry
         activity = {
@@ -687,6 +856,9 @@ def _log_mcp_activity(tool_name: str, details: dict = None):
             "cwd": working_dir,
             "project_id": project_id,
             "editor": detected_editor,
+            "actor": detected_editor,
+            "actor_source": actor_identity.get("source", "fallback"),
+            "actor_confidence": actor_identity.get("confidence", 0.0),
             "timestamp": datetime.now().isoformat(),
             "human_name": _get_mcp_human_name(tool_name, details),
             "file_context": "memory",
@@ -740,6 +912,20 @@ def _get_mcp_human_name(tool_name: str, details: dict = None) -> str:
 
     elif tool_name == "scan_project":
         return "Scanned project"
+
+    elif tool_name == "update_component_status":
+        name = details.get("name", "")[:20]
+        status = details.get("status", "")
+        status_icons = {"done": "🟢", "in_progress": "🟡", "blocked": "🔴", "not_started": "⚪"}
+        icon = status_icons.get(status, "⚙️")
+        return f"{icon} {name}: {status}"
+
+    elif tool_name == "supersede_decision":
+        old = details.get("old", "")[:20]
+        return f"Superseded: {old}..."
+
+    elif tool_name == "get_policy_status":
+        return "Checked policy status"
 
     return tool_name.replace("_", " ").title()
 
@@ -946,9 +1132,21 @@ def _clear_session():
 def _sync_compliance():
     """Sync session state to global _compliance_state for dashboard API."""
     session = _get_session()
+    _compliance_state["session_active"] = session.is_active()
+    _compliance_state["initialized_at"] = session.initialized_at
+    _compliance_state["project_id"] = session.project_id
     _compliance_state["decisions_displayed"] = session.decisions_displayed
     _compliance_state["goal_updated"] = session.goal_updated
+    _compliance_state["search_performed"] = session.search_performed
+    _compliance_state["component_updated"] = session.component_updated
+    _compliance_state["decision_logged"] = session.decision_logged
     _compliance_state["tool_calls_count"] = len(session.tool_calls)
+    # Calculate and sync score
+    score_data = session.get_compliance_score()
+    _compliance_state["score"] = score_data["score"]
+    _compliance_state["rules"] = score_data["rules"]
+    # Persist to file for Flask API access
+    _persist_compliance()
 
 
 # ============================================================
@@ -1113,8 +1311,14 @@ def _get_project_path(project_id: str) -> Path:
 
 
 def _load_project(project_id: str) -> Dict[str, Any]:
-    """Load project memory."""
+    """Load project memory with auto-recovery from backups."""
     path = _get_project_path(project_id)
+
+    if _safe_file_available:
+        # Use safe read with auto-recovery
+        return atomic_json_read(str(path), default={}, auto_recover=True)
+
+    # Fallback to regular json
     if path.exists():
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -1122,10 +1326,16 @@ def _load_project(project_id: str) -> Dict[str, Any]:
 
 
 def _save_project(project_id: str, data: Dict[str, Any]):
-    """Save project memory to V2 (canonical storage)."""
+    """Save project memory with auto-backup (to V2 canonical storage)."""
     path = _get_project_path(project_id)
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    if _safe_file_available:
+        # Use safe write with auto-backup
+        atomic_json_write(str(path), data, create_backup=True)
+    else:
+        # Fallback to regular json
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
     # Update index snapshot
     session = _get_session()
@@ -1572,7 +1782,7 @@ def _do_init_session(working_dir: str) -> str:
 
     # Update global compliance state for dashboard
     _compliance_state["last_session_init"] = datetime.now().isoformat()
-    _compliance_state["editor"] = _detect_editor()
+    _compliance_state["editor"] = _resolve_actor_identity().get("editor", "unknown")
 
     # Update active_ais for Multi-Active support
     _update_active_ai()
@@ -1584,7 +1794,8 @@ def _do_init_session(working_dir: str) -> str:
     cached = _get_cached_snapshot(project_id, working_dir)
     if cached and _is_meaningful_snapshot(cached):
         # Still update ai_session for cached projects
-        detected_editor = _compliance_state.get("editor", "claude")
+        actor_identity = _resolve_actor_identity()
+        detected_editor = actor_identity.get("editor", "unknown")
         data = _load_project(project_id)
         if data:
             # Track previous AI for handoff (Multi-AI Sync) - also in cache path
@@ -1604,6 +1815,8 @@ def _do_init_session(working_dir: str) -> str:
                 "editor": detected_editor,
                 "started_at": datetime.now().isoformat(),
                 "briefing_sent": False,
+                "actor_source": actor_identity.get("source", "fallback"),
+                "actor_confidence": actor_identity.get("confidence", 0.0),
                 "previous_ai": previous_ai
             }
 
@@ -1649,12 +1862,15 @@ def _do_init_session(working_dir: str) -> str:
             }
 
     # Update ai_session with detected editor
-    detected_editor = _compliance_state.get("editor", "claude")
+    actor_identity = _resolve_actor_identity()
+    detected_editor = actor_identity.get("editor", "unknown")
     data["ai_session"] = {
         "active": True,
         "editor": detected_editor,
         "started_at": datetime.now().isoformat(),
         "briefing_sent": False,
+        "actor_source": actor_identity.get("source", "fallback"),
+        "actor_confidence": actor_identity.get("confidence", 0.0),
         "previous_ai": previous_ai  # Track handoff
     }
 
@@ -1789,7 +2005,10 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
     # DECISIONS FIRST - Load from project file (not cached in snapshot)
     project_id = _get_project_id(working_dir)
     data = _load_project(project_id)
-    decisions = data.get('decisions', []) if data else []
+    all_decisions = data.get('decisions', []) if data else []
+    # Filter out superseded decisions - only show active ones
+    decisions = [d for d in all_decisions if not d.get('superseded')]
+    superseded_count = len(all_decisions) - len(decisions)
 
     if decisions:
         lines.append("---")
@@ -1802,6 +2021,9 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
             lines.append(f"🔒 **{dec.get('decision', '')}**")
             lines.append(f"   _Reason: {dec.get('reason', '')}_")
             lines.append("")
+        if superseded_count > 0:
+            lines.append(f"_({superseded_count} superseded decisions hidden)_")
+            lines.append("")
         lines.append("---")
         lines.append("")
 
@@ -1809,6 +2031,10 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
         session = _get_session()
         session.mark_decisions_displayed()
         _sync_compliance()
+
+        # Track ROI: decisions enforced this session (track once per init, not per decision)
+        if len(decisions) > 0:
+            _track_roi_event("decision_used")
 
     # INSIGHTS - Check these BEFORE researching anything!
     # Use Memory Decay ranking to show most important insights
@@ -2088,7 +2314,11 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
         lr = data.get('live_record', {})
 
         # DECISIONS FIRST - Most important for respecting past choices
-        decisions = data.get('decisions', [])
+        all_decisions = data.get('decisions', [])
+        # Filter out superseded decisions - only show active ones
+        decisions = [d for d in all_decisions if not d.get('superseded')]
+        superseded_count = len(all_decisions) - len(decisions)
+
         if decisions:
             lines.append("---")
             lines.append("## 🚨 ACTIVE DECISIONS - YOU MUST RESPECT THESE")
@@ -2099,6 +2329,9 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
             for dec in decisions:
                 lines.append(f"🔒 **{dec.get('decision', '')}**")
                 lines.append(f"   _Reason: {dec.get('reason', '')}_")
+                lines.append("")
+            if superseded_count > 0:
+                lines.append(f"_({superseded_count} superseded decisions hidden)_")
                 lines.append("")
             lines.append("---")
             lines.append("")
@@ -2391,6 +2624,18 @@ def update_live_record(section: str, data: str) -> str:
         if 'intent' not in lr:
             lr['intent'] = {}
 
+        # POLICY ENFORCEMENT: Check for blocked components when setting new goal
+        new_goal = update_data.get('current_goal', '')
+        if new_goal and _policy_available:
+            components = lr.get('architecture', {}).get('components', [])
+            blocked_relevant = check_blocked_components(new_goal, components)
+            if blocked_relevant:
+                blocked_names = [b['name'] for b in blocked_relevant]
+                pre_action_warning += f"\n⚠️ **BLOCKED COMPONENTS MAY AFFECT THIS GOAL:**\n"
+                for b in blocked_relevant:
+                    pre_action_warning += f"  🔴 **{b['name']}**: {b.get('desc', '')[:50]}\n"
+                pre_action_warning += "Consider unblocking these first, or adjust the goal."
+
         # Save previous goal to history before replacing
         old_goal = lr['intent'].get('current_goal', '')
         if old_goal and old_goal != update_data.get('current_goal', ''):
@@ -2490,8 +2735,18 @@ def get_live_record() -> str:
 
 
 @mcp.tool()
-def log_decision(decision: str, reason: str) -> str:
-    """Log an architectural decision. Decisions NEVER decay - they are permanent."""
+def log_decision(decision: str, reason: str, force: bool = False) -> str:
+    """
+    Log an architectural decision. Decisions NEVER decay - they are permanent.
+
+    Args:
+        decision: The decision text
+        reason: Why this decision was made
+        force: If True, override conflict detection and log anyway
+
+    Returns:
+        Success message or BLOCK message if conflict detected
+    """
     error, context = _universal_gate("log_decision")
     if error:
         return error
@@ -2502,25 +2757,48 @@ def log_decision(decision: str, reason: str) -> str:
     if 'decisions' not in memory:
         memory['decisions'] = []
 
-    # PRE-ACTION INTELLIGENCE: Check for similar/conflicting decisions
-    similar_warning = ""
-    decision_lower = decision.lower()
-    for existing in memory['decisions']:
-        existing_text = existing.get('decision', '').lower()
-        # Check for similar decisions (simple word overlap)
-        decision_words = set(decision_lower.split())
-        existing_words = set(existing_text.split())
-        overlap = decision_words & existing_words
-        if len(overlap) >= 3:  # At least 3 words in common
-            similar_warning = f"\n⚠️ **Similar decision exists:** {existing.get('decision', '')[:60]}..."
-            break
+    # POLICY ENFORCEMENT: Check for conflicts
+    policy_message = ""
+    if _policy_available:
+        # Filter to active decisions only for validation
+        active_decisions = [d for d in memory['decisions'] if not d.get('superseded')]
+        is_valid, message, conflicts = validate_decision(
+            decision, reason, active_decisions, force=force
+        )
 
+        print(f"[PolicyEngine] Validating: {decision[:50]}...")
+        print(f"[PolicyEngine] Against {len(active_decisions)} active decisions")
+        print(f"[PolicyEngine] Result: is_valid={is_valid}, conflicts={len(conflicts)}")
+
+        if not is_valid:
+            # BLOCK the decision - return error
+            return context + f"\n{message}\n\nDecision NOT logged."
+
+        if conflicts:
+            policy_message = f"\n{message}"
+
+    else:
+        # Fallback: simple word overlap check
+        decision_lower = decision.lower()
+        for existing in memory['decisions']:
+            if existing.get("superseded"):
+                continue
+            existing_text = existing.get('decision', '').lower()
+            decision_words = set(decision_lower.split())
+            existing_words = set(existing_text.split())
+            overlap = decision_words & existing_words
+            if len(overlap) >= 3:
+                policy_message = f"\n⚠️ **Similar decision exists:** {existing.get('decision', '')[:60]}..."
+                break
+
+    # Log the decision
     memory['decisions'].append({
-        "type": "decision",  # Marked as decision - will NEVER be archived
+        "type": "decision",
         "decision": decision,
         "reason": reason,
         "timestamp": datetime.now().isoformat(),
-        "importance": "permanent"  # Decisions never decay
+        "importance": "permanent",
+        "forced": force if force else None
     })
 
     _save_project(session.project_id, memory)
@@ -2528,7 +2806,8 @@ def log_decision(decision: str, reason: str) -> str:
     # Log MCP activity for dashboard
     _log_mcp_activity("log_decision", {
         "decision": decision[:50],
-        "reason": reason[:50]
+        "reason": reason[:50],
+        "forced": force
     })
 
     # Auto-index for semantic search
@@ -2538,7 +2817,7 @@ def log_decision(decision: str, reason: str) -> str:
         except Exception as e:
             print(f"[SemanticIndex] Failed to index decision: {e}")
 
-    return context + f"Logged decision: {decision}" + similar_warning
+    return context + f"Logged decision: {decision}" + policy_message
 
 
 @mcp.tool()
@@ -2578,6 +2857,296 @@ def log_avoid(what: str, reason: str) -> str:
             print(f"[SemanticIndex] Failed to index avoid: {e}")
 
     return context + f"Logged avoid: {what}"
+
+
+@mcp.tool()
+def supersede_decision(
+    old_decision: str,
+    new_decision: str = "",
+    new_reason: str = "",
+    supersede_reason: str = ""
+) -> str:
+    """
+    Supersede (replace) an existing decision with a new one.
+
+    Use this when:
+    - A previous decision was wrong or outdated
+    - Requirements changed and old decision no longer applies
+    - You need to resolve a policy conflict
+
+    Args:
+        old_decision: Text of the decision to supersede (partial match OK)
+        new_decision: The new decision (optional - leave empty to just deprecate)
+        new_reason: Reason for the new decision
+        supersede_reason: Why the old decision is being superseded
+
+    Returns:
+        Success message or error if decision not found
+    """
+    error, context = _universal_gate("supersede_decision")
+    if error:
+        return error
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+
+    if 'decisions' not in memory or not memory['decisions']:
+        return context + "No decisions found to supersede."
+
+    if not _policy_available:
+        return context + "Policy engine not available. Cannot supersede decisions."
+
+    success, message, updated_decisions = do_supersede(
+        memory['decisions'],
+        old_decision,
+        new_decision,
+        new_reason,
+        supersede_reason or "Superseded via MCP tool"
+    )
+
+    if not success:
+        return context + f"❌ {message}"
+
+    memory['decisions'] = updated_decisions
+    _save_project(session.project_id, memory)
+
+    # Log MCP activity
+    _log_mcp_activity("supersede_decision", {
+        "old": old_decision[:30],
+        "new": new_decision[:30] if new_decision else "(deprecated)"
+    })
+
+    result = f"✅ {message}"
+    if new_decision:
+        result += f"\n📝 New decision: {new_decision}"
+
+    return context + result
+
+
+@mcp.tool()
+def get_policy_status() -> str:
+    """
+    Get current policy status including active decisions, conflicts, and blocked components.
+
+    Returns summary of:
+    - Active vs superseded decisions
+    - Blocked components that need attention
+    - Any detected policy issues
+    """
+    error, context = _universal_gate("get_policy_status")
+    if error:
+        return error
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+
+    decisions = memory.get('decisions', [])
+    components = memory.get('live_record', {}).get('architecture', {}).get('components', [])
+
+    if _policy_available:
+        status = format_policy_status(decisions, components)
+    else:
+        active = [d for d in decisions if not d.get('superseded')]
+        superseded = [d for d in decisions if d.get('superseded')]
+        blocked = [c for c in components if c.get('status') == 'blocked']
+
+        status = f"## Policy Status\n\n"
+        status += f"**Active Decisions:** {len(active)}\n"
+        status += f"**Superseded:** {len(superseded)}\n"
+        status += f"**Blocked Components:** {len(blocked)}"
+
+        if blocked:
+            status += "\n\n### ⚠️ Blocked Components\n"
+            for comp in blocked:
+                status += f"- **{comp.get('name')}**: {comp.get('desc', 'No description')}\n"
+
+    return context + status
+
+
+@mcp.tool()
+def update_component_status(name: str, status: str, desc: str = "") -> str:
+    """
+    Update a component's status in the System Tree.
+
+    Use this at the end of tasks to reflect progress:
+    - When you finish implementing something → status="done"
+    - When you start working on something → status="in_progress"
+    - When something is blocked → status="blocked"
+    - When something is planned but not started → status="not_started"
+
+    If the component doesn't exist, it will be created.
+
+    Args:
+        name: Component name (e.g., "Policy Engine", "Dashboard")
+        status: One of: "done", "in_progress", "not_started", "blocked"
+        desc: Optional description update
+    """
+    error, context = _universal_gate("update_component_status")
+    if error:
+        return error
+
+    valid_statuses = ["done", "in_progress", "not_started", "blocked"]
+    if status not in valid_statuses:
+        return f"❌ Invalid status '{status}'. Must be one of: {', '.join(valid_statuses)}"
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+    actor_identity = _resolve_actor_identity()
+
+    # Ensure live_record and architecture exist
+    if 'live_record' not in memory:
+        memory['live_record'] = {}
+    if 'architecture' not in memory['live_record']:
+        memory['live_record']['architecture'] = {"components": [], "key_flows": [], "summary": "", "stack": ""}
+
+    arch = memory['live_record']['architecture']
+    if 'components' not in arch:
+        arch['components'] = []
+
+    components = arch['components']
+
+    # Find existing component or create new one
+    found = False
+    for comp in components:
+        if comp.get('name', '').lower() == name.lower():
+            old_status = comp.get('status', 'unknown')
+            comp['status'] = status
+            if desc:
+                comp['desc'] = desc
+            comp['updated_at'] = datetime.now().isoformat()
+            comp['updated_by'] = actor_identity.get("editor", "unknown")
+            comp['update_source'] = actor_identity.get("source", "fallback")
+            found = True
+            action = f"Updated '{name}': {old_status} → {status}"
+            break
+
+    if not found:
+        # Create new component
+        new_comp = {
+            "name": name,
+            "status": status,
+            "desc": desc or f"Added by AI",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "updated_by": actor_identity.get("editor", "unknown"),
+            "update_source": actor_identity.get("source", "fallback"),
+        }
+        components.append(new_comp)
+        action = f"Created '{name}' with status: {status}"
+
+    # Keep max 30 components (newest ones if over limit)
+    if len(components) > 30:
+        arch['components'] = components[-30:]
+    else:
+        arch['components'] = components
+    arch['updated_at'] = datetime.now().isoformat()
+
+    _save_project(session.project_id, memory)
+
+    # Log MCP activity for dashboard
+    _log_mcp_activity("update_component_status", {
+        "name": name,
+        "status": status
+    })
+
+    # Status icons for display
+    icons = {"done": "🟢", "in_progress": "🟡", "not_started": "⚪", "blocked": "🔴"}
+    icon = icons.get(status, "⚪")
+
+    return context + f"{icon} {action}"
+
+
+@mcp.tool()
+def auto_discover_components(apply: bool = False) -> str:
+    """
+    Automatically discover components from the codebase.
+
+    Scans the project's source code and identifies:
+    - API modules and blueprints
+    - Major classes (Managers, Engines, Providers)
+    - Extension files
+    - Dashboard files
+
+    Args:
+        apply: If True, add discovered components to the System Tree
+
+    Returns:
+        List of discovered components with suggestions
+    """
+    error, context = _universal_gate("auto_discover_components")
+    if error:
+        return error
+
+    try:
+        from core.auto_discovery import suggest_components
+
+        session = _get_session()
+        memory = _load_project(session.project_id)
+
+        # Get project path
+        gps = memory.get("live_record", {}).get("gps", {})
+        project_path = gps.get("working_dir", "")
+
+        if not project_path:
+            return context + "❌ No project path found. Run auto_init_session first."
+
+        # Get existing components
+        existing = memory.get("live_record", {}).get("architecture", {}).get("components", [])
+
+        # Run discovery
+        result = suggest_components(project_path, existing)
+
+        if "error" in result:
+            return context + f"❌ {result['error']}"
+
+        suggestions = result.get("suggestions", [])
+
+        if not suggestions:
+            return context + f"✅ No new components found. All {len(existing)} components are up to date."
+
+        # Apply if requested
+        if apply:
+            arch = memory.setdefault("live_record", {}).setdefault("architecture", {})
+            components = arch.setdefault("components", [])
+
+            for suggestion in suggestions:
+                new_comp = {
+                    "name": suggestion["name"],
+                    "status": suggestion.get("suggested_status", "done"),
+                    "desc": suggestion.get("suggested_desc", "Auto-discovered"),
+                    "source": suggestion.get("source", ""),
+                    "created_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat(),
+                    "auto_discovered": True
+                }
+                components.append(new_comp)
+
+            arch["updated_at"] = datetime.now().isoformat()
+            _save_project(session.project_id, memory)
+
+            _log_mcp_activity("auto_discover_components", {
+                "added": len(suggestions),
+                "applied": True
+            })
+
+            return context + f"✅ Added {len(suggestions)} components:\n" + "\n".join(
+                f"  🟢 {s['name']} ({s.get('source', 'unknown')})" for s in suggestions
+            )
+
+        # Just show suggestions
+        lines = [f"🔍 Found {len(suggestions)} new components:\n"]
+        for s in suggestions:
+            conf = "⭐" if s.get("confidence") == "high" else "○"
+            lines.append(f"  {conf} {s['name']} - {s.get('source', 'unknown')}")
+
+        lines.append(f"\nRun with apply=True to add them to the System Tree.")
+
+        return context + "\n".join(lines)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return context + f"❌ Error: {e}"
 
 
 @mcp.tool()
@@ -3241,6 +3810,110 @@ def get_browser_errors(limit: int = 10) -> str:
 
 
 @mcp.tool()
+def get_browser_context() -> str:
+    """
+    Get the element user selected in browser + recent errors.
+
+    Use this when the user says "this element", "the button", "fix this",
+    or refers to something visible in their browser.
+
+    The user selects elements using the FixOnce Chrome extension's
+    "Select Element" feature.
+
+    Returns:
+        Selected element with HTML, CSS, and selector path + recent errors
+    """
+    _universal_gate("get_browser_context")
+
+    try:
+        res = requests.get('http://localhost:5000/api/browser-context', timeout=3)
+        if res.status_code != 200:
+            return "No browser context available."
+
+        data = res.json()
+        selected = data.get('selected_element')
+        errors = data.get('recent_errors', [])
+
+        lines = ["## Browser Context\n"]
+
+        if selected:
+            el = selected.get('element', {})
+            lines.append("### 🎯 Selected Element\n")
+            lines.append(f"**Selector:** `{el.get('selector', 'N/A')}`")
+            lines.append(f"**Tag:** `{el.get('tagName', 'N/A')}`")
+
+            if el.get('id'):
+                lines.append(f"**ID:** `{el.get('id')}`")
+            if el.get('classes'):
+                lines.append(f"**Classes:** `{' '.join(el.get('classes', []))}`")
+
+            lines.append(f"\n**HTML:**\n```html\n{el.get('html', '')[:500]}\n```")
+
+            css = el.get('css', {})
+            if css:
+                lines.append("\n**Key CSS Properties:**")
+                for prop, value in list(css.items())[:15]:
+                    lines.append(f"- `{prop}`: `{value}`")
+
+            rect = el.get('rect', {})
+            if rect:
+                lines.append(f"\n**Dimensions:** {rect.get('width', 0)}x{rect.get('height', 0)}px")
+
+            lines.append(f"\n**Page URL:** {selected.get('url', 'N/A')}")
+            lines.append(f"**Captured:** {selected.get('timestamp', '')[:16].replace('T', ' ')}")
+        else:
+            lines.append("_No element selected. User can click 'Select Element' in FixOnce extension._")
+
+        if errors:
+            lines.append("\n### 🔴 Recent Errors\n")
+            for err in errors[:5]:
+                lines.append(f"- **{err.get('type', 'error')}:** {err.get('message', '')[:100]}")
+        else:
+            lines.append("\n_No recent browser errors._")
+
+        return '\n'.join(lines)
+
+    except requests.exceptions.RequestException:
+        return "Could not connect to dashboard. Make sure FixOnce server is running."
+    except Exception as e:
+        return f"Error fetching browser context: {e}"
+
+
+@mcp.tool()
+def highlight_element(selector: str, message: str = "") -> str:
+    """
+    Highlight an element in the user's browser.
+
+    Use this to visually point to an element when explaining something.
+    The element will glow briefly with a tooltip showing your message.
+
+    Args:
+        selector: CSS selector for the element (e.g., "#submit-btn", ".error-message")
+        message: Short message to show in tooltip (max 100 chars)
+
+    Returns:
+        Confirmation that highlight was queued
+    """
+    _universal_gate("highlight_element")
+
+    try:
+        res = requests.post(
+            'http://localhost:5000/api/highlight-element',
+            json={"selector": selector, "message": message[:100] if message else ""},
+            timeout=3
+        )
+        if res.status_code == 200:
+            return f"✨ Highlighting `{selector}` with message: '{message}'" if message else f"✨ Highlighting `{selector}`"
+        else:
+            return f"Failed to queue highlight: {res.text}"
+
+    except requests.exceptions.RequestException:
+        return "Could not connect to dashboard. Make sure FixOnce server is running."
+    except Exception as e:
+        return f"Error highlighting element: {e}"
+
+
+@mcp.tool()
 def get_protocol_compliance() -> str:
     """
     Get current protocol compliance status.
@@ -3249,30 +3922,24 @@ def get_protocol_compliance() -> str:
     Returns status of: session init, decisions display, goal updates.
     """
     session = _get_session()
-    compliance = session.get_compliance_status()
+    score_data = session.get_compliance_score()
+    score = score_data["score"]
 
-    lines = ["## Protocol Compliance Status\n"]
+    # Score bar visualization
+    filled = score // 10
+    empty = 10 - filled
+    bar = "█" * filled + "░" * empty
 
-    # Session
-    if compliance["session_initialized"]:
-        lines.append(f"✅ Session initialized at {compliance['initialized_at']}")
-    else:
-        lines.append("❌ Session NOT initialized - MUST call auto_init_session()")
+    lines = [f"## Protocol Compliance: {bar} {score}%\n"]
 
-    # Decisions
-    if compliance["decisions_displayed"]:
-        lines.append("✅ Decisions displayed to user")
-    else:
-        lines.append("⚠️ Decisions not displayed - Show them on session start")
-
-    # Goal
-    if compliance["goal_updated"]:
-        lines.append("✅ Goal updated this session")
-    else:
-        lines.append("⚠️ Goal not updated - Update before starting work")
+    # Rules checklist
+    for rule in score_data["rules"]:
+        icon = "✅" if rule["passed"] else ("❌" if rule["required"] else "⚠️")
+        req = " (required)" if rule["required"] else ""
+        lines.append(f"{icon} {rule['name']}{req}")
 
     # Tool calls
-    lines.append(f"\n📊 Tool calls this session: {compliance['tool_calls_count']}")
+    lines.append(f"\n📊 Tool calls this session: {score_data['tool_calls']}")
 
     # Violations
     if _compliance_state["violations"]:
@@ -3439,6 +4106,72 @@ def get_memory_stats() -> str:
             lines.append("✅ Memory is healthy - no action needed")
 
     return '\n'.join(lines)
+
+
+@mcp.tool()
+def get_impact_stats() -> str:
+    """
+    Get FixOnce impact statistics.
+
+    Shows how FixOnce is saving time:
+    - Time saved (estimated minutes)
+    - Solutions reused (vs debugging from scratch)
+    - Decisions applied (preventing wrong direction)
+    - Errors prevented (avoid patterns)
+    - Sessions with context (handover continuity)
+
+    Use this to report impact to the user.
+    """
+    try:
+        res = requests.get('http://localhost:5000/api/memory/roi', timeout=3)
+        if res.status_code != 200:
+            return "Could not fetch impact stats"
+
+        roi = res.json()
+
+        time_saved = roi.get('time_saved_minutes', 0)
+        reused = roi.get('solutions_reused', 0)
+        decisions = roi.get('decisions_referenced', 0)
+        prevented = roi.get('errors_prevented', 0)
+        sessions = roi.get('sessions_with_context', 0)
+        errors_live = roi.get('errors_caught_live', 0)
+        insights = roi.get('insights_used', 0)
+
+        # Format time
+        if time_saved < 60:
+            time_str = f"{time_saved} minutes"
+        else:
+            hours = time_saved // 60
+            mins = time_saved % 60
+            time_str = f"{hours}h {mins}m" if mins else f"{hours} hours"
+
+        lines = [
+            "## ⚡ FixOnce Impact\n",
+            f"**🕐 Time Saved:** {time_str}\n"
+        ]
+
+        # Breakdown
+        lines.append("**Breakdown:**")
+        if reused > 0:
+            lines.append(f"- 🔍 {reused} solutions reused (saved ~{reused * 10}m)")
+        if decisions > 0:
+            lines.append(f"- 🔒 {decisions} decisions applied (saved ~{decisions * 20}m)")
+        if prevented > 0:
+            lines.append(f"- 🛡️ {prevented} errors prevented (saved ~{prevented * 30}m)")
+        if sessions > 0:
+            lines.append(f"- 🔄 {sessions} sessions with context (saved ~{sessions * 10}m)")
+        if errors_live > 0:
+            lines.append(f"- ⚡ {errors_live} live errors caught")
+        if insights > 0:
+            lines.append(f"- 💡 {insights} insights used")
+
+        if reused == 0 and decisions == 0 and prevented == 0 and sessions == 0:
+            lines.append("- Building impact... (use search, log decisions, work across sessions)")
+
+        return '\n'.join(lines)
+
+    except Exception as e:
+        return f"Error getting impact stats: {e}"
 
 
 # ============================================================
@@ -3688,18 +4421,25 @@ def generate_context() -> str:
 def get_compliance_for_api() -> dict:
     """Get compliance status for dashboard API.
 
-    Uses global _compliance_state since Flask runs in different thread than MCP.
+    Loads from file since Flask runs in different process than MCP.
     """
+    # Load from file (shared between MCP and Flask processes)
+    state = _load_compliance()
     return {
-        "session_initialized": _compliance_state.get("session_active", False),
-        "initialized_at": _compliance_state.get("initialized_at"),
-        "decisions_displayed": _compliance_state.get("decisions_displayed", False),
-        "goal_updated": _compliance_state.get("goal_updated", False),
-        "tool_calls_count": _compliance_state.get("tool_calls_count", 0),
-        "last_session_init": _compliance_state.get("last_session_init"),
-        "violations": _compliance_state.get("violations", [])[-5:],
-        "editor": _compliance_state.get("editor"),
-        "project_id": _compliance_state.get("project_id")
+        "session_initialized": state.get("session_active", False),
+        "initialized_at": state.get("initialized_at"),
+        "decisions_displayed": state.get("decisions_displayed", False),
+        "goal_updated": state.get("goal_updated", False),
+        "search_performed": state.get("search_performed", False),
+        "component_updated": state.get("component_updated", False),
+        "decision_logged": state.get("decision_logged", False),
+        "tool_calls_count": state.get("tool_calls_count", 0),
+        "score": state.get("score", 0),
+        "rules": state.get("rules", []),
+        "last_session_init": state.get("last_session_init"),
+        "violations": state.get("violations", [])[-5:],
+        "editor": state.get("editor"),
+        "project_id": state.get("project_id")
     }
 
 

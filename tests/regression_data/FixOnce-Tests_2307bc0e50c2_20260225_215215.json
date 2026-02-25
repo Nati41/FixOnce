@@ -1,0 +1,167 @@
+{
+  "project_info": {
+    "working_dir": "/Users/haimdayan/Desktop/FixOnce-Tests",
+    "name": "FixOnce-Tests",
+    "created_at": "2026-02-25T21:46:57.787273"
+  },
+  "live_record": {
+    "gps": {
+      "working_dir": "/Users/haimdayan/Desktop/FixOnce-Tests",
+      "active_ports": [],
+      "url": "",
+      "environment": "dev"
+    },
+    "architecture": {
+      "summary": "Test project for FixOnce QA",
+      "stack": "JavaScript",
+      "key_flows": [
+        "Test all MCP tools",
+        "Verify dashboard updates",
+        "Check edge cases"
+      ],
+      "components": [
+        {
+          "name": "API Server",
+          "status": "in_progress",
+          "desc": "Main API server for tests",
+          "created_at": "2026-02-25T21:47:34.665227",
+          "updated_at": "2026-02-25T21:47:34.665297",
+          "updated_by": "claude",
+          "update_source": "parent_process"
+        },
+        {
+          "name": "Database",
+          "status": "not_started",
+          "desc": "SQLite database layer",
+          "created_at": "2026-02-25T21:47:35.325789",
+          "updated_at": "2026-02-25T21:47:35.325833",
+          "updated_by": "claude",
+          "update_source": "parent_process"
+        },
+        {
+          "name": "Auth Module",
+          "status": "blocked",
+          "desc": "Waiting for API Server",
+          "created_at": "2026-02-25T21:47:36.238083",
+          "updated_at": "2026-02-25T21:47:36.238128",
+          "updated_by": "claude",
+          "update_source": "parent_process"
+        }
+      ],
+      "updated_at": "2026-02-25T21:47:36.238140"
+    },
+    "intent": {
+      "current_goal": "Third goal to verify history",
+      "next_step": "",
+      "blockers": [],
+      "updated_at": "2026-02-25T21:50:09.901497",
+      "goal_history": [
+        {
+          "goal": "Test goal history feature",
+          "completed_at": "2026-02-25T21:50:09.901484"
+        },
+        {
+          "goal": "Run comprehensive FixOnce tests",
+          "completed_at": "2026-02-25T21:50:09.199662"
+        }
+      ]
+    },
+    "lessons": {
+      "insights": [
+        {
+          "text": "This is a test insight to verify dashboard updates",
+          "timestamp": "2026-02-25T21:47:25.489759",
+          "use_count": 1,
+          "last_used": "2026-02-25T21:47:39.733072",
+          "importance": "low"
+        },
+        {
+          "text": "בדיקת עברית עם אימוג'י 🎉 ותווים מיוחדים: <script>alert('xss')</script> ו-JSON: {\"key\": \"value\"}",
+          "timestamp": "2026-02-25T21:49:35.918316",
+          "use_count": 0,
+          "last_used": null,
+          "importance": "medium"
+        }
+      ],
+      "failed_attempts": []
+    },
+    "updated_at": "2026-02-25T21:50:09.901500"
+  },
+  "decisions": [
+    {
+      "type": "decision",
+      "decision": "Use Jest for testing",
+      "reason": "Standard testing framework for JavaScript",
+      "timestamp": "2026-02-25T21:47:24.625525",
+      "importance": "permanent",
+      "forced": null
+    },
+    {
+      "type": "decision",
+      "decision": "This is a very long decision text that spans multiple lines and contains a lot of information to test how the system handles long content. It should be stored properly and displayed correctly in the dashboard without breaking the layout or causing any issues. This decision is about testing the limits of the text fields.",
+      "reason": "Testing long text handling in FixOnce to ensure the system can store and display lengthy content without issues. This is an important edge case that needs to be verified before release.",
+      "timestamp": "2026-02-25T21:49:44.815979",
+      "importance": "permanent",
+      "forced": null
+    },
+    {
+      "type": "decision",
+      "decision": "Use Mocha for testing",
+      "reason": "Better assertion library",
+      "timestamp": "2026-02-25T21:49:50.039182",
+      "importance": "permanent",
+      "forced": null,
+      "superseded": true,
+      "superseded_at": "2026-02-25T21:50:01.487203",
+      "superseded_by": "Use Jest for testing (confirmed)",
+      "supersede_reason": "Wrong decision added during testing"
+    },
+    {
+      "type": "decision",
+      "decision": "Use Jest for testing (confirmed)",
+      "reason": "Jest is the standard, Mocha was added by mistake",
+      "timestamp": "2026-02-25T21:50:01.487213",
+      "importance": "permanent",
+      "supersedes": "Use Mocha for testing"
+    }
+  ],
+  "avoid": [
+    {
+      "type": "avoid",
+      "what": "Using console.log for production logging",
+      "reason": "Use proper logging library instead",
+      "timestamp": "2026-02-25T21:47:29.073980",
+      "importance": "permanent"
+    }
+  ],
+  "errors": [],
+  "ai_session": {
+    "active": true,
+    "editor": "claude",
+    "started_at": "2026-02-25T21:46:57.805379",
+    "briefing_sent": false,
+    "actor_source": "parent_process",
+    "actor_confidence": 0.9,
+    "previous_ai": null,
+    "last_activity": "2026-02-25T21:52:15.646963"
+  },
+  "ai_handoffs": [],
+  "active_ais": {
+    "claude": {
+      "started_at": "2026-02-25T21:47:19.166096",
+      "last_activity": "2026-02-25T21:52:15.646963",
+      "is_primary": true,
+      "actor_source": "parent_process",
+      "actor_confidence": 0.9,
+      "tool_calls": 19
+    }
+  },
+  "roi": {
+    "solutions_reused": 1,
+    "tokens_saved": 5000,
+    "time_saved_minutes": 15
+  },
+  "stats": {
+    "last_updated": "2026-02-25T21:47:39.796878"
+  }
+}

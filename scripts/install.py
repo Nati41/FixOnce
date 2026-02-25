@@ -342,8 +342,28 @@ def sync_rules() -> bool:
 
 # ============ Step 5: Start Server & Open Dashboard ============
 
+def check_server_health(port: int = 5000, max_attempts: int = 10) -> tuple:
+    """Check if server is running and healthy. Returns (is_healthy, actual_port)"""
+    import urllib.request
+    import urllib.error
+
+    for attempt in range(max_attempts):
+        for p in [port, port + 1, port + 2]:  # Try a few ports
+            try:
+                url = f"http://localhost:{p}/api/health"
+                req = urllib.request.urlopen(url, timeout=2)
+                if req.status == 200:
+                    return True, p
+            except (urllib.error.URLError, Exception):
+                pass
+        import time
+        time.sleep(0.5)
+
+    return False, port
+
+
 def start_server_and_open_dashboard() -> bool:
-    """Start the server and open dashboard"""
+    """Start the server and open dashboard with health check"""
     print(f"\n{Colors.BLUE}[5/5]{Colors.END} Starting FixOnce...")
 
     fixonce_dir = get_fixonce_dir()
@@ -355,35 +375,48 @@ def start_server_and_open_dashboard() -> bool:
 
     current_platform = get_platform()
 
-    # Start server in background
+    # Check if server already running
+    is_running, running_port = check_server_health(5000, max_attempts=2)
+    if is_running:
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Server already running on port {running_port}")
+        dashboard_url = f"http://localhost:{running_port}"
+    else:
+        # Start server in background
+        try:
+            if current_platform == 'windows':
+                python_cmd = sys.executable
+                subprocess.Popen(
+                    f'start /B "" "{python_cmd}" "{server_script}" --flask-only',
+                    shell=True,
+                    cwd=str(fixonce_dir / "src")
+                )
+            else:
+                subprocess.Popen(
+                    [sys.executable, str(server_script), '--flask-only'],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    cwd=str(fixonce_dir / "src"),
+                    start_new_session=True
+                )
+
+            print(f"  {Colors.YELLOW}[...]{Colors.END} Server starting, waiting for health check...")
+
+            # Health check with retries
+            is_healthy, actual_port = check_server_health(5000, max_attempts=15)
+
+            if is_healthy:
+                print(f"  {Colors.GREEN}[OK]{Colors.END} Server healthy on port {actual_port}")
+                dashboard_url = f"http://localhost:{actual_port}"
+            else:
+                print(f"  {Colors.YELLOW}[WARN]{Colors.END} Server may still be starting...")
+                dashboard_url = "http://localhost:5000"
+
+        except Exception as e:
+            print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to start: {e}")
+            return False
+
+    # Open dashboard
     try:
-        if current_platform == 'windows':
-            python_cmd = sys.executable
-            # Windows: use START command
-            subprocess.Popen(
-                f'start /B "" "{python_cmd}" "{server_script}" --flask-only',
-                shell=True,
-                cwd=str(fixonce_dir / "src")
-            )
-        else:
-            # Mac/Linux: use nohup
-            subprocess.Popen(
-                [sys.executable, str(server_script), '--flask-only'],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                cwd=str(fixonce_dir / "src"),
-                start_new_session=True
-            )
-
-        print(f"  {Colors.GREEN}[OK]{Colors.END} Server starting...")
-
-        # Wait a moment for server to start
-        import time
-        time.sleep(2)
-
-        # Open dashboard
-        dashboard_url = "http://localhost:5000"
-
         if current_platform == 'mac':
             subprocess.run(['open', dashboard_url], capture_output=True)
         elif current_platform == 'windows':
@@ -393,10 +426,10 @@ def start_server_and_open_dashboard() -> bool:
 
         print(f"  {Colors.GREEN}[OK]{Colors.END} Dashboard opened: {dashboard_url}")
         return True
-
     except Exception as e:
-        print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to start: {e}")
-        return False
+        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not open dashboard: {e}")
+        print(f"       Open manually: {dashboard_url}")
+        return True
 
 # ============ Create Launcher Scripts ============
 
