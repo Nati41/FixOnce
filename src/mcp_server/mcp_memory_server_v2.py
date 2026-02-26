@@ -2422,13 +2422,39 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
             except:
                 pass  # Skip handoff if timestamp parsing fails
 
-    # AI Queue - errors/tasks sent from dashboard
+    # AI Queue - errors/tasks/commands sent from dashboard
     ai_queue = data.get("ai_queue", [])
     pending_items = [q for q in ai_queue if q.get("status") == "pending"]
-    if pending_items:
+
+    # Separate action commands from regular items
+    action_commands = [q for q in pending_items if q.get("type") == "action_command"]
+    other_items = [q for q in pending_items if q.get("type") != "action_command"]
+
+    # Show action commands first (user requested action from dashboard)
+    if action_commands:
+        lines.append("═══════════════════════════════════════")
+        lines.append("## 🚀 ACTION REQUESTED FROM DASHBOARD")
+        lines.append("═══════════════════════════════════════")
+        lines.append("")
+        lines.append("The user clicked an action button in the FixOnce dashboard.")
+        lines.append("**Execute the following request:**")
+        lines.append("")
+
+        for cmd in action_commands[:1]:  # Show only the most recent command
+            msg = cmd.get("message", "")
+            lines.append("```")
+            lines.append(msg)
+            lines.append("```")
+
+        lines.append("")
+        lines.append("**This is a HIGH PRIORITY request. Execute it now.**")
+        lines.append("")
+
+    # Show other queued items
+    if other_items:
         lines.append("---")
         lines.append("## 🎯 QUEUED FOR YOU")
-        for item in pending_items[:3]:
+        for item in other_items[:3]:
             item_type = item.get("type", "task")
             msg = item.get("message", "")[:80]
             source = item.get("source", "")
@@ -2446,9 +2472,10 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
         lines.append("**Fix these first, then mark as handled.**")
         lines.append("")
 
-        # Mark items as shown
+    # Mark all pending items as shown
+    if pending_items:
         project_id = _get_project_id(working_dir)
-        for item in pending_items[:3]:
+        for item in pending_items:
             item["status"] = "shown"
         _save_project(project_id, data)
 

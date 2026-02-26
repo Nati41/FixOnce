@@ -1319,19 +1319,19 @@
   <div class="cmd-box" onclick="event.stopPropagation()">
     <div class="cmd-head">
       <div class="cmd-head-icon">🤖</div>
-      <div class="cmd-head-text">AI Command Preview</div>
+      <div class="cmd-head-text">Send to AI</div>
     </div>
     <div class="cmd-body">
-      <div class="cmd-label">Command to send</div>
+      <div class="cmd-label">Request to send</div>
       <div class="cmd-preview" id="cmd-preview-text">Loading...</div>
       <div class="cmd-info">
-        <span class="cmd-info-icon">ℹ️</span>
-        <span>This command will be copied. Paste it in your AI editor (Claude/Cursor).</span>
+        <span class="cmd-info-icon">🚀</span>
+        <span>AI will receive this on the next interaction (any MCP tool call)</span>
       </div>
     </div>
     <div class="cmd-actions">
       <button class="cmd-btn cancel" onclick="closeCommandPreview()">Cancel</button>
-      <button class="cmd-btn send" onclick="sendCommand()">📋 Copy & Send</button>
+      <button class="cmd-btn send" onclick="sendCommand()">🚀 Send to AI</button>
     </div>
   </div>
 </div>
@@ -2157,21 +2157,38 @@ Please diagnose the root cause and provide a fix. Use the context above to under
 
   async function sendCommand() {
     try {
-      await navigator.clipboard.writeText(currentCommand);
-      showToast('📋 Command copied! Paste in your AI editor');
-      closeCommandPreview();
+      // Send to AI queue - will be delivered on next MCP tool call
+      const res = await fetch('/api/memory/queue-for-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'action_command',
+          message: currentCommand,
+          source: 'dashboard_action_panel',
+          priority: 'high'
+        })
+      });
 
-      // Log this action
-      logActivity('ai_command_sent', 'AI command generated and copied');
+      const data = await res.json();
+      if (data.status === 'ok') {
+        closeCommandPreview();
+        showToast('🚀 Command sent! AI will receive it on next interaction');
+
+        // Log this action
+        logActivity('ai_command_sent', 'Action command queued for AI');
+      } else {
+        throw new Error(data.message || 'Failed to queue command');
+      }
     } catch (e) {
-      // Fallback: select text
-      const preview = document.getElementById('cmd-preview-text');
-      const range = document.createRange();
-      range.selectNodeContents(preview);
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      showToast('Select and copy the command manually');
+      console.error('Send command error:', e);
+      // Fallback: copy to clipboard
+      try {
+        await navigator.clipboard.writeText(currentCommand);
+        showToast('📋 Copied to clipboard (queue failed)');
+        closeCommandPreview();
+      } catch (clipErr) {
+        showToast('✗ Error: ' + e.message);
+      }
     }
   }
 
