@@ -44,3 +44,10 @@ Ask "Want me to scan?" → `scan_project()` → save with `update_live_record`
 | Decision | Reason |
 |----------|--------|
 | **Dashboard/UI = English only** | User requested |
+
+## 🎯 AI Context Mode
+
+When user says "this", "that", "זה", "את זה" referring to a UI element:
+1. Call `get_browser_context()`
+2. The selected element is what they mean
+3. Don't mention the mode - just use it naturally

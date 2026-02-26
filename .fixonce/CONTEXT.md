@@ -1,7 +1,7 @@
 # FixOnce Context
 
 > **Auto-generated file.** Do not edit manually.
-> Last updated: 2026-02-26 11:34
+> Last updated: 2026-02-26 21:12
 
 ---
 
@@ -9,7 +9,7 @@
 
 ## Current Goal
 
-**Build minimal Installer - macOS one-click, Windows basic, auto-port, health check**
+**Replace dashboard_vnext.html with health-focused design (Orb-based) while preserving all API integrations**
 
 ---
 
@@ -101,6 +101,22 @@
 ### Minimal installer approach - no complex packaging, just scripts
 
 *Reason:* Simpler to maintain, works cross-platform, auto-port detection and health checks built into server and launcher
+
+### Component Stability Layer with Git-based rollback
+
+*Reason:* Enables rollback to last known good state. Stores commit hash per component, tracks files, supports file restore or branch creation.
+
+### Checkpoints created for 13 components
+
+*Reason:* Bulk checkpoint at commit 22caa38d
+
+### Checkpoint created for Dashboard
+
+*Reason:* Saved at commit 22caa38d - can rollback to this state
+
+### Checkpoints created for 1 components
+
+*Reason:* Bulk checkpoint at commit 56e55cd3
 
 ---
 
