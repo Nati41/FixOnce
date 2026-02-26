@@ -190,8 +190,14 @@
     justify-content: center;
     position: relative;
     transition: all .6s ease;
-    cursor: default;
+    cursor: pointer;
     margin-bottom: 18px;
+  }
+  .orb:hover {
+    transform: scale(1.03);
+  }
+  .orb:active {
+    transform: scale(0.98);
   }
 
   .orb.green {
@@ -743,6 +749,283 @@
     box-shadow: 0 0 15px var(--red-dim);
   }
 
+  /* ─── ACTION PANEL ─── */
+  .action-overlay {
+    position: fixed; inset: 0;
+    background: rgba(7,9,12,.9);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s;
+    z-index: 180;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .action-overlay.show { opacity: 1; pointer-events: all; }
+
+  .action-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    width: 440px;
+    transform: scale(.95) translateY(10px);
+    transition: transform .25s ease;
+    overflow: hidden;
+  }
+  .action-overlay.show .action-box { transform: scale(1) translateY(0); }
+
+  .action-head {
+    padding: 20px 24px 16px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .action-orb-mini {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    margin: 0 auto 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    transition: all .3s;
+  }
+  .action-orb-mini.green {
+    background: radial-gradient(circle, #00e67620, transparent);
+    border: 1px solid #00e67640;
+    box-shadow: 0 0 30px #00e67615;
+  }
+  .action-orb-mini.amber {
+    background: radial-gradient(circle, #ffb30020, transparent);
+    border: 1px solid #ffb30040;
+    box-shadow: 0 0 30px #ffb30015;
+  }
+  .action-orb-mini.red {
+    background: radial-gradient(circle, #ff445520, transparent);
+    border: 1px solid #ff445540;
+    box-shadow: 0 0 30px #ff445515;
+  }
+
+  .action-state {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .action-state.green { color: var(--green); }
+  .action-state.amber { color: var(--amber); }
+  .action-state.red { color: var(--red); }
+
+  .action-desc {
+    font-size: 13px;
+    color: var(--text-mid);
+    margin-top: 6px;
+  }
+
+  .action-buttons {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .2s;
+    text-align: left;
+  }
+  .action-btn:hover {
+    border-color: var(--text-mid);
+    background: #161c28;
+  }
+  .action-btn:active { transform: scale(.99); }
+
+  .action-btn .ab-icon {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .action-btn .ab-icon.understand { background: #1a2535; color: #6ab7ff; }
+  .action-btn .ab-icon.approve { background: #1a2520; color: var(--green); }
+  .action-btn .ab-icon.ai { background: #251a2a; color: #c78fff; }
+
+  .action-btn .ab-text { flex: 1; }
+  .action-btn .ab-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+  .action-btn .ab-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+
+  .action-btn .ab-arrow {
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  .action-close {
+    padding: 14px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+  }
+  .action-close button {
+    padding: 8px 24px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .action-close button:hover {
+    border-color: var(--text-mid);
+    color: var(--text);
+  }
+
+  /* ─── AI COMMAND PREVIEW ─── */
+  .cmd-overlay {
+    position: fixed; inset: 0;
+    background: rgba(7,9,12,.92);
+    backdrop-filter: blur(12px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s;
+    z-index: 190;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cmd-overlay.show { opacity: 1; pointer-events: all; }
+
+  .cmd-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 14px;
+    width: 500px;
+    transform: scale(.95);
+    transition: transform .25s ease;
+  }
+  .cmd-overlay.show .cmd-box { transform: scale(1); }
+
+  .cmd-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .cmd-head-icon {
+    width: 32px; height: 32px;
+    border-radius: 6px;
+    background: #251a2a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+  .cmd-head-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .cmd-body {
+    padding: 20px;
+  }
+
+  .cmd-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .cmd-preview {
+    background: #0a0c10;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #c78fff;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .cmd-info {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cmd-info-icon { font-size: 14px; }
+
+  .cmd-actions {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .cmd-btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .cmd-btn.cancel {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .cmd-btn.cancel:hover {
+    border-color: var(--text-mid);
+    color: var(--text);
+  }
+  .cmd-btn.send {
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    border: none;
+    color: white;
+  }
+  .cmd-btn.send:hover {
+    box-shadow: 0 0 20px #7c3aed40;
+    transform: translateY(-1px);
+  }
+
   /* toast */
   .toast {
     position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
@@ -862,7 +1145,7 @@
 
   <!-- ORB -->
   <div class="orb-wrap">
-    <div class="orb green" id="orb">
+    <div class="orb green" id="orb" onclick="openActionPanel()" title="Click for actions">
       <div class="orb-icon" id="orb-icon">🛡</div>
       <div class="orb-state green" id="orb-state">Protected</div>
     </div>
@@ -987,6 +1270,68 @@
     <div class="confirm-buttons">
       <button class="confirm-btn cancel" id="confirm-cancel">Cancel</button>
       <button class="confirm-btn confirm" id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ACTION PANEL -->
+<div class="action-overlay" id="action-overlay" onclick="closeActionPanel(event)">
+  <div class="action-box" onclick="event.stopPropagation()">
+    <div class="action-head">
+      <div class="action-orb-mini green" id="action-orb">🛡</div>
+      <div class="action-state green" id="action-state">Protected</div>
+      <div class="action-desc" id="action-desc">Project is stable and safe</div>
+    </div>
+    <div class="action-buttons">
+      <div class="action-btn" onclick="actionUnderstand()">
+        <div class="ab-icon understand">🔍</div>
+        <div class="ab-text">
+          <div class="ab-title">Understand</div>
+          <div class="ab-sub" id="ab-understand-sub">View history and safety point status</div>
+        </div>
+        <div class="ab-arrow">→</div>
+      </div>
+      <div class="action-btn" onclick="actionApprove()">
+        <div class="ab-icon approve">✓</div>
+        <div class="ab-text">
+          <div class="ab-title">Approve</div>
+          <div class="ab-sub" id="ab-approve-sub">Create a new safety point</div>
+        </div>
+        <div class="ab-arrow">→</div>
+      </div>
+      <div class="action-btn" onclick="actionAskAI()">
+        <div class="ab-icon ai">🤖</div>
+        <div class="ab-text">
+          <div class="ab-title">Ask AI</div>
+          <div class="ab-sub" id="ab-ai-sub">Continue safe development</div>
+        </div>
+        <div class="ab-arrow">→</div>
+      </div>
+    </div>
+    <div class="action-close">
+      <button onclick="closeActionPanel()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI COMMAND PREVIEW -->
+<div class="cmd-overlay" id="cmd-overlay" onclick="closeCommandPreview(event)">
+  <div class="cmd-box" onclick="event.stopPropagation()">
+    <div class="cmd-head">
+      <div class="cmd-head-icon">🤖</div>
+      <div class="cmd-head-text">AI Command Preview</div>
+    </div>
+    <div class="cmd-body">
+      <div class="cmd-label">Command to send</div>
+      <div class="cmd-preview" id="cmd-preview-text">Loading...</div>
+      <div class="cmd-info">
+        <span class="cmd-info-icon">ℹ️</span>
+        <span>This command will be copied. Paste it in your AI editor (Claude/Cursor).</span>
+      </div>
+    </div>
+    <div class="cmd-actions">
+      <button class="cmd-btn cancel" onclick="closeCommandPreview()">Cancel</button>
+      <button class="cmd-btn send" onclick="sendCommand()">📋 Copy & Send</button>
     </div>
   </div>
 </div>
@@ -1639,6 +1984,208 @@
   setInterval(fetchData, 10000);           // Main data every 10s
   setInterval(fetchRuntimeData, 5000);     // Runtime data every 5s
   setInterval(checkAIContextState, 3000);  // AI Context state every 3s
+
+  // ============ ACTION PANEL ============
+  const ACTION_CONTENT = {
+    green: {
+      icon: '🛡',
+      state: 'Protected',
+      desc: 'Project is stable and safe',
+      understand: 'View history and safety point status',
+      approve: 'Create a new safety point',
+      ai: 'Continue safe development',
+      command: `I need to continue working on this project.
+
+Context from FixOnce:
+- Status: Protected (all components stable)
+- Last checkpoint: {checkpoint}
+- Active decisions: {decisions}
+
+Please review the current state and suggest what to work on next.`
+    },
+    amber: {
+      icon: '🟡',
+      state: 'In Progress',
+      desc: 'Changes detected — review recommended',
+      understand: 'See what changed and where',
+      approve: 'Approve changes / close warning',
+      ai: 'Analyze changes with full context',
+      command: `There are pending changes that need review.
+
+Context from FixOnce:
+- Status: In Progress (changes detected)
+- Components at risk: {atRisk}
+- Recent changes: {changes}
+- Active decisions: {decisions}
+
+Please analyze these changes and recommend whether to approve or rollback.`
+    },
+    red: {
+      icon: '🔴',
+      state: 'Needs Attention',
+      desc: 'Issues detected — action required',
+      understand: 'Analyze errors and broken components',
+      approve: 'Rollback to safety point',
+      ai: 'Fix with full error context',
+      command: `There are issues that need immediate attention.
+
+Context from FixOnce:
+- Status: Needs Attention
+- Broken components: {broken}
+- Error count: {errorCount}
+- Recent errors: {errors}
+- Last stable state: {checkpoint}
+
+Please diagnose the root cause and provide a fix. Use the context above to understand what changed.`
+    }
+  };
+
+  let currentCommand = '';
+
+  async function openActionPanel() {
+    await fetchMemoryData(); // Get latest decisions
+    updateActionPanelContent();
+    document.getElementById('action-overlay').classList.add('show');
+  }
+
+  function closeActionPanel(e) {
+    if (e && e.target !== document.getElementById('action-overlay')) return;
+    document.getElementById('action-overlay').classList.remove('show');
+  }
+
+  function updateActionPanelContent() {
+    const content = ACTION_CONTENT[currentState];
+
+    // Update orb mini
+    const orbMini = document.getElementById('action-orb');
+    orbMini.className = 'action-orb-mini ' + currentState;
+    orbMini.textContent = content.icon;
+
+    // Update state label
+    const stateEl = document.getElementById('action-state');
+    stateEl.className = 'action-state ' + currentState;
+    stateEl.textContent = content.state;
+
+    // Update description
+    document.getElementById('action-desc').textContent = content.desc;
+
+    // Update button subtitles
+    document.getElementById('ab-understand-sub').textContent = content.understand;
+    document.getElementById('ab-approve-sub').textContent = content.approve;
+    document.getElementById('ab-ai-sub').textContent = content.ai;
+  }
+
+  function actionUnderstand() {
+    closeActionPanel();
+    // Open Deep Dive panel
+    openDeep();
+  }
+
+  function actionApprove() {
+    closeActionPanel();
+
+    if (currentState === 'red') {
+      // In red state, "Approve" means rollback
+      if (currentAlert && currentAlert.component) {
+        rollbackAlert();
+      } else {
+        // General rollback - show component selection
+        openDeep();
+        showToast('Select a component to rollback');
+      }
+    } else if (currentState === 'amber') {
+      // In amber state, approve the warning
+      if (currentAlert) {
+        approveAlert();
+      } else {
+        setSafetyPoint();
+      }
+    } else {
+      // In green state, create safety point
+      setSafetyPoint();
+    }
+  }
+
+  function actionAskAI() {
+    closeActionPanel();
+
+    // Build the command with context
+    const content = ACTION_CONTENT[currentState];
+    let cmd = content.command;
+
+    // Replace placeholders with actual data
+    const components = snapshot?.architecture?.components || [];
+    const activity = snapshot?.activity || [];
+    const decisions = memoryData?.decisions || [];
+
+    const atRiskComponents = components.filter(c => c.status === 'broken' || c.status === 'blocked');
+    const activeDecisions = decisions.filter(d => !d.superseded).slice(0, 3);
+
+    // Get recent checkpoint time
+    const lastCheckpoint = document.getElementById('meta-sp').textContent || 'None';
+
+    // Format replacements
+    cmd = cmd.replace('{checkpoint}', lastCheckpoint);
+    cmd = cmd.replace('{decisions}', activeDecisions.length > 0
+      ? activeDecisions.map(d => '• ' + (d.text || d.decision)).join('\n')
+      : 'None');
+    cmd = cmd.replace('{atRisk}', atRiskComponents.length > 0
+      ? atRiskComponents.map(c => c.name).join(', ')
+      : 'None');
+    cmd = cmd.replace('{broken}', atRiskComponents.length > 0
+      ? atRiskComponents.map(c => c.name).join(', ')
+      : 'None');
+    cmd = cmd.replace('{changes}', activity.length > 0
+      ? activity.slice(0, 3).map(a => '• ' + (a.description || a.type)).join('\n')
+      : 'No recent changes');
+    cmd = cmd.replace('{errorCount}', runtimeErrors.length.toString());
+    cmd = cmd.replace('{errors}', runtimeErrors.length > 0
+      ? runtimeErrors.slice(0, 3).map(e => '• ' + (e.message || e.type)).join('\n')
+      : 'No errors');
+
+    currentCommand = cmd;
+
+    // Show preview
+    document.getElementById('cmd-preview-text').textContent = cmd;
+    document.getElementById('cmd-overlay').classList.add('show');
+  }
+
+  function closeCommandPreview(e) {
+    if (e && e.target !== document.getElementById('cmd-overlay')) return;
+    document.getElementById('cmd-overlay').classList.remove('show');
+  }
+
+  async function sendCommand() {
+    try {
+      await navigator.clipboard.writeText(currentCommand);
+      showToast('📋 Command copied! Paste in your AI editor');
+      closeCommandPreview();
+
+      // Log this action
+      logActivity('ai_command_sent', 'AI command generated and copied');
+    } catch (e) {
+      // Fallback: select text
+      const preview = document.getElementById('cmd-preview-text');
+      const range = document.createRange();
+      range.selectNodeContents(preview);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      showToast('Select and copy the command manually');
+    }
+  }
+
+  async function logActivity(type, description) {
+    try {
+      await fetch('/api/activity/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, description })
+      });
+    } catch (e) {
+      // Silently fail
+    }
+  }
 
   // ============ DEMO MODE ============
   function toggleDemoMode() {
