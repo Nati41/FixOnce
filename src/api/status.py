@@ -2138,14 +2138,14 @@ def api_mark_stable(name):
     """
     try:
         from core.component_stability import mark_component_stable, add_files_to_component, get_current_commit
-        from managers.multi_project_manager import get_active_project_id, get_active_project_path, load_project_memory, save_project_memory
+        from managers.multi_project_manager import get_active_project_id, load_project_memory, save_project_memory
 
         project_id = get_active_project_id()
         if not project_id:
             return jsonify({"error": "No active project"}), 400
 
-        repo_path = get_active_project_path()
         memory = load_project_memory(project_id) or {}
+        repo_path = memory.get("live_record", {}).get("gps", {}).get("working_dir", "")
 
         arch = memory.get("live_record", {}).get("architecture", {})
         components = arch.get("components", [])
@@ -2198,14 +2198,14 @@ def api_rollback_component(name):
     """
     try:
         from core.component_stability import rollback_files, create_rollback_branch
-        from managers.multi_project_manager import get_active_project_id, get_active_project_path, load_project_memory
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
 
         project_id = get_active_project_id()
         if not project_id:
             return jsonify({"error": "No active project"}), 400
 
-        repo_path = get_active_project_path()
         memory = load_project_memory(project_id) or {}
+        repo_path = memory.get("live_record", {}).get("gps", {}).get("working_dir", "")
 
         arch = memory.get("live_record", {}).get("architecture", {})
         components = arch.get("components", [])
