@@ -3349,18 +3349,19 @@
             const isStable = node.status === 'stable' || node.status === 'done';
 
             // Stability buttons
+            // Show "Mark Stable" if no checkpoint yet (even for done/stable components)
+            // Show "Rollback" only if has checkpoint
             const stabilityButtons = `
                 <div class="stability-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-                    ${!isStable ? `
-                        <button class="stability-btn mark-stable" onclick="markComponentStable('${escapeHtml(node.name)}')" title="Mark as stable and create checkpoint">
-                            🔒 Mark Stable
+                    ${!hasCheckpoint ? `
+                        <button class="stability-btn mark-stable" onclick="markComponentStable('${escapeHtml(node.name)}')" title="Create checkpoint at current commit">
+                            🔒 Create Checkpoint
                         </button>
-                    ` : ''}
-                    ${hasCheckpoint ? `
+                    ` : `
                         <button class="stability-btn rollback" onclick="rollbackComponent('${escapeHtml(node.name)}')" title="Restore files to last stable state">
                             ↩️ Rollback
                         </button>
-                    ` : ''}
+                    `}
                 </div>
             `;
 
