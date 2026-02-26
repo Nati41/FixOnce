@@ -22,7 +22,7 @@ PROJECT_ROOT = Path(SPECPATH)
 datas = [
     # Dashboard HTML files
     (str(PROJECT_ROOT / 'data' / 'dashboard_vnext.html'), 'data'),
-    (str(PROJECT_ROOT / 'data' / 'dashboard_v3.html'), 'data'),
+    (str(PROJECT_ROOT / 'data' / 'dashboard_app.html'), 'data'),
     (str(PROJECT_ROOT / 'data' / 'logo.png'), 'data'),
 
     # Template JSON files (initial state)

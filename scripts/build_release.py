@@ -42,7 +42,6 @@ COMMON_DIRS = [
 
 COMMON_DATA_FILES = [
     "data/dashboard_vnext.html",
-    "data/dashboard_v3.html",
     "data/dashboard_app.html",
     "data/logo.png",
     "data/project_memory.template.json",
