@@ -1885,6 +1885,19 @@
             font-style: italic;
         }
 
+        .depth-item.stability-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-left: 3px solid var(--accent-orange);
+            padding-left: 10px;
+        }
+
+        .depth-item-file {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: var(--mono-font);
+            margin-top: 4px;
+        }
+
         .system-info {
             font-family: monospace;
             font-size: 12px;
@@ -2736,6 +2749,7 @@
                         <span>🌳 System Tree <span class="inline-help" data-tip="Visual map of system components. AI updates status as work progresses. Click a node for details.">?</span></span>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span id="tree-stats" style="font-size: 10px; color: var(--text-muted);"></span>
+                            <button class="stability-btn mark-stable" onclick="markAllStable()" style="font-size: 10px; padding: 4px 8px;" title="Create checkpoints for all components without one">🔒 Checkpoint All</button>
                             <button class="tree-focus-btn" id="tree-focus-btn" onclick="toggleTreeFocus()">Focus</button>
                             <span id="tree-toggle" style="font-size: 10px; color: var(--text-muted); cursor: pointer;" onclick="toggleTree()">▼</span>
                         </div>
@@ -3401,7 +3415,14 @@
 
         // Stability API functions
         async function markComponentStable(name) {
-            if (!confirm('Mark "' + name + '" as stable?\n\nThis will create a checkpoint at the current git commit.')) return;
+            const confirmed = await showConfirm({
+                title: 'Create Checkpoint',
+                message: 'Mark "' + name + '" as stable? This will save the current git commit as a recovery point.',
+                icon: '🔒',
+                type: 'warning',
+                confirmText: 'Create'
+            });
+            if (!confirmed) return;
 
             try {
                 const res = await fetch('/api/stability/mark/' + encodeURIComponent(name), {
@@ -3421,7 +3442,14 @@
         }
 
         async function rollbackComponent(name) {
-            if (!confirm('Rollback "' + name + '" to last stable state?\n\n⚠️ This will restore tracked files to their previous state.')) return;
+            const confirmed = await showConfirm({
+                title: 'Rollback Component',
+                message: 'Restore "' + name + '" to last stable state? This will revert tracked files to their checkpoint state.',
+                icon: '↩️',
+                type: 'danger',
+                confirmText: 'Rollback'
+            });
+            if (!confirmed) return;
 
             try {
                 const res = await fetch('/api/stability/rollback/' + encodeURIComponent(name), {
@@ -3435,6 +3463,44 @@
                     showToast('✅ Restored ' + count + ' files');
                 } else {
                     showToast('❌ ' + (data.error || 'Rollback failed'));
+                }
+            } catch (e) {
+                showToast('❌ Error: ' + e.message);
+            }
+        }
+
+        async function markAllStable() {
+            var components = (snapshot.architecture || {}).components || [];
+            var componentsWithoutCheckpoint = components.filter(function(c) {
+                return !c.last_stable;
+            });
+
+            if (componentsWithoutCheckpoint.length === 0) {
+                showToast('✅ All components already have checkpoints');
+                return;
+            }
+
+            var names = componentsWithoutCheckpoint.map(function(c) { return c.name; }).join(', ');
+            const confirmed = await showConfirm({
+                title: 'Checkpoint All Components',
+                message: 'Create checkpoints for ' + componentsWithoutCheckpoint.length + ' components: ' + names,
+                icon: '🔒',
+                type: 'warning',
+                confirmText: 'Create All'
+            });
+            if (!confirmed) return;
+
+            try {
+                const res = await fetch('/api/stability/mark-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('✅ Created ' + data.marked_count + ' checkpoints');
+                    setTimeout(refreshData, 500);
+                } else {
+                    showToast('❌ ' + (data.error || 'Failed'));
                 }
             } catch (e) {
                 showToast('❌ Error: ' + e.message);
@@ -4214,18 +4280,23 @@
                     html = '<p class="empty-state">No recent activity</p>';
                 } else {
                     html = activities.slice(0, 30).map(a => {
-                        const icon = a.type === 'mcp_tool' ? '🧠' : '📝';
+                        // Special handling for stability warnings
+                        const isStabilityWarning = a.type === 'stability_warning' || (a.tool === 'stability_warning');
+                        const icon = isStabilityWarning ? '⚠️' : (a.type === 'mcp_tool' ? '🧠' : '📝');
+                        const itemClass = isStabilityWarning ? 'depth-item stability-warning' : 'depth-item';
                         const time = timeSince(a.timestamp);
-                        const name = a.human_name || a.tool || 'Activity';
+                        const name = a.human_name || a.action || a.tool || 'Activity';
                         const actorRaw = a.actor || 'unknown';
                         const actor = escapeHtml(actorRaw);
                         const actorLower = String(actorRaw).toLowerCase();
                         const historical = actorLower !== 'unknown' && activeEditors.size > 0 && !activeEditors.has(actorLower)
                             ? ' <span class="historical-badge">historical</span>'
                             : '';
+                        const extraInfo = a.file ? '<div class="depth-item-file">File: ' + escapeHtml(a.file) + '</div>' : '';
                         return `
-                            <div class="depth-item">
+                            <div class="${itemClass}">
                                 <div class="depth-item-title">${icon} ${name}</div>
+                                ${extraInfo}
                                 <div class="depth-item-meta">${time} · ${actor}${historical}</div>
                             </div>
                         `;

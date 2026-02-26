@@ -937,6 +937,10 @@ def _get_mcp_human_name(tool_name: str, details: dict = None) -> str:
         name = details.get("name", "")[:20]
         return f"📁 Added files to: {name}"
 
+    elif tool_name == "stability_warning":
+        component = details.get("component", "")[:20]
+        return f"⚠️ Modified stable: {component}"
+
     elif tool_name == "get_stability_report":
         return "📊 Stability report"
 
@@ -1973,6 +1977,116 @@ def _get_browser_errors_summary(limit: int = 3) -> Optional[str]:
         return '\n'.join(lines)
     except Exception:
         return None
+
+
+def _check_stable_component_impact(file_path: str) -> Optional[Dict[str, Any]]:
+    """
+    Check if a file belongs to a STABLE component.
+
+    Returns:
+        None if no stable component affected
+        Dict with component info if affected: {"name": ..., "commit": ..., "files": [...]}
+    """
+    try:
+        session = _get_session()
+        if not session.is_active():
+            return None
+
+        memory = _load_project(session.project_id)
+        arch = memory.get("live_record", {}).get("architecture", {})
+        components = arch.get("components", [])
+
+        # Normalize file path for comparison
+        file_path_normalized = file_path.replace("\\", "/")
+        if file_path_normalized.startswith("./"):
+            file_path_normalized = file_path_normalized[2:]
+
+        for comp in components:
+            # Only check stable components with checkpoints
+            if comp.get("status") not in ["stable", "done"]:
+                continue
+            if not comp.get("last_stable"):
+                continue
+
+            comp_files = comp.get("files", [])
+            for cf in comp_files:
+                cf_normalized = cf.replace("\\", "/")
+                if cf_normalized.startswith("./"):
+                    cf_normalized = cf_normalized[2:]
+
+                # Check if file matches (exact or ends with)
+                if (file_path_normalized == cf_normalized or
+                    file_path_normalized.endswith("/" + cf_normalized) or
+                    cf_normalized.endswith("/" + file_path_normalized)):
+                    return {
+                        "name": comp.get("name"),
+                        "commit": comp.get("last_stable", {}).get("commit_short", "unknown"),
+                        "files": comp_files
+                    }
+
+        return None
+    except Exception:
+        return None
+
+
+def _log_stable_component_modification(component_name: str, file_path: str, actor: str = "AI") -> None:
+    """Log when AI modifies a stable component."""
+    try:
+        session = _get_session()
+        if not session.is_active():
+            return
+
+        memory = _load_project(session.project_id)
+
+        # Add to activity log in memory
+        activity = {
+            "type": "stability_warning",
+            "action": f"Modified stable component: {component_name}",
+            "file": file_path,
+            "actor": actor,
+            "timestamp": datetime.now().isoformat(),
+            "severity": "warning"
+        }
+
+        if "activity_log" not in memory:
+            memory["activity_log"] = []
+        memory["activity_log"].append(activity)
+
+        # Keep last 100 activities
+        if len(memory["activity_log"]) > 100:
+            memory["activity_log"] = memory["activity_log"][-100:]
+
+        _save_project(session.project_id, memory)
+
+        # Send to activity API for dashboard visibility
+        actor_identity = _resolve_actor_identity()
+        detected_editor = actor_identity.get("editor", "unknown")
+
+        api_activity = {
+            "type": "stability_warning",
+            "tool": "stability_warning",
+            "file": file_path,
+            "cwd": session.working_dir,
+            "project_id": session.project_id,
+            "editor": detected_editor,
+            "actor": detected_editor,
+            "timestamp": datetime.now().isoformat(),
+            "human_name": f"⚠️ Modified stable: {component_name}",
+            "action": f"Modified stable component: {component_name}",
+            "file_context": "stability",
+            "mcp_details": {
+                "component": component_name,
+                "file": file_path
+            }
+        }
+
+        requests.post(
+            "http://localhost:5000/api/activity/log",
+            json=api_activity,
+            timeout=2
+        )
+    except Exception:
+        pass
 
 
 def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
@@ -4643,6 +4757,17 @@ def smart_file_operation(
                 result_lines.append(f"❌ File not found: {file_path}")
 
         elif operation == "write":
+            # Check if this affects a stable component BEFORE writing
+            stable_impact = _check_stable_component_impact(file_path)
+            if stable_impact:
+                result_lines.append("")
+                result_lines.append(f"⚠️ **STABILITY WARNING**: This file belongs to stable component '{stable_impact['name']}'")
+                result_lines.append(f"   Checkpoint: {stable_impact['commit']}")
+                result_lines.append(f"   Consider: rollback_component(\"{stable_impact['name']}\") if issues occur")
+                result_lines.append("")
+                # Log this modification
+                _log_stable_component_modification(stable_impact['name'], file_path, "AI")
+
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding='utf-8')
             result_lines.append(f"✅ Wrote {len(content)} chars to {file_path}")
@@ -4650,6 +4775,17 @@ def smart_file_operation(
                 result_lines.append(f"📝 {description}")
 
         elif operation == "append":
+            # Check if this affects a stable component BEFORE appending
+            stable_impact = _check_stable_component_impact(file_path)
+            if stable_impact:
+                result_lines.append("")
+                result_lines.append(f"⚠️ **STABILITY WARNING**: This file belongs to stable component '{stable_impact['name']}'")
+                result_lines.append(f"   Checkpoint: {stable_impact['commit']}")
+                result_lines.append(f"   Consider: rollback_component(\"{stable_impact['name']}\") if issues occur")
+                result_lines.append("")
+                # Log this modification
+                _log_stable_component_modification(stable_impact['name'], file_path, "AI")
+
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, 'a', encoding='utf-8') as f:
                 f.write(content)

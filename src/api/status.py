@@ -2175,11 +2175,26 @@ def api_mark_stable(name):
         arch["components"] = components
         arch["updated_at"] = datetime.now().isoformat()
         memory["live_record"]["architecture"] = arch
+
+        # Log as decision
+        commit_short = component.get("last_stable", {}).get("commit_short", "unknown")
+        decision = {
+            "type": "decision",
+            "decision": f"Checkpoint created for {name}",
+            "reason": f"Saved at commit {commit_short} - can rollback to this state",
+            "timestamp": datetime.now().isoformat(),
+            "importance": "permanent"
+        }
+        if "decisions" not in memory:
+            memory["decisions"] = []
+        memory["decisions"].append(decision)
+
         save_project_memory(project_id, memory)
 
         return jsonify({
             "success": True,
-            "component": component
+            "component": component,
+            "decision_logged": True
         })
 
     except Exception as e:
@@ -2236,7 +2251,99 @@ def api_rollback_component(name):
                 return jsonify({"error": "No files tracked for this component"}), 400
             result = rollback_files(repo_path, commit_hash, files)
 
+        # Log rollback to component history
+        if result.get("success"):
+            from managers.multi_project_manager import save_project_memory
+
+            if "history" not in component:
+                component["history"] = []
+            component["history"].append({
+                "action": "rollback_executed",
+                "commit": last_stable.get("commit_short", commit_hash[:8]),
+                "files_restored": len(result.get("restored", [])),
+                "timestamp": datetime.now().isoformat(),
+                "by": "dashboard"
+            })
+
+            # Keep last 20 history entries
+            if len(component["history"]) > 20:
+                component["history"] = component["history"][-20:]
+
+            # Save updated component
+            for i, comp in enumerate(components):
+                if comp.get("name", "").lower() == name.lower():
+                    components[i] = component
+                    break
+            arch["components"] = components
+            memory["live_record"]["architecture"] = arch
+            save_project_memory(project_id, memory)
+
         return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@status_bp.route("/stability/mark-all", methods=["POST"])
+def api_mark_all_stable():
+    """
+    Create checkpoints for all components without one.
+    """
+    try:
+        from core.component_stability import mark_component_stable
+        from managers.multi_project_manager import get_active_project_id, load_project_memory, save_project_memory
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"error": "No active project"}), 400
+
+        memory = load_project_memory(project_id) or {}
+        repo_path = memory.get("live_record", {}).get("gps", {}).get("working_dir", "")
+
+        arch = memory.get("live_record", {}).get("architecture", {})
+        components = arch.get("components", [])
+
+        created = 0
+        skipped = 0
+
+        for i, comp in enumerate(components):
+            if comp.get("last_stable"):
+                skipped += 1
+                continue
+
+            # Mark stable
+            components[i] = mark_component_stable(comp, repo_path, "dashboard")
+            created += 1
+
+        # Save all
+        arch["components"] = components
+        arch["updated_at"] = datetime.now().isoformat()
+        memory["live_record"]["architecture"] = arch
+
+        # Log as single decision
+        if created > 0:
+            from core.component_stability import get_current_commit
+            commit_info = get_current_commit(repo_path)
+            commit_short = commit_info["short_hash"] if commit_info else "unknown"
+
+            decision = {
+                "type": "decision",
+                "decision": f"Checkpoints created for {created} components",
+                "reason": f"Bulk checkpoint at commit {commit_short}",
+                "timestamp": datetime.now().isoformat(),
+                "importance": "permanent"
+            }
+            if "decisions" not in memory:
+                memory["decisions"] = []
+            memory["decisions"].append(decision)
+
+        save_project_memory(project_id, memory)
+
+        return jsonify({
+            "success": True,
+            "created": created,
+            "skipped": skipped
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
