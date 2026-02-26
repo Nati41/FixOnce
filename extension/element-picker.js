@@ -336,8 +336,7 @@
       badge.innerHTML = `
         <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#22c55e;border-radius:50%;font-size:12px;font-weight:600">${selected.length}</span>
         <span style="margin-left:10px">selected</span>
-        <span style="margin-left:12px;padding:4px 10px;background:rgba(34,197,94,0.2);border-radius:6px;color:#22c55e;font-weight:500">ENTER</span>
-        <span style="margin-left:16px;opacity:0.4">ESC undo</span>
+        <span style="margin-left:16px;opacity:0.6">ESC to exit</span>
       `;
     }
     badge.style.display = 'flex';
@@ -473,14 +472,20 @@
     if (!hovered || hovered.id?.startsWith('__fo_')) return;
     if (selected.some(s => s.el === hovered)) return;
 
-    const { marker, id } = createMarker(hovered, selected.length);
+    // No permanent marker - just flash green on highlight
+    const id = generateSelectionId();
     const data = capture(hovered, id);
-    selected.push({ el: hovered, data, marker, id });
+    selected.push({ el: hovered, data, marker: null, id });
 
+    // Brief green flash to confirm selection
     highlight.style.borderColor = '#22c55e';
+    highlight.style.background = 'rgba(34, 197, 94, 0.15)';
     setTimeout(() => {
-      if (highlight) highlight.style.borderColor = '#3b82f6';
-    }, 150);
+      if (highlight) {
+        highlight.style.borderColor = '#3b82f6';
+        highlight.style.background = 'rgba(59, 130, 246, 0.08)';
+      }
+    }, 200);
 
     updateBadge();
     send();
@@ -508,15 +513,8 @@
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-
-      if (selected.length > 0) {
-        const last = selected.pop();
-        if (last.marker) last.marker.remove();
-        updateBadge();
-        selected.length > 0 ? send() : window.postMessage({ source: 'FIXONCE_PICKER', type: 'ELEMENT_CLEARED' }, '*');
-      } else {
-        stopPicker();
-      }
+      // ESC exits picker mode entirely (elements remain selected)
+      stopPicker();
     }
   }
 
@@ -556,11 +554,9 @@
     if (highlight) { highlight.remove(); highlight = null; }
     if (badge) { badge.remove(); badge = null; }
 
-    // Keep markers if we have selections
-    if (pickerState === 'idle') {
-      document.querySelectorAll('.__fo_marker__').forEach(m => m.remove());
-      selected = [];
-    }
+    // Always remove markers from screen when exiting picker mode
+    // User can manage elements from dashboard
+    document.querySelectorAll('.__fo_marker__').forEach(m => m.remove());
 
     updateFabState();
   }

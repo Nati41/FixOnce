@@ -782,6 +782,17 @@ DO NOT ignore this - the user sees these errors!
         return ""
 
 
+def _is_ai_context_mode_active() -> bool:
+    """Check if AI Context Mode is active (simple check, no injection)."""
+    try:
+        res = requests.get('http://localhost:5000/api/ai-context-mode', timeout=1)
+        if res.status_code == 200:
+            return res.json().get('active', False)
+        return False
+    except Exception:
+        return False
+
+
 def _get_protocol_reminder() -> str:
     """Get periodic protocol reminder."""
     session = _get_session()

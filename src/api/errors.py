@@ -440,6 +440,43 @@ def api_browser_context_clear():
 
 
 # ============================================================
+# AI CONTEXT MODE - When active, AI auto-checks browser context
+# ============================================================
+
+_ai_context_mode = {}  # project_id -> { active: bool, activated_at: timestamp }
+
+@errors_bp.route("/api/ai-context-mode", methods=["GET"])
+def api_get_ai_context_mode():
+    """Check if AI Context Mode is active for current project."""
+    project_id = _get_active_project_id()
+    mode_data = _ai_context_mode.get(project_id, {"active": False})
+    return jsonify({
+        "active": mode_data.get("active", False),
+        "activated_at": mode_data.get("activated_at"),
+        "project_id": project_id
+    })
+
+@errors_bp.route("/api/ai-context-mode", methods=["POST"])
+def api_set_ai_context_mode():
+    """Set AI Context Mode for current project."""
+    project_id = _get_active_project_id()
+    data = request.get_json(silent=True) or {}
+    active = data.get("active", False)
+
+    if active:
+        _ai_context_mode[project_id] = {
+            "active": True,
+            "activated_at": datetime.now().isoformat()
+        }
+        print(f"[AIContextMode] Activated for project: {project_id}")
+    else:
+        _ai_context_mode[project_id] = {"active": False}
+        print(f"[AIContextMode] Deactivated for project: {project_id}")
+
+    return jsonify({"status": "ok", "active": active})
+
+
+# ============================================================
 # PROJECT URL CHECKING - For Extension to Know When to Show FAB
 # ============================================================
 

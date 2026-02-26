@@ -41,8 +41,10 @@ COMMON_DIRS = [
 ]
 
 COMMON_DATA_FILES = [
-    "data/brain_dashboard.html",
-    "data/dashboard_v2.html",
+    "data/dashboard_vnext.html",
+    "data/dashboard_v3.html",
+    "data/dashboard_app.html",
+    "data/logo.png",
     "data/project_memory.template.json",
     "data/active_project.json",
     "data/project_index.json",
