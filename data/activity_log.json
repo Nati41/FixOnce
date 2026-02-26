@@ -1,6 +1,36 @@
 {
   "activities": [
     {
+      "id": "act_20260226_211637_719901",
+      "type": "command",
+      "tool": null,
+      "file": null,
+      "command": "git status && git log --oneline -3",
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "editor": "unknown",
+      "timestamp": "2026-02-26T19:16:37Z",
+      "human_name": "git status && git log --onelin",
+      "file_context": "",
+      "diff": {},
+      "boundary_transition": null
+    },
+    {
+      "id": "act_20260226_211615_645401",
+      "type": "command",
+      "tool": null,
+      "file": null,
+      "command": "git add .fixonce/CONTEXT.md CLAUDE.md data/active_project.json data/activity_log.json data/boundary_state.json data/mcp_compliance.json data/project_index.json data/projects_v2/FixOnce_e43ce7ce16a6.json data/dashboard_vnext_backup_20260226_200124.html",
+      "cwd": "/Users/haimdayan/Desktop/FixOnce",
+      "project_id": "FixOnce_e43ce7ce16a6",
+      "editor": "unknown",
+      "timestamp": "2026-02-26T19:16:15Z",
+      "human_name": "git add .fixonce/CONTEXT.md CL",
+      "file_context": "",
+      "diff": {},
+      "boundary_transition": null
+    },
+    {
       "id": "act_20260226_211611_961791",
       "type": "command",
       "tool": null,
@@ -1611,42 +1641,6 @@
       "diff": {
         "added": 156,
         "removed": 34
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260226_114311_607756",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/dashboard_vnext.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce",
-      "project_id": "FixOnce_e3921f743904",
-      "editor": "claude",
-      "timestamp": "2026-02-26T09:43:11Z",
-      "human_name": "Dashboard",
-      "file_context": "ui",
-      "diff": {
-        "added": 146,
-        "removed": 29
-      },
-      "boundary_transition": null
-    },
-    {
-      "id": "act_20260226_114254_408767",
-      "type": "file_change",
-      "tool": "Edit",
-      "file": "/Users/haimdayan/Desktop/FixOnce/data/dashboard_vnext.html",
-      "command": null,
-      "cwd": "/Users/haimdayan/Desktop/FixOnce",
-      "project_id": "FixOnce_e3921f743904",
-      "editor": "claude",
-      "timestamp": "2026-02-26T09:42:54Z",
-      "human_name": "Dashboard",
-      "file_context": "ui",
-      "diff": {
-        "added": 111,
-        "removed": 29
       },
       "boundary_transition": null
     }
