@@ -1,5 +1,8 @@
 @echo off
-REM FixOnce One-Click Installer for Windows
-cd /d "%~dp0"
-py -3 scripts\install.py 2>nul || python scripts\install.py
+echo.
+echo ================================
+echo   FixOnce Installer for Windows
+echo ================================
+echo.
+python scripts\install.py
 pause

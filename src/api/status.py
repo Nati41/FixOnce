@@ -2085,3 +2085,158 @@ def api_auto_discover():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+# ============================================================
+# COMPONENT STABILITY API
+# ============================================================
+
+@status_bp.route("/api/stability/report", methods=["GET"])
+def api_stability_report():
+    """
+    Get component stability summary.
+
+    Returns:
+        {
+            "total": 10,
+            "stable": 5,
+            "building": 3,
+            "broken": 2,
+            "with_checkpoints": 4,
+            "components": [...]
+        }
+    """
+    try:
+        from core.component_stability import get_stability_summary
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"error": "No active project"}), 400
+
+        memory = load_project_memory(project_id) or {}
+        components = memory.get("live_record", {}).get("architecture", {}).get("components", [])
+
+        summary = get_stability_summary(components)
+        summary["components"] = components
+
+        return jsonify(summary)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@status_bp.route("/api/stability/mark/<name>", methods=["POST"])
+def api_mark_stable(name):
+    """
+    Mark a component as stable via API.
+
+    Request body (optional):
+        {
+            "files": ["src/file1.py", "src/file2.py"]
+        }
+    """
+    try:
+        from core.component_stability import mark_component_stable, add_files_to_component, get_current_commit
+        from managers.multi_project_manager import get_active_project_id, get_active_project_path, load_project_memory, save_project_memory
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"error": "No active project"}), 400
+
+        repo_path = get_active_project_path()
+        memory = load_project_memory(project_id) or {}
+
+        arch = memory.get("live_record", {}).get("architecture", {})
+        components = arch.get("components", [])
+
+        # Find component
+        found_idx = None
+        for i, comp in enumerate(components):
+            if comp.get("name", "").lower() == name.lower():
+                found_idx = i
+                break
+
+        if found_idx is None:
+            return jsonify({"error": f"Component '{name}' not found"}), 404
+
+        component = components[found_idx]
+
+        # Add files if provided
+        data = request.get_json(silent=True) or {}
+        if data.get("files"):
+            component = add_files_to_component(component, data["files"])
+
+        # Mark stable
+        component = mark_component_stable(component, repo_path, "dashboard")
+
+        # Save
+        components[found_idx] = component
+        arch["components"] = components
+        arch["updated_at"] = datetime.now().isoformat()
+        memory["live_record"]["architecture"] = arch
+        save_project_memory(project_id, memory)
+
+        return jsonify({
+            "success": True,
+            "component": component
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@status_bp.route("/api/stability/rollback/<name>", methods=["POST"])
+def api_rollback_component(name):
+    """
+    Rollback a component to its last stable state.
+
+    Request body (optional):
+        {
+            "mode": "files"  # or "branch"
+        }
+    """
+    try:
+        from core.component_stability import rollback_files, create_rollback_branch
+        from managers.multi_project_manager import get_active_project_id, get_active_project_path, load_project_memory
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"error": "No active project"}), 400
+
+        repo_path = get_active_project_path()
+        memory = load_project_memory(project_id) or {}
+
+        arch = memory.get("live_record", {}).get("architecture", {})
+        components = arch.get("components", [])
+
+        # Find component
+        component = None
+        for comp in components:
+            if comp.get("name", "").lower() == name.lower():
+                component = comp
+                break
+
+        if not component:
+            return jsonify({"error": f"Component '{name}' not found"}), 404
+
+        last_stable = component.get("last_stable")
+        if not last_stable:
+            return jsonify({"error": f"No stable checkpoint for '{name}'"}), 400
+
+        commit_hash = last_stable.get("commit_hash")
+        data = request.get_json(silent=True) or {}
+        mode = data.get("mode", "files")
+
+        if mode == "branch":
+            result = create_rollback_branch(repo_path, commit_hash)
+        else:
+            files = component.get("files", [])
+            if not files:
+                return jsonify({"error": "No files tracked for this component"}), 400
+            result = rollback_files(repo_path, commit_hash, files)
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

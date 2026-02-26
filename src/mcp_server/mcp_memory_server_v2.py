@@ -916,9 +916,29 @@ def _get_mcp_human_name(tool_name: str, details: dict = None) -> str:
     elif tool_name == "update_component_status":
         name = details.get("name", "")[:20]
         status = details.get("status", "")
-        status_icons = {"done": "🟢", "in_progress": "🟡", "blocked": "🔴", "not_started": "⚪"}
+        status_icons = {"done": "🟢", "in_progress": "🟡", "blocked": "🔴", "not_started": "⚪",
+                        "stable": "🟢", "building": "🟡", "broken": "🔴"}
         icon = status_icons.get(status, "⚙️")
         return f"{icon} {name}: {status}"
+
+    elif tool_name == "mark_component_stable":
+        name = details.get("name", "")[:20]
+        return f"🔒 Marked stable: {name}"
+
+    elif tool_name == "rollback_component":
+        name = details.get("name", "")[:20]
+        return f"🔄 Rollback: {name}"
+
+    elif tool_name == "check_component_changes":
+        name = details.get("name", "")[:20]
+        return f"🔍 Checked: {name}"
+
+    elif tool_name == "add_component_files":
+        name = details.get("name", "")[:20]
+        return f"📁 Added files to: {name}"
+
+    elif tool_name == "get_stability_report":
+        return "📊 Stability report"
 
     elif tool_name == "supersede_decision":
         old = details.get("old", "")[:20]
@@ -3050,10 +3070,349 @@ def update_component_status(name: str, status: str, desc: str = "") -> str:
     })
 
     # Status icons for display
-    icons = {"done": "🟢", "in_progress": "🟡", "not_started": "⚪", "blocked": "🔴"}
+    icons = {"done": "🟢", "in_progress": "🟡", "not_started": "⚪", "blocked": "🔴",
+             "stable": "🟢", "building": "🟡", "broken": "🔴"}
     icon = icons.get(status, "⚪")
 
     return context + f"{icon} {action}"
+
+
+@mcp.tool()
+def mark_component_stable(name: str, files: str = "") -> str:
+    """
+    Mark a component as STABLE and create a checkpoint for rollback.
+
+    This records the current git commit as the "last known good" state.
+    If the component breaks later, you can rollback to this checkpoint.
+
+    Args:
+        name: Component name (e.g., "API Server", "Dashboard")
+        files: Comma-separated list of files belonging to this component (optional)
+               Example: "src/api/server.py,src/api/routes.py"
+
+    Returns:
+        Confirmation with commit hash
+    """
+    error, context = _universal_gate("mark_component_stable")
+    if error:
+        return error
+
+    from core.component_stability import (
+        mark_component_stable as do_mark_stable,
+        add_files_to_component,
+        get_current_commit
+    )
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+    actor_identity = _resolve_actor_identity()
+
+    # Get project path for git operations
+    gps = memory.get("live_record", {}).get("gps", {})
+    repo_path = gps.get("working_dir", "")
+
+    if not repo_path:
+        return context + "[ERROR] No project path. Run auto_init_session first."
+
+    # Find component
+    arch = memory.get("live_record", {}).get("architecture", {})
+    components = arch.get("components", [])
+
+    found_idx = None
+    for i, comp in enumerate(components):
+        if comp.get("name", "").lower() == name.lower():
+            found_idx = i
+            break
+
+    if found_idx is None:
+        return context + f"[ERROR] Component '{name}' not found. Create it first with update_component_status."
+
+    component = components[found_idx]
+
+    # Add files if provided
+    if files:
+        file_list = [f.strip() for f in files.split(",") if f.strip()]
+        component = add_files_to_component(component, file_list)
+
+    # Mark as stable and record commit
+    marked_by = actor_identity.get("editor", "unknown")
+    component = do_mark_stable(component, repo_path, marked_by)
+
+    # Save back
+    components[found_idx] = component
+    arch["components"] = components
+    arch["updated_at"] = datetime.now().isoformat()
+    memory["live_record"]["architecture"] = arch
+    _save_project(session.project_id, memory)
+
+    # Log activity
+    _log_mcp_activity("mark_component_stable", {"name": name})
+
+    # Build response
+    last_stable = component.get("last_stable", {})
+    commit_short = last_stable.get("commit_short", "unknown")
+    file_count = len(component.get("files", []))
+
+    result = f"[STABLE] {name} marked as stable\n"
+    result += f"Checkpoint: {commit_short}\n"
+    if file_count > 0:
+        result += f"Files tracked: {file_count}\n"
+    result += "You can now rollback to this state if needed."
+
+    return context + result
+
+
+@mcp.tool()
+def rollback_component(name: str, mode: str = "files") -> str:
+    """
+    Rollback a component to its last stable state.
+
+    Two modes available:
+    - "files": Restore specific files to their stable state (default)
+    - "branch": Create a new branch from the stable commit
+
+    Args:
+        name: Component name to rollback
+        mode: "files" (restore files) or "branch" (create rollback branch)
+
+    Returns:
+        Result of rollback operation
+    """
+    error, context = _universal_gate("rollback_component")
+    if error:
+        return error
+
+    from core.component_stability import (
+        rollback_files,
+        create_rollback_branch
+    )
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+
+    # Get project path
+    gps = memory.get("live_record", {}).get("gps", {})
+    repo_path = gps.get("working_dir", "")
+
+    if not repo_path:
+        return context + "[ERROR] No project path. Run auto_init_session first."
+
+    # Find component
+    arch = memory.get("live_record", {}).get("architecture", {})
+    components = arch.get("components", [])
+
+    component = None
+    for comp in components:
+        if comp.get("name", "").lower() == name.lower():
+            component = comp
+            break
+
+    if not component:
+        return context + f"[ERROR] Component '{name}' not found."
+
+    # Check if has stable checkpoint
+    last_stable = component.get("last_stable")
+    if not last_stable:
+        return context + f"[ERROR] No stable checkpoint for '{name}'. Mark it stable first."
+
+    commit_hash = last_stable.get("commit_hash")
+    if not commit_hash:
+        return context + f"[ERROR] Invalid checkpoint for '{name}'."
+
+    # Perform rollback based on mode
+    if mode == "branch":
+        result = create_rollback_branch(repo_path, commit_hash)
+        if result["success"]:
+            return context + f"[OK] Created rollback branch: {result['branch']}\nFrom commit: {commit_hash[:8]}"
+        else:
+            return context + f"[ERROR] Failed to create branch: {result.get('error', 'Unknown error')}"
+
+    else:  # files mode
+        files = component.get("files", [])
+        if not files:
+            return context + f"[ERROR] No files tracked for '{name}'. Add files with mark_component_stable first."
+
+        result = rollback_files(repo_path, commit_hash, files)
+
+        if result["success"]:
+            restored_count = len(result["restored"])
+            return context + f"[OK] Restored {restored_count} files to stable state\nCommit: {commit_hash[:8]}\nFiles: {', '.join(result['restored'][:5])}{'...' if restored_count > 5 else ''}"
+        else:
+            error_msgs = [e["error"] for e in result["errors"][:3]]
+            return context + f"[ERROR] Rollback failed:\n" + "\n".join(error_msgs)
+
+
+@mcp.tool()
+def check_component_changes(name: str) -> str:
+    """
+    Check if a stable component has been modified since its checkpoint.
+
+    Use this before AI modifies a stable component to warn the user.
+
+    Args:
+        name: Component name to check
+
+    Returns:
+        Status: unchanged, modified (with list of changed files), or no checkpoint
+    """
+    error, context = _universal_gate("check_component_changes")
+    if error:
+        return error
+
+    from core.component_stability import check_component_stability
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+
+    # Get project path
+    gps = memory.get("live_record", {}).get("gps", {})
+    repo_path = gps.get("working_dir", "")
+
+    # Find component
+    arch = memory.get("live_record", {}).get("architecture", {})
+    components = arch.get("components", [])
+
+    component = None
+    for comp in components:
+        if comp.get("name", "").lower() == name.lower():
+            component = comp
+            break
+
+    if not component:
+        return context + f"[ERROR] Component '{name}' not found."
+
+    if not component.get("last_stable"):
+        return context + f"[INFO] '{name}' has no stable checkpoint. Nothing to compare."
+
+    result = check_component_stability(component, repo_path)
+
+    if not result["is_stable"]:
+        return context + f"[INFO] '{name}' is not marked as stable (status: {component.get('status', 'unknown')})"
+
+    if result["modified_since_checkpoint"]:
+        changed = result["changed_files"]
+        msg = f"[WARNING] '{name}' has been modified since stable checkpoint!\n"
+        msg += f"Changed files ({len(changed)}):\n"
+        for f in changed[:10]:
+            msg += f"  - {f}\n"
+        if len(changed) > 10:
+            msg += f"  ... and {len(changed) - 10} more\n"
+        msg += "\nYou can rollback with: rollback_component(\"{name}\")"
+        return context + msg
+
+    return context + f"[OK] '{name}' is stable and unchanged since checkpoint."
+
+
+@mcp.tool()
+def add_component_files(name: str, files: str) -> str:
+    """
+    Add files to a component's tracked file list.
+
+    These files will be restored when you rollback the component.
+
+    Args:
+        name: Component name
+        files: Comma-separated list of file paths
+               Example: "src/api/server.py,src/api/routes.py"
+
+    Returns:
+        Updated file list
+    """
+    error, context = _universal_gate("add_component_files")
+    if error:
+        return error
+
+    from core.component_stability import add_files_to_component
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+
+    # Find component
+    arch = memory.get("live_record", {}).get("architecture", {})
+    components = arch.get("components", [])
+
+    found_idx = None
+    for i, comp in enumerate(components):
+        if comp.get("name", "").lower() == name.lower():
+            found_idx = i
+            break
+
+    if found_idx is None:
+        return context + f"[ERROR] Component '{name}' not found."
+
+    # Parse and add files
+    file_list = [f.strip() for f in files.split(",") if f.strip()]
+    if not file_list:
+        return context + "[ERROR] No valid files provided."
+
+    component = components[found_idx]
+    component = add_files_to_component(component, file_list)
+    component["updated_at"] = datetime.now().isoformat()
+
+    # Save
+    components[found_idx] = component
+    arch["components"] = components
+    memory["live_record"]["architecture"] = arch
+    _save_project(session.project_id, memory)
+
+    all_files = component.get("files", [])
+    return context + f"[OK] Added {len(file_list)} files to '{name}'\nTotal tracked: {len(all_files)}"
+
+
+@mcp.tool()
+def get_stability_report() -> str:
+    """
+    Get a summary of component stability across the project.
+
+    Shows:
+    - How many components are stable/building/broken
+    - Which have checkpoints (can rollback)
+    - Which track files
+
+    Returns:
+        Stability report
+    """
+    error, context = _universal_gate("get_stability_report")
+    if error:
+        return error
+
+    from core.component_stability import get_stability_summary
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+
+    arch = memory.get("live_record", {}).get("architecture", {})
+    components = arch.get("components", [])
+
+    if not components:
+        return context + "[INFO] No components defined yet."
+
+    summary = get_stability_summary(components)
+
+    report = "## Component Stability Report\n\n"
+    report += f"Total components: {summary['total']}\n"
+    report += f"  Stable: {summary['stable']}\n"
+    report += f"  Building: {summary['building']}\n"
+    report += f"  Broken: {summary['broken']}\n"
+    report += f"\nWith checkpoints (can rollback): {summary['with_checkpoints']}\n"
+    report += f"With file tracking: {summary['with_files']}\n"
+
+    # List components with their status
+    report += "\n### Components:\n"
+    icons = {"stable": "[OK]", "done": "[OK]", "building": "[...]", "in_progress": "[...]",
+             "broken": "[X]", "blocked": "[X]", "not_started": "[ ]"}
+
+    for comp in components:
+        status = comp.get("status", "building")
+        icon = icons.get(status, "[ ]")
+        name = comp.get("name", "Unknown")
+        has_checkpoint = "[checkpoint]" if comp.get("last_stable") else ""
+        file_count = len(comp.get("files", []))
+        files_info = f"[{file_count} files]" if file_count > 0 else ""
+
+        report += f"  {icon} {name} {has_checkpoint} {files_info}\n"
+
+    return context + report
 
 
 @mcp.tool()

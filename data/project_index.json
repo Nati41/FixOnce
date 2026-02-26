@@ -5,7 +5,7 @@
       "project_id": "FixOnce_e3921f743904",
       "working_dir": "/Users/haimdayan/Desktop/FixOnce",
       "name": "FixOnce",
-      "git_commit_hash": "109cf7c15265",
+      "git_commit_hash": "6a94f4672592",
       "summary": "FixOnce is a persistent memory layer for AI coding assistants (Claude Code, Cursor, Codex). It remembers decisions, solutions, insights, and context across sessions so AI never forgets previous work.",
       "stack": "Python 3, Flask, FastMCP (MCP protocol), Chrome Extension (JS), NumPy, scikit-learn (TF-IDF embeddings), SQLite, JSON storage",
       "current_goal": "Build minimal Installer - macOS one-click, Windows basic, auto-port, health check",
@@ -18,7 +18,7 @@
       },
       "decisions_count": 21,
       "avoid_count": 0,
-      "indexed_at": "2026-02-25T22:03:32.475160"
+      "indexed_at": "2026-02-26T11:34:38.212258"
     },
     "tetris-game_57755ff050fb": {
       "project_id": "tetris-game_57755ff050fb",
@@ -59,5 +59,5 @@
       "indexed_at": "2026-02-25T21:56:19.220302"
     }
   },
-  "updated_at": "2026-02-25T22:03:32.475225"
+  "updated_at": "2026-02-26T11:34:38.212319"
 }

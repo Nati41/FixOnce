@@ -1,7 +1,7 @@
 # FixOnce Context
 
 > **Auto-generated file.** Do not edit manually.
-> Last updated: 2026-02-25 21:46
+> Last updated: 2026-02-26 11:34
 
 ---
 
@@ -9,7 +9,7 @@
 
 ## Current Goal
 
-**Build Impact Transparency - show real metrics of FixOnce value**
+**Build minimal Installer - macOS one-click, Windows basic, auto-port, health check**
 
 ---
 
@@ -97,6 +97,10 @@
 ### Merged Status Rail into Tree Summary - single status display with clickable chips
 
 *Reason:* Removed duplicate status display. Now Tree Section has chips that filter the tree on click, with progress bar and last updated info.
+
+### Minimal installer approach - no complex packaging, just scripts
+
+*Reason:* Simpler to maintain, works cross-platform, auto-port detection and health checks built into server and launcher
 
 ---
 
