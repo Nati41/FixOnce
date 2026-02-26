@@ -1527,6 +1527,41 @@
             transition: all 0.2s;
         }
 
+        /* Stability UI */
+        .checkpoint-badge {
+            font-size: 10px;
+            margin-left: 4px;
+            opacity: 0.8;
+        }
+        .stability-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-primary);
+        }
+        .stability-btn:hover {
+            background: var(--hover-bg);
+            border-color: var(--accent-color);
+        }
+        .stability-btn.mark-stable {
+            border-color: #22c55e;
+            color: #22c55e;
+        }
+        .stability-btn.mark-stable:hover {
+            background: rgba(34, 197, 94, 0.1);
+        }
+        .stability-btn.rollback {
+            border-color: #f59e0b;
+            color: #f59e0b;
+        }
+        .stability-btn.rollback:hover {
+            background: rgba(245, 158, 11, 0.1);
+        }
+
         .tree-filter:hover {
             border-color: var(--text-secondary);
             color: var(--text-secondary);
@@ -3262,12 +3297,17 @@
 
         function statusLabel(status) {
             const labels = {
-                blocked: 'Blocked',
-                in_progress: 'In Progress',
-                not_started: 'Not Started',
-                done: 'Done'
+                // New statuses
+                stable: '🔒 Stable',
+                building: '🟡 Building',
+                broken: '🔴 Broken',
+                // Old statuses (backwards compat)
+                blocked: '🔴 Blocked',
+                in_progress: '🟡 In Progress',
+                not_started: '⚪ Not Started',
+                done: '🟢 Done'
             };
-            return labels[status] || 'Not Started';
+            return labels[status] || '⚪ Not Started';
         }
 
         function actorSourceLabel(source) {
@@ -3299,6 +3339,31 @@
                 ? `${Math.round(node.actor_confidence * 100)}%`
                 : '—';
 
+            // Stability info
+            const lastStable = node.last_stable;
+            const hasCheckpoint = !!lastStable;
+            const checkpointInfo = hasCheckpoint
+                ? `${lastStable.commit_short || lastStable.commit_hash?.slice(0, 8) || '?'} · ${timeSince(lastStable.marked_at)}`
+                : 'No checkpoint';
+            const fileCount = (node.files || []).length;
+            const isStable = node.status === 'stable' || node.status === 'done';
+
+            // Stability buttons
+            const stabilityButtons = `
+                <div class="stability-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    ${!isStable ? `
+                        <button class="stability-btn mark-stable" onclick="markComponentStable('${escapeHtml(node.name)}')" title="Mark as stable and create checkpoint">
+                            🔒 Mark Stable
+                        </button>
+                    ` : ''}
+                    ${hasCheckpoint ? `
+                        <button class="stability-btn rollback" onclick="rollbackComponent('${escapeHtml(node.name)}')" title="Restore files to last stable state">
+                            ↩️ Rollback
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+
             detailsEl.innerHTML = `
                 <div class="tree-details-label">Node Details</div>
                 <div class="tree-details-title">${escapeHtml(node.name || 'Unnamed')}</div>
@@ -3317,15 +3382,62 @@
                         <div class="tree-meta-v">${escapeHtml(owner)}</div>
                     </div>
                     <div class="tree-meta-item">
+                        <div class="tree-meta-k">Checkpoint</div>
+                        <div class="tree-meta-v">${hasCheckpoint ? '🔒 ' : ''}${escapeHtml(checkpointInfo)}</div>
+                    </div>
+                    <div class="tree-meta-item">
+                        <div class="tree-meta-k">Files Tracked</div>
+                        <div class="tree-meta-v">${fileCount > 0 ? fileCount + ' files' : 'None'}</div>
+                    </div>
+                    <div class="tree-meta-item">
                         <div class="tree-meta-k">Actor Source</div>
                         <div class="tree-meta-v">${escapeHtml(source)}</div>
                     </div>
-                    <div class="tree-meta-item" style="grid-column: 1 / -1;">
-                        <div class="tree-meta-k">Identity Confidence</div>
-                        <div class="tree-meta-v">${escapeHtml(confidence)}</div>
-                    </div>
                 </div>
+                ${stabilityButtons}
             `;
+        }
+
+        // Stability API functions
+        async function markComponentStable(name) {
+            if (!confirm(`Mark "${name}" as stable?\n\nThis will create a checkpoint at the current git commit.`)) return;
+
+            try {
+                const res = await fetch(\`/api/stability/mark/\${encodeURIComponent(name)}\`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(\`✅ \${name} marked as stable\`);
+                    setTimeout(refreshData, 500);
+                } else {
+                    showToast(\`❌ \${data.error || 'Failed'}\`);
+                }
+            } catch (e) {
+                showToast(\`❌ Error: \${e.message}\`);
+            }
+        }
+
+        async function rollbackComponent(name) {
+            if (!confirm(\`Rollback "\${name}" to last stable state?\n\n⚠️ This will restore tracked files to their previous state.\`)) return;
+
+            try {
+                const res = await fetch(\`/api/stability/rollback/\${encodeURIComponent(name)}\`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'files' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    const count = data.restored?.length || 0;
+                    showToast(\`✅ Restored \${count} files\`);
+                } else {
+                    showToast(\`❌ \${data.error || 'Rollback failed'}\`);
+                }
+            } catch (e) {
+                showToast(\`❌ Error: \${e.message}\`);
+            }
         }
 
         function selectTreeNode(nodeId) {
@@ -3344,65 +3456,73 @@
             const flows = arch.key_flows || [];
             treeNodesIndex = {};
 
-            // Status icons mapping
+            // Status icons mapping (includes both old and new status names)
             const statusIcons = {
                 'done': '🟢',
+                'stable': '🔒',
                 'in_progress': '🟡',
+                'building': '🟡',
                 'not_started': '⚪',
-                'blocked': '🔴'
+                'blocked': '🔴',
+                'broken': '🔴'
             };
 
             // If we have components, show them grouped
             if (components.length > 0) {
-                // Count by status
-                const counts = { done: 0, in_progress: 0, not_started: 0, blocked: 0 };
+                // Normalize status (map old names to display groups)
+                const normalizeStatus = (s) => {
+                    if (s === 'stable' || s === 'done') return 'stable';
+                    if (s === 'broken' || s === 'blocked') return 'broken';
+                    return 'building'; // in_progress, not_started, building
+                };
+
+                // Count by normalized status
+                const counts = { stable: 0, building: 0, broken: 0 };
                 components.forEach(c => {
-                    const status = c.status || 'not_started';
-                    counts[status] = (counts[status] || 0) + 1;
+                    const norm = normalizeStatus(c.status || 'building');
+                    counts[norm]++;
                 });
 
                 // Update stats
-                const activeCount = counts.in_progress + counts.not_started + counts.blocked;
-                statsEl.textContent = `${counts.done}✓ ${activeCount}⏳`;
+                const activeCount = counts.building + counts.broken;
+                statsEl.textContent = `${counts.stable}🔒 ${activeCount}⏳`;
 
                 // Filter components
                 let filtered = components;
                 if (treeFilter === 'active') {
-                    filtered = components.filter(c => c.status !== 'done');
+                    filtered = components.filter(c => normalizeStatus(c.status) !== 'stable');
                 } else if (treeFilter === 'done') {
-                    filtered = components.filter(c => c.status === 'done');
+                    filtered = components.filter(c => normalizeStatus(c.status) === 'stable');
                 }
 
                 if (filtered.length === 0) {
-                    const msg = treeFilter === 'done' ? 'No completed components' :
-                               treeFilter === 'active' ? 'All components completed! 🎉' :
+                    const msg = treeFilter === 'done' ? 'No stable components' :
+                               treeFilter === 'active' ? 'All components stable! 🎉' :
                                'No components yet';
                     el.innerHTML = `<div class="tree-empty">${msg}</div>`;
                     renderTreeDetails(null);
                     return;
                 }
 
-                // Group by status
+                // Group by normalized status
                 const groups = {
-                    'blocked': { title: 'Blocked', icon: '🔴', items: [] },
-                    'in_progress': { title: 'In Progress', icon: '🟡', items: [] },
-                    'not_started': { title: 'Not Started', icon: '⚪', items: [] },
-                    'done': { title: 'Completed', icon: '🟢', items: [] }
+                    'broken': { title: 'Broken', icon: '🔴', items: [] },
+                    'building': { title: 'Building', icon: '🟡', items: [] },
+                    'stable': { title: 'Stable', icon: '🔒', items: [] }
                 };
 
                 filtered.forEach(comp => {
-                    const status = comp.status || 'not_started';
-                    if (groups[status]) {
-                        groups[status].items.push(comp);
-                    }
+                    const norm = normalizeStatus(comp.status || 'building');
+                    comp._displayStatus = norm; // Store for rendering
+                    groups[norm].items.push(comp);
                 });
 
                 let html = '';
                 const groupOrder = treeFilter === 'done'
-                    ? ['done']
+                    ? ['stable']
                     : treeFilter === 'all'
-                    ? ['blocked', 'in_progress', 'not_started', 'done']
-                    : ['blocked', 'in_progress', 'not_started'];
+                    ? ['broken', 'building', 'stable']
+                    : ['broken', 'building'];
 
                 for (const key of groupOrder) {
                     const group = groups[key];
@@ -3426,13 +3546,15 @@
                         const who = comp.updated_by ? ` · ${capitalize(String(comp.updated_by))}` : '';
                         const when = comp.updated_at ? timeSince(comp.updated_at) : '';
                         const meta = [when, who].filter(Boolean).join('');
+                        const hasCheckpoint = !!comp.last_stable;
+                        const checkpointBadge = hasCheckpoint ? '<span class="checkpoint-badge" title="Has checkpoint">🔒</span>' : '';
 
                         html += `
                             <div class="tree-node" data-tree-id="${nodeId}" data-status="${key}" onclick="selectTreeNode('${nodeId}')">
                                 <span class="tree-branch">${branch}─</span>
                                 <span class="tree-icon status-${key}">${group.icon}</span>
                                 <div>
-                                    <div class="tree-name">${escapeHtml(name)}</div>
+                                    <div class="tree-name">${escapeHtml(name)} ${checkpointBadge}</div>
                                     ${desc ? `<div class="tree-desc">${escapeHtml(desc)}</div>` : ''}
                                     ${meta ? `<div class="tree-desc">${escapeHtml(meta)}</div>` : ''}
                                 </div>
@@ -3508,6 +3630,39 @@
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
+        }
+
+        // Toast notification
+        function showToast(message, duration = 3000) {
+            let toast = document.getElementById('toast-notification');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toast-notification';
+                toast.style.cssText = `
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    background: var(--card-bg);
+                    border: 1px solid var(--card-border);
+                    border-radius: 8px;
+                    padding: 12px 20px;
+                    font-size: 13px;
+                    color: var(--text-primary);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    z-index: 9999;
+                    opacity: 0;
+                    transform: translateY(20px);
+                    transition: all 0.3s ease;
+                `;
+                document.body.appendChild(toast);
+            }
+            toast.textContent = message;
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(20px)';
+            }, duration);
         }
 
         function toggleTree() {
