@@ -3400,43 +3400,43 @@
 
         // Stability API functions
         async function markComponentStable(name) {
-            if (!confirm(`Mark "${name}" as stable?\n\nThis will create a checkpoint at the current git commit.`)) return;
+            if (!confirm('Mark "' + name + '" as stable?\n\nThis will create a checkpoint at the current git commit.')) return;
 
             try {
-                const res = await fetch(\`/api/stability/mark/\${encodeURIComponent(name)}\`, {
+                const res = await fetch('/api/stability/mark/' + encodeURIComponent(name), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast(\`✅ \${name} marked as stable\`);
+                    showToast('✅ ' + name + ' marked as stable');
                     setTimeout(refreshData, 500);
                 } else {
-                    showToast(\`❌ \${data.error || 'Failed'}\`);
+                    showToast('❌ ' + (data.error || 'Failed'));
                 }
             } catch (e) {
-                showToast(\`❌ Error: \${e.message}\`);
+                showToast('❌ Error: ' + e.message);
             }
         }
 
         async function rollbackComponent(name) {
-            if (!confirm(\`Rollback "\${name}" to last stable state?\n\n⚠️ This will restore tracked files to their previous state.\`)) return;
+            if (!confirm('Rollback "' + name + '" to last stable state?\n\n⚠️ This will restore tracked files to their previous state.')) return;
 
             try {
-                const res = await fetch(\`/api/stability/rollback/\${encodeURIComponent(name)}\`, {
+                const res = await fetch('/api/stability/rollback/' + encodeURIComponent(name), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ mode: 'files' })
                 });
                 const data = await res.json();
                 if (data.success) {
-                    const count = data.restored?.length || 0;
-                    showToast(\`✅ Restored \${count} files\`);
+                    var count = data.restored ? data.restored.length : 0;
+                    showToast('✅ Restored ' + count + ' files');
                 } else {
-                    showToast(\`❌ \${data.error || 'Rollback failed'}\`);
+                    showToast('❌ ' + (data.error || 'Rollback failed'));
                 }
             } catch (e) {
-                showToast(\`❌ Error: \${e.message}\`);
+                showToast('❌ Error: ' + e.message);
             }
         }
 
