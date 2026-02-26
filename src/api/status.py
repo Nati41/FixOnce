@@ -2091,7 +2091,7 @@ def api_auto_discover():
 # COMPONENT STABILITY API
 # ============================================================
 
-@status_bp.route("/api/stability/report", methods=["GET"])
+@status_bp.route("/stability/report", methods=["GET"])
 def api_stability_report():
     """
     Get component stability summary.
@@ -2126,7 +2126,7 @@ def api_stability_report():
         return jsonify({"error": str(e)}), 500
 
 
-@status_bp.route("/api/stability/mark/<name>", methods=["POST"])
+@status_bp.route("/stability/mark/<name>", methods=["POST"])
 def api_mark_stable(name):
     """
     Mark a component as stable via API.
@@ -2186,7 +2186,7 @@ def api_mark_stable(name):
         return jsonify({"error": str(e)}), 500
 
 
-@status_bp.route("/api/stability/rollback/<name>", methods=["POST"])
+@status_bp.route("/stability/rollback/<name>", methods=["POST"])
 def api_rollback_component(name):
     """
     Rollback a component to its last stable state.
