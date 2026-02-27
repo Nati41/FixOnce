@@ -2270,10 +2270,39 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
     # AI Queue - errors/tasks sent from dashboard
     ai_queue = data.get("ai_queue", []) if data else []
     pending_items = [q for q in ai_queue if q.get("status") == "pending"]
-    if pending_items:
+
+    # Separate action commands from regular items
+    action_commands = [q for q in pending_items if q.get("type") == "action_command"]
+    other_items = [q for q in pending_items if q.get("type") != "action_command"]
+
+    # Show action commands first (user requested action from dashboard)
+    if action_commands:
+        lines.append("═══════════════════════════════════════")
+        lines.append("## 🚀 ACTION REQUESTED FROM DASHBOARD")
+        lines.append("═══════════════════════════════════════")
+        lines.append("")
+        lines.append("The user clicked an action button in the FixOnce dashboard.")
+        lines.append("**Execute the following request:**")
+        lines.append("")
+
+        for cmd in action_commands[:1]:  # Show only the most recent command
+            cmd_id = cmd.get("id", "unknown")
+            msg = cmd.get("message", "")
+            lines.append(f"**Command ID:** `{cmd_id}`")
+            lines.append("```")
+            lines.append(msg)
+            lines.append("```")
+
+        lines.append("")
+        lines.append("**This is a HIGH PRIORITY request. Execute it now.**")
+        lines.append("**After completing, call:** `mark_command_executed(command_id, result, details)`")
+        lines.append("")
+
+    # Show other queued items
+    if other_items:
         lines.append("---")
         lines.append("## 🎯 QUEUED FOR YOU")
-        for item in pending_items[:3]:
+        for item in other_items[:3]:
             item_type = item.get("type", "task")
             msg = item.get("message", "")[:80]
             source = item.get("source", "")
@@ -2291,9 +2320,12 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
         lines.append("**Fix these first, then mark as handled.**")
         lines.append("")
 
-        # Mark items as shown
+        # Mark items as delivered (old code used "shown", now using security layer status)
+        now = datetime.now().isoformat()
         for item in pending_items[:3]:
-            item["status"] = "shown"
+            item["status"] = "delivered"
+            item["delivered_at"] = now
+            item["delivered_to"] = _detect_editor()
         _save_project(snapshot.get("project_id") or _get_project_id(working_dir), data)
 
     # Fix #3: Session State Visibility
@@ -2423,12 +2455,39 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
                 pass  # Skip handoff if timestamp parsing fails
 
     # AI Queue - errors/tasks/commands sent from dashboard
+    # Security Layer: Session Scope Guard + Explicit Marker Lock
     ai_queue = data.get("ai_queue", [])
     pending_items = [q for q in ai_queue if q.get("status") == "pending"]
 
+    # Get current session ID for scope validation
+    current_project_id = _get_project_id(working_dir)
+    current_session_id = hashlib.md5(
+        f"{current_project_id}_{session.initialized_at}".encode()
+    ).hexdigest()[:8] if session.initialized_at else None
+
+    # Filter items by scope (Session Scope Guard)
+    # Only show commands meant for this project/session
+    valid_items = []
+    skipped_items = []
+    for item in pending_items:
+        item_project = item.get("project_id")
+        item_session = item.get("session_id")
+
+        # Scope validation: skip if command is for different project
+        if item_project and item_project != current_project_id:
+            skipped_items.append(item)
+            continue
+
+        # Session validation: warn but still show if different session
+        # (user might have restarted AI but command is still valid)
+        if item_session and item_session != current_session_id:
+            item["_session_mismatch"] = True
+
+        valid_items.append(item)
+
     # Separate action commands from regular items
-    action_commands = [q for q in pending_items if q.get("type") == "action_command"]
-    other_items = [q for q in pending_items if q.get("type") != "action_command"]
+    action_commands = [q for q in valid_items if q.get("type") == "action_command"]
+    other_items = [q for q in valid_items if q.get("type") != "action_command"]
 
     # Show action commands first (user requested action from dashboard)
     if action_commands:
@@ -2441,7 +2500,10 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
         lines.append("")
 
         for cmd in action_commands[:1]:  # Show only the most recent command
+            cmd_id = cmd.get("id", "unknown")
             msg = cmd.get("message", "")
+            session_warning = " ⚠️ (different session)" if cmd.get("_session_mismatch") else ""
+            lines.append(f"**Command ID:** `{cmd_id}`{session_warning}")
             lines.append("```")
             lines.append(msg)
             lines.append("```")
@@ -2455,29 +2517,57 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
         lines.append("---")
         lines.append("## 🎯 QUEUED FOR YOU")
         for item in other_items[:3]:
+            item_id = item.get("id", "")
             item_type = item.get("type", "task")
             msg = item.get("message", "")[:80]
             source = item.get("source", "")
             line_num = item.get("line", "")
 
             if item_type == "error":
-                lines.append(f"⚠️ **Error:** `{msg}`")
+                lines.append(f"⚠️ **Error** `[{item_id}]`: `{msg}`")
                 if source:
                     loc = source + (f":{line_num}" if line_num else "")
                     lines.append(f"   📍 {loc}")
             else:
-                lines.append(f"📋 **Task:** {msg}")
+                lines.append(f"📋 **Task** `[{item_id}]`: {msg}")
 
         lines.append("")
         lines.append("**Fix these first, then mark as handled.**")
         lines.append("")
 
-    # Mark all pending items as shown
-    if pending_items:
+    # Mark valid items as delivered with full audit trail (Explicit Marker Lock)
+    if valid_items:
         project_id = _get_project_id(working_dir)
-        for item in pending_items:
-            item["status"] = "shown"
+        now = datetime.now().isoformat()
+        detected_editor = _detect_editor()
+
+        # Initialize audit log if needed
+        if "command_audit" not in data:
+            data["command_audit"] = []
+
+        for item in valid_items:
+            # Mark as delivered (one-time delivery)
+            item["status"] = "delivered"
+            item["delivered_at"] = now
+            item["delivered_to"] = detected_editor
+
+            # Add audit entry
+            data["command_audit"].append({
+                "id": item.get("id", "unknown"),
+                "action": "delivered",
+                "delivered_to": detected_editor,
+                "timestamp": now,
+                "session_id": current_session_id
+            })
+
+        # Keep audit log bounded
+        data["command_audit"] = data["command_audit"][-50:]
         _save_project(project_id, data)
+
+    # Log skipped items (wrong project scope)
+    if skipped_items:
+        lines.append(f"_(Skipped {len(skipped_items)} commands from other projects)_")
+        lines.append("")
 
     if status == "new":
         lines.append("_This is a new project. Ask: 'רוצה שאסרוק את הפרויקט?'_")
@@ -4348,30 +4438,39 @@ def get_browser_context() -> str:
         lines = ["## Browser Context\n"]
 
         if selected:
-            el = selected.get('element', {})
-            lines.append("### 🎯 Selected Element\n")
-            lines.append(f"**Selector:** `{el.get('selector', 'N/A')}`")
-            lines.append(f"**Tag:** `{el.get('tagName', 'N/A')}`")
+            # Handle both 'element' (old) and 'elements' (new array format)
+            elements = selected.get('elements', [])
+            el = elements[0] if elements else selected.get('element', {})
 
-            if el.get('id'):
-                lines.append(f"**ID:** `{el.get('id')}`")
-            if el.get('classes'):
-                lines.append(f"**Classes:** `{' '.join(el.get('classes', []))}`")
+            if not el:
+                lines.append("_No element data._")
+            else:
+                lines.append("### 🎯 Selected Element\n")
+                lines.append(f"**Selector:** `{el.get('selector', 'N/A')}`")
+                lines.append(f"**Tag:** `{el.get('tagName', 'N/A')}`")
 
-            lines.append(f"\n**HTML:**\n```html\n{el.get('html', '')[:500]}\n```")
+                if el.get('id'):
+                    lines.append(f"**ID:** `{el.get('id')}`")
+                if el.get('classes'):
+                    lines.append(f"**Classes:** `{' '.join(el.get('classes', []))}`")
 
-            css = el.get('css', {})
-            if css:
-                lines.append("\n**Key CSS Properties:**")
-                for prop, value in list(css.items())[:15]:
-                    lines.append(f"- `{prop}`: `{value}`")
+                lines.append(f"\n**HTML:**\n```html\n{el.get('html', '')[:500]}\n```")
 
-            rect = el.get('rect', {})
-            if rect:
-                lines.append(f"\n**Dimensions:** {rect.get('width', 0)}x{rect.get('height', 0)}px")
+                css = el.get('css', {})
+                if css:
+                    lines.append("\n**Key CSS Properties:**")
+                    for prop, value in list(css.items())[:8]:
+                        lines.append(f"- `{prop}`: `{value}`")
 
-            lines.append(f"\n**Page URL:** {selected.get('url', 'N/A')}")
-            lines.append(f"**Captured:** {selected.get('timestamp', '')[:16].replace('T', ' ')}")
+                rect = el.get('rect', {})
+                if rect:
+                    lines.append(f"\n**Dimensions:** {rect.get('width', 0)}x{rect.get('height', 0)}px")
+
+                # Get URL from element or parent
+                url = el.get('url') or selected.get('url', 'N/A')
+                timestamp = el.get('timestamp') or selected.get('timestamp', '')
+                lines.append(f"\n**Page URL:** {url}")
+                lines.append(f"**Captured:** {timestamp[:16].replace('T', ' ') if timestamp else 'N/A'}")
         else:
             lines.append("_No element selected. User can click 'Select Element' in FixOnce extension._")
 
@@ -4945,6 +5044,78 @@ def generate_context() -> str:
         return f"✅ Context file generated:\n`{context_path}`\n\nAny AI can now read this file to get project context."
     except Exception as e:
         return f"Error generating context: {e}"
+
+
+# ============================================================
+# COMMAND EXECUTION ACKNOWLEDGMENT
+# ============================================================
+
+@mcp.tool()
+def mark_command_executed(command_id: str, result: str = "success", details: str = "") -> str:
+    """
+    Mark a dashboard command as executed (completed).
+
+    Call this AFTER you finish executing a command from the dashboard.
+    This completes the audit trail: queued → delivered → executed.
+
+    Args:
+        command_id: The command ID shown in the action request (e.g., "a1b2c3d4")
+        result: "success", "failed", or "partial"
+        details: Optional details about the execution result
+
+    Returns:
+        Confirmation message
+    """
+    error, context = _universal_gate("mark_command_executed")
+    if error:
+        return error
+
+    session = _get_session()
+    if not session.is_active():
+        return "Error: No active session."
+
+    memory = _load_project(session.project_id)
+    if not memory:
+        return "Error: Could not load project memory."
+
+    # Find the command in the queue
+    ai_queue = memory.get("ai_queue", [])
+    command = None
+    for item in ai_queue:
+        if item.get("id") == command_id:
+            command = item
+            break
+
+    if not command:
+        # Command might have been cleaned up, just log to audit
+        pass
+    else:
+        # Update command status
+        command["status"] = "executed" if result == "success" else f"executed_{result}"
+        command["executed_at"] = datetime.now().isoformat()
+        command["execution_result"] = result
+        command["execution_details"] = details
+
+    # Add to audit log
+    if "command_audit" not in memory:
+        memory["command_audit"] = []
+
+    memory["command_audit"].append({
+        "id": command_id,
+        "action": "executed",
+        "result": result,
+        "details": details[:200] if details else "",
+        "timestamp": datetime.now().isoformat(),
+        "executed_by": _detect_editor()
+    })
+
+    # Keep audit bounded
+    memory["command_audit"] = memory["command_audit"][-50:]
+
+    _save_project(session.project_id, memory)
+
+    result_emoji = "✅" if result == "success" else "⚠️" if result == "partial" else "❌"
+    return f"{result_emoji} Command `{command_id}` marked as {result}.\n(📌 FixOnce: execution logged)"
 
 
 # ============================================================

@@ -1085,16 +1085,24 @@ def api_get_project_identity():
 
 @memory_bp.route("/queue-for-ai", methods=["POST"])
 def api_queue_for_ai():
-    """Queue an error or task for the next AI session."""
+    """Queue an error or task for the next AI session.
+
+    Security features:
+    - Unique command ID (uuid4) for one-time execution
+    - Project/session scope binding
+    - Audit trail with timestamps
+    """
     try:
         from managers.multi_project_manager import (
             get_active_project_id,
             load_project_memory,
-            save_project_memory
+            save_project_memory,
+            get_active_session_id
         )
+        import uuid
 
         data = request.get_json(silent=True) or {}
-        
+
         project_id = get_active_project_id()
         if not project_id:
             return jsonify({"status": "error", "message": "No active project"}), 400
@@ -1103,32 +1111,191 @@ def api_queue_for_ai():
         if not memory:
             return jsonify({"status": "error", "message": "Project not found"}), 404
 
+        # Get current session for scope binding
+        session_id = get_active_session_id(project_id)
+
         # Initialize queue if not exists
         if "ai_queue" not in memory:
             memory["ai_queue"] = []
 
-        # Add to queue
+        # Initialize audit log if not exists
+        if "command_audit" not in memory:
+            memory["command_audit"] = []
+
+        # Generate unique command ID
+        command_id = str(uuid.uuid4())[:8]
+
+        # Add to queue with security metadata
         queue_item = {
+            "id": command_id,
             "type": data.get("type", "task"),
             "message": data.get("message", ""),
             "source": data.get("source", ""),
             "line": data.get("line", ""),
             "priority": data.get("priority", "normal"),
             "queued_at": datetime.now().isoformat(),
-            "status": "pending"
+            "queued_by": "dashboard",
+            "status": "pending",
+            # Scope binding - command only valid for this project/session
+            "project_id": project_id,
+            "session_id": session_id,
+            # Delivery tracking
+            "delivered_at": None,
+            "delivered_to": None
         }
-        
+
         memory["ai_queue"].append(queue_item)
-        
-        # Keep only last 10 items
+
+        # Add to audit log
+        memory["command_audit"].append({
+            "id": command_id,
+            "action": "queued",
+            "message": data.get("message", "")[:100],
+            "type": data.get("type", "task"),
+            "timestamp": datetime.now().isoformat(),
+            "project_id": project_id,
+            "session_id": session_id
+        })
+
+        # Keep only last 10 queue items, but 50 audit entries
         memory["ai_queue"] = memory["ai_queue"][-10:]
-        
+        memory["command_audit"] = memory["command_audit"][-50:]
+
         save_project_memory(project_id, memory)
 
         return jsonify({
             "status": "ok",
             "message": "Queued for AI",
+            "command_id": command_id,
             "queue_length": len(memory["ai_queue"])
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============ Command Audit API (Security Visibility) ============
+
+@memory_bp.route("/command-audit", methods=["GET"])
+def api_get_command_audit():
+    """Get command audit log for dashboard visibility.
+
+    Shows full lifecycle of AI commands:
+    - When queued, by whom
+    - When delivered, to which AI
+    - Session/project scope
+
+    Query params:
+        limit: Max entries to return (default 20)
+    """
+    try:
+        from managers.multi_project_manager import (
+            get_active_project_id,
+            load_project_memory
+        )
+
+        limit = int(request.args.get('limit', 20))
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"audit": [], "message": "No active project"})
+
+        memory = load_project_memory(project_id)
+        if not memory:
+            return jsonify({"audit": [], "message": "Project not found"})
+
+        audit = memory.get("command_audit", [])
+
+        # Return most recent entries first
+        audit_reversed = list(reversed(audit))[:limit]
+
+        return jsonify({
+            "status": "ok",
+            "audit": audit_reversed,
+            "total": len(audit)
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@memory_bp.route("/ai-queue", methods=["GET"])
+def api_get_ai_queue():
+    """Get current AI command queue status.
+
+    Shows pending/delivered commands with full metadata.
+    """
+    try:
+        from managers.multi_project_manager import (
+            get_active_project_id,
+            load_project_memory
+        )
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"queue": [], "message": "No active project"})
+
+        memory = load_project_memory(project_id)
+        if not memory:
+            return jsonify({"queue": [], "message": "Project not found"})
+
+        queue = memory.get("ai_queue", [])
+
+        # Separate by status for dashboard display
+        pending = [q for q in queue if q.get("status") == "pending"]
+        delivered = [q for q in queue if q.get("status") == "delivered"]
+
+        return jsonify({
+            "status": "ok",
+            "queue": queue,
+            "pending_count": len(pending),
+            "delivered_count": len(delivered)
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@memory_bp.route("/ai-queue/<command_id>", methods=["DELETE"])
+def api_cancel_command(command_id):
+    """Cancel a pending command before it's delivered to AI."""
+    try:
+        from managers.multi_project_manager import (
+            get_active_project_id,
+            load_project_memory,
+            save_project_memory
+        )
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"status": "error", "message": "No active project"}), 400
+
+        memory = load_project_memory(project_id)
+        if not memory:
+            return jsonify({"status": "error", "message": "Project not found"}), 404
+
+        queue = memory.get("ai_queue", [])
+
+        # Find and remove the command
+        original_len = len(queue)
+        memory["ai_queue"] = [q for q in queue if q.get("id") != command_id]
+
+        if len(memory["ai_queue"]) == original_len:
+            return jsonify({"status": "error", "message": "Command not found"}), 404
+
+        # Add cancellation to audit log
+        if "command_audit" not in memory:
+            memory["command_audit"] = []
+
+        memory["command_audit"].append({
+            "id": command_id,
+            "action": "cancelled",
+            "timestamp": datetime.now().isoformat(),
+            "cancelled_by": "dashboard"
+        })
+
+        save_project_memory(project_id, memory)
+
+        return jsonify({
+            "status": "ok",
+            "message": f"Command {command_id} cancelled"
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500

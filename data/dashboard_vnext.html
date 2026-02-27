@@ -98,14 +98,19 @@
     display: flex; align-items: center; gap: 7px;
     padding: 5px 14px;
     background: none;
+    transition: all 0.2s ease;
     border: 1px solid var(--border2);
     border-radius: 5px;
     color: var(--text-dim);
     font-family: var(--mono);
     font-size: 11px;
-    cursor: default;
-    transition: all .3s;
+    cursor: pointer;
+    transition: all .2s;
     margin-right: 8px;
+  }
+  .context-indicator:hover {
+    border-color: var(--text-mid);
+    background: var(--surface2);
   }
   .context-indicator.active {
     border-color: var(--green);
@@ -541,6 +546,109 @@
   .log-row:last-child { border-bottom: none; }
   .log-t { font-family: var(--mono); font-size: 10px; color: var(--text-dim); flex-shrink: 0; width: 50px; }
   .log-txt { flex: 1; color: var(--text); line-height: 1.5; }
+
+  /* AI Commands Timeline */
+  .ai-cmd-empty {
+    color: var(--text-dim);
+    font-style: italic;
+    font-size: 11px;
+    padding: 8px 0;
+  }
+
+  .ai-cmd {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    background: var(--surface2);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    border-left: 3px solid var(--text-dim);
+    transition: all .2s;
+  }
+  .ai-cmd.pending { border-left-color: var(--amber); }
+  .ai-cmd.delivered { border-left-color: #3399ff; }
+  .ai-cmd.executed { border-left-color: var(--green); }
+  .ai-cmd.failed { border-left-color: var(--red); }
+  .ai-cmd.cancelled { border-left-color: var(--text-dim); opacity: 0.6; }
+
+  .ai-cmd-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ai-cmd-status {
+    font-size: 10px;
+    font-family: var(--mono);
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .ai-cmd-status.pending { background: var(--amber-dim); color: var(--amber); }
+  .ai-cmd-status.delivered { background: #3399ff20; color: #3399ff; }
+  .ai-cmd-status.executed { background: var(--green-dim); color: var(--green); }
+  .ai-cmd-status.failed { background: var(--red-dim); color: var(--red); }
+  .ai-cmd-status.cancelled { background: #ffffff10; color: var(--text-dim); }
+
+  .ai-cmd-id {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .ai-cmd-time {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+
+  .ai-cmd-msg {
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.4;
+    word-break: break-word;
+  }
+
+  .ai-cmd-timeline {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9px;
+    font-family: var(--mono);
+    color: var(--text-dim);
+  }
+
+  .ai-cmd-step {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .ai-cmd-step.done { color: var(--green); }
+  .ai-cmd-step.current { color: #3399ff; }
+  .ai-cmd-step.pending { color: var(--text-dim); }
+
+  .ai-cmd-arrow {
+    color: var(--text-dim);
+  }
+
+  .ai-cmd-cancel {
+    font-size: 10px;
+    padding: 3px 8px;
+    background: transparent;
+    border: 1px solid var(--red);
+    color: var(--red);
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: all .2s;
+    margin-left: auto;
+  }
+  .ai-cmd-cancel:hover {
+    opacity: 1;
+    background: var(--red-dim);
+  }
 
   .deep-foot {
     padding: 12px 20px;
@@ -1132,7 +1240,7 @@
   <div class="tb-sep"></div>
   <div class="tb-item">Changes: <b id="tb-changes">0 files</b></div>
   <div class="tb-spacer"></div>
-  <div class="context-indicator" id="ctx-indicator" title="Activate via Extension FAB">
+  <div class="context-indicator" id="ctx-indicator" title="Click to toggle AI Context" onclick="toggleAIContext()" style="cursor: pointer;">
     <span class="ctx-dot"></span>
     <span id="ctx-label">AI Context</span>
   </div>
@@ -1232,6 +1340,12 @@
         <span class="dc-title">Timeline</span>
         <div id="timeline-content">
           <div class="log-row"><div class="log-t">—</div><div class="log-txt">Loading...</div></div>
+        </div>
+
+        <div class="sep"></div>
+        <span class="dc-title">AI Commands</span>
+        <div id="ai-commands-content">
+          <div class="ai-cmd-empty">No commands</div>
         </div>
 
         <div class="bc-section">
@@ -1663,6 +1777,118 @@
     } else {
       timelineEl.innerHTML = '<div class="log-row"><div class="log-t">—</div><div class="log-txt">No activity yet</div></div>';
     }
+
+    // AI Commands (fetch separately)
+    renderAICommands();
+  }
+
+  async function renderAICommands() {
+    const container = document.getElementById('ai-commands-content');
+    if (!container) return;
+
+    try {
+      const res = await fetch('/api/memory/ai-queue');
+      const data = await res.json();
+      const queue = data.queue || [];
+
+      if (queue.length === 0) {
+        container.innerHTML = '<div class="ai-cmd-empty">No commands</div>';
+        return;
+      }
+
+      // Show most recent first
+      const sorted = [...queue].reverse();
+
+      container.innerHTML = sorted.map(cmd => {
+        const status = cmd.status || 'pending';
+        const statusLabel = status.replace('executed_', '');
+        const id = cmd.id || '—';
+        const msg = cmd.message || '—';
+        const time = cmd.queued_at ? formatTime(cmd.queued_at) : '—';
+
+        // Build timeline steps
+        const steps = buildCommandTimeline(cmd);
+
+        // Cancel button only for pending
+        const cancelBtn = status === 'pending'
+          ? `<button class="ai-cmd-cancel" onclick="cancelCommand('${id}')">Cancel</button>`
+          : '';
+
+        return `
+          <div class="ai-cmd ${status}">
+            <div class="ai-cmd-head">
+              <span class="ai-cmd-status ${status}">${statusLabel}</span>
+              <span class="ai-cmd-id">#${id}</span>
+              <span class="ai-cmd-time">${time}</span>
+              ${cancelBtn}
+            </div>
+            <div class="ai-cmd-msg">${escapeHtml(msg.slice(0, 100))}${msg.length > 100 ? '...' : ''}</div>
+            <div class="ai-cmd-timeline">${steps}</div>
+          </div>
+        `;
+      }).join('');
+
+    } catch (e) {
+      console.error('AI queue fetch error:', e);
+      container.innerHTML = '<div class="ai-cmd-empty">Error loading commands</div>';
+    }
+  }
+
+  function buildCommandTimeline(cmd) {
+    const status = cmd.status || 'pending';
+
+    // Determine which steps are done
+    const queued = true;
+    const delivered = status !== 'pending';
+    const executed = status.startsWith('executed');
+    const cancelled = status === 'cancelled';
+
+    if (cancelled) {
+      return `
+        <span class="ai-cmd-step done">🟡 Queued</span>
+        <span class="ai-cmd-arrow">→</span>
+        <span class="ai-cmd-step" style="color: var(--red)">🔴 Cancelled</span>
+      `;
+    }
+
+    const steps = [];
+
+    // Queued step
+    steps.push(`<span class="ai-cmd-step done">🟡 Queued</span>`);
+
+    // Delivered step
+    if (delivered) {
+      const deliveredTo = cmd.delivered_to || 'AI';
+      steps.push(`<span class="ai-cmd-arrow">→</span>`);
+      steps.push(`<span class="ai-cmd-step ${executed ? 'done' : 'current'}">🔵 ${deliveredTo}</span>`);
+    } else {
+      steps.push(`<span class="ai-cmd-arrow">→</span>`);
+      steps.push(`<span class="ai-cmd-step pending">⚪ Waiting</span>`);
+    }
+
+    // Executed step
+    if (executed) {
+      const result = cmd.execution_result || 'success';
+      const icon = result === 'success' ? '🟢' : result === 'partial' ? '🟡' : '🔴';
+      steps.push(`<span class="ai-cmd-arrow">→</span>`);
+      steps.push(`<span class="ai-cmd-step done">${icon} ${result}</span>`);
+    }
+
+    return steps.join('');
+  }
+
+  async function cancelCommand(commandId) {
+    try {
+      const res = await fetch(`/api/memory/ai-queue/${commandId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        renderAICommands();
+      } else {
+        console.error('Cancel failed:', data.message);
+      }
+    } catch (e) {
+      console.error('Cancel error:', e);
+    }
   }
 
   function getActivityIcon(type) {
@@ -1803,7 +2029,7 @@
     }
   }
 
-  // AI Context is now indicator-only (activated via Extension FAB)
+  // AI Context - can be toggled from dashboard or Extension FAB
   function updateAIContextIndicator(isActive) {
     const indicator = document.getElementById('ctx-indicator');
     const label = document.getElementById('ctx-label');
@@ -1814,6 +2040,33 @@
     } else {
       indicator.classList.remove('active');
       label.textContent = 'AI Context';
+    }
+  }
+
+  async function toggleAIContext() {
+    try {
+      // Check current state
+      const res = await fetch('/api/ai-context-mode');
+      const data = await res.json();
+      const newState = !data.active;
+
+      // Toggle state
+      await fetch('/api/ai-context-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: newState })
+      });
+
+      // Update indicator
+      updateAIContextIndicator(newState);
+
+      // Show feedback
+      const indicator = document.getElementById('ctx-indicator');
+      indicator.style.transform = 'scale(1.1)';
+      setTimeout(() => indicator.style.transform = '', 200);
+
+    } catch (e) {
+      console.error('Toggle AI Context failed:', e);
     }
   }
 

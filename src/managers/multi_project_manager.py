@@ -209,6 +209,37 @@ def get_active_project_id() -> Optional[str]:
     return active.get('active_id') if active else None
 
 
+def get_active_session_id(project_id: str = None) -> Optional[str]:
+    """
+    Get the current session ID for a project.
+
+    Session ID is derived from project_id + ai_session.started_at.
+    Used for command scope validation - commands only execute in
+    the session they were queued for.
+
+    Returns:
+        Session ID (8-char hash) or None if no active session
+    """
+    if not project_id:
+        project_id = get_active_project_id()
+    if not project_id:
+        return None
+
+    memory = load_project_memory(project_id)
+    if not memory:
+        return None
+
+    ai_session = memory.get('ai_session', {})
+    started_at = ai_session.get('started_at')
+
+    if not started_at:
+        return None
+
+    # Generate session ID same way as MCP server
+    session_id = hashlib.md5(f"{project_id}_{started_at}".encode()).hexdigest()[:8]
+    return session_id
+
+
 def set_active_project(
     project_id: str,
     detected_from: str = "manual",
