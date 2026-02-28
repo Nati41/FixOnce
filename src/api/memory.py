@@ -1222,12 +1222,15 @@ def api_get_ai_queue():
     """Get current AI command queue status.
 
     Shows pending/delivered commands with full metadata.
+    Runs timeout watchdog on access.
     """
     try:
         from managers.multi_project_manager import (
             get_active_project_id,
-            load_project_memory
+            load_project_memory,
+            save_project_memory
         )
+        from core.unified_health import check_command_timeouts
 
         project_id = get_active_project_id()
         if not project_id:
@@ -1238,16 +1241,29 @@ def api_get_ai_queue():
             return jsonify({"queue": [], "message": "Project not found"})
 
         queue = memory.get("ai_queue", [])
+        audit_log = memory.get("command_audit", [])
+
+        # Run timeout watchdog
+        queue, timed_out = check_command_timeouts(queue, audit_log)
+
+        # Save if any commands timed out
+        if timed_out:
+            memory["ai_queue"] = queue
+            memory["command_audit"] = audit_log[-50:]  # Keep bounded
+            save_project_memory(project_id, memory)
 
         # Separate by status for dashboard display
         pending = [q for q in queue if q.get("status") == "pending"]
         delivered = [q for q in queue if q.get("status") == "delivered"]
+        failed = [q for q in queue if q.get("status", "").startswith("failed")]
 
         return jsonify({
             "status": "ok",
             "queue": queue,
             "pending_count": len(pending),
-            "delivered_count": len(delivered)
+            "delivered_count": len(delivered),
+            "failed_count": len(failed),
+            "timed_out_count": len(timed_out)
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500

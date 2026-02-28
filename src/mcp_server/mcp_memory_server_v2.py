@@ -37,6 +37,9 @@ try:
 except ImportError:
     pass  # Semantic search not available, will use fallback
 
+# Session Registry for Multi-AI Isolation - imported later after sys.path is set
+_session_registry_available = False
+
 # Policy Enforcement Engine - imported later after sys.path is set
 _policy_available = False
 _policy_error = None
@@ -188,6 +191,14 @@ try:
 except ImportError as e:
     _policy_error = str(e)
     print(f"[FixOnce] Policy engine not available: {e}")
+
+# Session Registry for Multi-AI Isolation - must be after sys.path is set
+try:
+    from core.session_registry import get_registry, get_or_create_session
+    _session_registry_available = True
+    print("[FixOnce] Session registry loaded successfully")
+except ImportError as e:
+    print(f"[FixOnce] Session registry not available: {e}")
 
 # Phase 0: Project isolation - central project context
 from core.project_context import ProjectContext, resolve_project_id
@@ -589,6 +600,24 @@ def _universal_gate(tool_name: str) -> tuple:
     # Log tool call
     session.log_tool_call(tool_name)
     _sync_compliance()
+
+    # REGISTER IN SESSION REGISTRY (Multi-AI Isolation)
+    if _session_registry_available and session.is_active():
+        try:
+            ai_name = actor_identity.get("editor", "unknown")
+            isolated_session = get_or_create_session(
+                ai_name=ai_name,
+                project_id=session.project_id,
+                project_path=session.working_dir or ""
+            )
+            # Sync state to isolated session
+            isolated_session.log_tool_call(tool_name)
+            if session.initialized_at:
+                isolated_session.mark_initialized()
+            isolated_session.goal_updated = session.goal_updated
+            isolated_session.decisions_displayed = session.decisions_displayed
+        except Exception as e:
+            print(f"[FixOnce] SessionRegistry error: {e}")
 
     # UPDATE ACTIVE AI on every tool call (lightweight)
     _update_active_ai(actor_identity)
@@ -1817,7 +1846,23 @@ def _do_init_session(working_dir: str) -> str:
 
     # Update global compliance state for dashboard
     _compliance_state["last_session_init"] = datetime.now().isoformat()
-    _compliance_state["editor"] = _resolve_actor_identity().get("editor", "unknown")
+    actor_identity = _resolve_actor_identity()
+    _compliance_state["editor"] = actor_identity.get("editor", "unknown")
+
+    # REGISTER IN SESSION REGISTRY (Multi-AI Isolation)
+    if _session_registry_available:
+        try:
+            ai_name = actor_identity.get("editor", "unknown")
+            isolated_session = get_or_create_session(
+                ai_name=ai_name,
+                project_id=project_id,
+                project_path=working_dir
+            )
+            isolated_session.mark_initialized()
+            isolated_session.log_tool_call("auto_init_session")
+            print(f"[FixOnce] Registered session: {ai_name} on {project_id}")
+        except Exception as e:
+            print(f"[FixOnce] SessionRegistry error in init: {e}")
 
     # Update active_ais for Multi-Active support
     _update_active_ai()
@@ -5090,6 +5135,11 @@ def mark_command_executed(command_id: str, result: str = "success", details: str
         # Command might have been cleaned up, just log to audit
         pass
     else:
+        # EXECUTION LOCK: Only allow marking if status is "delivered"
+        current_status = command.get("status", "")
+        if current_status != "delivered":
+            return f"❌ Cannot mark command `{command_id}` as executed.\nCurrent status: `{current_status}` (must be `delivered`).\n(📌 FixOnce: execution lock rejected)"
+
         # Update command status
         command["status"] = "executed" if result == "success" else f"executed_{result}"
         command["executed_at"] = datetime.now().isoformat()

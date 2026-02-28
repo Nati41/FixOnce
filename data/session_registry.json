@@ -1,0 +1,53 @@
+{
+  "updated_at": "2026-02-28T21:43:39.040371",
+  "sessions": {
+    "codex:/Users/haimdayan/Desktop/FixOnce-Tests": {
+      "ai_name": "codex",
+      "project_id": "FixOnce-Tests_2307bc0e50c2",
+      "project_path": "/Users/haimdayan/Desktop/FixOnce-Tests",
+      "started_at": "2026-02-28T20:53:16.098230",
+      "last_activity": "2026-02-28T20:53:50.442701",
+      "initialized": true,
+      "decisions_displayed": true,
+      "goal_updated": true,
+      "search_performed": false,
+      "component_updated": true,
+      "decision_logged": false,
+      "tool_calls_count": 0,
+      "compliance_score": 71,
+      "is_active": true
+    },
+    "claude:/Users/haimdayan/Desktop/FixOnce-Tests": {
+      "ai_name": "claude",
+      "project_id": "FixOnce-Tests_2307bc0e50c2",
+      "project_path": "/Users/haimdayan/Desktop/FixOnce-Tests",
+      "started_at": "2026-02-28T21:04:23.643428",
+      "last_activity": "2026-02-28T21:43:11.880295",
+      "initialized": true,
+      "decisions_displayed": true,
+      "goal_updated": false,
+      "search_performed": false,
+      "component_updated": false,
+      "decision_logged": false,
+      "tool_calls_count": 3,
+      "compliance_score": 28,
+      "is_active": true
+    },
+    "claude:/Users/haimdayan/Desktop/FixOnce": {
+      "ai_name": "claude",
+      "project_id": "FixOnce_e3921f743904",
+      "project_path": "/Users/haimdayan/Desktop/FixOnce",
+      "started_at": "2026-02-28T21:06:59.580839",
+      "last_activity": "2026-02-28T21:43:39.040184",
+      "initialized": true,
+      "decisions_displayed": true,
+      "goal_updated": false,
+      "search_performed": true,
+      "component_updated": true,
+      "decision_logged": true,
+      "tool_calls_count": 23,
+      "compliance_score": 71,
+      "is_active": true
+    }
+  }
+}

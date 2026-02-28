@@ -1497,11 +1497,129 @@ def api_dashboard_snapshot():
         except Exception:
             pass
 
+        # === Unified Orb Health ===
+        try:
+            from core.unified_health import get_unified_health, check_command_timeouts
+            from managers.multi_project_manager import get_active_project_id, load_project_memory, save_project_memory
+
+            active_id = get_active_project_id()
+            if active_id:
+                memory = load_project_memory(active_id) or {}
+
+                # Get command queue and run timeout watchdog
+                ai_queue = memory.get("ai_queue", [])
+                audit_log = memory.get("command_audit", [])
+                ai_queue, timed_out = check_command_timeouts(ai_queue, audit_log)
+
+                # Save if any timed out
+                if timed_out:
+                    memory["ai_queue"] = ai_queue
+                    memory["command_audit"] = audit_log[-50:]
+                    save_project_memory(active_id, memory)
+
+                # Get components
+                components = memory.get("live_record", {}).get("architecture", {}).get("components", [])
+
+                # Get browser errors
+                browser_errors = memory.get("browser_errors", [])
+
+                # Calculate unified health
+                snapshot["orb"] = get_unified_health(ai_queue, components, browser_errors)
+        except Exception:
+            snapshot["orb"] = {"status": "green", "reasons": [], "timestamp": None}
+
         return jsonify({"status": "ok", "snapshot": snapshot})
 
     except Exception as e:
         snapshot["error"] = str(e)
         return jsonify({"status": "error", "snapshot": snapshot, "message": str(e)}), 500
+
+
+# ============ Sessions API (Multi-AI Isolation) ============
+
+@status_bp.route("/sessions", methods=["GET"])
+def api_get_sessions():
+    """
+    Get all active sessions for dashboard tabs.
+
+    Returns:
+        {
+            "status": "ok",
+            "sessions": [...],
+            "projects": {
+                "project_id": {
+                    "name": "...",
+                    "path": "...",
+                    "active_ais": ["claude", "codex"],
+                    "primary_ai": "claude"
+                }
+            }
+        }
+    """
+    try:
+        from core.session_registry import get_registry
+
+        registry = get_registry()
+        data = registry.get_dashboard_data()
+
+        return jsonify({
+            "status": "ok",
+            **data
+        })
+    except ImportError:
+        # SessionRegistry not available
+        return jsonify({
+            "status": "ok",
+            "sessions": [],
+            "projects": {},
+            "message": "SessionRegistry not available"
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
+@status_bp.route("/sessions/cleanup", methods=["POST"])
+def api_cleanup_sessions():
+    """Remove stale sessions."""
+    try:
+        from core.session_registry import get_registry
+
+        registry = get_registry()
+        removed = registry.cleanup_stale()
+
+        return jsonify({
+            "status": "ok",
+            "removed_count": removed
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
+@status_bp.route("/sessions/<project_id>", methods=["DELETE"])
+def api_close_session(project_id):
+    """Close all sessions for a project (used when closing a tab)."""
+    try:
+        from core.session_registry import get_registry
+
+        registry = get_registry()
+        closed = registry.close_project_sessions(project_id)
+
+        return jsonify({
+            "status": "ok",
+            "closed_count": closed,
+            "project_id": project_id
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 
 @status_bp.route("/dashboard/policy", methods=["POST"])
