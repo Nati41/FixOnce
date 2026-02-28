@@ -16,7 +16,9 @@
   // Config
   const SERVER_PORTS = [5000, 5001, 5002];
   const POLL_INTERVAL = 2000;
-  const HIGHLIGHT_DURATION = 3000;
+  const ACK_HIGHLIGHT_DURATION = 1200;
+  const DONE_HIGHLIGHT_DURATION = 900;
+  const WORKING_HIGHLIGHT_MAX_DURATION = 45000;
   const FADE_DURATION = 300;
 
   let serverPort = null;
@@ -145,7 +147,7 @@
       const data = await response.json();
 
       if (data.has_highlight) {
-        executeHighlight(data.selector, data.message);
+        executeHighlight(data.selector, data.message, data.mode, data.duration_ms);
       }
     } catch (e) {}
   }
@@ -154,18 +156,73 @@
   // AI HIGHLIGHT - With Dedupe
   // ============================================================
 
-  function executeHighlight(selector, message) {
+  function getHighlightPalette(mode) {
+    if (mode === 'working') {
+      return {
+        border: '2px solid #0ea5a5',
+        background: 'rgba(14, 165, 165, 0.08)',
+        glow: '0 0 0 3px rgba(14, 165, 165, 0.18), 0 4px 18px rgba(14, 165, 165, 0.22)',
+        labelBg: '#0f766e',
+        labelColor: '#ecfeff',
+        labelText: 'Working on this'
+      };
+    }
+    if (mode === 'done') {
+      return {
+        border: '2px solid #16a34a',
+        background: 'rgba(22, 163, 74, 0.12)',
+        glow: '0 0 0 4px rgba(34, 197, 94, 0.22), 0 4px 20px rgba(34, 197, 94, 0.28)',
+        labelBg: '#15803d',
+        labelColor: '#f0fdf4',
+        labelText: 'Done'
+      };
+    }
+    return {
+      border: '2px solid #8b5cf6',
+      background: 'rgba(139, 92, 246, 0.1)',
+      glow: '0 0 0 4px rgba(139, 92, 246, 0.2), 0 4px 20px rgba(139, 92, 246, 0.3)',
+      labelBg: '#8b5cf6',
+      labelColor: '#fff',
+      labelText: 'Selected'
+    };
+  }
+
+  function removeHighlight(selector) {
+    if (!activeHighlights.has(selector)) return;
+    const existing = activeHighlights.get(selector);
+    if (existing.element && existing.element.parentNode) {
+      existing.element.style.opacity = '0';
+      setTimeout(() => {
+        if (existing.element && existing.element.parentNode) {
+          existing.element.remove();
+        }
+      }, FADE_DURATION);
+    }
+    if (existing.timer) clearTimeout(existing.timer);
+    activeHighlights.delete(selector);
+  }
+
+  function executeHighlight(selector, message, mode, durationMs) {
+    const resolvedMode = mode || 'ack';
+
+    if (resolvedMode === 'clear') {
+      removeHighlight(selector);
+      return;
+    }
+
+    if (resolvedMode === 'done') {
+      if (activeHighlights.has(selector)) {
+        removeHighlight(selector);
+      }
+      // continue with a short success flash
+    }
+
+    if (resolvedMode === 'ack' && activeHighlights.has(selector)) {
+      removeHighlight(selector);
+    }
+
     // Generate unique ID for this highlight
     const highlightId = `${selector}-${Date.now()}`;
-
-    // Check if same selector is already highlighted
-    if (activeHighlights.has(selector)) {
-      const existing = activeHighlights.get(selector);
-      if (existing.element && existing.element.parentNode) {
-        existing.element.remove();
-      }
-      activeHighlights.delete(selector);
-    }
 
     try {
       const el = document.querySelector(selector);
@@ -180,16 +237,17 @@
       const overlay = document.createElement('div');
       overlay.id = '__fo_ai_hl_' + highlightId;
       overlay.className = '__fo_ai_highlight__';
+      const palette = getHighlightPalette(resolvedMode);
       Object.assign(overlay.style, {
         position: 'absolute',
         top: (rect.top + window.scrollY - 4) + 'px',
         left: (rect.left + window.scrollX - 4) + 'px',
         width: (rect.width + 8) + 'px',
         height: (rect.height + 8) + 'px',
-        border: '2px solid #8b5cf6',
+        border: palette.border,
         borderRadius: '8px',
-        background: 'rgba(139, 92, 246, 0.1)',
-        boxShadow: '0 0 0 4px rgba(139, 92, 246, 0.2), 0 4px 20px rgba(139, 92, 246, 0.3)',
+        background: palette.background,
+        boxShadow: palette.glow,
         pointerEvents: 'none',
         zIndex: '2147483646',
         opacity: '0',
@@ -197,7 +255,7 @@
       });
 
       // Tooltip - consistent template
-      if (message) {
+      if (message || resolvedMode === 'working') {
         const tooltip = document.createElement('div');
         Object.assign(tooltip.style, {
           position: 'absolute',
@@ -205,8 +263,8 @@
           left: '50%',
           transform: 'translateX(-50%)',
           padding: '8px 14px',
-          background: '#8b5cf6',
-          color: '#fff',
+          background: palette.labelBg,
+          color: palette.labelColor,
           borderRadius: '8px',
           fontSize: '13px',
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -215,9 +273,9 @@
           maxWidth: '300px',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)'
+          boxShadow: '0 4px 12px rgba(0,0,0,0.25)'
         });
-        tooltip.textContent = message;
+        tooltip.textContent = message || palette.labelText;
 
         const arrow = document.createElement('div');
         Object.assign(arrow.style, {
@@ -227,14 +285,15 @@
           transform: 'translateX(-50%)',
           borderLeft: '6px solid transparent',
           borderRight: '6px solid transparent',
-          borderTop: '6px solid #8b5cf6'
+          borderTop: `6px solid ${palette.labelBg}`
         });
         tooltip.appendChild(arrow);
         overlay.appendChild(tooltip);
       }
 
       document.body.appendChild(overlay);
-      activeHighlights.set(selector, { element: overlay, id: highlightId });
+      const entry = { element: overlay, id: highlightId, mode: resolvedMode, timer: null };
+      activeHighlights.set(selector, entry);
 
       // Scroll into view
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -244,14 +303,17 @@
         overlay.style.opacity = '1';
       });
 
-      // Fade out and remove
-      setTimeout(() => {
-        overlay.style.opacity = '0';
-        setTimeout(() => {
-          overlay.remove();
-          activeHighlights.delete(selector);
-        }, FADE_DURATION);
-      }, HIGHLIGHT_DURATION);
+      if (resolvedMode === 'working') {
+        const maxDuration = (durationMs && durationMs > 0) ? durationMs : WORKING_HIGHLIGHT_MAX_DURATION;
+        entry.timer = setTimeout(() => {
+          executeHighlight(selector, 'Done', 'done', DONE_HIGHLIGHT_DURATION);
+        }, maxDuration);
+      } else {
+        const flashDuration = (durationMs && durationMs > 0)
+          ? durationMs
+          : (resolvedMode === 'done' ? DONE_HIGHLIGHT_DURATION : ACK_HIGHLIGHT_DURATION);
+        entry.timer = setTimeout(() => removeHighlight(selector), flashDuration);
+      }
 
     } catch (e) {
       console.error('[FixOnce] Highlight error:', e);

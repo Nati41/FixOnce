@@ -937,8 +937,29 @@
   }
   .project-item:hover { background: var(--surface2); }
   .project-item.active { background: var(--green-dim); border: 1px solid #00e67630; }
-  .project-item .p-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); }
+  .project-item .p-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
   .project-item.active .p-dot { background: var(--green); }
+  .project-item .p-name { flex: 1; cursor: pointer; }
+  .project-item .p-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s; }
+  .project-item:hover .p-actions { opacity: 1; }
+  .project-item .p-activate {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .project-item .p-activate:hover {
+    background: rgba(0,230,118,0.2);
+    border-color: var(--green);
+    color: var(--green);
+  }
 
   /* ─── CONFIRM MODAL ─── */
   .confirm-overlay {
@@ -1850,7 +1871,8 @@
       updateBrowserContext(contextData);
 
       // Recalculate health with new error data
-      calculateAndApplyHealth();
+      const healthSummary = calculateAndApplyHealth();
+      updateStatusMessage(healthSummary);
     } catch (e) {
       console.error('Runtime fetch error:', e);
     }
@@ -2029,25 +2051,23 @@
     const changeCount = recentActivity.length;
     const topChangesEl = document.getElementById('tb-changes');
     const metaChangesEl = document.getElementById('meta-changes');
-    const messageEl = document.getElementById('status-message');
 
     if (changeCount === 0) {
       topChangesEl.textContent = 'No recent events';
       metaChangesEl.textContent = 'No recent activity';
       metaChangesEl.className = 'meta-val idle';
-      messageEl.textContent = 'No recent activity. Your project is stable and ready.';
     } else {
       topChangesEl.textContent = `${changeCount} event${changeCount !== 1 ? 's' : ''} (last 60m)`;
       metaChangesEl.textContent = `${changeCount} recent event${changeCount !== 1 ? 's' : ''}`;
       metaChangesEl.className = 'meta-val';
-      messageEl.textContent = 'FixOnce monitors system health, AI actions, and safety checkpoints in real time.';
     }
 
     // Components
     const components = snapshot.architecture?.components || [];
 
     // Calculate health state
-    calculateAndApplyHealth();
+    const healthSummary = calculateAndApplyHealth();
+    updateStatusMessage(healthSummary);
 
     // Check for stability warnings
     checkStabilityWarnings();
@@ -2056,8 +2076,66 @@
     renderDeepPanel();
   }
 
+  function updateStatusMessage(healthSummary) {
+    const messageEl = document.getElementById('status-message');
+    if (!messageEl || !snapshot) return;
+
+    const activity = snapshot.activity || [];
+    const recentActivity = activity.filter(a => {
+      const age = (Date.now() - new Date(a.timestamp).getTime()) / 60000;
+      return age < 60;
+    });
+    const changeCount = recentActivity.length;
+
+    if (!healthSummary) {
+      messageEl.textContent = changeCount === 0
+        ? 'No recent activity. Your project is stable and ready.'
+        : 'FixOnce monitors system health, AI actions, and safety checkpoints in real time.';
+      return;
+    }
+
+    const {
+      state,
+      errorCount,
+      hasStabilityWarning,
+      failedCommands,
+      pendingCommands,
+      awaitingCommands
+    } = healthSummary;
+
+    const queuedCommands = pendingCommands + awaitingCommands;
+
+    if (state === 'red') {
+      if (failedCommands > 0) {
+        messageEl.textContent = `${failedCommands} command${failedCommands !== 1 ? 's' : ''} failed. Review and resolve before continuing.`;
+      } else if (errorCount > 0) {
+        messageEl.textContent = `${errorCount} browser error${errorCount !== 1 ? 's' : ''} detected. System needs attention.`;
+      } else {
+        messageEl.textContent = 'System needs attention. Review active risks before continuing.';
+      }
+      return;
+    }
+
+    if (state === 'amber') {
+      if (errorCount > 0) {
+        messageEl.textContent = `${errorCount} browser error${errorCount !== 1 ? 's' : ''} detected. Monitoring active issues.`;
+      } else if (queuedCommands > 0) {
+        messageEl.textContent = `${queuedCommands} command${queuedCommands !== 1 ? 's' : ''} waiting in queue.`;
+      } else if (hasStabilityWarning) {
+        messageEl.textContent = 'Stability warning detected. Review before next critical change.';
+      } else {
+        messageEl.textContent = 'System is in progress. Monitor active signals before the next action.';
+      }
+      return;
+    }
+
+    messageEl.textContent = changeCount === 0
+      ? 'No recent activity. Your project is stable and ready.'
+      : 'All systems healthy. Monitoring activity and safety checkpoints in real time.';
+  }
+
   function calculateAndApplyHealth() {
-    if (!snapshot) return;
+    if (!snapshot) return null;
 
     // Use unified health from backend if available
     const orbHealth = snapshot.orb;
@@ -2075,11 +2153,20 @@
       const atRiskCount = (stabSignals.broken_count || 0) + (stabSignals.blocked_count || 0);
       const errorCount = errSignals.error_count || runtimeErrors.length;
       const failedCommands = cmdSignals.failed_count || 0;
+      const pendingCommands = cmdSignals.pending_count || 0;
+      const awaitingCommands = cmdSignals.delivered_count || 0;
       const hasStabilityWarning = checkForStabilityWarning();
 
       // Apply state with reasons
       setState(state, atRiskCount, errorCount, hasStabilityWarning, reasons, failedCommands);
-      return;
+      return {
+        state,
+        errorCount,
+        hasStabilityWarning,
+        failedCommands,
+        pendingCommands,
+        awaitingCommands
+      };
     }
 
     // Fallback: local calculation
@@ -2101,6 +2188,14 @@
 
     // Apply state
     setState(newState, atRiskCount, errorCount, hasStabilityWarning, []);
+    return {
+      state: newState,
+      errorCount,
+      hasStabilityWarning,
+      failedCommands: 0,
+      pendingCommands: 0,
+      awaitingCommands: 0
+    };
   }
 
   function checkForStabilityWarning() {
@@ -2653,11 +2748,15 @@
 
     listEl.innerHTML = projects.map(p => {
       const projectId = p.id || p.project_id || p.name;
+      const projectPath = p.working_dir || p.path || '';
       const isActive = p.name === currentProject || p.is_active;
       return `
-        <div class="project-item ${isActive ? 'active' : ''}" onclick="switchProject('${escapeHtml(projectId)}')">
+        <div class="project-item ${isActive ? 'active' : ''}">
           <span class="p-dot"></span>
-          ${escapeHtml(p.name)}
+          <span class="p-name" onclick="switchProject('${escapeHtml(projectId)}')">${escapeHtml(p.name)}</span>
+          <span class="p-actions">
+            <button class="p-activate" onclick="event.stopPropagation(); requestAISwitch('${escapeHtml(projectId)}', '${escapeHtml(projectPath)}')" title="Request AI to work here">▶</button>
+          </span>
         </div>
       `;
     }).join('');
@@ -2684,6 +2783,33 @@
       }
     } catch (e) {
       showToast('✗ Failed to switch: ' + e.message);
+    }
+  }
+
+  async function requestAISwitch(projectId, projectPath) {
+    // Send command to AI to switch to this project
+    const message = `Please switch to project at: ${projectPath}\n\nCall auto_init_session(cwd="${projectPath}") to initialize and start working on this project.`;
+
+    try {
+      const res = await fetch('/api/memory/queue-for-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'switch_project',
+          message: message,
+          source: 'project_switcher'
+        })
+      });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        showNotification('Request sent to AI: switch to ' + (projectPath.split('/').pop() || projectId), 'success');
+        closeProjectSwitcher();
+      } else {
+        showNotification('Failed to send request', 'error');
+      }
+    } catch (e) {
+      console.error('Request AI switch error:', e);
+      showNotification('Failed to send request', 'error');
     }
   }
 

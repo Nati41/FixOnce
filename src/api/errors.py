@@ -550,7 +550,7 @@ def api_check_project_url():
 # AI HIGHLIGHT - AI-Initiated Element Highlighting
 # ============================================================
 
-# Store pending highlights (in-memory, TTL handled by extension)
+# Store pending highlight queue per project (in-memory, TTL handled by extension)
 _pending_highlights = {}
 # Store last highlight sent (for dashboard display)
 _last_highlight_sent = {}
@@ -564,6 +564,8 @@ def api_highlight_element_post():
 
     selector = data.get("selector", "")
     message = data.get("message", "")
+    mode = data.get("mode", "ack")
+    duration_ms = int(data.get("duration_ms", 0) or 0)
 
     if not selector:
         return jsonify({"status": "error", "message": "No selector provided"}), 400
@@ -573,22 +575,26 @@ def api_highlight_element_post():
     highlight_entry = {
         "selector": selector,
         "message": message[:100] if message else "",
+        "mode": mode if mode in {"ack", "working", "done", "clear"} else "ack",
+        "duration_ms": duration_ms if duration_ms >= 0 else 0,
         "timestamp": datetime.now().isoformat(),
-        "consumed": False
     }
 
-    _pending_highlights[project_id] = highlight_entry
+    if project_id not in _pending_highlights:
+        _pending_highlights[project_id] = []
+    _pending_highlights[project_id].append(highlight_entry)
 
     # Track last highlight for dashboard
     _last_highlight_sent[project_id] = {
         "selector": selector,
         "message": message[:100] if message else "",
+        "mode": highlight_entry["mode"],
         "timestamp": datetime.now().isoformat()
     }
 
-    print(f"[AIHighlight] Queued: {selector} - {message[:50] if message else 'no message'}")
+    print(f"[AIHighlight] Queued ({highlight_entry['mode']}): {selector} - {message[:50] if message else 'no message'}")
 
-    return jsonify({"status": "ok", "selector": selector})
+    return jsonify({"status": "ok", "selector": selector, "mode": highlight_entry["mode"]})
 
 
 @errors_bp.route("/api/highlight-element", methods=["GET"])
@@ -596,17 +602,20 @@ def api_highlight_element_get():
     """Extension polls for pending highlight commands."""
     project_id = _get_active_project_id()
 
-    highlight = _pending_highlights.get(project_id)
+    queue = _pending_highlights.get(project_id, [])
 
-    if highlight and not highlight.get("consumed"):
-        # Mark as consumed
-        _pending_highlights[project_id]["consumed"] = True
+    if queue:
+        highlight = queue.pop(0)
+        if not queue:
+            _pending_highlights.pop(project_id, None)
 
         return jsonify({
             "has_highlight": True,
             "selector": highlight["selector"],
             "message": highlight["message"],
-            "timestamp": highlight["timestamp"]
+            "mode": highlight.get("mode", "ack"),
+            "duration_ms": highlight.get("duration_ms", 0),
+            "timestamp": highlight["timestamp"],
         })
 
     return jsonify({"has_highlight": False})
@@ -616,9 +625,18 @@ def api_highlight_element_get():
 def api_highlight_element_clear():
     """Clear pending highlight."""
     project_id = _get_active_project_id()
+    selector = request.args.get("selector", "")
 
     if project_id in _pending_highlights:
-        del _pending_highlights[project_id]
+        if selector:
+            _pending_highlights[project_id] = [
+                item for item in _pending_highlights[project_id]
+                if item.get("selector") != selector
+            ]
+            if not _pending_highlights[project_id]:
+                del _pending_highlights[project_id]
+        else:
+            del _pending_highlights[project_id]
 
     return jsonify({"status": "ok"})
 

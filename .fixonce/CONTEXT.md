@@ -1,7 +1,7 @@
 # FixOnce Context
 
 > **Auto-generated file.** Do not edit manually.
-> Last updated: 2026-02-26 21:12
+> Last updated: 2026-02-28 22:52
 
 ---
 
@@ -9,7 +9,7 @@
 
 ## Current Goal
 
-**Replace dashboard_vnext.html with health-focused design (Orb-based) while preserving all API integrations**
+**Implement hybrid element highlight behavior: quick ack blink + subtle working indicator + clear on completion**
 
 ---
 
@@ -117,6 +117,34 @@
 ### Checkpoints created for 1 components
 
 *Reason:* Bulk checkpoint at commit 56e55cd3
+
+### Checkpoints created for 1 components
+
+*Reason:* Bulk checkpoint at commit cf79438e
+
+### Checkpoints created for 1 components
+
+*Reason:* Bulk checkpoint at commit c57599ad
+
+### AI Command Injection Security Layer with three mechanisms: Explicit Marker Lock (uuid4 IDs, one-time delivery), Session Scope Guard (project/session validation), Audit Visibility (full lifecycle tracking)
+
+*Reason:* Prevents duplicate execution, scope hijacking, and provides transparency. Commands only execute once, in the correct project/session, with full audit trail.
+
+### Unified Nervous System - Orb calculates health from Command Engine + Stability + Browser Errors. Timeout = 5 minutes for delivered commands.
+
+*Reason:* Prevents cognitive dissonance. Single source of truth for system health. Commands not executed within 5 min = failed_timeout.
+
+### Isolated Tabs Architecture: Backend session isolation per AI+project path, UI tabs per active project with independent Health Orbs
+
+*Reason:* Prevents AI conflicts, enables multi-project parallel work, maintains minimalist UX. Each AI works in isolated bubble, dashboard shows tabs for all active projects.
+
+### Browser-style Project Tabs with Session Isolation
+
+*Reason:* Tabs feel like browser tabs - user knows what's open, sees activity via pulse color, can switch without losing Health Orb state. Hidden when only one project active.
+
+### Hybrid element highlight lifecycle: auto ack pulse on browser-context fetch, subtle working indicator, and explicit done/clear modes.
+
+*Reason:* Gives immediate user confirmation, avoids distracting continuous blinking, and keeps a clear work-state signal.
 
 ---
 

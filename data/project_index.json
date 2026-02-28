@@ -5,20 +5,20 @@
       "project_id": "FixOnce_e3921f743904",
       "working_dir": "/Users/haimdayan/Desktop/FixOnce",
       "name": "FixOnce",
-      "git_commit_hash": "90fa4daf1df7",
+      "git_commit_hash": "bed6ffbdf37d",
       "summary": "FixOnce is a persistent memory layer for AI coding assistants (Claude Code, Cursor, Codex). It remembers decisions, solutions, insights, and context across sessions so AI never forgets previous work.",
       "stack": "Python 3, Flask, FastMCP (MCP protocol), Chrome Extension (JS), NumPy, scikit-learn (TF-IDF embeddings), SQLite, JSON storage",
-      "current_goal": "Replace dashboard_vnext.html with health-focused design (Orb-based) while preserving all API integrations",
+      "current_goal": "Improve dashboard status-message to reflect orb health and operational signals (browser errors, pending commands) instead of only activity count.",
       "last_insight": {
-        "text": "Release v3.2 packages built: macOS (1.5MB) + Windows (651KB). Build configs updated to include dashboard_vnext.html and dashboard_app.html. Inno Setup version updated to 3.2.",
-        "timestamp": "2026-02-26T21:14:36.104064",
+        "text": "dashboard_vnext status-message now uses orb health summary (red/amber/green), browser error count, and command queue counts (pending+delivered) so runtime signals override generic activity text.",
+        "timestamp": "2026-02-28T22:58:22.713975",
         "use_count": 0,
         "last_used": null,
         "importance": "medium"
       },
-      "decisions_count": 25,
+      "decisions_count": 32,
       "avoid_count": 0,
-      "indexed_at": "2026-02-26T21:14:36.136461"
+      "indexed_at": "2026-02-28T22:58:23.066689"
     },
     "tetris-game_57755ff050fb": {
       "project_id": "tetris-game_57755ff050fb",
@@ -46,18 +46,18 @@
       "git_commit_hash": "ee36e39013ea",
       "summary": "Test project for FixOnce QA",
       "stack": "JavaScript",
-      "current_goal": "Third goal to verify history",
+      "current_goal": "כתיבת טסטים לפיצ'רים החדשים: Session Registry, Tabs, Health Engine",
       "last_insight": {
-        "text": "בדיקת עברית עם אימוג'י 🎉 ותווים מיוחדים: <script>alert('xss')</script> ו-JSON: {\"key\": \"value\"}",
-        "timestamp": "2026-02-25T21:49:35.918316",
+        "text": "Codex-side isolation check completed.",
+        "timestamp": "2026-02-28T21:14:35.147936",
         "use_count": 0,
         "last_used": null,
         "importance": "medium"
       },
       "decisions_count": 5,
       "avoid_count": 1,
-      "indexed_at": "2026-02-26T20:58:25.829174"
+      "indexed_at": "2026-02-28T23:07:20.332519"
     }
   },
-  "updated_at": "2026-02-26T21:14:36.136541"
+  "updated_at": "2026-02-28T23:07:20.332577"
 }

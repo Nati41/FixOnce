@@ -4514,8 +4514,40 @@ def get_browser_context() -> str:
                 # Get URL from element or parent
                 url = el.get('url') or selected.get('url', 'N/A')
                 timestamp = el.get('timestamp') or selected.get('timestamp', '')
+                selector = el.get('selector', '')
                 lines.append(f"\n**Page URL:** {url}")
                 lines.append(f"**Captured:** {timestamp[:16].replace('T', ' ') if timestamp else 'N/A'}")
+
+                # Auto-confirm selected element to user:
+                # 1) brief ack pulse, 2) subtle "working" indicator while AI processes it.
+                if selector:
+                    selection_key = f"{selector}|{timestamp or ''}"
+                    last_key = getattr(get_browser_context, "_last_auto_highlight_key", "")
+                    if selection_key != last_key:
+                        try:
+                            requests.post(
+                                'http://localhost:5000/api/highlight-element',
+                                json={
+                                    "selector": selector,
+                                    "message": "Selection received",
+                                    "mode": "ack",
+                                    "duration_ms": 1200
+                                },
+                                timeout=2
+                            )
+                            requests.post(
+                                'http://localhost:5000/api/highlight-element',
+                                json={
+                                    "selector": selector,
+                                    "message": "Working on this",
+                                    "mode": "working",
+                                    "duration_ms": 15000
+                                },
+                                timeout=2
+                            )
+                            setattr(get_browser_context, "_last_auto_highlight_key", selection_key)
+                        except Exception:
+                            pass
         else:
             lines.append("_No element selected. User can click 'Select Element' in FixOnce extension._")
 
@@ -4535,16 +4567,17 @@ def get_browser_context() -> str:
 
 
 @mcp.tool()
-def highlight_element(selector: str, message: str = "") -> str:
+def highlight_element(selector: str, message: str = "", mode: str = "ack", duration_ms: int = 0) -> str:
     """
     Highlight an element in the user's browser.
 
-    Use this to visually point to an element when explaining something.
-    The element will glow briefly with a tooltip showing your message.
+    Use this to point to or track work on an element in the user's browser.
 
     Args:
         selector: CSS selector for the element (e.g., "#submit-btn", ".error-message")
         message: Short message to show in tooltip (max 100 chars)
+        mode: One of: ack, working, done, clear
+        duration_ms: Optional custom duration in milliseconds
 
     Returns:
         Confirmation that highlight was queued
@@ -4554,11 +4587,17 @@ def highlight_element(selector: str, message: str = "") -> str:
     try:
         res = requests.post(
             'http://localhost:5000/api/highlight-element',
-            json={"selector": selector, "message": message[:100] if message else ""},
+            json={
+                "selector": selector,
+                "message": message[:100] if message else "",
+                "mode": mode,
+                "duration_ms": max(0, int(duration_ms or 0))
+            },
             timeout=3
         )
         if res.status_code == 200:
-            return f"✨ Highlighting `{selector}` with message: '{message}'" if message else f"✨ Highlighting `{selector}`"
+            suffix = f" ({mode})" if mode else ""
+            return f"✨ Highlighting{suffix} `{selector}` with message: '{message}'" if message else f"✨ Highlighting{suffix} `{selector}`"
         else:
             return f"Failed to queue highlight: {res.text}"
 
