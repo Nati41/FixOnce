@@ -60,6 +60,56 @@ body {
   border-radius: 50%;
 }
 
+/* Power Toggle */
+.power-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--red);
+  transition: 0.3s;
+  border-radius: 20px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background: var(--green);
+}
+
+input:checked + .slider:before {
+  transform: translateX(16px);
+}
+
 /* Center Status */
 .status-section {
   text-align: center;
@@ -312,6 +362,28 @@ body {
   background: var(--red);
 }
 
+/* Powered Off State */
+body.powered-off .status-section,
+body.powered-off .project-section,
+body.powered-off .health-section,
+body.powered-off .memory-section,
+body.powered-off .rules-section,
+body.powered-off .activity-section,
+body.powered-off .safety-btn {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+body.powered-off .logo {
+  color: var(--text-dim);
+}
+
+body.powered-off .logo::after {
+  content: " (OFF)";
+  font-size: 10px;
+  color: var(--red);
+}
+
 /* Activity */
 .activity-section {
   background: var(--surface);
@@ -368,6 +440,12 @@ body {
 <!-- Top Bar -->
 <div class="topbar">
   <div class="logo">FixOnce</div>
+  <div class="power-toggle">
+    <label class="switch">
+      <input type="checkbox" id="powerToggle" checked onchange="togglePower()">
+      <span class="slider"></span>
+    </label>
+  </div>
   <div class="ai-status">
     Active AI: <span id="activeAI">-</span>
     <div class="ai-dot"></div>
@@ -607,6 +685,38 @@ function hideSyncBadge() {
   document.getElementById('syncBadge').style.display = 'none';
 }
 
+async function togglePower() {
+  const toggle = document.getElementById('powerToggle');
+  const newMode = toggle.checked ? 'full' : 'off';
+
+  try {
+    await fetch(`${API}/api/system/mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dashboard': 'true' },
+      body: JSON.stringify({ mode: newMode })
+    });
+    showToast(newMode === 'full' ? 'FixOnce ON' : 'FixOnce OFF');
+
+    // Update UI to reflect state
+    document.body.classList.toggle('powered-off', newMode === 'off');
+  } catch (e) {
+    console.error('Failed to toggle power:', e);
+    toggle.checked = !toggle.checked; // Revert
+  }
+}
+
+async function loadPowerState() {
+  try {
+    const res = await fetch(`${API}/api/system/mode`);
+    if (res.ok) {
+      const data = await res.json();
+      const isOn = data.mode === 'full';
+      document.getElementById('powerToggle').checked = isOn;
+      document.body.classList.toggle('powered-off', !isOn);
+    }
+  } catch (e) {}
+}
+
 async function addRule() {
   const input = document.getElementById('newRuleInput');
   const text = input.value.trim();
@@ -661,6 +771,7 @@ function escapeHtml(s) {
 }
 
 fetchData();
+loadPowerState();
 setInterval(fetchData, 5000);
 </script>
 </body>

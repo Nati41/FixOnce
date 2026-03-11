@@ -33,6 +33,13 @@ except ImportError as e:
     BOUNDARY_DETECTION_ENABLED = False
     print(f"[Activity] Boundary detection not available: {e}")
 
+# Session registry for updating Active AI
+try:
+    from core.session_registry import get_registry
+    SESSION_REGISTRY_ENABLED = True
+except ImportError:
+    SESSION_REGISTRY_ENABLED = False
+
 activity_bp = Blueprint('activity', __name__)
 
 
@@ -269,6 +276,32 @@ def _get_project_id_smart(cwd: str, file_path: str) -> str:
     return "__global__"
 
 
+def _update_session_registry(editor: str, project_id: str, project_path: str, tool: str):
+    """
+    Update session registry when activity is logged from hooks.
+    This ensures Active AI updates even when MCP tools aren't called.
+    """
+    if not SESSION_REGISTRY_ENABLED:
+        return
+
+    if not editor or editor == "unknown":
+        return
+
+    if not project_id or project_id == "__global__":
+        return
+
+    try:
+        registry = get_registry()
+        session = registry.get_or_create(editor, project_id, project_path or "")
+        if session:
+            session.touch()
+            # Log the tool call for activity tracking
+            if tool:
+                session.log_tool_call(f"hook:{tool}")
+    except Exception as e:
+        print(f"[Activity] Session registry update failed: {e}")
+
+
 @activity_bp.route("/log", methods=["POST"])
 def log_activity():
     """
@@ -364,6 +397,9 @@ def log_activity():
         log["activities"] = log["activities"][:100]
 
         _save_activity(log)
+
+        # Update session registry so Active AI updates in dashboard
+        _update_session_registry(current_editor, project_id, cwd, data.get("tool"))
 
         print(f"[Activity] {activity['type']}: {activity.get('file') or (activity.get('command') or '')[:50] or activity.get('human_name', '')}")
 
