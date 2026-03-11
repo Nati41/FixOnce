@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FixOnce Error Test</title>
+    <style>
+        body {
+            font-family: -apple-system, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 40px;
+            text-align: center;
+        }
+        button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover { background: #ff6b6b; }
+        .status { margin-top: 30px; color: #888; }
+    </style>
+</head>
+<body>
+    <h1>FixOnce Error Test Page</h1>
+    <p>Click the button to generate a JavaScript error</p>
+
+    <button onclick="generateReferenceError()">Generate ReferenceError</button>
+    <button onclick="generateTypeError()">Generate TypeError</button>
+
+    <div class="status">
+        <p>Check the browser console and FixOnce dashboard for errors</p>
+    </div>
+
+    <script>
+        function generateReferenceError() {
+            console.error("TEST ERROR: This is a manual console.error for testing FixOnce capture");
+        }
+
+        function generateTypeError() {
+            console.log("Generating TypeError...");
+            const obj = null;
+            obj.someMethod();  // TypeError: Cannot read properties of null
+        }
+    </script>
+</body>
+</html>

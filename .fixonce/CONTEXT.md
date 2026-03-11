@@ -1,7 +1,7 @@
 # FixOnce Context
 
 > **Auto-generated file.** Do not edit manually.
-> Last updated: 2026-02-28 22:52
+> Last updated: 2026-03-11 21:02
 
 ---
 
@@ -9,7 +9,9 @@
 
 ## Current Goal
 
-**Implement hybrid element highlight behavior: quick ack blink + subtle working indicator + clear on completion**
+**תשתית בדיקות לפני release**
+
+Next step: Produce a focused report on widgets, user flows, strengths, and gaps
 
 ---
 
@@ -146,6 +148,70 @@
 
 *Reason:* Gives immediate user confirmation, avoids distracting continuous blinking, and keeps a clear work-state signal.
 
+### AI Context Mode auto-injects selected browser elements into init_session response when active
+
+*Reason:* When user enables AI Context in dashboard AND has selected elements via FAB, the init response includes formatted element details (selector, tag, id, classes, text, HTML). This allows AI to understand "this/that/זה" references automatically.
+
+### AI must clear browser errors after fixing them using POST /api/clear-logs
+
+*Reason:* When AI fixes a browser error, old errors remain in the dashboard causing false "unhealthy" status. After confirming fix works, AI should clear the error log so Orb returns to green.
+
+### AI Commands auto-cleanup: executed commands decay after 5 minutes, failed commands stay, Clear History button for manual cleanup
+
+*Reason:* Prevents queue buildup while keeping audit trail. Executed commands auto-removed after 5min. Failed commands need attention so they stay. Dashboard has Clear button for immediate cleanup.
+
+### Checkpoints created for 10 components
+
+*Reason:* Bulk checkpoint at commit 8d6ac320
+
+### Clear on Success: When page loads without errors for 5 seconds, old errors (>60s) are automatically cleared
+
+*Reason:* Prevents stale fixed errors from polluting the error log. Extension sends PAGE_LOAD_SUCCESS after 5s clean load, server clears errors older than 60 seconds.
+
+### Solutions Memory Layer: debug_sessions stored in .fixonce/solutions.json, auto-surfaced on matching errors
+
+*Reason:* Closes the bug→fix→remember→suggest loop. Solutions from debug_sessions are committed to Git, synced on clone, and surfaced when similar errors appear. Higher matching priority than insights.
+
+### Session Resume State layer: save_resume_state/get_resume_state/clear_resume_state tools for persisting work state across sessions
+
+*Reason:* FixOnce needs to remember not just knowledge (insights, decisions, solutions) but also operational state - where we were in the work. This enables true session continuity after MCP restart.
+
+### Opening message format: narrative story style instead of bullet-point report. Tell what we did, why we stopped, what we wanted to test, what's the result. Creates emotional continuity.
+
+*Reason:* Bullet points feel like a technical report. Narrative style makes user feel the system really remembers them - creates emotional continuity, not just data continuity.
+
+### Opening message v2: (1) "עצרנו אחרי ש..." must be SPECIFIC/technical (2) NO stats like "40 decisions" - use human text (3) End with SPECIFIC next step, not generic "רוצה שנמשיך?"
+
+*Reason:* שלושה שיפורי UX: דיוק טכני באיפה עצרנו, טקסט אנושי במקום סטטיסטיקות קרות, כיוון ברור לצעד הבא
+
+### Opening message v3: הוספת 3 שדות מטא בראש ההודעה - (1) 📦 פרויקט: שם (2) ⏱ עדכון אחרון: זמן יחסי/מוחלט (3) 📌 checkpoint: שם או hash קצר
+
+*Reason:* שלושת השדות האלה נותנים קונטקסט מיידי - איפה אני, מתי עבדתי, ובאיזו גרסה. זה מחזק את תחושת האמינות שהמערכת באמת זוכרת
+
+### Opening message v4: (1) זמן חייב להיות ספציפי כמו "10 Mar 11:52" ולא סתם "היום" (2) הוספת שדה 📂 קובץ אחרון (3) שורת הזיכרון חמה יותר: "FixOnce עדיין זוכר..." במקום סטטיסטיקות
+
+*Reason:* שלושה שיפורי UX: זמן ספציפי נותן context מדויק, קובץ אחרון נותן context של קוד אמיתי, שורת זיכרון חמה במקום קרה
+
+### Opening message v5: הוספת שדה 🧩 אזור עבודה, מבנה נרטיבי משופר (מה→למה→איפה עצרנו→מצב נוכחי), שדות אופציונליים ⚠️ להימנע ו-🔧 פתוח, שאלת סיום ממוקדת יותר
+
+*Reason:* שדרוג חוויית הפתיחה: אזור עבודה נותן מיקוד מיידי, המבנה מספר סיפור ולא דוח, שדות אופציונליים מונעים חזרה על טעויות ומזכירים משימות פתוחות
+
+### Resume Context Architecture: auto_init_session returns both structured resume_context object AND human-readable suggested_opening. The context is built from real saved state (not templates). New tool update_work_context makes it easy to keep context fresh.
+
+*Reason:* הפרדה בין truth layer (resume_context) לבין rendering layer (suggested_opening). ה-AI יכול לענות על שאלות המשך מהמידע המובנה, לא רק להציג טקסט.
+
+### Opening message v6: (1) 📂 קובץ אחרון חייב להיות נתיב אמיתי כמו src/core/resume_context.py ולא תיאור כללי (2) להוסיף "השלב הבא יכול להיות..." לפני השאלה הסוגרת - נותן כיוון עבודה (3) לקצר את "FixOnce זוכר את ההחלטות..." ל"אז אפשר להמשיך בדיוק מאותה נקודה"
+
+*Reason:* שלושה שיפורי UX אחרונים לגרסת 10/10: קובץ אמיתי נותן אמינות, הצעת שלב הבא נותנת כיוון, וקיצור הסיום מונע חזרתיות
+
+### Memory Architecture Separation: projects_v2 = working cache, .fixonce = portable source of truth
+
+*Reason:* שני מקורות אמת מייצרים באגים שקטים. ההפרדה: projects_v2 הוא cache עבודה מלא, .fixonce הוא הידע האיכותי שנוסע עם הריפו. בעתיד נשקול להעביר הכל ל-.fixonce כמקור יחיד.
+
+### Opening format v7: Clean scannable sections - header, DECISIONS, AVOID, CONTEXT, STATE
+
+*Reason:* נרטיבי ארוך מדי. פורמט חדש כמו Cursor/Linear - קצר, חד, סריק. מפתחים רוצים: איפה אנחנו, מה חשוב, מה הבא.
+
 ---
 
 ## Architecture
@@ -188,6 +254,19 @@ FixOnce is a persistent memory layer for AI coding assistants (Claude Code, Curs
 - When adding DELETE endpoint to errors.py, accidentally broke GET endpoint by inserting new function in the middle of existing code - GET was left without return statement
 
 ---
+
+## Solved Problems
+
+> Reference these when encountering similar errors.
+
+### Uncaught TypeError: Cannot read properties of undefined (reading 'settings')
+**Solution:** הסרתי גישה ל-undefined variable - testConfig היה undefined וניסיתי לגשת ל-testConfig.settings.theme
+
+### Uncaught TypeError: Cannot read properties of null (reading 'someMethod')
+**Solution:** בדקתי שהאובייקט לא null לפני קריאה למתודה - הוספתי optional chaining: obj?.someMethod() או בדיקת if (obj) לפני הקריאה
+
+### Test error from FixOnce testing
+**Solution:** This was a test error - removed the console.error call
 
 ---
 

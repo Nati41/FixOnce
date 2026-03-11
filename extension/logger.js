@@ -199,4 +199,30 @@
 
   // Signal activation
   console.log('%c[FixOnce] v1.1 Active (HTTP Monitoring)', 'color:#56d364;font-weight:bold;font-size:12px');
+
+  // 7. Clear on Success - if page loads with no errors for 5 seconds, clear old errors
+  let errorOccurred = false;
+  const origSend = send;
+
+  // Wrap send to track if errors occurred
+  function trackingSend(type, data) {
+    errorOccurred = true;
+    origSend(type, data);
+  }
+
+  // Replace send with tracking version temporarily
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      if (!errorOccurred) {
+        // No errors in first 5 seconds - signal success to clear old errors
+        window.postMessage({
+          source: 'FIXONCE',
+          payload: {
+            type: 'page_load_success',
+            url: location.href
+          }
+        }, '*');
+      }
+    }, 5000);
+  });
 })();

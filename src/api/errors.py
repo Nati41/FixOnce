@@ -119,6 +119,41 @@ def api_log_error():
     except Exception as e:
         print(f"[V3.1] Match error: {e}")
 
+    # Check for committed solutions in .fixonce/solutions.json
+    if not entry.get("matched_solution"):
+        try:
+            from core.committed_knowledge import read_committed_knowledge
+            from managers.multi_project_manager import get_active_project_path
+
+            working_dir = get_active_project_path()
+            if working_dir:
+                committed = read_committed_knowledge(working_dir)
+                solutions = committed.get("solutions", [])
+
+                # Simple keyword matching for now
+                error_msg_lower = entry["message"].lower()
+                for sol in solutions:
+                    problem_lower = sol.get("problem", "").lower()
+                    symptoms = [s.lower() for s in sol.get("symptoms", [])]
+
+                    # Check if error matches problem or symptoms
+                    problem_words = set(problem_lower.split())
+                    error_words = set(error_msg_lower.split())
+                    overlap = problem_words & error_words
+
+                    if len(overlap) >= 3 or any(symptom in error_msg_lower for symptom in symptoms):
+                        entry["committed_solution"] = {
+                            "problem": sol.get("problem", ""),
+                            "solution": sol.get("solution", ""),
+                            "root_cause": sol.get("root_cause", ""),
+                            "files_changed": sol.get("files_changed", []),
+                            "source": "repo"
+                        }
+                        print(f"[CommittedSolution] Found match: {sol.get('problem', '')[:50]}")
+                        break
+        except Exception as e:
+            print(f"[CommittedSolution] Error: {e}")
+
     # Phase 0: Add error with project_id tagging
     project_id = _get_active_project_id()
     add_error(entry, project_id=project_id)
@@ -285,375 +320,45 @@ def api_clear_logs():
     return jsonify({"status": "ok", "message": "Logs cleared"})
 
 
-@errors_bp.route("/api/feedback", methods=["POST"])
-def api_feedback():
-    """V3.1: User feedback on solution matches."""
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"status": "error"}), 400
+@errors_bp.route("/api/page-load-success", methods=["POST"])
+def api_page_load_success():
+    """
+    Called by extension when a page loads with no errors.
+    Clears all errors older than 60 seconds.
 
-    solution_id = data.get("solution_id")
-    feedback = data.get("feedback")
+    This implements "Clear on Success" - when a page loads cleanly,
+    old errors from previous (fixed) sessions are automatically cleared.
+    """
+    data = request.get_json(silent=True) or {}
+    url = data.get("url", "")
 
-    if not solution_id or feedback not in ["verified", "incorrect"]:
-        return jsonify({"status": "error", "message": "Invalid feedback"}), 400
+    # Clear errors older than 60 seconds
+    cutoff = datetime.now().timestamp() - 60
+    cleared_count = 0
 
-    try:
-        from core.semantic_engine import get_engine
-        from config import PERSONAL_DB_PATH
-
-        engine = get_engine(PERSONAL_DB_PATH)
-        if feedback == "verified":
-            engine.increment_success_count(solution_id)
-        return jsonify({"status": "ok", "message": f"Feedback recorded: {feedback}"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-# ============================================================
-# BROWSER CONTEXT - Element Selection for AI Vision
-# ============================================================
-
-# Store selected element (in-memory, per project)
-_browser_context = {}
-
-@errors_bp.route("/api/browser-context", methods=["POST"])
-def api_browser_context_post():
-    """Receive selected element(s) from Chrome extension."""
-    try:
-        data = request.get_json(silent=True)
-        if not data:
-            return jsonify({"status": "error", "message": "No JSON body"}), 400
-
-        project_id = _get_active_project_id()
-
-        # Support both single element and multiple elements
-        element_data = data.get("element", {})
-        is_multiple = data.get("multiple", False)
-
-        if is_multiple and isinstance(element_data, list):
-            # Multiple elements
-            elements = []
-            for el in element_data[:5]:  # Limit to 5 elements
-                html_val = el.get("html") or ""
-                text_val = el.get("innerText") or ""
-                elements.append({
-                    "selector": el.get("selector", ""),
-                    "tagName": el.get("tagName", ""),
-                    "id": el.get("id"),
-                    "classes": el.get("classes", []),
-                    "html": html_val[:2000],
-                    "innerText": text_val[:200],
-                    "css": el.get("css", {}),
-                    "rect": el.get("rect", {}),
-                    "url": el.get("url", ""),
-                    "timestamp": el.get("timestamp", datetime.now().isoformat()),
-                })
-
-            context_entry = {
-                "type": "multiple_elements",
-                "elements": elements,
-                "count": len(elements),
-                "project_id": project_id,
-                "timestamp": datetime.now().isoformat()
-            }
-
-            _browser_context[project_id] = context_entry
-            print(f"[BrowserContext] {len(elements)} elements selected")
-            return jsonify({"status": "ok", "count": len(elements)})
-
-        else:
-            # Single element (backward compatible)
-            html_val = element_data.get("html") or ""
-            text_val = element_data.get("innerText") or ""
-            context_entry = {
-                "type": data.get("type", "element_selection"),
-                "element": {
-                    "selector": element_data.get("selector", ""),
-                    "tagName": element_data.get("tagName", ""),
-                    "id": element_data.get("id"),
-                    "classes": element_data.get("classes", []),
-                    "html": html_val[:2000],
-                    "innerText": text_val[:200],
-                    "css": element_data.get("css", {}),
-                    "rect": element_data.get("rect", {}),
-                },
-                "url": element_data.get("url", ""),
-                "timestamp": element_data.get("timestamp", datetime.now().isoformat()),
-                "project_id": project_id
-            }
-
-            _browser_context[project_id] = context_entry
-            print(f"[BrowserContext] Element selected: {context_entry['element']['selector']}")
-            return jsonify({"status": "ok", "selector": context_entry['element']['selector']})
-
-    except Exception as e:
-        print(f"[BrowserContext] Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@errors_bp.route("/api/browser-context", methods=["GET"])
-def api_browser_context_get():
-    """Get current browser context (selected element + recent errors)."""
-    project_id = _get_active_project_id()
-
-    # Get selected element
-    selected = _browser_context.get(project_id)
-
-    # Get recent errors (last 5 minutes)
-    since_seconds = 300
-    cutoff = datetime.now().timestamp() - since_seconds
     with log_lock:
-        recent_errors = []
-        for error in list(error_log)[-10:]:  # Last 10 errors max
+        to_keep = []
+        for error in error_log:
             try:
                 error_time = datetime.fromisoformat(error.get('timestamp', '')).timestamp()
                 if error_time >= cutoff:
-                    recent_errors.append({
-                        "message": error.get("message", "")[:200],
-                        "type": error.get("type", "error"),
-                        "url": error.get("url", ""),
-                        "timestamp": error.get("timestamp", "")
-                    })
+                    to_keep.append(error)
+                else:
+                    cleared_count += 1
             except:
-                pass
+                # If timestamp parsing fails, keep the error
+                to_keep.append(error)
+
+        error_log.clear()
+        error_log.extend(to_keep)
+
+    if cleared_count > 0:
+        print(f"[PageLoadSuccess] Cleared {cleared_count} old errors (page: {url[:50]})")
 
     return jsonify({
-        "selected_element": selected,
-        "recent_errors": recent_errors,
-        "has_context": selected is not None
+        "status": "ok",
+        "cleared": cleared_count,
+        "remaining": len(error_log)
     })
 
 
-@errors_bp.route("/api/browser-context", methods=["DELETE"])
-def api_browser_context_clear():
-    """Clear the selected element from browser context."""
-    project_id = _get_active_project_id()
-
-    if project_id in _browser_context:
-        del _browser_context[project_id]
-        print(f"[BrowserContext] Cleared for project: {project_id}")
-
-    return jsonify({"status": "ok", "message": "Browser context cleared"})
-
-
-# ============================================================
-# AI CONTEXT MODE - When active, AI auto-checks browser context
-# ============================================================
-
-_ai_context_mode = {}  # project_id -> { active: bool, activated_at: timestamp }
-
-@errors_bp.route("/api/ai-context-mode", methods=["GET"])
-def api_get_ai_context_mode():
-    """Check if AI Context Mode is active for current project."""
-    project_id = _get_active_project_id()
-    mode_data = _ai_context_mode.get(project_id, {"active": False})
-    return jsonify({
-        "active": mode_data.get("active", False),
-        "activated_at": mode_data.get("activated_at"),
-        "project_id": project_id
-    })
-
-@errors_bp.route("/api/ai-context-mode", methods=["POST"])
-def api_set_ai_context_mode():
-    """Set AI Context Mode for current project."""
-    project_id = _get_active_project_id()
-    data = request.get_json(silent=True) or {}
-    active = data.get("active", False)
-
-    if active:
-        _ai_context_mode[project_id] = {
-            "active": True,
-            "activated_at": datetime.now().isoformat()
-        }
-        print(f"[AIContextMode] Activated for project: {project_id}")
-    else:
-        _ai_context_mode[project_id] = {"active": False}
-        print(f"[AIContextMode] Deactivated for project: {project_id}")
-
-    return jsonify({"status": "ok", "active": active})
-
-
-# ============================================================
-# PROJECT URL CHECKING - For Extension to Know When to Show FAB
-# ============================================================
-
-@errors_bp.route("/api/check-project-url", methods=["POST"])
-def api_check_project_url():
-    """Check if a URL belongs to the active project."""
-    data = request.get_json(silent=True)
-    if not data or "url" not in data:
-        return jsonify({"belongs_to_project": False, "reason": "no_url"}), 200
-
-    url = data.get("url", "")
-    project_id = _get_active_project_id()
-
-    if project_id == "__global__":
-        return jsonify({"belongs_to_project": False, "reason": "no_active_project"}), 200
-
-    try:
-        from urllib.parse import urlparse
-        parsed = urlparse(url)
-        domain = parsed.netloc
-
-        # Check if it's a dev domain (localhost, 127.0.0.1, etc.)
-        dev_patterns = ['localhost', '127.0.0.1', '0.0.0.0']
-        is_dev = any(p in domain for p in dev_patterns)
-
-        if is_dev:
-            return jsonify({
-                "belongs_to_project": True,
-                "project_id": project_id,
-                "reason": "dev_domain"
-            }), 200
-
-        # Check against project's base URL if configured
-        try:
-            from managers.multi_project_manager import get_active_project_path
-            from pathlib import Path
-            import json
-
-            project_path = get_active_project_path()
-            if project_path:
-                config_file = Path(project_path) / ".fixonce" / "config.json"
-                if config_file.exists():
-                    config = json.loads(config_file.read_text())
-                    allowed_domains = config.get("allowed_domains", [])
-                    base_url = config.get("base_url", "")
-
-                    if any(d in domain for d in allowed_domains):
-                        return jsonify({
-                            "belongs_to_project": True,
-                            "project_id": project_id,
-                            "reason": "allowed_domain"
-                        }), 200
-
-                    if base_url and base_url in url:
-                        return jsonify({
-                            "belongs_to_project": True,
-                            "project_id": project_id,
-                            "reason": "base_url_match"
-                        }), 200
-        except Exception as e:
-            print(f"[CheckProjectURL] Config check error: {e}")
-
-        return jsonify({"belongs_to_project": False, "reason": "not_matching"}), 200
-
-    except Exception as e:
-        print(f"[CheckProjectURL] Error: {e}")
-        return jsonify({"belongs_to_project": False, "reason": "error"}), 200
-
-
-# ============================================================
-# AI HIGHLIGHT - AI-Initiated Element Highlighting
-# ============================================================
-
-# Store pending highlight queue per project (in-memory, TTL handled by extension)
-_pending_highlights = {}
-# Store last highlight sent (for dashboard display)
-_last_highlight_sent = {}
-
-@errors_bp.route("/api/highlight-element", methods=["POST"])
-def api_highlight_element_post():
-    """AI sends a highlight command for the extension to execute."""
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"status": "error", "message": "No JSON body"}), 400
-
-    selector = data.get("selector", "")
-    message = data.get("message", "")
-    mode = data.get("mode", "ack")
-    duration_ms = int(data.get("duration_ms", 0) or 0)
-
-    if not selector:
-        return jsonify({"status": "error", "message": "No selector provided"}), 400
-
-    project_id = _get_active_project_id()
-
-    highlight_entry = {
-        "selector": selector,
-        "message": message[:100] if message else "",
-        "mode": mode if mode in {"ack", "working", "done", "clear"} else "ack",
-        "duration_ms": duration_ms if duration_ms >= 0 else 0,
-        "timestamp": datetime.now().isoformat(),
-    }
-
-    if project_id not in _pending_highlights:
-        _pending_highlights[project_id] = []
-    _pending_highlights[project_id].append(highlight_entry)
-
-    # Track last highlight for dashboard
-    _last_highlight_sent[project_id] = {
-        "selector": selector,
-        "message": message[:100] if message else "",
-        "mode": highlight_entry["mode"],
-        "timestamp": datetime.now().isoformat()
-    }
-
-    print(f"[AIHighlight] Queued ({highlight_entry['mode']}): {selector} - {message[:50] if message else 'no message'}")
-
-    return jsonify({"status": "ok", "selector": selector, "mode": highlight_entry["mode"]})
-
-
-@errors_bp.route("/api/highlight-element", methods=["GET"])
-def api_highlight_element_get():
-    """Extension polls for pending highlight commands."""
-    project_id = _get_active_project_id()
-
-    queue = _pending_highlights.get(project_id, [])
-
-    if queue:
-        highlight = queue.pop(0)
-        if not queue:
-            _pending_highlights.pop(project_id, None)
-
-        return jsonify({
-            "has_highlight": True,
-            "selector": highlight["selector"],
-            "message": highlight["message"],
-            "mode": highlight.get("mode", "ack"),
-            "duration_ms": highlight.get("duration_ms", 0),
-            "timestamp": highlight["timestamp"],
-        })
-
-    return jsonify({"has_highlight": False})
-
-
-@errors_bp.route("/api/highlight-element", methods=["DELETE"])
-def api_highlight_element_clear():
-    """Clear pending highlight."""
-    project_id = _get_active_project_id()
-    selector = request.args.get("selector", "")
-
-    if project_id in _pending_highlights:
-        if selector:
-            _pending_highlights[project_id] = [
-                item for item in _pending_highlights[project_id]
-                if item.get("selector") != selector
-            ]
-            if not _pending_highlights[project_id]:
-                del _pending_highlights[project_id]
-        else:
-            del _pending_highlights[project_id]
-
-    return jsonify({"status": "ok"})
-
-
-@errors_bp.route("/api/last-highlight", methods=["GET"])
-def api_last_highlight():
-    """Get the last highlight sent (for dashboard display)."""
-    project_id = _get_active_project_id()
-
-    last = _last_highlight_sent.get(project_id)
-
-    if last:
-        return jsonify({
-            "has_highlight": True,
-            "selector": last["selector"],
-            "message": last["message"],
-            "timestamp": last["timestamp"]
-        })
-
-    return jsonify({"has_highlight": False})

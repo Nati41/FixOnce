@@ -88,17 +88,17 @@ def _send_dashboard_file(path):
 
 @flask_app.route("/")
 def dashboard():
-    """Serve the main dashboard (vNext)."""
-    dashboard_path = DATA_DIR / "dashboard_vnext.html"
+    """Serve the main dashboard (lite)."""
+    dashboard_path = DATA_DIR / "dashboard_lite.html"
     return _send_dashboard_file(dashboard_path)
 
 
 @flask_app.route("/next")
 @flask_app.route("/vnext")
 def dashboard_vnext():
-    """Serve the vNext dashboard (Project State Engine - minimalist)."""
-    vnext_path = DATA_DIR / "dashboard_vnext.html"
-    return _send_dashboard_file(vnext_path)
+    """Redirect to lite dashboard (vnext disabled)."""
+    from flask import redirect
+    return redirect("/lite")
 
 
 @flask_app.route("/app")
@@ -106,6 +106,20 @@ def dashboard_app():
     """Serve the compact app dashboard (for native window)."""
     app_path = DATA_DIR / "dashboard_app.html"
     return _send_dashboard_file(app_path)
+
+
+@flask_app.route("/lite")
+def dashboard_lite():
+    """Serve the minimal Dashboard Lite."""
+    lite_path = DATA_DIR / "dashboard_lite.html"
+    return _send_dashboard_file(lite_path)
+
+
+@flask_app.route("/test-error")
+def test_error_page():
+    """Serve test error page for debugging error capture."""
+    test_path = DATA_DIR / "test_error.html"
+    return _send_dashboard_file(test_path)
 
 
 @flask_app.route("/logo.png")
@@ -118,225 +132,23 @@ def serve_logo():
     return "Logo not found", 404
 
 
-@flask_app.route("/test")
-def test_site():
-    """Serve the comprehensive test site."""
-    test_path = PROJECT_DIR / "tests" / "test-site" / "index.html"
-    return send_file(test_path)
+@flask_app.route("/app-icon.png")
+def serve_app_icon():
+    """Serve the FixOnce app icon."""
+    icon_path = DATA_DIR / "app-icon.png"
+    if icon_path.exists():
+        return send_file(icon_path, mimetype='image/png')
+    return "App icon not found", 404
 
 
-@flask_app.route("/test/brutal")
-def brutal_test_site():
-    """Serve brutal adversarial test harness."""
-    brutal_path = PROJECT_DIR / "tests" / "brutal" / "brutal_test.html"
-    return send_file(brutal_path)
+@flask_app.route("/fixonce-logo.svg")
+def serve_fixonce_logo():
+    """Serve the FixOnce SVG logo."""
+    logo_path = DATA_DIR / "fixonce_logo.svg"
+    if logo_path.exists():
+        return send_file(logo_path, mimetype='image/svg+xml')
+    return "FixOnce logo not found", 404
 
-
-@flask_app.route("/demo")
-def demo_site():
-    """Serve the FixOnce demo/test page."""
-    demo_path = DATA_DIR / "test_site.html"
-    return send_file(demo_path)
-
-
-# ---------------------------------------------------------------------------
-# Current Site Tracking
-# ---------------------------------------------------------------------------
-CURRENT_SITE = None
-CURRENT_SITE_LOCK = threading.Lock()
-
-
-@flask_app.route("/api/current-site", methods=["POST"])
-def api_current_site_update():
-    """Receive current site from extension."""
-    global CURRENT_SITE
-    data = request.get_json(silent=True)
-    if data:
-        with CURRENT_SITE_LOCK:
-            CURRENT_SITE = {
-                "url": data.get("url", ""),
-                "domain": data.get("domain", ""),
-                "title": data.get("title", ""),
-                "timestamp": data.get("timestamp", datetime.now().isoformat())
-            }
-        print(f"[CurrentSite] Updated: {CURRENT_SITE['domain']}")
-    return jsonify({"status": "ok"})
-
-
-@flask_app.route("/api/current-site", methods=["GET"])
-def api_current_site_get():
-    """Get the current site the user is working on."""
-    with CURRENT_SITE_LOCK:
-        if CURRENT_SITE:
-            return jsonify(CURRENT_SITE)
-    return jsonify({"url": None, "domain": None, "message": "No active dev site detected"})
-
-
-# ---------------------------------------------------------------------------
-# Server Connection
-# ---------------------------------------------------------------------------
-@flask_app.route("/api/server/connect", methods=["POST"])
-def api_server_connect():
-    """Connect to user's server for monitoring."""
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"status": "error", "message": "No JSON body"}), 400
-
-    target_url = data.get("url", "")
-    target_port = data.get("port", "")
-
-    if not target_url and not target_port:
-        return jsonify({"status": "error", "message": "URL or port required"}), 400
-
-    if target_url and not target_port:
-        try:
-            from urllib.parse import urlparse
-            parsed = urlparse(target_url)
-            target_port = parsed.port or (443 if parsed.scheme == 'https' else 80)
-        except:
-            pass
-
-    try:
-        from managers.project_memory_manager import get_project_context, save_memory
-        memory = get_project_context()
-        memory["connected_server"] = {
-            "url": target_url,
-            "port": target_port,
-            "connected_at": datetime.now().isoformat(),
-            "status": "active"
-        }
-        save_memory(memory)
-
-        print(f"[ServerConnect] Connected to {target_url or f'localhost:{target_port}'}")
-        return jsonify({
-            "status": "ok",
-            "message": f"Connected to server on port {target_port}",
-            "monitoring": "HTTP errors will be captured automatically via browser extension"
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@flask_app.route("/api/server/status", methods=["GET"])
-def api_server_status():
-    """Get connected server status."""
-    try:
-        from managers.project_memory_manager import get_project_context
-        memory = get_project_context()
-        server = memory.get("connected_server", {})
-        return jsonify({
-            "connected": bool(server.get("status") == "active"),
-            "server": server
-        })
-    except Exception as e:
-        return jsonify({"connected": False, "error": str(e)})
-
-
-# ---------------------------------------------------------------------------
-# AI Session
-# ---------------------------------------------------------------------------
-@flask_app.route("/api/session/start", methods=["POST"])
-def api_session_start():
-    """Start an AI session."""
-    from managers.project_memory_manager import get_project_context, save_memory
-
-    data = request.get_json(silent=True) or {}
-    editor = data.get("editor", "unknown")
-
-    memory = get_project_context()
-    memory["ai_session"] = {
-        "active": True,
-        "editor": editor,
-        "started_at": datetime.now().isoformat(),
-        "briefing_sent": False
-    }
-    save_memory(memory)
-
-    return jsonify({"status": "ok", "message": "Session started"})
-
-
-@flask_app.route("/api/session/launch", methods=["POST"])
-def api_session_launch():
-    """Launch an AI editor."""
-    import subprocess
-    import platform
-
-    data = request.get_json(silent=True) or {}
-    editor = data.get("editor", "claude")
-
-    try:
-        current_os = platform.system()
-        if current_os == "Darwin":
-            if editor == "claude":
-                script = '''
-                tell application "Terminal"
-                    activate
-                    do script "cd ~ && claude"
-                end tell
-                '''
-                subprocess.run(["osascript", "-e", script], check=True)
-            elif editor == "cursor":
-                subprocess.run(["open", "-a", "Cursor"], check=True)
-            elif editor == "windsurf":
-                subprocess.run(["open", "-a", "Windsurf"], check=True)
-            elif editor in ("vscode", "continue"):
-                subprocess.run(["open", "-a", "Visual Studio Code"], check=True)
-            else:
-                return jsonify({"status": "error", "message": f"Unknown editor: {editor}"}), 400
-        elif current_os == "Windows":
-            if editor == "claude":
-                # Prefer Claude CLI in a visible terminal
-                subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", "claude"])
-            elif editor == "cursor":
-                subprocess.Popen(["cmd", "/c", "start", "", "cursor"])
-            elif editor in ("vscode", "continue"):
-                subprocess.Popen(["cmd", "/c", "start", "", "code"])
-            else:
-                return jsonify({"status": "error", "message": f"Unknown editor: {editor}"}), 400
-        else:
-            return jsonify({"status": "error", "message": "Unsupported OS for launch"}), 400
-
-        return jsonify({"status": "ok", "message": f"Launched {editor}"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@flask_app.route("/api/session/status", methods=["GET"])
-def api_session_status():
-    """Get current session status."""
-    from managers.project_memory_manager import get_project_context
-
-    memory = get_project_context()
-    session = memory.get("ai_session", {})
-
-    return jsonify({
-        "active": session.get("active", False),
-        "editor": session.get("editor"),
-        "started_at": session.get("started_at"),
-        "briefing_sent": session.get("briefing_sent", False)
-    })
-
-
-@flask_app.route("/api/launch-app", methods=["POST"])
-def api_launch_app():
-    """Launch the FixOnce desktop app."""
-    import subprocess
-
-    app_launcher = PROJECT_DIR / "scripts" / "app_launcher.py"
-
-    if not app_launcher.exists():
-        return jsonify({"success": False, "error": "app_launcher.py not found"}), 404
-
-    try:
-        subprocess.Popen(
-            [sys.executable, str(app_launcher)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True
-        )
-        return jsonify({"success": True, "message": "Desktop app launching..."})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ---------------------------------------------------------------------------

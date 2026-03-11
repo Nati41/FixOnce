@@ -17,6 +17,7 @@ Try: `init_session(working_dir="/path/to/project")` or `init_session(port=5000)`
 
 ## When Active
 
+- **Smart sync**: Check `get_live_record()` at key moments: session start, before significant code changes, when user mentions rules changed
 - **Respect decisions** returned from init. Ask before contradicting.
 - **Update goal** before work: `update_live_record("intent", ...)`
 - **Log insights**: `update_live_record("lessons", ...)`

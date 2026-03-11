@@ -1,35 +1,19 @@
 {
-  "updated_at": "2026-02-28T23:07:20.193781",
+  "updated_at": "2026-03-11T21:04:47.625433",
   "sessions": {
-    "claude:/Users/haimdayan/Desktop/FixOnce-Tests": {
-      "ai_name": "claude",
-      "project_id": "FixOnce-Tests_2307bc0e50c2",
-      "project_path": "/Users/haimdayan/Desktop/FixOnce-Tests",
-      "started_at": "2026-02-28T21:04:23.643428",
-      "last_activity": "2026-02-28T23:07:20.193583",
-      "initialized": true,
-      "decisions_displayed": true,
-      "goal_updated": true,
-      "search_performed": false,
-      "component_updated": true,
-      "decision_logged": false,
-      "tool_calls_count": 6,
-      "compliance_score": 71,
-      "is_active": true
-    },
     "claude:/Users/haimdayan/Desktop/FixOnce": {
       "ai_name": "claude",
       "project_id": "FixOnce_e3921f743904",
       "project_path": "/Users/haimdayan/Desktop/FixOnce",
-      "started_at": "2026-02-28T21:06:59.580839",
-      "last_activity": "2026-02-28T22:28:02.179436",
+      "started_at": "2026-03-11T17:30:32.800017",
+      "last_activity": "2026-03-11T21:04:47.625324",
       "initialized": true,
       "decisions_displayed": true,
-      "goal_updated": false,
+      "goal_updated": true,
       "search_performed": true,
-      "component_updated": true,
-      "decision_logged": true,
-      "tool_calls_count": 30,
+      "component_updated": false,
+      "decision_logged": false,
+      "tool_calls_count": 38,
       "compliance_score": 71,
       "is_active": true
     }

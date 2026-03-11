@@ -315,6 +315,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+
+  // Handle page load success - clear old errors
+  if (message.action === 'PAGE_LOAD_SUCCESS' && message.payload) {
+    const url = message.payload.url || '';
+    fetch(`http://localhost:${ACTIVE_PORT}/api/page-load-success`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: url })
+    }).then(response => response.json())
+      .then(data => {
+        if (data.cleared > 0) {
+          console.log(`[FixOnce] Cleared ${data.cleared} old errors (success load)`);
+        }
+      })
+      .catch(err => {
+        // Silently fail - server might not be running
+      });
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // ===== TAB EVENTS =====

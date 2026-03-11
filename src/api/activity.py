@@ -166,6 +166,38 @@ def _save_activity(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def _get_human_name(data: dict) -> str:
+    """Generate human-readable name for activity."""
+    file_path = data.get("file", "")
+    tool = data.get("tool", "")
+    command = data.get("command", "")
+
+    if file_path:
+        # Get filename without path
+        name = Path(file_path).stem
+        # Common file type mappings
+        suffixes = {
+            "server": "Server",
+            "dashboard": "Dashboard",
+            "activity": "Activity",
+            "memory": "Memory",
+            "status": "Status",
+            "config": "Config",
+            "test": "Test",
+            "index": "Index",
+        }
+        for key, label in suffixes.items():
+            if key in name.lower():
+                return label
+        return name.title()[:20]
+
+    if command:
+        # First word of command
+        return command.split()[0][:15] if command.split() else "Command"
+
+    return tool or "Activity"
+
+
 def _get_project_id_from_cwd(cwd: str) -> str:
     """Generate project_id from cwd (same logic as MCP server)."""
     if not cwd:
@@ -341,52 +373,6 @@ def log_activity():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@activity_bp.route("/session", methods=["POST"])
-def log_session():
-    """
-    Log session start/end.
-
-    Body:
-        event: "start" | "end"
-        session_id: session identifier
-        cwd: working directory
-        source: how session started (startup, resume, etc.)
-        timestamp: ISO timestamp
-    """
-    try:
-        data = request.get_json(silent=True) or {}
-
-        event = data.get("event", "unknown")
-        session_id = data.get("session_id", "unknown")
-
-        log = _load_activity()
-
-        if "sessions" not in log:
-            log["sessions"] = {}
-
-        if event == "start":
-            log["sessions"][session_id] = {
-                "started_at": data.get("timestamp") or datetime.now().isoformat(),
-                "cwd": data.get("cwd"),
-                "source": data.get("source"),
-                "status": "active"
-            }
-            print(f"[Session] Started: {session_id[:12]}...")
-
-        elif event == "end":
-            if session_id in log["sessions"]:
-                log["sessions"][session_id]["ended_at"] = data.get("timestamp") or datetime.now().isoformat()
-                log["sessions"][session_id]["status"] = "ended"
-            print(f"[Session] Ended: {session_id[:12]}...")
-
-        _save_activity(log)
-
-        return jsonify({"status": "ok", "event": event})
-
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
 @activity_bp.route("/feed", methods=["GET"])
 def get_activity_feed():
     """
@@ -411,83 +397,3 @@ def get_activity_feed():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@activity_bp.route("/<activity_id>", methods=["DELETE"])
-def delete_activity(activity_id):
-    """Delete a single activity by ID."""
-    try:
-        log = _load_activity()
-        original_count = len(log.get("activities", []))
-        log["activities"] = [a for a in log.get("activities", []) if a.get("id") != activity_id]
-
-        if len(log["activities"]) < original_count:
-            _save_activity(log)
-            return jsonify({"status": "ok", "deleted": activity_id})
-        else:
-            return jsonify({"status": "not_found"}), 404
-
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@activity_bp.route("/clear", methods=["DELETE"])
-def clear_activities():
-    """Clear all activities."""
-    try:
-        log = _load_activity()
-        count = len(log.get("activities", []))
-        log["activities"] = []
-        _save_activity(log)
-
-        return jsonify({"status": "ok", "cleared": count})
-
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@activity_bp.route("/open-file", methods=["POST"])
-def open_file_in_editor():
-    """Open a file in the default editor (VS Code/Cursor)."""
-    import subprocess
-    import shutil
-    try:
-        data = request.get_json(silent=True) or {}
-        file_path = data.get("file", "")
-
-        if not file_path:
-            return jsonify({"status": "error", "message": "No file path"}), 400
-
-        # Try different editors in order of preference
-        if shutil.which("cursor"):
-            subprocess.Popen(["cursor", file_path])
-        elif shutil.which("code"):
-            subprocess.Popen(["code", file_path])
-        else:
-            # Fallback to Mac open command
-            subprocess.Popen(["open", file_path])
-
-        return jsonify({"status": "ok", "opened": file_path})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-def _get_human_name(data):
-    """
-    Convert file path to human-readable component name.
-    Uses the components module for comprehensive mapping.
-    """
-    # If human_name is already provided (e.g., MCP activities), use it
-    if data.get("human_name"):
-        return data.get("human_name")
-
-    file_path = data.get("file", "")
-
-    if not file_path:
-        command = data.get("command")
-        return command[:30] if command else ""
-
-    try:
-        from .components import get_component_name
-        return get_component_name(file_path)
-    except:
-        # Fallback to file name
-        return Path(file_path).stem

@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FixOnce</title>
+<style>
+:root {
+  --bg: #0a0c10;
+  --surface: #12151a;
+  --border: #1e2430;
+  --green: #00e676;
+  --amber: #ffb300;
+  --red: #ff5252;
+  --blue: #448aff;
+  --text: #e0e6ed;
+  --text-dim: #6b7785;
+  --mono: 'SF Mono', 'Monaco', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 16px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+/* Top Bar */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.ai-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.ai-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+}
+
+/* Center Status */
+.status-section {
+  text-align: center;
+  padding: 32px 0;
+  margin-bottom: 20px;
+}
+
+.status-label {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  margin-bottom: 8px;
+}
+
+.status-label.green { color: var(--green); }
+.status-label.amber { color: var(--amber); }
+.status-label.red { color: var(--red); }
+
+.roi-stat {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.roi-stat span {
+  color: var(--text);
+}
+
+/* Project Section */
+.project-section {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.project-name {
+  font-weight: 500;
+}
+
+.project-goal {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* System Health */
+.health-section {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.health-ok {
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.health-error {
+  color: var(--amber);
+}
+
+.health-error .title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.error-list {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding-left: 20px;
+}
+
+.error-list li {
+  margin-bottom: 4px;
+}
+
+/* Memory Section */
+.memory-section {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.memory-section h3 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.memory-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+}
+
+.memory-stat {
+  color: var(--text-dim);
+}
+
+.memory-stat span {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* AI Rules */
+.rules-section {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.rules-section h3 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.rule input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--green);
+}
+
+.rule span {
+  flex: 1;
+}
+
+.rule .delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.rule:hover .delete-btn {
+  opacity: 1;
+}
+
+.rule .delete-btn:hover {
+  color: #ff6b6b;
+}
+
+.add-rule {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.add-rule input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.add-rule input:focus {
+  outline: none;
+  border-color: var(--green);
+}
+
+.add-rule button {
+  background: var(--green);
+  color: var(--bg);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sync-badge {
+  background: var(--amber);
+  color: var(--bg);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 9px;
+  font-weight: 500;
+  margin-left: 8px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.rules-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--green);
+  color: var(--bg);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.toast.error {
+  background: var(--red);
+}
+
+/* Activity */
+.activity-section {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.activity-section h3 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.activity-line {
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.activity-line .label {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.activity-line .action {
+  color: var(--text);
+}
+
+/* Safety Point Button */
+.safety-btn {
+  width: 100%;
+  background: transparent;
+  border: 2px solid var(--green);
+  color: var(--green);
+  padding: 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.safety-btn:hover {
+  background: var(--green);
+  color: var(--bg);
+}
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="topbar">
+  <div class="logo">FixOnce</div>
+  <div class="ai-status">
+    Active AI: <span id="activeAI">-</span>
+    <div class="ai-dot"></div>
+  </div>
+</div>
+
+<!-- Center Status -->
+<div class="status-section">
+  <div class="status-label green" id="statusLabel">PROTECTED</div>
+  <div class="roi-stat" id="roiStat"><span>0</span> decisions enforced</div>
+</div>
+
+<!-- Project Section -->
+<div class="project-section">
+  <div>
+    <div class="project-name">Project: <span id="projectName">-</span></div>
+    <div class="project-goal">Goal: <span id="projectGoal">-</span></div>
+  </div>
+</div>
+
+<!-- System Health -->
+<div class="health-section" id="healthSection">
+  <div class="health-ok" id="healthOk">
+    <span>&#10004;</span> System healthy
+  </div>
+  <div class="health-error" id="healthError" style="display:none;">
+    <div class="title"><span>&#9888;</span> Errors detected</div>
+    <ul class="error-list" id="errorList"></ul>
+  </div>
+</div>
+
+<!-- Memory Section -->
+<div class="memory-section">
+  <h3>Memory</h3>
+  <div class="memory-stats">
+    <div class="memory-stat"><span id="decisionCount">0</span> decisions</div>
+    <div class="memory-stat"><span id="insightCount">0</span> insights</div>
+    <div class="memory-stat" id="avoidStat" style="display:none;"><span id="avoidCount">0</span> avoids</div>
+  </div>
+</div>
+
+<!-- AI Rules -->
+<div class="rules-section">
+  <h3>AI Rules <span id="syncBadge" class="sync-badge" style="display:none">Pending sync</span></h3>
+  <div id="rulesList"></div>
+  <div class="add-rule">
+    <input type="text" id="newRuleInput" placeholder="Add rule..." onkeypress="if(event.key==='Enter')addRule()">
+    <button onclick="addRule()">+</button>
+  </div>
+  <div class="rules-hint">Syncs on AI's next FixOnce call</div>
+</div>
+
+<!-- Activity -->
+<div class="activity-section">
+  <h3>Activity</h3>
+  <div id="activityContent">
+    <div class="activity-line"><span class="label">Now:</span> <span class="action">-</span></div>
+  </div>
+</div>
+
+<!-- Safety Point Button -->
+<button class="safety-btn" onclick="setSafetyPoint()">Set Safety Point</button>
+
+<script>
+const API = 'http://localhost:5000';
+
+async function fetchData() {
+  try {
+    // Dashboard snapshot
+    const res = await fetch(`${API}/api/dashboard_snapshot`, { headers: { 'X-Dashboard': 'true' } });
+    if (res.ok) {
+      const data = await res.json();
+      renderSnapshot(data.snapshot || {});
+    }
+
+    // Errors
+    const errRes = await fetch(`${API}/api/live-errors?since=300`);
+    if (errRes.ok) {
+      const data = await errRes.json();
+      renderHealth(data.errors || []);
+    }
+
+    // Rules
+    const rulesRes = await fetch(`${API}/api/memory/rules`, { headers: { 'X-Dashboard': 'true' } });
+    if (rulesRes.ok) {
+      const data = await rulesRes.json();
+      renderRules(data.rules || []);
+    }
+
+    // Activity
+    const actRes = await fetch(`${API}/api/activity/feed?limit=2`);
+    if (actRes.ok) {
+      const data = await actRes.json();
+      renderActivity(data.activities || []);
+    }
+  } catch (e) {
+    console.error('Fetch error:', e);
+  }
+}
+
+function renderSnapshot(snap) {
+  // Active AI - only show if recent activity (not just process detection)
+  const ais = snap.active_ais || [];
+  const now = Date.now();
+  const STALE_MS = 30 * 60 * 1000; // 30 minutes
+
+  // Filter to only AIs with recent activity (not process_probe without activity)
+  const activeAIs = ais.filter(a => {
+    if (a.actor_source === 'process_probe' && !a.last_activity) return false;
+    if (a.last_activity) {
+      const lastTime = new Date(a.last_activity).getTime();
+      if (now - lastTime > STALE_MS) return false;
+    }
+    return true;
+  });
+
+  const primary = activeAIs.find(a => a.is_primary) || activeAIs[0];
+  const aiDot = document.querySelector('.ai-dot');
+
+  if (primary && primary.last_activity) {
+    document.getElementById('activeAI').textContent = capitalize(primary.editor);
+    aiDot.style.background = 'var(--green)';
+  } else {
+    document.getElementById('activeAI').textContent = 'Not connected';
+    aiDot.style.background = 'var(--text-dim)';
+  }
+
+  // Status + ROI
+  const orb = snap.orb || {};
+  const status = orb.status || 'green';
+  const statusEl = document.getElementById('statusLabel');
+
+  statusEl.className = 'status-label ' + status;
+  if (status === 'green') statusEl.textContent = 'PROTECTED';
+  else if (status === 'amber') statusEl.textContent = 'WARNING';
+  else statusEl.textContent = 'BROKEN';
+
+  // ROI
+  const identity = snap.identity || {};
+  const decisions = identity.counts?.decisions || snap.knowledge?.total_decisions || 0;
+  document.getElementById('roiStat').innerHTML = `<span>${decisions}</span> decisions enforced`;
+
+  // Project + Goal
+  document.getElementById('projectName').textContent = identity.name || '-';
+  document.getElementById('projectGoal').textContent = identity.current_goal || '-';
+
+  // Memory stats
+  const knowledge = snap.knowledge || {};
+  document.getElementById('decisionCount').textContent = knowledge.total_decisions || 0;
+  document.getElementById('insightCount').textContent = knowledge.total_insights || 0;
+
+  const avoids = knowledge.total_avoids || 0;
+  if (avoids > 0) {
+    document.getElementById('avoidCount').textContent = avoids;
+    document.getElementById('avoidStat').style.display = '';
+  }
+}
+
+function renderHealth(errors) {
+  const okEl = document.getElementById('healthOk');
+  const errEl = document.getElementById('healthError');
+  const listEl = document.getElementById('errorList');
+
+  if (errors.length === 0) {
+    okEl.style.display = '';
+    errEl.style.display = 'none';
+  } else {
+    okEl.style.display = 'none';
+    errEl.style.display = '';
+    listEl.innerHTML = errors.slice(0, 5).map(e =>
+      `<li>${escapeHtml((e.message || '').slice(0, 80))}</li>`
+    ).join('');
+  }
+}
+
+function renderRules(rules) {
+  const container = document.getElementById('rulesList');
+  container.innerHTML = rules.map(r => `
+    <div class="rule">
+      <input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="toggleRule('${r.id}', this.checked)">
+      <span>${escapeHtml(r.text)}</span>
+      <button class="delete-btn" onclick="deleteRule('${r.id}')" title="Delete rule">✕</button>
+    </div>
+  `).join('');
+}
+
+function renderActivity(activities) {
+  const container = document.getElementById('activityContent');
+
+  if (activities.length === 0) {
+    container.innerHTML = '<div class="activity-line"><span class="label">Now:</span> <span class="action">Idle</span></div>';
+    return;
+  }
+
+  const formatAction = (a) => {
+    const tool = a.tool || a.type || 'action';
+    const file = a.file ? a.file.split('/').pop() : a.human_name || '';
+    return `AI ${tool.toLowerCase()} ${file}`;
+  };
+
+  let html = `<div class="activity-line"><span class="label">Now:</span> <span class="action">${formatAction(activities[0])}</span></div>`;
+
+  if (activities.length > 1) {
+    html += `<div class="activity-line"><span class="label">Previous:</span> <span class="action">${formatAction(activities[1])}</span></div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+async function toggleRule(id, enabled) {
+  await fetch(`${API}/api/memory/rules/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Dashboard': 'true' },
+    body: JSON.stringify({ enabled })
+  });
+  showSyncBadge();
+}
+
+async function deleteRule(id) {
+  await fetch(`${API}/api/memory/rules/${id}`, {
+    method: 'DELETE',
+    headers: { 'X-Dashboard': 'true' }
+  });
+  showSyncBadge();
+  fetchData();
+}
+
+let rulesPendingSync = false;
+
+function showSyncBadge() {
+  rulesPendingSync = true;
+  document.getElementById('syncBadge').style.display = 'inline';
+}
+
+function hideSyncBadge() {
+  rulesPendingSync = false;
+  document.getElementById('syncBadge').style.display = 'none';
+}
+
+async function addRule() {
+  const input = document.getElementById('newRuleInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  await fetch(`${API}/api/memory/rules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Dashboard': 'true' },
+    body: JSON.stringify({ text })
+  });
+
+  input.value = '';
+  showSyncBadge();
+  fetchData();
+}
+
+async function setSafetyPoint() {
+  const res = await fetch(`${API}/api/stability/mark-all`, {
+    method: 'POST',
+    headers: { 'X-Dashboard': 'true' }
+  });
+  if (res.ok) {
+    showToast('Safety Point created!');
+  } else {
+    showToast('Failed to create Safety Point', true);
+  }
+}
+
+function showToast(message, isError = false) {
+  // Remove existing toast
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'toast' + (isError ? ' error' : '');
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  setTimeout(() => toast.classList.add('show'), 10);
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+fetchData();
+setInterval(fetchData, 5000);
+</script>
+</body>
+</html>

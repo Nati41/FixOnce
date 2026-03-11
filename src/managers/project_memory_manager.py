@@ -343,6 +343,11 @@ def _create_default_memory() -> Dict[str, Any]:
         "ai_context_snapshot": "Initial setup - no active focus yet",
         "decisions": [],  # Architectural/design decisions
         "avoid": [],  # Things NOT to do (failed attempts, bad patterns)
+        "project_rules": [  # AI behavioral rules for this project
+            {"id": "rule_default_1", "text": "Explain the approach before changing code", "enabled": True, "default": True},
+            {"id": "rule_default_2", "text": "Keep backward compatibility", "enabled": True, "default": True},
+            {"id": "rule_default_3", "text": "Make minimal changes", "enabled": True, "default": True}
+        ],
         "handover": "",  # Last session summary for next AI
         "stats": {
             "total_errors_captured": 0,
@@ -898,6 +903,88 @@ def get_avoid_list() -> List[Dict[str, Any]]:
     with _lock:
         memory = _load_memory()
         return memory.get('avoid', [])
+
+
+def get_project_rules() -> List[Dict[str, Any]]:
+    """Get all project rules (enabled ones only by default)."""
+    with _lock:
+        memory = _load_memory()
+        rules = memory.get('project_rules', [])
+        # Return only enabled rules
+        return [r for r in rules if r.get('enabled', True)]
+
+
+def get_all_project_rules() -> List[Dict[str, Any]]:
+    """Get all project rules including disabled ones."""
+    with _lock:
+        memory = _load_memory()
+        return memory.get('project_rules', [])
+
+
+def add_project_rule(text: str) -> Dict[str, Any]:
+    """Add a custom project rule."""
+    if not text or not text.strip():
+        return {"status": "error", "message": "Rule text is required"}
+
+    text = text.strip()
+    if len(text) > 200:
+        text = text[:200]
+
+    with _lock:
+        memory = _load_memory()
+        if 'project_rules' not in memory:
+            memory['project_rules'] = []
+
+        # Check for duplicate
+        for existing in memory['project_rules']:
+            if existing.get('text', '').lower() == text.lower():
+                return {"status": "exists", "message": "Rule already exists"}
+
+        rule_id = f"rule_custom_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        entry = {
+            "id": rule_id,
+            "text": text,
+            "enabled": True,
+            "default": False,
+            "created_at": datetime.now().isoformat()
+        }
+        memory['project_rules'].append(entry)
+        _save_memory(memory)
+
+    return {"status": "ok", "message": "Rule added", "id": rule_id}
+
+
+def toggle_project_rule(rule_id: str, enabled: bool) -> Dict[str, Any]:
+    """Enable or disable a project rule."""
+    with _lock:
+        memory = _load_memory()
+        rules = memory.get('project_rules', [])
+
+        for rule in rules:
+            if rule.get('id') == rule_id:
+                rule['enabled'] = enabled
+                _save_memory(memory)
+                return {"status": "ok", "enabled": enabled}
+
+        return {"status": "error", "message": "Rule not found"}
+
+
+def delete_project_rule(rule_id: str) -> Dict[str, Any]:
+    """Delete a custom project rule (cannot delete default rules)."""
+    with _lock:
+        memory = _load_memory()
+        rules = memory.get('project_rules', [])
+
+        for rule in rules:
+            if rule.get('id') == rule_id:
+                if rule.get('default', False):
+                    return {"status": "error", "message": "Cannot delete default rules"}
+                rules.remove(rule)
+                memory['project_rules'] = rules
+                _save_memory(memory)
+                return {"status": "ok", "message": "Rule deleted"}
+
+        return {"status": "error", "message": "Rule not found"}
 
 
 def save_handover(summary: str) -> Dict[str, Any]:

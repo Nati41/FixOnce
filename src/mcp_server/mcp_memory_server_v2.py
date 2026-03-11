@@ -18,6 +18,13 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+
+def _log(*args, **kwargs):
+    """MCP-safe logging: never write to stdout on stdio transport."""
+    kwargs.pop("file", None)
+    print(*args, file=sys.stderr, flush=True, **kwargs)
+
+
 # Safe File Operations (auto-backup, atomic writes)
 _safe_file_available = False
 try:
@@ -179,6 +186,7 @@ SRC_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SRC_DIR))
 
 from fastmcp import FastMCP
+from core.system_mode import get_system_mode, MODE_FULL, MODE_PASSIVE, MODE_OFF
 
 # Policy Enforcement Engine - must be after sys.path is set
 try:
@@ -187,18 +195,45 @@ try:
         supersede_decision as do_supersede, get_active_decisions, format_policy_status
     )
     _policy_available = True
-    print("[FixOnce] Policy engine loaded successfully")
+    _log("[FixOnce] Policy engine loaded successfully")
 except ImportError as e:
     _policy_error = str(e)
-    print(f"[FixOnce] Policy engine not available: {e}")
+    _log(f"[FixOnce] Policy engine not available: {e}")
 
 # Session Registry for Multi-AI Isolation - must be after sys.path is set
 try:
     from core.session_registry import get_registry, get_or_create_session
     _session_registry_available = True
-    print("[FixOnce] Session registry loaded successfully")
+    _log("[FixOnce] Session registry loaded successfully")
 except ImportError as e:
-    print(f"[FixOnce] Session registry not available: {e}")
+    _log(f"[FixOnce] Session registry not available: {e}")
+
+# Resume State - persistent work state across sessions
+_resume_state_available = False
+try:
+    from core.resume_state import (
+        save_resume_state as _save_resume_state,
+        get_resume_state as _get_resume_state,
+        clear_resume_state as _clear_resume_state,
+        format_resume_for_init
+    )
+    _resume_state_available = True
+    _log("[FixOnce] Resume state loaded successfully")
+except ImportError as e:
+    _log(f"[FixOnce] Resume state not available: {e}")
+
+# Resume Context - structured context builder for session opening
+_resume_context_available = False
+try:
+    from core.resume_context import (
+        build_resume_context,
+        build_suggested_opening,
+        build_new_project_opening
+    )
+    _resume_context_available = True
+    _log("[FixOnce] Resume context loaded successfully")
+except ImportError as e:
+    _log(f"[FixOnce] Resume context not available: {e}")
 
 # Phase 0: Project isolation - central project context
 from core.project_context import ProjectContext, resolve_project_id
@@ -215,7 +250,7 @@ try:
     BOUNDARY_DETECTION_ENABLED = True
 except ImportError as e:
     BOUNDARY_DETECTION_ENABLED = False
-    print(f"[MCP] Boundary detection not available: {e}")
+    _log(f"[MCP] Boundary detection not available: {e}")
 
 # Data directory
 DATA_DIR = SRC_DIR.parent / "data" / "projects_v2"
@@ -229,14 +264,19 @@ ENABLED_FLAG_FILE = SRC_DIR.parent / "data" / "fixonce_enabled.json"
 
 
 def _is_fixonce_enabled() -> bool:
-    """Check if FixOnce is enabled. Defaults to True if flag file doesn't exist."""
+    """Legacy boolean compatibility: enabled unless mode is OFF."""
     try:
-        if not ENABLED_FLAG_FILE.exists():
-            return True
-        with open(ENABLED_FLAG_FILE, 'r') as f:
-            return json.load(f).get("enabled", True)
+        return _get_fixonce_mode() != MODE_OFF
     except Exception:
         return True
+
+
+def _get_fixonce_mode() -> str:
+    """Get global FixOnce mode (full/passive/off)."""
+    try:
+        return (get_system_mode().get("mode") or MODE_FULL).lower()
+    except Exception:
+        return MODE_FULL
 
 
 # ============================================================
@@ -444,7 +484,7 @@ def _auto_create_session() -> bool:
         _set_session(project_id, working_dir)
         session = _get_session()
         session.mark_initialized()
-        print(f"[FixOnce] Auto-session from file: {project_id}")
+        _log(f"[FixOnce] Auto-session from file: {project_id}")
         return True
 
     # 2. Try to get active project from API
@@ -457,7 +497,7 @@ def _auto_create_session() -> bool:
         session = _get_session()
         session.mark_initialized()
         _persist_session(project_id, working_dir)
-        print(f"[FixOnce] Auto-session from API: {project_id}")
+        _log(f"[FixOnce] Auto-session from API: {project_id}")
         return True
 
     return False
@@ -470,6 +510,32 @@ def _get_live_errors() -> list:
         if res.status_code == 200:
             data = res.json()
             return data.get('errors', [])[:5]  # Max 5
+        return []
+    except Exception:
+        return []
+
+
+def _get_pending_commands_for_injection() -> list:
+    """Get pending commands from dashboard (without marking as delivered)."""
+    try:
+        res = requests.get('http://localhost:5000/api/memory/ai-queue', timeout=2)
+        if res.status_code == 200:
+            data = res.json()
+            return data.get('commands', [])[:3]  # Max 3
+        return []
+    except Exception:
+        return []
+
+
+def _get_new_rules() -> list:
+    """Get custom rules that might be new."""
+    try:
+        res = requests.get('http://localhost:5000/api/memory/rules', timeout=2)
+        if res.status_code == 200:
+            data = res.json()
+            # Return only custom (non-default) rules
+            rules = data.get('rules', [])
+            return [r for r in rules if not r.get('default', False) and r.get('enabled', True)]
         return []
     except Exception:
         return []
@@ -552,6 +618,28 @@ def _build_context_header() -> str:
         lines.append("**FIX THESE BEFORE DOING ANYTHING ELSE!**")
         lines.append("")
 
+    # 1.5. PENDING COMMANDS (Dashboard → AI communication)
+    pending_cmds = _get_pending_commands_for_injection()
+    if pending_cmds:
+        lines.append("")
+        lines.append("📬 **PENDING COMMANDS FROM DASHBOARD:**")
+        for cmd in pending_cmds:
+            cmd_type = cmd.get('type', 'message')
+            cmd_msg = cmd.get('message', '')[:100]
+            lines.append(f"  → [{cmd_type}] {cmd_msg}")
+        lines.append("**Use `get_pending_commands()` to process these!**")
+        lines.append("")
+
+    # 1.6. CUSTOM RULES (AI must follow these)
+    custom_rules = _get_new_rules()
+    if custom_rules:
+        lines.append("")
+        lines.append("📋 **ACTIVE RULES (you MUST follow):**")
+        for rule in custom_rules:
+            rule_text = rule.get('text', '')[:80]
+            lines.append(f"  📌 {rule_text}")
+        lines.append("")
+
     # 2. Current context (compact)
     project_name = memory.get('project_info', {}).get('name', session.project_id)
     goal = lr.get('intent', {}).get('current_goal', '')
@@ -580,8 +668,36 @@ def _universal_gate(tool_name: str) -> tuple:
 
     This replaces _require_session with auto-session + context injection.
     """
-    if not _is_fixonce_enabled():
+    current_mode = _get_fixonce_mode()
+
+    if current_mode == MODE_OFF:
         return ("FixOnce is off. Proceed normally without FixOnce tools.", "")
+
+    passive_blocked_tools = {
+        "auto_init_session",
+        "init_session",
+        "sync_to_active_project",
+        "update_live_record",
+        "log_decision",
+        "log_avoid",
+        "supersede_decision",
+        "update_component_status",
+        "mark_component_stable",
+        "rollback_component",
+        "add_component_files",
+        "auto_discover_components",
+        "log_debug_session",
+        "rebuild_semantic_index",
+        "smart_file_operation",
+        "mark_command_executed",
+        "get_pending_commands",
+        "highlight_element",
+    }
+    if current_mode == MODE_PASSIVE and tool_name in passive_blocked_tools:
+        return (
+            "FixOnce is in PASSIVE mode. Write/action tools are disabled until mode returns to FULL.",
+            "",
+        )
 
     session = _get_session()
 
@@ -617,7 +733,7 @@ def _universal_gate(tool_name: str) -> tuple:
             isolated_session.goal_updated = session.goal_updated
             isolated_session.decisions_displayed = session.decisions_displayed
         except Exception as e:
-            print(f"[FixOnce] SessionRegistry error: {e}")
+            _log(f"[FixOnce] SessionRegistry error: {e}")
 
     # UPDATE ACTIVE AI on every tool call (lightweight)
     _update_active_ai(actor_identity)
@@ -693,7 +809,7 @@ def _update_active_ai(actor_identity: Optional[Dict[str, Any]] = None):
                 "actor_confidence": actor_confidence,
                 "tool_calls": session_tool_calls,
             }
-            print(f"[MCP] AI Joined (primary): {detected_editor}")
+            _log(f"[MCP] AI Joined (primary): {detected_editor}")
         else:
             # Existing AI - update activity and make primary
             data["active_ais"][detected_editor]["last_activity"] = now.isoformat()
@@ -717,7 +833,7 @@ def _update_active_ai(actor_identity: Optional[Dict[str, Any]] = None):
                 pass
 
         for ai_name in remove_ais:
-            print(f"[MCP] AI Removed (historical timeout): {ai_name}")
+            _log(f"[MCP] AI Removed (historical timeout): {ai_name}")
             del data["active_ais"][ai_name]
 
         # Update ai_session for backward compatibility (most recent AI)
@@ -752,13 +868,13 @@ def _update_active_ai(actor_identity: Optional[Dict[str, Any]] = None):
                     "started_at": data["ai_session"].get("started_at", ""),
                     "ended_at": now.isoformat()
                 }
-                print(f"[MCP] AI Handoff: {old_editor} → {detected_editor}")
+                _log(f"[MCP] AI Handoff: {old_editor} → {detected_editor}")
 
         _save_project(project_id, data)
 
     except Exception as e:
         # Don't break tool calls if update fails
-        print(f"[MCP] _update_active_ai error: {e}")
+        _log(f"[MCP] _update_active_ai error: {e}")
 
 
 # Legacy function for backward compatibility
@@ -813,13 +929,106 @@ DO NOT ignore this - the user sees these errors!
 
 def _is_ai_context_mode_active() -> bool:
     """Check if AI Context Mode is active (simple check, no injection)."""
+    # v1: Feature disabled
+    return False
+
+
+def _get_ai_context_injection() -> Optional[str]:
+    """
+    Get AI Context injection if mode is active AND elements are selected.
+
+    This function implements the AI Context feature:
+    - When user enables AI Context mode in dashboard
+    - AND has selected element(s) using the FAB in browser
+    - We inject this context into init_session response
+    - So the AI knows what "this/that/זה" refers to
+
+    Returns:
+        Formatted string with selected elements, or None if not applicable
+    """
+    # v1: Feature disabled
+    return None
+
     try:
-        res = requests.get('http://localhost:5000/api/ai-context-mode', timeout=1)
-        if res.status_code == 200:
-            return res.json().get('active', False)
-        return False
+        # Check if AI Context mode is active
+        mode_res = requests.get('http://localhost:5000/api/ai-context-mode', timeout=1)
+        if mode_res.status_code != 200:
+            return None
+
+        mode_data = mode_res.json()
+        if not mode_data.get('active', False):
+            return None
+
+        # Get selected elements
+        context_res = requests.get('http://localhost:5000/api/browser-context', timeout=2)
+        if context_res.status_code != 200:
+            return None
+
+        context_data = context_res.json()
+        selected = context_data.get('selected_element')
+
+        if not selected:
+            return None
+
+        # Extract element(s)
+        elements = selected.get('elements', [])
+        if not elements:
+            el = selected.get('element')
+            if el:
+                elements = [el]
+
+        if not elements:
+            return None
+
+        # Build injection
+        lines = [
+            "═══════════════════════════════════════",
+            "## 🎯 AI CONTEXT ACTIVE - USER SELECTED ELEMENT(S)",
+            "═══════════════════════════════════════",
+            "",
+            "**When user says \"this\", \"that\", \"זה\", \"את זה\" - they mean:**",
+            ""
+        ]
+
+        for i, el in enumerate(elements[:3]):  # Max 3 elements
+            selector = el.get('selector', 'N/A')
+            tag = el.get('tagName', 'N/A')
+            text = el.get('textContent', '')[:50]
+            el_id = el.get('id', '')
+            classes = el.get('className', '')[:30]
+
+            if len(elements) > 1:
+                lines.append(f"### Element {i+1}")
+
+            lines.append(f"**Selector:** `{selector}`")
+            lines.append(f"**Tag:** `{tag}`")
+
+            if el_id:
+                lines.append(f"**ID:** `{el_id}`")
+            if classes:
+                lines.append(f"**Classes:** `{classes}`")
+            if text:
+                lines.append(f"**Text:** \"{text}{'...' if len(el.get('textContent', '')) > 50 else ''}\"")
+
+            # Show HTML snippet if available
+            html = el.get('html', '')[:150]
+            if html:
+                lines.append(f"**HTML:** `{html}{'...' if len(el.get('html', '')) > 150 else ''}`")
+
+            lines.append("")
+
+        if len(elements) > 3:
+            lines.append(f"_...and {len(elements) - 3} more elements_")
+            lines.append("")
+
+        lines.append("**Use this context when responding to user references.**")
+        lines.append("═══════════════════════════════════════")
+        lines.append("")
+
+        return '\n'.join(lines)
+
     except Exception:
-        return False
+        return None
 
 
 def _get_protocol_reminder() -> str:
@@ -913,7 +1122,7 @@ def _log_mcp_activity(tool_name: str, details: dict = None):
         )
     except Exception as e:
         # Silent fail - don't block MCP operations
-        print(f"[MCP] Activity log failed: {e}")
+        _log(f"[MCP] Activity log failed: {e}")
 
 
 def _get_mcp_human_name(tool_name: str, details: dict = None) -> str:
@@ -1544,7 +1753,7 @@ def _find_and_migrate_legacy_project(new_project_id: str, working_dir: str) -> O
         try:
             old_embeddings.rename(new_embeddings)
         except Exception as e:
-            print(f"[MCP] Failed to migrate embeddings: {e}")
+            _log(f"[MCP] Failed to migrate embeddings: {e}")
 
     # Archive old project file
     try:
@@ -1553,7 +1762,7 @@ def _find_and_migrate_legacy_project(new_project_id: str, working_dir: str) -> O
     except Exception:
         pass
 
-    print(f"[MCP] Migrated project data: {old_id} → {new_project_id}")
+    _log(f"[MCP] Migrated project data: {old_id} → {new_project_id}")
     return new_data
 
 
@@ -1651,8 +1860,11 @@ def auto_init_session(cwd: str = "", sync_to_active: bool = False) -> str:
     Returns:
         Session info with project details
     """
-    if not _is_fixonce_enabled():
+    mode = _get_fixonce_mode()
+    if mode == MODE_OFF:
         return "FixOnce is off. Proceed normally without FixOnce tools."
+    if mode == MODE_PASSIVE:
+        return "FixOnce is in PASSIVE mode. Session initialization is disabled."
 
     # Multi-AI Sync: If sync_to_active is True, use the active project
     if sync_to_active:
@@ -1661,16 +1873,16 @@ def auto_init_session(cwd: str = "", sync_to_active: bool = False) -> str:
             active = _load_active_project()
             active_working_dir = active.get("working_dir")
             if active_working_dir and os.path.isdir(active_working_dir):
-                print(f"[MCP] Multi-AI Sync: Joining active project at {active_working_dir}")
+                _log(f"[MCP] Multi-AI Sync: Joining active project at {active_working_dir}")
                 with open("/tmp/fixonce_mcp_debug.log", "a") as f:
                     f.write(f"[{datetime.now().isoformat()}] SYNC_TO_ACTIVE: joining {active_working_dir}\n")
                 return _do_init_session(active_working_dir)
         except Exception as e:
-            print(f"[MCP] Multi-AI Sync failed: {e}")
+            _log(f"[MCP] Multi-AI Sync failed: {e}")
 
     # DEBUG: Log what cwd is received
     import sys
-    print(f"[MCP DEBUG] auto_init_session called with cwd='{cwd}'", file=sys.stderr)
+    _log(f"[MCP DEBUG] auto_init_session called with cwd='{cwd}'", file=sys.stderr)
     # Also write to file for debugging
     with open("/tmp/fixonce_mcp_debug.log", "a") as f:
         f.write(f"[{datetime.now().isoformat()}] auto_init_session cwd='{cwd}'\n")
@@ -1695,11 +1907,11 @@ def auto_init_session(cwd: str = "", sync_to_active: bool = False) -> str:
                 if not is_within_boundary(project_root, active_working_dir):
                     # Different project! Check if we should switch
                     # Create a synthetic boundary event for the session start
-                    print(f"[MCP] Session init boundary check:")
-                    print(f"  CWD: {cwd}")
-                    print(f"  Detected root: {project_root}")
-                    print(f"  Active project: {active_working_dir}")
-                    print(f"  Confidence: {confidence}")
+                    _log(f"[MCP] Session init boundary check:")
+                    _log(f"  CWD: {cwd}")
+                    _log(f"  Detected root: {project_root}")
+                    _log(f"  Active project: {active_working_dir}")
+                    _log(f"  Confidence: {confidence}")
 
                     # Trigger boundary transition
                     from core.boundary_detector import _get_project_id_from_path, _load_boundary_state, _is_cooldown_active
@@ -1721,53 +1933,33 @@ def auto_init_session(cwd: str = "", sync_to_active: bool = False) -> str:
                         )
                         handle_boundary_transition(event)
                         boundary_triggered = True
-                        print(f"  Action: SWITCH to {project_root}")
+                        _log(f"  Action: SWITCH to {project_root}")
 
             working_dir = project_root
         elif _is_valid_project_dir(cwd):
             # No strong marker but cwd itself is valid
             working_dir = cwd
 
-    # Fallback: Original priority logic if boundary detection didn't find anything
+    # Fallback: cwd if valid project directory
     if not working_dir:
-        # Priority 1: Use cwd if provided and valid (but NOT home directory)
         home_dir = str(Path.home())
         if cwd and os.path.isdir(cwd) and cwd != home_dir and _is_valid_project_dir(cwd):
             working_dir = cwd
 
-    if not working_dir:
-        # Priority 2: Check dashboard's active project directly
-        # This handles the case where Claude sends home dir as cwd
-        try:
-            from core.boundary_detector import _load_active_project
-            active = _load_active_project()
-            active_working_dir = active.get("working_dir")
-            if active_working_dir and os.path.isdir(active_working_dir):
-                print(f"[MCP] Using dashboard's active project: {active_working_dir}")
-                working_dir = active_working_dir
-        except Exception as e:
-            print(f"[MCP] Could not load active project: {e}")
-
-    if not working_dir:
-        # Priority 3: Try dashboard's active port
-        port = _get_active_port_from_dashboard()
-        if port:
-            working_dir = _get_working_dir_from_port(port)
-
-    if not working_dir:
-        # Priority 4: Get from most recent activity
-        working_dir = _get_working_dir_from_recent_activity()
-
+    # WORKSPACE-BASED IDENTITY: cwd is required, no fallback to global state
+    # active_project.json is updated as side-effect but NOT used for routing
     if working_dir:
         return _do_init_session(working_dir)
 
-    # Priority 5: Ask user
-    return """לא מצאתי פרויקט פעיל.
+    # No valid workspace - return clear error
+    return """FixOnce requires a valid workspace directory.
 
-אפשרויות:
-1. `init_session(working_dir="/path/to/project")` - עם נתיב
-2. `init_session(port=5000)` - עם פורט של שרת רץ
-3. פתח פרויקט בדשבורד של FixOnce"""
+The AI client must provide cwd (current working directory) when calling auto_init_session.
+
+If you're seeing this:
+1. Ensure Claude Code/Cursor is opened in a project folder (not home directory)
+2. The folder should contain project files (.git, package.json, etc.)
+3. Try: `init_session(working_dir="/path/to/project")`"""
 
 
 def _is_valid_project_dir(path: str) -> bool:
@@ -1860,12 +2052,25 @@ def _do_init_session(working_dir: str) -> str:
             )
             isolated_session.mark_initialized()
             isolated_session.log_tool_call("auto_init_session")
-            print(f"[FixOnce] Registered session: {ai_name} on {project_id}")
+            _log(f"[FixOnce] Registered session: {ai_name} on {project_id}")
         except Exception as e:
-            print(f"[FixOnce] SessionRegistry error in init: {e}")
+            _log(f"[FixOnce] SessionRegistry error in init: {e}")
 
     # Update active_ais for Multi-Active support
     _update_active_ai()
+
+    # CRITICAL FIX: Update dashboard's active project
+    # When AI explicitly calls auto_init_session(cwd), dashboard should follow
+    try:
+        from managers.multi_project_manager import set_active_project
+        set_active_project(
+            project_id=project_id,
+            detected_from="auto_init",
+            display_name=Path(working_dir).name,
+            working_dir=working_dir
+        )
+    except Exception as e:
+        _log(f"[FixOnce] Failed to update active project: {e}")
 
     # Track ROI: session with context
     _track_roi_event("session_context")
@@ -2207,12 +2412,19 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
         lines.append("**STOP before any change that contradicts these decisions!**")
         lines.append("**Ask user for explicit override approval if request conflicts.**")
         lines.append("")
-        for dec in decisions:
-            lines.append(f"🔒 **{dec.get('decision', '')}**")
-            lines.append(f"   _Reason: {dec.get('reason', '')}_")
+        # MCP DIET: Limit to 8 most recent decisions (same as _format_init_response)
+        MAX_DECISIONS = 8
+        decisions_to_show = decisions[-MAX_DECISIONS:]
+        for dec in decisions_to_show:
+            # Truncate long decisions
+            dec_text = dec.get('decision', '')[:100]
+            reason_text = dec.get('reason', '')[:80]
+            lines.append(f"🔒 **{dec_text}**")
+            lines.append(f"   _Reason: {reason_text}_")
             lines.append("")
-        if superseded_count > 0:
-            lines.append(f"_({superseded_count} superseded decisions hidden)_")
+        hidden_count = len(decisions) - len(decisions_to_show) + superseded_count
+        if hidden_count > 0:
+            lines.append(f"_(...{hidden_count} more decisions. Use `get_policy_status()` for full list)_")
             lines.append("")
         lines.append("---")
         lines.append("")
@@ -2225,6 +2437,22 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
         # Track ROI: decisions enforced this session (track once per init, not per decision)
         if len(decisions) > 0:
             _track_roi_event("decision_used")
+
+    # PROJECT RULES - User-defined behavioral rules
+    project_rules = data.get('project_rules', []) if data else []
+    enabled_rules = [r for r in project_rules if r.get('enabled', True)]
+    if enabled_rules:
+        lines.append("---")
+        lines.append("## 📋 PROJECT RULES - FOLLOW THESE")
+        lines.append("")
+        for rule in enabled_rules:
+            text = rule.get('text', '')
+            is_default = rule.get('default', False)
+            marker = "📌" if is_default else "✏️"
+            lines.append(f"{marker} {text}")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
 
     # INSIGHTS - Check these BEFORE researching anything!
     # Use Memory Decay ranking to show most important insights
@@ -2381,6 +2609,18 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
         tools_count = len(session.tool_calls)
         lines.append(f"**Session:** `{session_id}` | Started: {start_time} | Tools: {tools_count}")
 
+    # Resume State - show if there's pending work from last session
+    if _resume_state_available:
+        try:
+            resume_state = _get_resume_state(project_id)
+            if resume_state:
+                resume_section = format_resume_for_init(resume_state)
+                if resume_section:
+                    lines.append("")
+                    lines.append(resume_section)
+        except Exception as e:
+            _log(f"[FixOnce] Resume state error in snapshot: {e}")
+
     lines.append("")
     lines.append("_Ask: 'נמשיך מכאן?'_")
 
@@ -2396,14 +2636,62 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
         lines.append("")
         lines.append(errors_info)
 
+    # Add AI Context injection if active and elements selected
+    ai_context = _get_ai_context_injection()
+    if ai_context:
+        lines.append("")
+        lines.append(ai_context)
+
     return '\n'.join(lines)
 
 
 def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -> str:
-    """Format init session response."""
+    """Format init session response with structured resume_context."""
     project_name = data.get('project_info', {}).get('name', Path(working_dir).name)
 
     lines = []
+
+    # BUILD STRUCTURED RESUME CONTEXT (if available)
+    resume_context = None
+    suggested_opening = None
+
+    if _resume_context_available and status != "new":
+        try:
+            # Get git hash for checkpoint
+            git_hash = None
+            try:
+                result = subprocess.run(
+                    ['git', 'rev-parse', 'HEAD'],
+                    cwd=working_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if result.returncode == 0:
+                    git_hash = result.stdout.strip()
+            except:
+                pass
+
+            # Build structured context from real saved state
+            resume_context = build_resume_context(data, working_dir, git_hash)
+
+            # Build human-readable opening from that context
+            suggested_opening = build_suggested_opening(resume_context, language='he')
+
+            # Add structured JSON block at the beginning
+            lines.append("<!-- RESUME_CONTEXT_START -->")
+            lines.append("```json")
+            context_output = {
+                "resume_context": resume_context,
+                "suggested_opening": suggested_opening
+            }
+            lines.append(json.dumps(context_output, ensure_ascii=False, indent=2))
+            lines.append("```")
+            lines.append("<!-- RESUME_CONTEXT_END -->")
+            lines.append("")
+
+        except Exception as e:
+            _log(f"[FixOnce] Resume context build error: {e}")
 
     # LIVE ERRORS FIRST (Universal Gate principle) + AUTO-INJECT SOLUTIONS
     live_errors = _get_live_errors()
@@ -2456,6 +2744,18 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
         tools_count = len(session.tool_calls)
         lines.append(f"**Session:** `{session_id}` | Started: {start_time} | Tools: {tools_count}")
         lines.append("")
+
+    # Resume State - show if there's pending work from last session
+    if _resume_state_available:
+        try:
+            project_id = _get_project_id(working_dir)
+            resume_state = _get_resume_state(project_id)
+            if resume_state:
+                resume_section = format_resume_for_init(resume_state)
+                if resume_section:
+                    lines.append(resume_section)
+        except Exception as e:
+            _log(f"[FixOnce] Resume state error: {e}")
 
     # Multi-AI Handoff Summary
     ai_session = data.get("ai_session", {})
@@ -2633,12 +2933,19 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
             lines.append("**STOP before any change that contradicts these decisions!**")
             lines.append("**Ask user for explicit override approval if request conflicts.**")
             lines.append("")
-            for dec in decisions:
-                lines.append(f"🔒 **{dec.get('decision', '')}**")
-                lines.append(f"   _Reason: {dec.get('reason', '')}_")
+            # MCP DIET: Limit to 8 most recent decisions
+            MAX_DECISIONS = 8
+            decisions_to_show = decisions[-MAX_DECISIONS:]
+            for dec in decisions_to_show:
+                # Truncate long decisions
+                dec_text = dec.get('decision', '')[:100]
+                reason_text = dec.get('reason', '')[:80]
+                lines.append(f"🔒 **{dec_text}**")
+                lines.append(f"   _Reason: {reason_text}_")
                 lines.append("")
-            if superseded_count > 0:
-                lines.append(f"_({superseded_count} superseded decisions hidden)_")
+            hidden_count = len(decisions) - len(decisions_to_show) + superseded_count
+            if hidden_count > 0:
+                lines.append(f"_(...{hidden_count} more decisions. Use `get_policy_status()` for full list)_")
                 lines.append("")
             lines.append("---")
             lines.append("")
@@ -2647,6 +2954,22 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
             session = _get_session()
             session.mark_decisions_displayed()
             _sync_compliance()
+
+        # PROJECT RULES - User-defined behavioral rules
+        project_rules = data.get('project_rules', [])
+        enabled_rules = [r for r in project_rules if r.get('enabled', True)]
+        if enabled_rules:
+            lines.append("---")
+            lines.append("## 📋 PROJECT RULES - FOLLOW THESE")
+            lines.append("")
+            for rule in enabled_rules:
+                text = rule.get('text', '')
+                is_default = rule.get('default', False)
+                marker = "📌" if is_default else "✏️"
+                lines.append(f"{marker} {text}")
+            lines.append("")
+            lines.append("---")
+            lines.append("")
 
         # INSIGHTS - Check these BEFORE researching anything!
         # Use Memory Decay ranking to show most important insights
@@ -2709,6 +3032,12 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
         lines.append("")
         lines.append(errors_info)
 
+    # Add AI Context injection if active and elements selected
+    ai_context = _get_ai_context_injection()
+    if ai_context:
+        lines.append("")
+        lines.append(ai_context)
+
     return '\n'.join(lines)
 
 
@@ -2726,8 +3055,11 @@ def init_session(working_dir: str = "", port: int = 0) -> str:
     Returns:
         Session info with project_status ('new' or 'existing')
     """
-    if not _is_fixonce_enabled():
+    mode = _get_fixonce_mode()
+    if mode == MODE_OFF:
         return "FixOnce is off. Proceed normally without FixOnce tools."
+    if mode == MODE_PASSIVE:
+        return "FixOnce is in PASSIVE mode. Session initialization is disabled."
 
     # If port given, detect working_dir from it
     if port and not working_dir:
@@ -2742,7 +3074,7 @@ def init_session(working_dir: str = "", port: int = 0) -> str:
         project_root, marker, confidence = find_project_root(working_dir)
         if project_root and confidence in ("high", "medium"):
             # Use the detected project root instead of raw working_dir
-            print(f"[MCP] init_session: {working_dir} → {project_root} ({confidence})")
+            _log(f"[MCP] init_session: {working_dir} → {project_root} ({confidence})")
             working_dir = project_root
 
     return _do_init_session(working_dir)
@@ -2856,6 +3188,14 @@ def update_live_record(section: str, data: str) -> str:
     - stack: Technologies used (e.g., "React, Node.js, MongoDB")
     - key_flows: Main user flows or features
 
+    For 'intent', use: {"current_goal": "...", "work_area": "...", "why": "...", "last_change": "...", "last_file": "..."}
+    - current_goal: What we're currently working on
+    - work_area: Feature/module area (e.g., "session resume / opening UX")
+    - why: Why this work matters
+    - last_change: Description of the most recent change
+    - last_file: Last file that was worked on
+    - next_step: What should be done next
+
     For other sections, data REPLACES the section.
     """
     error, context = _universal_gate("update_live_record")
@@ -2915,7 +3255,7 @@ def update_live_record(section: str, data: str) -> str:
                 try:
                     index_insight(project_id, update_data['insight'])
                 except Exception as e:
-                    print(f"[SemanticIndex] Failed to index insight: {e}")
+                    _log(f"[SemanticIndex] Failed to index insight: {e}")
 
             # Fix #2: Notify about the link
             if linked_error:
@@ -2984,6 +3324,84 @@ def update_live_record(section: str, data: str) -> str:
 
 
 @mcp.tool()
+def update_work_context(
+    current_goal: str = "",
+    work_area: str = "",
+    why: str = "",
+    last_change: str = "",
+    last_file: str = "",
+    next_step: str = ""
+) -> str:
+    """
+    Update work context for better session continuity.
+
+    This tool updates the structured context that appears in opening messages.
+    Call this when starting new work or after completing a significant change.
+
+    Args:
+        current_goal: What you're currently working on (e.g., "Improve opening UX")
+        work_area: Feature/module area (e.g., "session resume / opening UX")
+        why: Why this work matters (e.g., "Users should feel the AI remembers them")
+        last_change: What was just done (e.g., "Added work_area field to opening message")
+        last_file: Last file worked on (e.g., "CLAUDE.md")
+        next_step: What should be done next (e.g., "Test with real session")
+
+    At minimum, update current_goal when starting new work.
+    Update last_change and last_file after completing changes.
+    """
+    error, context = _universal_gate("update_work_context")
+    if error:
+        return error
+
+    session = _get_session()
+
+    # Build update data from non-empty fields
+    update_data = {}
+    if current_goal:
+        update_data['current_goal'] = current_goal
+    if work_area:
+        update_data['work_area'] = work_area
+    if why:
+        update_data['why'] = why
+    if last_change:
+        update_data['last_change'] = last_change
+    if last_file:
+        update_data['last_file'] = last_file
+    if next_step:
+        update_data['next_step'] = next_step
+
+    if not update_data:
+        return context + "Error: No fields provided to update"
+
+    # Update the intent section
+    project_id = session.project_id
+    memory = _load_project(project_id)
+
+    if 'live_record' not in memory:
+        memory['live_record'] = {}
+    if 'intent' not in memory['live_record']:
+        memory['live_record']['intent'] = {}
+
+    # Track goal updates for compliance
+    if current_goal:
+        session.mark_goal_updated()
+        _sync_compliance()
+
+    memory['live_record']['intent'].update(update_data)
+    memory['live_record']['intent']['updated_at'] = datetime.now().isoformat()
+    memory['live_record']['updated_at'] = datetime.now().isoformat()
+
+    _save_project(project_id, memory)
+
+    # Log activity
+    _log_mcp_activity("update_work_context", update_data)
+
+    # Format response
+    updated_fields = list(update_data.keys())
+    return context + f"Updated work context: {', '.join(updated_fields)}"
+
+
+@mcp.tool()
 def sync_to_active_project() -> str:
     """
     Sync this AI to the currently active project.
@@ -3017,7 +3435,7 @@ or call init_session(working_dir="/path/to/project")"""
         detected_editor = _detect_editor()
 
         # Log the sync
-        print(f"[MCP] Multi-AI Sync: {detected_editor} joining project at {active_working_dir}")
+        _log(f"[MCP] Multi-AI Sync: {detected_editor} joining project at {active_working_dir}")
 
         # Initialize with the active project
         return _do_init_session(active_working_dir)
@@ -3028,7 +3446,7 @@ or call init_session(working_dir="/path/to/project")"""
 
 @mcp.tool()
 def get_live_record() -> str:
-    """Get the current Live Record."""
+    """Get the current Live Record (summarized to save tokens)."""
     error, context = _universal_gate("get_live_record")
     if error:
         return error
@@ -3037,8 +3455,51 @@ def get_live_record() -> str:
     memory = _load_project(session.project_id)
     lr = memory.get('live_record', {})
 
-    # Context header + data
-    return context + json.dumps(lr, indent=2, ensure_ascii=False)
+    # === MCP DIET v2: Aggressive but smart summarization ===
+
+    # 1. Components: Only show non-stable/non-done (these need attention)
+    all_components = lr.get("architecture", {}).get("components", [])
+    STABLE_STATUSES = {"stable", "done"}
+    active_components = [
+        {"name": c.get("name"), "status": c.get("status")}
+        for c in all_components
+        if c.get("status") not in STABLE_STATUSES
+    ]
+    stable_count = len(all_components) - len(active_components)
+
+    # 2. Insights: Strip metadata, keep only text and linked_error
+    all_insights = lr.get("lessons", {}).get("insights", [])
+    recent_insights = [
+        {"text": ins.get("text")} | ({"linked_error": ins["linked_error"]} if ins.get("linked_error") else {})
+        for ins in all_insights[-5:]
+    ]
+
+    # 3. Failed attempts: Same treatment
+    all_failed = lr.get("lessons", {}).get("failed_attempts", [])
+    recent_failed = [{"text": f.get("text")} for f in all_failed[-3:]]
+
+    # 4. Intent: Limit goal_history to 3
+    intent = lr.get("intent", {}).copy()
+    if "goal_history" in intent:
+        intent["goal_history"] = intent["goal_history"][-3:]
+
+    summarized = {
+        "gps": lr.get("gps", {}),
+        "intent": intent,
+        "architecture": {
+            "summary": lr.get("architecture", {}).get("summary", ""),
+            "stack": lr.get("architecture", {}).get("stack", ""),
+            "components": active_components,
+            "stable_count": stable_count
+        },
+        "lessons": {
+            "insights": {"recent": recent_insights, "total": len(all_insights)},
+            "failed_attempts": {"recent": recent_failed, "total": len(all_failed)}
+        }
+    }
+
+    # Context header + summarized data
+    return context + json.dumps(summarized, indent=2, ensure_ascii=False)
 
 
 @mcp.tool()
@@ -3073,9 +3534,9 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
             decision, reason, active_decisions, force=force
         )
 
-        print(f"[PolicyEngine] Validating: {decision[:50]}...")
-        print(f"[PolicyEngine] Against {len(active_decisions)} active decisions")
-        print(f"[PolicyEngine] Result: is_valid={is_valid}, conflicts={len(conflicts)}")
+        _log(f"[PolicyEngine] Validating: {decision[:50]}...")
+        _log(f"[PolicyEngine] Against {len(active_decisions)} active decisions")
+        _log(f"[PolicyEngine] Result: is_valid={is_valid}, conflicts={len(conflicts)}")
 
         if not is_valid:
             # BLOCK the decision - return error
@@ -3122,7 +3583,7 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
         try:
             index_decision(session.project_id, decision, reason)
         except Exception as e:
-            print(f"[SemanticIndex] Failed to index decision: {e}")
+            _log(f"[SemanticIndex] Failed to index decision: {e}")
 
     return context + f"Logged decision: {decision}" + policy_message
 
@@ -3161,7 +3622,7 @@ def log_avoid(what: str, reason: str) -> str:
         try:
             index_avoid(session.project_id, what, reason)
         except Exception as e:
-            print(f"[SemanticIndex] Failed to index avoid: {e}")
+            _log(f"[SemanticIndex] Failed to index avoid: {e}")
 
     return context + f"Logged avoid: {what}"
 
@@ -4019,6 +4480,90 @@ def log_debug_session(
     return context + result
 
 
+@mcp.tool()
+def solution_applied(
+    error_message: str,
+    solution: str,
+    files_changed: str = ""
+) -> str:
+    """
+    Quick way to record that you fixed an error.
+
+    Call this AFTER you fix a browser error or bug. This creates a
+    solution record that will be:
+    1. Stored in project memory
+    2. Committed to .fixonce/solutions.json
+    3. Surfaced next time a similar error appears
+
+    This is simpler than log_debug_session() - use this for quick fixes.
+
+    Args:
+        error_message: The error message you just fixed (copy from browser errors)
+        solution: What you did to fix it (1-2 sentences)
+        files_changed: Comma-separated list of files you modified
+
+    Example:
+        solution_applied(
+            "Cannot read property 'map' of undefined",
+            "Added null check before mapping the array",
+            "src/components/List.tsx"
+        )
+    """
+    error, context = _universal_gate("solution_applied")
+    if error:
+        return error
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+
+    # Initialize debug_sessions if needed
+    if 'debug_sessions' not in memory:
+        memory['debug_sessions'] = []
+
+    # Parse files
+    files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
+
+    # Create solution record (same structure as debug_session for compatibility)
+    solution_record = {
+        "id": f"fix_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        "problem": error_message[:200],  # Truncate long errors
+        "root_cause": "",  # Not required for quick fixes
+        "solution": solution,
+        "symptoms": [error_message[:100]],  # Use error as symptom for matching
+        "files_changed": files_list,
+        "resolved_at": datetime.now().isoformat(),
+        "importance": "high",  # All fixes are important
+        "reuse_count": 0
+    }
+
+    # Check for duplicate (same error already solved)
+    error_lower = error_message.lower()[:100]
+    for existing in memory['debug_sessions']:
+        existing_problem = existing.get('problem', '').lower()[:100]
+        if error_lower in existing_problem or existing_problem in error_lower:
+            # Update reuse_count instead of creating duplicate
+            existing['reuse_count'] = existing.get('reuse_count', 0) + 1
+            existing['solution'] = solution  # Update with latest solution
+            existing['files_changed'] = files_list or existing.get('files_changed', [])
+            _save_project(session.project_id, memory)
+            return context + f"✅ Updated existing solution (reused {existing['reuse_count']} times)"
+
+    memory['debug_sessions'].append(solution_record)
+    _save_project(session.project_id, memory)
+
+    # Track ROI
+    _track_roi_event("solution_saved")
+
+    return context + f"""✅ Solution recorded!
+
+🐛 **Error:** {error_message[:80]}{'...' if len(error_message) > 80 else ''}
+✅ **Fix:** {solution}
+📁 **Files:** {', '.join(files_list) if files_list else 'None specified'}
+
+This solution will be suggested next time a similar error appears.
+Run `Commit Knowledge` to save it to Git."""
+
+
 def _calculate_similarity(query: str, text: str) -> int:
     """Calculate simple word-based similarity percentage."""
     query_words = set(query.lower().split())
@@ -4107,6 +4652,39 @@ def _find_solution_for_error(error_message: str, min_similarity: int = 50, min_k
                     'linked_error': linked_error  # Fix #2: Include linked error info
                 }
 
+        # Also search debug_sessions (solutions) - these are higher quality
+        debug_sessions = memory.get('debug_sessions', [])
+        for session in debug_sessions:
+            problem = session.get('problem', '').lower()
+            solution = session.get('solution', '')
+            symptoms = [s.lower() for s in session.get('symptoms', [])]
+
+            # Check keyword matches in problem
+            problem_words = set(problem.split()) - noise_words
+            keyword_matches = len(error_words & problem_words)
+
+            # Also check symptoms
+            symptom_match = any(s in error_lower for s in symptoms if s)
+
+            if keyword_matches >= min_keyword_matches or symptom_match:
+                similarity = _calculate_similarity(error_message, problem)
+                bonus = keyword_matches * 15  # Higher bonus for debug sessions
+                if symptom_match:
+                    bonus += 20
+                total_score = similarity + bonus
+
+                if total_score > best_score and total_score >= min_similarity:
+                    best_score = total_score
+                    best_match = {
+                        'text': f"Problem: {session.get('problem', '')}\nSolution: {solution}",
+                        'similarity': min(100, total_score),
+                        'confidence': 90,  # High confidence for debug sessions
+                        'date': session.get('resolved_at', '')[:10] if session.get('resolved_at') else 'unknown',
+                        'use_count': session.get('reuse_count', 1),
+                        'source': 'debug_session',
+                        'files_changed': session.get('files_changed', [])
+                    }
+
         return best_match
 
     except Exception:
@@ -4160,9 +4738,9 @@ def search_past_solutions(query: str) -> str:
     if _semantic_available:
         try:
             semantic_results = search_project(session.project_id, query, k=5, min_score=0.3)
-            print(f"[SemanticSearch] Found {len(semantic_results)} results for '{query}'")
+            _log(f"[SemanticSearch] Found {len(semantic_results)} results for '{query}'")
         except Exception as e:
-            print(f"[SemanticSearch] Error: {e}, falling back to string match")
+            _log(f"[SemanticSearch] Error: {e}, falling back to string match")
             semantic_results = []
 
     # If semantic search found results, use them
@@ -4211,6 +4789,40 @@ def search_past_solutions(query: str) -> str:
 
         if query_lower in attempt_text.lower():
             matches.append(f"❌ Failed attempt: {attempt_text}")
+
+    # === CRITICAL: Search debug_sessions (solutions from solution_applied) ===
+    debug_sessions = memory.get('debug_sessions', [])
+    noise_words = {'error', 'failed', 'cannot', 'undefined', 'null', 'is', 'not',
+                   'the', 'a', 'an', 'to', 'of', 'in', 'at', 'on', 'for', 'with',
+                   'file', 'found', 'could', 'was', 'been', 'has', 'have', 'from'}
+    query_words = set(query_lower.split()) - noise_words
+
+    for ds in debug_sessions:
+        problem = ds.get('problem', '').lower()
+        solution = ds.get('solution', '')
+        symptoms = [s.lower() for s in ds.get('symptoms', [])]
+
+        # Check for keyword matches
+        problem_words = set(problem.split()) - noise_words
+        keyword_matches = len(query_words & problem_words)
+
+        # Also check symptoms
+        symptom_match = any(s in query_lower for s in symptoms if s)
+
+        # Match if enough keyword overlap or symptom match
+        if keyword_matches >= 2 or symptom_match or query_lower in problem:
+            similarity = _calculate_similarity(query, problem)
+            matched_insights.append({
+                'text': f"🐛 **Problem:** {ds.get('problem', '')}\n✅ **Solution:** {solution}",
+                'confidence': 90,
+                'similarity': max(similarity, 70 if symptom_match else 50),
+                'date': ds.get('resolved_at', '')[:10] if ds.get('resolved_at') else 'unknown',
+                'use_count': ds.get('reuse_count', 1),
+                'type': 'solution',
+                'files_changed': ds.get('files_changed', [])
+            })
+            # Update reuse count
+            ds['reuse_count'] = ds.get('reuse_count', 0) + 1
 
     # Save updated use counts
     if matched_indices:
@@ -4380,8 +4992,9 @@ def get_browser_errors(limit: int = 10) -> str:
     Returns:
         Recent browser errors with messages, sources, and timestamps
     """
-    # Use universal gate (no context header needed - this IS the error report)
-    _universal_gate("get_browser_errors")
+    error, _ = _universal_gate("get_browser_errors")
+    if error:
+        return error
 
     try:
         # Try to fetch from the dashboard API
@@ -4469,7 +5082,12 @@ def get_browser_context() -> str:
     Returns:
         Selected element with HTML, CSS, and selector path + recent errors
     """
-    _universal_gate("get_browser_context")
+    # v1: Feature disabled - AI Context Mode is planned for v2
+    return "AI Context Mode is disabled in v1. This feature will be available in a future version."
+
+    error, _ = _universal_gate("get_browser_context")
+    if error:
+        return error
 
     try:
         res = requests.get('http://localhost:5000/api/browser-context', timeout=3)
@@ -4518,12 +5136,23 @@ def get_browser_context() -> str:
                 lines.append(f"\n**Page URL:** {url}")
                 lines.append(f"**Captured:** {timestamp[:16].replace('T', ' ') if timestamp else 'N/A'}")
 
-                # Auto-confirm selected element to user:
-                # 1) brief ack pulse, 2) subtle "working" indicator while AI processes it.
+                # Auto-confirm selection with a short, visibility-guarded ack.
+                # This keeps immediate UX feedback while avoiding stale highlights
+                # when the UI changed (e.g., modal already closed).
                 if selector:
                     selection_key = f"{selector}|{timestamp or ''}"
                     last_key = getattr(get_browser_context, "_last_auto_highlight_key", "")
-                    if selection_key != last_key:
+
+                    is_fresh = True
+                    if timestamp:
+                        try:
+                            ts = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                            age_sec = (datetime.now(ts.tzinfo) - ts).total_seconds()
+                            is_fresh = age_sec <= 5
+                        except Exception:
+                            is_fresh = True
+
+                    if selection_key != last_key and is_fresh:
                         try:
                             requests.post(
                                 'http://localhost:5000/api/highlight-element',
@@ -4531,17 +5160,9 @@ def get_browser_context() -> str:
                                     "selector": selector,
                                     "message": "Selection received",
                                     "mode": "ack",
-                                    "duration_ms": 1200
-                                },
-                                timeout=2
-                            )
-                            requests.post(
-                                'http://localhost:5000/api/highlight-element',
-                                json={
-                                    "selector": selector,
-                                    "message": "Working on this",
-                                    "mode": "working",
-                                    "duration_ms": 15000
+                                    "duration_ms": 900,
+                                    "require_visible": True,
+                                    "allow_context_open": False
                                 },
                                 timeout=2
                             )
@@ -4582,7 +5203,12 @@ def highlight_element(selector: str, message: str = "", mode: str = "ack", durat
     Returns:
         Confirmation that highlight was queued
     """
-    _universal_gate("highlight_element")
+    # v1: Feature disabled - AI Context Mode is planned for v2
+    return "AI Context Mode is disabled in v1. This feature will be available in a future version."
+
+    error, _ = _universal_gate("highlight_element")
+    if error:
+        return error
 
     try:
         res = requests.post(
@@ -5091,6 +5717,13 @@ def check_and_report() -> str:
                 lines.append("")
                 lines.append(f"🎯 Current goal: {goal}")
 
+    # Check AI Context mode
+    ai_context = _get_ai_context_injection()
+    if ai_context:
+        lines.append("")
+        lines.append("🎯 **AI Context ACTIVE** - User has selected element(s)")
+        lines.append("   When they say \"this/that/זה\" → use the selected element")
+
     return '\n'.join(lines)
 
 
@@ -5207,6 +5840,216 @@ def mark_command_executed(command_id: str, result: str = "success", details: str
     return f"{result_emoji} Command `{command_id}` marked as {result}.\n(📌 FixOnce: execution logged)"
 
 
+@mcp.tool()
+def get_pending_commands(mark_delivered: bool = True) -> str:
+    """
+    Get pending commands from the dashboard AI queue.
+
+    Use this to receive messages/commands sent from the FixOnce dashboard.
+    When user clicks "Send to AI" or uses action buttons, commands are queued here.
+
+    Args:
+        mark_delivered: If True (default), mark retrieved commands as "delivered"
+                       so they won't be returned again.
+
+    Returns:
+        Pending commands with their messages, or "No pending commands."
+    """
+    error, context = _universal_gate("get_pending_commands")
+    if error:
+        return error
+
+    session = _get_session()
+    if not session.is_active():
+        return "Error: No active session."
+
+    memory = _load_project(session.project_id)
+    if not memory:
+        return "Error: Could not load project memory."
+
+    # Get pending commands
+    ai_queue = memory.get("ai_queue", [])
+    pending = [cmd for cmd in ai_queue if cmd.get("status") == "pending"]
+
+    if not pending:
+        return "No pending commands."
+
+    # Build response
+    lines = ["## 🚀 ACTION REQUESTED FROM DASHBOARD\n"]
+
+    for cmd in pending:
+        cmd_id = cmd.get("id", "unknown")
+        cmd_type = cmd.get("type", "unknown")
+        message = cmd.get("message", "")
+        source = cmd.get("source", "dashboard")
+        queued_at = cmd.get("queued_at", "")
+
+        lines.append(f"**Command ID:** `{cmd_id}`")
+        lines.append(f"**Type:** {cmd_type}")
+        lines.append(f"**Source:** {source}")
+        if queued_at:
+            lines.append(f"**Queued:** {queued_at}")
+        lines.append("")
+        lines.append("**Message:**")
+        lines.append(message)
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+        # Mark as delivered
+        if mark_delivered:
+            cmd["status"] = "delivered"
+            cmd["delivered_at"] = datetime.now().isoformat()
+            cmd["delivered_to"] = _detect_editor()
+
+    # Save if we marked any as delivered
+    if mark_delivered and pending:
+        _save_project(session.project_id, memory)
+
+    lines.append(f"_Call `mark_command_executed(command_id=\"{pending[0].get('id')}\", result=\"success\")` when done._")
+
+    return "\n".join(lines)
+
+
+# ============================================================
+# SESSION RESUME STATE
+# ============================================================
+
+@mcp.tool()
+def save_resume_state(
+    active_task: str,
+    last_completed_step: str = "",
+    current_status: str = "in_progress",
+    next_recommended_action: str = "",
+    short_summary: str = ""
+) -> str:
+    """
+    Save the current work state for resuming after restart.
+
+    Call this BEFORE:
+    - Restarting Claude/MCP
+    - Closing a session
+    - Major refactors
+    - When a clear next action is defined
+
+    Args:
+        active_task: What task is currently in progress
+        last_completed_step: The last step that was completed
+        current_status: One of: in_progress, waiting_for_restart, blocked, paused, completed
+        next_recommended_action: What should be done next
+        short_summary: Human-readable summary of where we stopped
+
+    Returns:
+        Confirmation of saved state
+    """
+    error = _require_session("save_resume_state")
+    if error:
+        return error
+
+    if not _resume_state_available:
+        return "Error: Resume state module not available."
+
+    session = _get_session()
+
+    result = _save_resume_state(
+        project_id=session.project_id,
+        active_task=active_task,
+        last_completed_step=last_completed_step,
+        current_status=current_status,
+        next_recommended_action=next_recommended_action,
+        short_summary=short_summary
+    )
+
+    if "error" in result:
+        return f"Error: {result['error']}"
+
+    lines = ["## ✅ Resume State Saved\n"]
+    lines.append(f"**Task:** {active_task}")
+    if last_completed_step:
+        lines.append(f"**Last step:** {last_completed_step}")
+    lines.append(f"**Status:** {current_status}")
+    if next_recommended_action:
+        lines.append(f"**Next action:** {next_recommended_action}")
+    lines.append("")
+    lines.append("_This state will be shown automatically when you start a new session._")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def get_resume_state() -> str:
+    """
+    Get the current resume state for this project.
+
+    Returns the saved work state, or indicates if none exists.
+    """
+    error = _require_session("get_resume_state")
+    if error:
+        return error
+
+    if not _resume_state_available:
+        return "Error: Resume state module not available."
+
+    session = _get_session()
+    resume_state = _get_resume_state(session.project_id)
+
+    if not resume_state:
+        return "No resume state saved for this project."
+
+    lines = ["## 🔄 Current Resume State\n"]
+    lines.append(f"**Task:** {resume_state.get('active_task', 'N/A')}")
+
+    if resume_state.get('last_completed_step'):
+        lines.append(f"**Last completed:** {resume_state['last_completed_step']}")
+
+    status = resume_state.get('current_status', 'unknown')
+    status_emoji = {
+        "in_progress": "🔵",
+        "waiting_for_restart": "⏳",
+        "blocked": "🔴",
+        "paused": "⏸️",
+        "completed": "✅"
+    }
+    emoji = status_emoji.get(status, "")
+    lines.append(f"**Status:** {emoji} {status}")
+
+    if resume_state.get('next_recommended_action'):
+        lines.append(f"**Next action:** {resume_state['next_recommended_action']}")
+
+    if resume_state.get('short_summary'):
+        lines.append("")
+        lines.append(f"_{resume_state['short_summary']}_")
+
+    if resume_state.get('updated_at'):
+        lines.append("")
+        lines.append(f"_Saved at: {resume_state['updated_at'][:19]}_")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def clear_resume_state() -> str:
+    """
+    Clear the resume state (task completed, no longer relevant).
+
+    Call this when the active task is fully completed.
+    """
+    error = _require_session("clear_resume_state")
+    if error:
+        return error
+
+    if not _resume_state_available:
+        return "Error: Resume state module not available."
+
+    session = _get_session()
+    success = _clear_resume_state(session.project_id)
+
+    if success:
+        return "✅ Resume state cleared. No pending work state."
+    else:
+        return "No resume state to clear."
+
+
 # ============================================================
 # COMPLIANCE API (For Dashboard Widget)
 # ============================================================
@@ -5237,4 +6080,4 @@ def get_compliance_for_api() -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(show_banner=False)

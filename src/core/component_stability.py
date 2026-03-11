@@ -28,6 +28,131 @@ STATUS_MIGRATION = {
 }
 
 
+def check_uncommitted_changes(repo_path: str) -> Dict[str, Any]:
+    """
+    Check if there are uncommitted changes in the repo.
+
+    Returns:
+        {
+            "has_changes": bool,
+            "staged": int,      # number of staged files
+            "unstaged": int,    # number of unstaged modified files
+            "untracked": int,   # number of untracked files
+            "summary": str      # human-readable summary
+        }
+    """
+    try:
+        # Get status in porcelain format
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return {"has_changes": False, "error": "Not a git repo"}
+
+        lines = [l for l in result.stdout.strip().split('\n') if l]
+
+        staged = 0
+        unstaged = 0
+        untracked = 0
+
+        for line in lines:
+            if len(line) < 2:
+                continue
+            index_status = line[0]
+            worktree_status = line[1]
+
+            if index_status == '?':
+                untracked += 1
+            elif index_status != ' ':
+                staged += 1
+            if worktree_status not in (' ', '?'):
+                unstaged += 1
+
+        has_changes = (staged + unstaged + untracked) > 0
+
+        # Build summary
+        parts = []
+        if staged > 0:
+            parts.append(f"{staged} staged")
+        if unstaged > 0:
+            parts.append(f"{unstaged} modified")
+        if untracked > 0:
+            parts.append(f"{untracked} untracked")
+
+        summary = ", ".join(parts) if parts else "clean"
+
+        return {
+            "has_changes": has_changes,
+            "staged": staged,
+            "unstaged": unstaged,
+            "untracked": untracked,
+            "summary": summary
+        }
+    except Exception as e:
+        return {"has_changes": False, "error": str(e)}
+
+
+def create_safety_commit(repo_path: str, message: str = None, stage_all: bool = False) -> Dict[str, Any]:
+    """
+    Create a safety checkpoint commit.
+
+    Args:
+        repo_path: Path to git repository
+        message: Optional commit message (default: "FixOnce: Safety checkpoint")
+        stage_all: If True, stage all changes first. If False, commit only staged changes.
+
+    Returns:
+        {"success": bool, "commit_hash": str, "error": str}
+    """
+    try:
+        if not message:
+            message = "FixOnce: Safety checkpoint"
+
+        # Only stage all if explicitly requested
+        if stage_all:
+            stage_result = subprocess.run(
+                ["git", "add", "-A"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if stage_result.returncode != 0:
+                return {"success": False, "error": f"Failed to stage: {stage_result.stderr}"}
+
+        # Commit
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", message],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if commit_result.returncode != 0:
+            # Check if nothing to commit (can be in stdout or stderr)
+            output = (commit_result.stdout + commit_result.stderr).lower()
+            if "nothing to commit" in output or "no changes added to commit" in output:
+                return {"success": True, "commit_hash": None, "message": "Nothing staged to commit"}
+            return {"success": False, "error": f"Failed to commit: {commit_result.stderr or commit_result.stdout}"}
+
+        # Get the new commit hash
+        commit_info = get_current_commit(repo_path)
+        return {
+            "success": True,
+            "commit_hash": commit_info["hash"] if commit_info else None,
+            "short_hash": commit_info["short_hash"] if commit_info else None,
+            "message": message
+        }
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def get_current_commit(repo_path: str) -> Optional[Dict[str, str]]:
     """
     Get current git commit info.

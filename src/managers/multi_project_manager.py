@@ -39,6 +39,7 @@ if str(_PROJECT_DIR) not in sys.path:
 
 # Context generator for universal AI access (lazy import to avoid circular deps)
 _context_generator = None
+_committed_knowledge_updater = None
 
 def _get_context_generator():
     """Lazy load context generator to avoid import issues."""
@@ -50,6 +51,18 @@ def _get_context_generator():
         except ImportError:
             _context_generator = lambda *args, **kwargs: None
     return _context_generator
+
+
+def _get_committed_knowledge_updater():
+    """Lazy load committed knowledge updater to avoid import issues."""
+    global _committed_knowledge_updater
+    if _committed_knowledge_updater is None:
+        try:
+            from src.core.committed_knowledge import update_committed_on_save
+            _committed_knowledge_updater = update_committed_on_save
+        except ImportError:
+            _committed_knowledge_updater = lambda *args, **kwargs: None
+    return _committed_knowledge_updater
 
 # Paths
 SRC_DIR = Path(__file__).parent.parent
@@ -304,8 +317,19 @@ def set_active_project(
 # ============================================================
 
 def init_project_memory(project_id: str, display_name: str = None, working_dir: str = None) -> Dict[str, Any]:
-    """Initialize memory for a new project."""
+    """Initialize memory for a new project. Syncs from .fixonce/ if exists (cloned repo)."""
     now = datetime.now().isoformat()
+
+    # Check if repo has committed knowledge (.fixonce/decisions.json, etc.)
+    committed_knowledge = None
+    if working_dir:
+        try:
+            from src.core.committed_knowledge import read_committed_knowledge
+            committed_knowledge = read_committed_knowledge(working_dir)
+            if committed_knowledge.get("found"):
+                print(f"[MultiProject] Found committed knowledge in .fixonce/")
+        except ImportError:
+            pass
 
     memory = {
         "project_info": {
@@ -361,6 +385,16 @@ def init_project_memory(project_id: str, display_name: str = None, working_dir: 
             "sessions_with_context": 0
         }
     }
+
+    # Merge committed knowledge from .fixonce/ if found (cloned repo scenario)
+    if committed_knowledge and committed_knowledge.get("found"):
+        for dec in committed_knowledge.get("decisions", []):
+            dec["source"] = "repo"  # Mark as from repo
+            memory["decisions"].append(dec)
+        for avoid in committed_knowledge.get("avoid", []):
+            avoid["source"] = "repo"
+            memory["avoid"].append(avoid)
+        print(f"[MultiProject] Merged {len(memory['decisions'])} decisions, {len(memory['avoid'])} avoid patterns from repo")
 
     project_path = get_project_path(project_id)
 
@@ -486,6 +520,15 @@ def save_project_memory(project_id: str, memory: Dict[str, Any] = None) -> bool:
             except Exception as ctx_err:
                 print(f"[ContextGen] Warning: {ctx_err}")
 
+            # Update committed knowledge (.fixonce/decisions.json, avoid.json)
+            try:
+                committed_updater = _get_committed_knowledge_updater()
+                committed_path = committed_updater(project_id, memory)
+                if committed_path:
+                    print(f"[CommittedKnowledge] Updated: {committed_path}")
+            except Exception as ck_err:
+                print(f"[CommittedKnowledge] Warning: {ck_err}")
+
             return True
         except Exception as e:
             print(f"[MultiProject] Error saving {project_id}: {e}")
@@ -585,11 +628,11 @@ def unarchive_project(project_id: str) -> Dict[str, Any]:
 # ============================================================
 
 def list_projects() -> List[Dict[str, Any]]:
-    """List all projects from V2 storage."""
-    projects = []
+    """List all projects from V2 storage (deduplicated by working_dir/name)."""
+    raw_projects = []
 
     if not PROJECTS_V2_DIR.exists():
-        return projects
+        return raw_projects
 
     for project_file in PROJECTS_V2_DIR.glob("*.json"):
         try:
@@ -600,7 +643,7 @@ def list_projects() -> List[Dict[str, Any]]:
             stats = memory.get('stats', {})
             live_record = memory.get('live_record', {})
 
-            projects.append({
+            raw_projects.append({
                 "id": project_file.stem,
                 "name": info.get('name', project_file.stem),
                 "working_dir": info.get('working_dir', ''),
@@ -615,6 +658,58 @@ def list_projects() -> List[Dict[str, Any]]:
             })
         except Exception as e:
             print(f"[MultiProject] Error reading {project_file.name}: {e}")
+
+    def _to_ts(value: str) -> float:
+        if not value:
+            return 0.0
+        try:
+            dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            if dt.tzinfo:
+                dt = dt.replace(tzinfo=None)
+            return dt.timestamp()
+        except Exception:
+            return 0.0
+
+    # Canonicalize duplicates:
+    # 1) primary key: working_dir (case-insensitive)
+    # 2) fallback key: project name
+    # Prefer non-archived + with working_dir + most recently updated.
+    names_with_workdir = {
+        (p.get("name") or "").strip().lower()
+        for p in raw_projects
+        if (p.get("working_dir") or "").strip()
+    }
+    deduped: Dict[str, Dict[str, Any]] = {}
+    for project in raw_projects:
+        name = (project.get("name") or "").strip()
+        workdir = (project.get("working_dir") or "").strip()
+
+        # If a same-name project exists with concrete working_dir, drop the
+        # empty-working_dir shadow entry (common duplicate artifact).
+        if not workdir and name.lower() in names_with_workdir:
+            continue
+
+        key = f"dir:{workdir.lower()}" if workdir else f"name:{name.lower()}"
+
+        current = deduped.get(key)
+        if not current:
+            deduped[key] = project
+            continue
+
+        current_score = (
+            1 if not current.get("archived") else 0,
+            1 if (current.get("working_dir") or "").strip() else 0,
+            _to_ts(current.get("last_updated", "")),
+        )
+        candidate_score = (
+            1 if not project.get("archived") else 0,
+            1 if workdir else 0,
+            _to_ts(project.get("last_updated", "")),
+        )
+        if candidate_score > current_score:
+            deduped[key] = project
+
+    projects = list(deduped.values())
 
     # Sort by last_updated descending
     projects.sort(key=lambda x: x.get('last_updated', ''), reverse=True)

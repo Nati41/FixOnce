@@ -13,6 +13,16 @@
     if (!payload) return;
 
     try {
+      // Handle page load success (clear old errors)
+      if (payload.type === 'page_load_success') {
+        chrome.runtime.sendMessage({
+          action: 'PAGE_LOAD_SUCCESS',
+          payload: payload
+        });
+        return;
+      }
+
+      // Normal error logging
       chrome.runtime.sendMessage({
         action: 'LOG_ERROR',
         payload: payload

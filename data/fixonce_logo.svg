@@ -1,0 +1,31 @@
+<svg width="220" height="220" viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="eyeTop" x1="16" y1="110" x2="204" y2="98" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1F67C4"/>
+      <stop offset="0.55" stop-color="#2FA6E8"/>
+      <stop offset="1" stop-color="#39D86F"/>
+    </linearGradient>
+    <linearGradient id="eyeBottom" x1="16" y1="114" x2="204" y2="126" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1A5CB5"/>
+      <stop offset="0.55" stop-color="#2498DE"/>
+      <stop offset="1" stop-color="#32CD69"/>
+    </linearGradient>
+    <linearGradient id="ringCore" x1="73" y1="73" x2="147" y2="147" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2CD278"/>
+      <stop offset="1" stop-color="#27A0E5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Eye shell -->
+  <path d="M16 110C16 110 51 54 110 54C158 54 187 88 204 103"
+        stroke="url(#eyeTop)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M16 110C16 110 51 166 110 166C158 166 187 132 204 117"
+        stroke="url(#eyeBottom)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Inner ring -->
+  <circle cx="110" cy="110" r="41" stroke="#2BA4E2" stroke-width="11"/>
+  <path d="M83 88C90 79 100 73 112 70C124 67 136 69 146 76"
+        stroke="#31CF6E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M92 109L106 123L137 92"
+        stroke="#2CCF6C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

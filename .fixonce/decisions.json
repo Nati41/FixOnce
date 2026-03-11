@@ -1,0 +1,200 @@
+{
+  "fixonce_version": "1.0",
+  "project_id": "FixOnce_e3921f743904",
+  "updated_at": "2026-03-11T21:02:16.858500",
+  "count": 32,
+  "decisions": [
+    {
+      "decision": "Per-project Semantic Index with provider abstraction layer",
+      "reason": "Enables semantic search across project memory. Architecture: EmbeddingProvider abstraction (swappable models), EmbeddingConfig (version tracking), SemanticIndex (per-project), FastEmbedProvider (ONNX, no PyTorch). Index auto-rebuilds if model changes.",
+      "timestamp": "",
+      "superseded": false
+    },
+    {
+      "decision": "Display opening message and conversation in user's language, but store all data in English",
+      "reason": "Storage must be consistent (English) for search and dashboard. But AI should present information to user in whatever language they're speaking for better UX.",
+      "timestamp": "",
+      "superseded": false
+    },
+    {
+      "decision": "Atomic file writes with FileLock for crash safety and concurrent access",
+      "reason": "Prevents file corruption on crash (write to temp then os.replace). Prevents race conditions with file locking (fcntl/msvcrt). Core module: src/core/safe",
+      "timestamp": "",
+      "superseded": false
+    },
+    {
+      "decision": "Stress tests must use dedicated test project, not active project",
+      "reason": "Running stress tests on active project destroys real data. Tests should create isolated test project with unique ID.",
+      "timestamp": "",
+      "superseded": false
+    },
+    {
+      "decision": "Codex CLI integration via FastMCP STDIO transport",
+      "reason": "OpenAI Codex CLI supports MCP. Config in ~/.codex/config.toml using fastmcp run with --transport stdio. All 21 FixOnce tools now available in Codex.",
+      "timestamp": "",
+      "superseded": false
+    },
+    {
+      "decision": "vNext dashboard includes an in-product Help Layer (global ? modal + contextual tooltips + setup hint)",
+      "reason": "Reduces onboarding friction, explains data provenance, and prevents confusion around empty/not-set states.",
+      "timestamp": "",
+      "superseded": false
+    },
+    {
+      "decision": "Dashboard translation layer with auto-detected language",
+      "reason": "Uses navigator.language to detect user's language (he/en). TRANSLATIONS object stores pairs, t() function for lookups. Data stored in English, displayed in user's language.",
+      "timestamp": "",
+      "superseded": false
+    },
+    {
+      "decision": "Data written in user's conversation language, not English",
+      "reason": "AI writes goals, insights, component names in the language the user speaks (Hebrew/English). Dashboard UI labels stay in English. This is simpler than translation layers and feels more natural.",
+      "timestamp": "",
+      "superseded": false
+    },
+    {
+      "decision": "All data stored in English for consistency",
+      "reason": "Consistent storage format for search and dashboard",
+      "timestamp": "",
+      "superseded": false
+    },
+    {
+      "decision": "Auto-backup before every project file write",
+      "reason": "Prevents data loss. Timestamped backups stored in data/projects_v2/.backups/. Keeps last 5 backups per file. Auto-recovery on read if file is corrupt or missing.",
+      "timestamp": "2026-02-25T09:36:29.767922",
+      "superseded": false
+    },
+    {
+      "decision": "Minimal installer approach - no complex packaging, just scripts",
+      "reason": "Simpler to maintain, works cross-platform, auto-port detection and health checks built into server and launcher",
+      "timestamp": "2026-02-25T22:03:32.443107",
+      "superseded": false
+    },
+    {
+      "decision": "Component Stability Layer with Git-based rollback",
+      "reason": "Enables rollback to last known good state. Stores commit hash per component, tracks files, supports file restore or branch creation.",
+      "timestamp": "2026-02-26T11:39:16.314171",
+      "superseded": false
+    },
+    {
+      "decision": "AI Command Injection Security Layer with three mechanisms: Explicit Marker Lock (uuid4 IDs, one-time delivery), Session Scope Guard (project/session validation), Audit Visibility (full lifecycle tracking)",
+      "reason": "Prevents duplicate execution, scope hijacking, and provides transparency. Commands only execute once, in the correct project/session, with full audit trail.",
+      "timestamp": "2026-02-27T12:06:02.617060",
+      "superseded": false
+    },
+    {
+      "decision": "Unified Nervous System - Orb calculates health from Command Engine + Stability + Browser Errors. Timeout = 5 minutes for delivered commands.",
+      "reason": "Prevents cognitive dissonance. Single source of truth for system health. Commands not executed within 5 min = failed_timeout.",
+      "timestamp": "2026-02-28T20:18:06.068386",
+      "superseded": false
+    },
+    {
+      "decision": "Isolated Tabs Architecture: Backend session isolation per AI+project path, UI tabs per active project with independent Health Orbs",
+      "reason": "Prevents AI conflicts, enables multi-project parallel work, maintains minimalist UX. Each AI works in isolated bubble, dashboard shows tabs for all active projects.",
+      "timestamp": "2026-02-28T20:40:15.198343",
+      "superseded": false
+    },
+    {
+      "decision": "Browser-style Project Tabs with Session Isolation",
+      "reason": "Tabs feel like browser tabs - user knows what's open, sees activity via pulse color, can switch without losing Health Orb state. Hidden when only one project active.",
+      "timestamp": "2026-02-28T21:27:11.410118",
+      "superseded": false
+    },
+    {
+      "decision": "Hybrid element highlight lifecycle: auto ack pulse on browser-context fetch, subtle working indicator, and explicit done/clear modes.",
+      "reason": "Gives immediate user confirmation, avoids distracting continuous blinking, and keeps a clear work-state signal.",
+      "timestamp": "2026-02-28T22:25:38.522979",
+      "superseded": false
+    },
+    {
+      "decision": "AI Context Mode auto-injects selected browser elements into init_session response when active",
+      "reason": "When user enables AI Context in dashboard AND has selected elements via FAB, the init response includes formatted element details (selector, tag, id, classes, text, HTML). This allows AI to understand \"this/that/זה\" references automatically.",
+      "timestamp": "2026-03-01T20:21:51.511480",
+      "superseded": false
+    },
+    {
+      "decision": "AI must clear browser errors after fixing them using POST /api/clear-logs",
+      "reason": "When AI fixes a browser error, old errors remain in the dashboard causing false \"unhealthy\" status. After confirming fix works, AI should clear the error log so Orb returns to green.",
+      "timestamp": "2026-03-01T20:59:25.729679",
+      "superseded": false
+    },
+    {
+      "decision": "AI Commands auto-cleanup: executed commands decay after 5 minutes, failed commands stay, Clear History button for manual cleanup",
+      "reason": "Prevents queue buildup while keeping audit trail. Executed commands auto-removed after 5min. Failed commands need attention so they stay. Dashboard has Clear button for immediate cleanup.",
+      "timestamp": "2026-03-01T21:17:28.100248",
+      "superseded": false
+    },
+    {
+      "decision": "Clear on Success: When page loads without errors for 5 seconds, old errors (>60s) are automatically cleared",
+      "reason": "Prevents stale fixed errors from polluting the error log. Extension sends PAGE_LOAD_SUCCESS after 5s clean load, server clears errors older than 60 seconds.",
+      "timestamp": "2026-03-07T22:30:14.505340",
+      "superseded": false
+    },
+    {
+      "decision": "Solutions Memory Layer: debug_sessions stored in .fixonce/solutions.json, auto-surfaced on matching errors",
+      "reason": "Closes the bug→fix→remember→suggest loop. Solutions from debug_sessions are committed to Git, synced on clone, and surfaced when similar errors appear. Higher matching priority than insights.",
+      "timestamp": "2026-03-08T13:42:59.621032",
+      "superseded": false
+    },
+    {
+      "decision": "Session Resume State layer: save_resume_state/get_resume_state/clear_resume_state tools for persisting work state across sessions",
+      "reason": "FixOnce needs to remember not just knowledge (insights, decisions, solutions) but also operational state - where we were in the work. This enables true session continuity after MCP restart.",
+      "timestamp": "2026-03-10T11:42:25.930977",
+      "superseded": false
+    },
+    {
+      "decision": "Opening message format: narrative story style instead of bullet-point report. Tell what we did, why we stopped, what we wanted to test, what's the result. Creates emotional continuity.",
+      "reason": "Bullet points feel like a technical report. Narrative style makes user feel the system really remembers them - creates emotional continuity, not just data continuity.",
+      "timestamp": "2026-03-10T11:57:59.934689",
+      "superseded": false
+    },
+    {
+      "decision": "Opening message v2: (1) \"עצרנו אחרי ש...\" must be SPECIFIC/technical (2) NO stats like \"40 decisions\" - use human text (3) End with SPECIFIC next step, not generic \"רוצה שנמשיך?\"",
+      "reason": "שלושה שיפורי UX: דיוק טכני באיפה עצרנו, טקסט אנושי במקום סטטיסטיקות קרות, כיוון ברור לצעד הבא",
+      "timestamp": "2026-03-10T12:02:54.768299",
+      "superseded": false
+    },
+    {
+      "decision": "Opening message v3: הוספת 3 שדות מטא בראש ההודעה - (1) 📦 פרויקט: שם (2) ⏱ עדכון אחרון: זמן יחסי/מוחלט (3) 📌 checkpoint: שם או hash קצר",
+      "reason": "שלושת השדות האלה נותנים קונטקסט מיידי - איפה אני, מתי עבדתי, ובאיזו גרסה. זה מחזק את תחושת האמינות שהמערכת באמת זוכרת",
+      "timestamp": "2026-03-10T12:06:05.922489",
+      "superseded": false
+    },
+    {
+      "decision": "Opening message v4: (1) זמן חייב להיות ספציפי כמו \"10 Mar 11:52\" ולא סתם \"היום\" (2) הוספת שדה 📂 קובץ אחרון (3) שורת הזיכרון חמה יותר: \"FixOnce עדיין זוכר...\" במקום סטטיסטיקות",
+      "reason": "שלושה שיפורי UX: זמן ספציפי נותן context מדויק, קובץ אחרון נותן context של קוד אמיתי, שורת זיכרון חמה במקום קרה",
+      "timestamp": "2026-03-10T12:10:56.949727",
+      "superseded": false
+    },
+    {
+      "decision": "Opening message v5: הוספת שדה 🧩 אזור עבודה, מבנה נרטיבי משופר (מה→למה→איפה עצרנו→מצב נוכחי), שדות אופציונליים ⚠️ להימנע ו-🔧 פתוח, שאלת סיום ממוקדת יותר",
+      "reason": "שדרוג חוויית הפתיחה: אזור עבודה נותן מיקוד מיידי, המבנה מספר סיפור ולא דוח, שדות אופציונליים מונעים חזרה על טעויות ומזכירים משימות פתוחות",
+      "timestamp": "2026-03-10T12:18:59.269142",
+      "superseded": false
+    },
+    {
+      "decision": "Resume Context Architecture: auto_init_session returns both structured resume_context object AND human-readable suggested_opening. The context is built from real saved state (not templates). New tool update_work_context makes it easy to keep context fresh.",
+      "reason": "הפרדה בין truth layer (resume_context) לבין rendering layer (suggested_opening). ה-AI יכול לענות על שאלות המשך מהמידע המובנה, לא רק להציג טקסט.",
+      "timestamp": "2026-03-10T12:36:58.662370",
+      "superseded": false
+    },
+    {
+      "decision": "Opening message v6: (1) 📂 קובץ אחרון חייב להיות נתיב אמיתי כמו src/core/resume_context.py ולא תיאור כללי (2) להוסיף \"השלב הבא יכול להיות...\" לפני השאלה הסוגרת - נותן כיוון עבודה (3) לקצר את \"FixOnce זוכר את ההחלטות...\" ל\"אז אפשר להמשיך בדיוק מאותה נקודה\"",
+      "reason": "שלושה שיפורי UX אחרונים לגרסת 10/10: קובץ אמיתי נותן אמינות, הצעת שלב הבא נותנת כיוון, וקיצור הסיום מונע חזרתיות",
+      "timestamp": "2026-03-10T12:46:40.383083",
+      "superseded": false
+    },
+    {
+      "decision": "Memory Architecture Separation: projects_v2 = working cache, .fixonce = portable source of truth",
+      "reason": "שני מקורות אמת מייצרים באגים שקטים. ההפרדה: projects_v2 הוא cache עבודה מלא, .fixonce הוא הידע האיכותי שנוסע עם הריפו. בעתיד נשקול להעביר הכל ל-.fixonce כמקור יחיד.",
+      "timestamp": "2026-03-11T14:22:16.154667",
+      "superseded": false
+    },
+    {
+      "decision": "Opening format v7: Clean scannable sections - header, DECISIONS, AVOID, CONTEXT, STATE",
+      "reason": "נרטיבי ארוך מדי. פורמט חדש כמו Cursor/Linear - קצר, חד, סריק. מפתחים רוצים: איפה אנחנו, מה חשוב, מה הבא.",
+      "timestamp": "2026-03-11T14:36:41.214277",
+      "superseded": false
+    }
+  ]
+}

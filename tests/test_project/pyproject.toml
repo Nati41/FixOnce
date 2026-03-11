@@ -1,0 +1,7 @@
+[project]
+name = "fixonce-test-project"
+version = "0.1.0"
+description = "Minimal project for FixOnce testing"
+
+[tool.fixonce]
+# This file helps FixOnce detect this as a project root

@@ -13,6 +13,7 @@ import io
 import re
 
 from . import memory_bp, get_project_from_request
+from core.system_mode import get_system_mode, MODE_OFF, MODE_PASSIVE
 
 
 @memory_bp.route("", methods=["GET"])
@@ -31,241 +32,6 @@ def api_get_memory_summary():
     try:
         from managers.project_memory_manager import get_context_summary
         return get_context_summary(), 200, {'Content-Type': 'text/markdown'}
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/issues", methods=["GET"])
-def api_get_active_issues():
-    """Get active issues list."""
-    try:
-        from managers.project_memory_manager import get_project_context
-        memory = get_project_context()
-        return jsonify({
-            "count": len(memory['active_issues']),
-            "issues": memory['active_issues']
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/issues/<issue_id>/resolve", methods=["POST"])
-def api_resolve_issue(issue_id):
-    """Resolve an issue and move to solutions history."""
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"status": "error", "message": "No JSON body"}), 400
-
-    solution_desc = data.get("solution", "")
-    worked = data.get("worked", True)
-
-    if not solution_desc:
-        return jsonify({"status": "error", "message": "Solution description required"}), 400
-
-    try:
-        from managers.project_memory_manager import resolve_issue
-        result = resolve_issue(issue_id, solution_desc, worked)
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/context", methods=["PUT"])
-def api_update_context():
-    """Update the AI context snapshot."""
-    data = request.get_json(silent=True)
-    if not data or "context" not in data:
-        return jsonify({"status": "error", "message": "Context required"}), 400
-
-    try:
-        from managers.project_memory_manager import update_ai_context
-        result = update_ai_context(data["context"])
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/project", methods=["PUT"])
-def api_update_project_info():
-    """Update project information."""
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"status": "error", "message": "No JSON body"}), 400
-
-    try:
-        from managers.project_memory_manager import update_project_info
-        result = update_project_info(
-            name=data.get("name"),
-            stack=data.get("stack"),
-            status=data.get("status"),
-            description=data.get("description")
-        )
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/project", methods=["POST"])
-def api_set_project_info():
-    """Set project info (name, stack, root_path) - used by wizard."""
-    try:
-        from managers.project_memory_manager import get_project_context, save_memory
-        data = request.get_json() or {}
-
-        memory = get_project_context()
-
-        if 'name' in data:
-            memory['project_info']['name'] = data['name']
-        if 'stack' in data:
-            memory['project_info']['stack'] = data['stack']
-        if 'root_path' in data and data['root_path']:
-            memory['project_info']['root_path'] = data['root_path']
-
-        save_memory(memory)
-
-        return jsonify({
-            "status": "ok",
-            "message": "Project info updated",
-            "project": memory['project_info']
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/project/root", methods=["POST"])
-def api_set_project_root():
-    """Set the project root path."""
-    try:
-        from managers.project_memory_manager import set_project_root
-        data = request.get_json() or {}
-        root_path = data.get("root_path")
-        if not root_path:
-            return jsonify({"status": "error", "message": "root_path is required"}), 400
-        return jsonify(set_project_root(root_path))
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/project/root", methods=["GET"])
-def api_get_project_root():
-    """Get the current project root path."""
-    try:
-        from managers.project_memory_manager import get_project_root
-        root_path = get_project_root()
-        return jsonify({"root_path": root_path or ""})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/clear-issues", methods=["POST"])
-def api_clear_issues():
-    """Clear all active issues."""
-    try:
-        from managers.project_memory_manager import clear_active_issues
-        return jsonify(clear_active_issues())
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/solutions/<solution_id>", methods=["DELETE"])
-def api_delete_memory_solution(solution_id):
-    """Delete a solution from project memory history."""
-    try:
-        from managers.project_memory_manager import get_project_context, save_memory
-        memory = get_project_context()
-        original_count = len(memory['solutions_history'])
-        memory['solutions_history'] = [s for s in memory['solutions_history'] if s.get('id') != solution_id]
-        deleted = len(memory['solutions_history']) < original_count
-        if deleted:
-            save_memory(memory)
-            return jsonify({"status": "ok", "message": f"Solution {solution_id} deleted"})
-        return jsonify({"error": "Solution not found"}), 404
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/clear-history", methods=["POST"])
-def api_clear_history():
-    """Clear all solution history."""
-    try:
-        from managers.project_memory_manager import get_project_context, save_memory
-        memory = get_project_context()
-        count = len(memory['solutions_history'])
-        memory['solutions_history'] = []
-        memory['stats']['total_solutions_applied'] = 0
-        save_memory(memory)
-        return jsonify({"status": "ok", "cleared": count})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/health", methods=["GET"])
-def api_memory_health():
-    """Get memory health status for dashboard display."""
-    try:
-        from managers.project_memory_manager import get_memory_health
-        return jsonify(get_memory_health())
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/roi", methods=["GET"])
-def api_get_roi():
-    """Get ROI statistics for dashboard display."""
-    try:
-        from managers.project_memory_manager import get_roi_stats
-        return jsonify(get_roi_stats())
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/roi/track", methods=["POST"])
-def api_track_roi():
-    """Track an ROI event."""
-    try:
-        from managers.project_memory_manager import (
-            track_solution_reused, track_decision_used,
-            track_error_prevented, track_session_with_context,
-            track_insight_used, track_error_caught_live
-        )
-        data = request.get_json() or {}
-        event_type = data.get("event")
-
-        if event_type == "solution_reused":
-            return jsonify(track_solution_reused(data.get("solution_id")))
-        elif event_type == "decision_used":
-            return jsonify(track_decision_used(data.get("decision_id")))
-        elif event_type == "error_prevented":
-            return jsonify(track_error_prevented())
-        elif event_type == "session_context":
-            return jsonify(track_session_with_context())
-        elif event_type == "insight_used":
-            return jsonify(track_insight_used())
-        elif event_type == "error_caught_live":
-            return jsonify(track_error_caught_live())
-        else:
-            return jsonify({"status": "error", "message": f"Unknown event type: {event_type}"}), 400
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/roi/reset", methods=["POST"])
-def api_reset_roi():
-    """Reset ROI statistics."""
-    try:
-        from managers.project_memory_manager import reset_roi_stats
-        return jsonify(reset_roi_stats())
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/detect", methods=["POST"])
-def api_detect_project():
-    """Auto-detect project info from filesystem."""
-    try:
-        from managers.project_memory_manager import auto_update_project_info
-        result = auto_update_project_info()
-        return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -299,34 +65,6 @@ def api_add_decision():
     try:
         from managers.project_memory_manager import log_decision
         result = log_decision(decision, reason, data.get("context", ""))
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/decisions/<decision_id>", methods=["DELETE"])
-def api_delete_decision(decision_id):
-    """Delete a decision."""
-    try:
-        from managers.project_memory_manager import get_project_context, save_memory
-        memory = get_project_context()
-        original_count = len(memory.get('decisions', []))
-        memory['decisions'] = [d for d in memory.get('decisions', []) if d.get('id') != decision_id]
-        deleted = len(memory['decisions']) < original_count
-        if deleted:
-            save_memory(memory)
-            return jsonify({"status": "ok", "message": f"Decision {decision_id} deleted"})
-        return jsonify({"error": "Decision not found"}), 404
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/decisions/<decision_id>/used", methods=["POST"])
-def api_mark_decision_used(decision_id):
-    """Mark a decision as used by AI."""
-    try:
-        from managers.project_memory_manager import mark_decision_used
-        result = mark_decision_used(decision_id)
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -366,30 +104,146 @@ def api_add_avoid():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@memory_bp.route("/avoid/<avoid_id>", methods=["DELETE"])
-def api_delete_avoid(avoid_id):
-    """Delete an avoid pattern."""
+# ============ Project Rules API ============
+
+@memory_bp.route("/rules", methods=["GET"])
+def api_get_project_rules():
+    """Get all project rules."""
     try:
-        from managers.project_memory_manager import get_project_context, save_memory
-        memory = get_project_context()
-        original_count = len(memory.get('avoid', []))
-        memory['avoid'] = [a for a in memory.get('avoid', []) if a.get('id') != avoid_id]
-        deleted = len(memory['avoid']) < original_count
-        if deleted:
-            save_memory(memory)
-            return jsonify({"status": "ok", "message": f"Avoid pattern {avoid_id} deleted"})
-        return jsonify({"error": "Avoid pattern not found"}), 404
+        from managers.project_memory_manager import get_all_project_rules
+        rules = get_all_project_rules()
+        return jsonify({"rules": rules, "count": len(rules)})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@memory_bp.route("/avoid/<avoid_id>/used", methods=["POST"])
-def api_mark_avoid_used(avoid_id):
-    """Mark an avoid pattern as used by AI."""
+@memory_bp.route("/rules", methods=["POST"])
+def api_add_project_rule():
+    """Add a custom project rule."""
+    data = request.get_json(silent=True)
+    if not data or not data.get("text"):
+        return jsonify({"status": "error", "message": "Rule text required"}), 400
+
     try:
-        from managers.project_memory_manager import mark_avoid_used
-        result = mark_avoid_used(avoid_id)
+        from managers.project_memory_manager import add_project_rule
+        result = add_project_rule(data["text"])
         return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@memory_bp.route("/rules/<rule_id>", methods=["PUT"])
+def api_toggle_project_rule(rule_id):
+    """Enable or disable a project rule."""
+    data = request.get_json(silent=True)
+    if data is None or "enabled" not in data:
+        return jsonify({"status": "error", "message": "enabled field required"}), 400
+
+    try:
+        from managers.project_memory_manager import toggle_project_rule
+        result = toggle_project_rule(rule_id, data["enabled"])
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@memory_bp.route("/rules/<rule_id>", methods=["DELETE"])
+def api_delete_project_rule(rule_id):
+    """Delete a custom project rule."""
+    try:
+        from managers.project_memory_manager import delete_project_rule
+        result = delete_project_rule(rule_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============ AI Queue API ============
+
+@memory_bp.route("/ai-queue", methods=["GET"])
+def api_get_ai_queue():
+    """Get pending commands for AI."""
+    try:
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"commands": []})
+
+        memory = load_project_memory(project_id)
+        ai_queue = memory.get("ai_queue", []) if memory else []
+        pending = [cmd for cmd in ai_queue if cmd.get("status") == "pending"]
+
+        return jsonify({"commands": pending})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@memory_bp.route("/queue-for-ai", methods=["POST"])
+def api_queue_for_ai():
+    """Add a command to the AI queue."""
+    try:
+        from managers.multi_project_manager import get_active_project_id, load_project_memory, save_project_memory
+        import uuid
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"status": "error", "message": "No active project"}), 400
+
+        data = request.get_json() or {}
+        message = data.get("message", "").strip()
+        cmd_type = data.get("type", "refresh_rules")
+
+        if not message and cmd_type != "refresh_rules":
+            return jsonify({"status": "error", "message": "Message required"}), 400
+
+        memory = load_project_memory(project_id) or {}
+        ai_queue = memory.get("ai_queue", [])
+
+        # Remove existing pending commands of same type (prevent duplicates)
+        ai_queue = [cmd for cmd in ai_queue
+                    if not (cmd.get("type") == cmd_type and cmd.get("status") == "pending")]
+
+        # Create command
+        command = {
+            "id": str(uuid.uuid4())[:8],
+            "type": cmd_type,
+            "message": message or "Refresh rules - user updated rules in dashboard",
+            "status": "pending",
+            "created_at": datetime.now().isoformat(),
+            "source": data.get("source", "dashboard")
+        }
+
+        ai_queue.append(command)
+        memory["ai_queue"] = ai_queue
+        save_project_memory(project_id, memory)
+
+        return jsonify({"status": "ok", "command_id": command["id"]})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@memory_bp.route("/command-status/<command_id>", methods=["GET"])
+def api_get_command_status(command_id):
+    """Get the status of a specific command."""
+    try:
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"status": "unknown"}), 404
+
+        memory = load_project_memory(project_id) or {}
+        ai_queue = memory.get("ai_queue", [])
+
+        for cmd in ai_queue:
+            if cmd.get("id") == command_id:
+                return jsonify({
+                    "status": cmd.get("status", "pending"),
+                    "executed_at": cmd.get("executed_at")
+                })
+
+        return jsonify({"status": "not_found"}), 404
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -518,16 +372,6 @@ def api_get_live_record():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@memory_bp.route("/live-record/summary", methods=["GET"])
-def api_get_live_record_summary():
-    """Get Live Record as formatted markdown summary."""
-    try:
-        from managers.project_memory_manager import get_live_record_summary
-        return get_live_record_summary(), 200, {'Content-Type': 'text/markdown'}
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
 @memory_bp.route("/live-record/<section>", methods=["PUT"])
 def api_update_live_record(section):
     """
@@ -550,24 +394,6 @@ def api_update_live_record(section):
     try:
         from managers.project_memory_manager import update_live_record
         result = update_live_record(section, data)
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/live-record/<section>", methods=["DELETE"])
-def api_clear_live_record_section(section):
-    """Clear a specific Live Record section."""
-    valid_sections = {'gps', 'architecture', 'lessons', 'intent'}
-    if section not in valid_sections:
-        return jsonify({
-            "status": "error",
-            "message": f"Invalid section. Must be one of: {', '.join(valid_sections)}"
-        }), 400
-
-    try:
-        from managers.project_memory_manager import clear_live_record_section
-        result = clear_live_record_section(section)
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -930,389 +756,4 @@ def _extract_semantic_identity(project_id: str) -> dict:
 
     return result
 
-
-@memory_bp.route("/identity", methods=["GET"])
-def api_get_project_identity():
-    """
-    Read-only derived project identity.
-    Does NOT mutate memory; only synthesizes a clear project snapshot.
-    """
-    try:
-        from managers.multi_project_manager import get_active_project_id, load_project_memory
-
-        project_id = get_active_project_id()
-        if not project_id:
-            return jsonify({"identity": None, "status": "no_active_project"})
-
-        memory = load_project_memory(project_id) or {}
-        project_info = memory.get("project_info", {}) or {}
-        live = memory.get("live_record", {}) or {}
-        intent = live.get("intent", {}) or {}
-        arch = live.get("architecture", {}) or {}
-
-        decisions = memory.get("decisions", []) or []
-        avoid = memory.get("avoid", []) or []
-        solved_history = memory.get("solutions_history", []) or []
-        handover = memory.get("handover", {}) or {}
-
-        lessons = (live.get("lessons", {}) or {}).get("insights", []) or []
-        lesson_texts = [_to_text(x) for x in lessons if _to_text(x) and not _is_test_artifact(_to_text(x))]
-        handover_text = _to_text(handover)
-        if _is_test_artifact(handover_text):
-            handover_text = ""
-
-        # Parse summary-like sources into structured signals
-        signals = {"solved": [], "decisions": [], "insights": [], "risks": [], "changes": []}
-        for source_text in [handover_text] + lesson_texts[-15:]:
-            s = _extract_signals(source_text)
-            for key in signals:
-                signals[key].extend(s[key])
-
-        # De-duplicate merged signals
-        for key in signals:
-            seen = set()
-            dedup = []
-            for item in signals[key]:
-                if item not in seen:
-                    dedup.append(item)
-                    seen.add(item)
-            signals[key] = dedup[:20]
-
-        # Critical decisions from official decisions list (+ parsed fallback)
-        critical_decisions = []
-        for d in decisions[-8:]:
-            decision_text = _to_text(d.get("decision") if isinstance(d, dict) else d)
-            reason_text = _to_text(d.get("reason") if isinstance(d, dict) else "")
-            if decision_text and not _is_test_artifact(decision_text):
-                critical_decisions.append({
-                    "decision": decision_text,
-                    "reason": "" if _is_test_artifact(reason_text) else reason_text
-                })
-        if not critical_decisions and signals["decisions"]:
-            critical_decisions = [{"decision": x, "reason": ""} for x in signals["decisions"][:5]]
-
-        stack = project_info.get("stack") or arch.get("stack") or ""
-        project_type = stack if stack else "לא סווג"
-        if not stack:
-            name = (project_info.get("name") or "").lower()
-            if any(k in name for k in ["api", "server", "backend"]):
-                project_type = "Backend/API"
-            elif any(k in name for k in ["dashboard", "ui", "frontend"]):
-                project_type = "Frontend/UI"
-
-        about_candidates = [
-            _to_text(project_info.get("description")),
-            _to_text(arch.get("summary")),
-            _to_text(project_info.get("name")),
-        ]
-        about = ""
-        for candidate in about_candidates:
-            if candidate and not _is_test_artifact(candidate):
-                about = _short_text(candidate, 140)
-                break
-        if not about:
-            about = "פרויקט פעיל ב-FixOnce"
-
-        identity = {
-            "name": project_info.get("name") or project_id,
-            "about": about,
-            "goal": (
-                ""
-                if _is_test_artifact(intent.get("current_goal") or "")
-                else intent.get("current_goal")
-            ) or arch.get("summary") or "",
-            "project_type": project_type,
-            "stage": _infer_stage(memory),
-            "critical_decisions": critical_decisions[:6],
-            "sensitive_points": [
-                _to_text(a.get("what") if isinstance(a, dict) else a)
-                for a in avoid[:8]
-                if _to_text(a.get("what") if isinstance(a, dict) else a)
-                and not _is_test_artifact(_to_text(a.get("what") if isinstance(a, dict) else a))
-            ],
-            "next_step": (
-                "" if _is_test_artifact(intent.get("next_step") or "") else (intent.get("next_step") or "")
-            ),
-            "structured_memory": {
-                "solved": signals["solved"][:10],
-                "decisions": signals["decisions"][:10],
-                "insights": signals["insights"][:10],
-                "risks": signals["risks"][:10],
-                "changes": signals["changes"][:10]
-            },
-            "counts": {
-                "active_issues": len(memory.get("active_issues", []) or []),
-                "solutions_history": len(solved_history),
-                "decisions": len(decisions),
-                "avoid": len(avoid),
-                "insights": len(lesson_texts)
-            },
-            "provenance": {
-                "owner": "FixOnce",
-                "computed_by": "/api/memory/identity",
-                "sources": [
-                    "project_info.description",
-                    "live_record.architecture.summary",
-                    "live_record.intent.current_goal",
-                    "live_record.intent.next_step",
-                    "decisions[]",
-                    "avoid[]",
-                    "live_record.lessons.insights[]",
-                    "handover.summary"
-                ]
-            },
-            "updated_at": datetime.now().isoformat()
-        }
-
-        # Add semantic identity extraction
-        semantic_identity = _extract_semantic_identity(project_id)
-        identity["semantic"] = {
-            "enabled": semantic_identity.get("semantic_enabled", False),
-            "signature": semantic_identity.get("signature", []),
-            "top_learnings": semantic_identity.get("top_learnings", []),
-            "document_count": semantic_identity.get("document_count", 0)
-        }
-
-        # If semantic search found better "about" description, use it
-        if semantic_identity.get("top_learnings") and not about:
-            # Use the highest-ranked insight as about
-            identity["about"] = semantic_identity["top_learnings"][0][:140]
-
-        return jsonify({"status": "ok", "identity": identity})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/queue-for-ai", methods=["POST"])
-def api_queue_for_ai():
-    """Queue an error or task for the next AI session.
-
-    Security features:
-    - Unique command ID (uuid4) for one-time execution
-    - Project/session scope binding
-    - Audit trail with timestamps
-    """
-    try:
-        from managers.multi_project_manager import (
-            get_active_project_id,
-            load_project_memory,
-            save_project_memory,
-            get_active_session_id
-        )
-        import uuid
-
-        data = request.get_json(silent=True) or {}
-
-        project_id = get_active_project_id()
-        if not project_id:
-            return jsonify({"status": "error", "message": "No active project"}), 400
-
-        memory = load_project_memory(project_id)
-        if not memory:
-            return jsonify({"status": "error", "message": "Project not found"}), 404
-
-        # Get current session for scope binding
-        session_id = get_active_session_id(project_id)
-
-        # Initialize queue if not exists
-        if "ai_queue" not in memory:
-            memory["ai_queue"] = []
-
-        # Initialize audit log if not exists
-        if "command_audit" not in memory:
-            memory["command_audit"] = []
-
-        # Generate unique command ID
-        command_id = str(uuid.uuid4())[:8]
-
-        # Add to queue with security metadata
-        queue_item = {
-            "id": command_id,
-            "type": data.get("type", "task"),
-            "message": data.get("message", ""),
-            "source": data.get("source", ""),
-            "line": data.get("line", ""),
-            "priority": data.get("priority", "normal"),
-            "queued_at": datetime.now().isoformat(),
-            "queued_by": "dashboard",
-            "status": "pending",
-            # Scope binding - command only valid for this project/session
-            "project_id": project_id,
-            "session_id": session_id,
-            # Delivery tracking
-            "delivered_at": None,
-            "delivered_to": None
-        }
-
-        memory["ai_queue"].append(queue_item)
-
-        # Add to audit log
-        memory["command_audit"].append({
-            "id": command_id,
-            "action": "queued",
-            "message": data.get("message", "")[:100],
-            "type": data.get("type", "task"),
-            "timestamp": datetime.now().isoformat(),
-            "project_id": project_id,
-            "session_id": session_id
-        })
-
-        # Keep only last 10 queue items, but 50 audit entries
-        memory["ai_queue"] = memory["ai_queue"][-10:]
-        memory["command_audit"] = memory["command_audit"][-50:]
-
-        save_project_memory(project_id, memory)
-
-        return jsonify({
-            "status": "ok",
-            "message": "Queued for AI",
-            "command_id": command_id,
-            "queue_length": len(memory["ai_queue"])
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-# ============ Command Audit API (Security Visibility) ============
-
-@memory_bp.route("/command-audit", methods=["GET"])
-def api_get_command_audit():
-    """Get command audit log for dashboard visibility.
-
-    Shows full lifecycle of AI commands:
-    - When queued, by whom
-    - When delivered, to which AI
-    - Session/project scope
-
-    Query params:
-        limit: Max entries to return (default 20)
-    """
-    try:
-        from managers.multi_project_manager import (
-            get_active_project_id,
-            load_project_memory
-        )
-
-        limit = int(request.args.get('limit', 20))
-
-        project_id = get_active_project_id()
-        if not project_id:
-            return jsonify({"audit": [], "message": "No active project"})
-
-        memory = load_project_memory(project_id)
-        if not memory:
-            return jsonify({"audit": [], "message": "Project not found"})
-
-        audit = memory.get("command_audit", [])
-
-        # Return most recent entries first
-        audit_reversed = list(reversed(audit))[:limit]
-
-        return jsonify({
-            "status": "ok",
-            "audit": audit_reversed,
-            "total": len(audit)
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/ai-queue", methods=["GET"])
-def api_get_ai_queue():
-    """Get current AI command queue status.
-
-    Shows pending/delivered commands with full metadata.
-    Runs timeout watchdog on access.
-    """
-    try:
-        from managers.multi_project_manager import (
-            get_active_project_id,
-            load_project_memory,
-            save_project_memory
-        )
-        from core.unified_health import check_command_timeouts
-
-        project_id = get_active_project_id()
-        if not project_id:
-            return jsonify({"queue": [], "message": "No active project"})
-
-        memory = load_project_memory(project_id)
-        if not memory:
-            return jsonify({"queue": [], "message": "Project not found"})
-
-        queue = memory.get("ai_queue", [])
-        audit_log = memory.get("command_audit", [])
-
-        # Run timeout watchdog
-        queue, timed_out = check_command_timeouts(queue, audit_log)
-
-        # Save if any commands timed out
-        if timed_out:
-            memory["ai_queue"] = queue
-            memory["command_audit"] = audit_log[-50:]  # Keep bounded
-            save_project_memory(project_id, memory)
-
-        # Separate by status for dashboard display
-        pending = [q for q in queue if q.get("status") == "pending"]
-        delivered = [q for q in queue if q.get("status") == "delivered"]
-        failed = [q for q in queue if q.get("status", "").startswith("failed")]
-
-        return jsonify({
-            "status": "ok",
-            "queue": queue,
-            "pending_count": len(pending),
-            "delivered_count": len(delivered),
-            "failed_count": len(failed),
-            "timed_out_count": len(timed_out)
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@memory_bp.route("/ai-queue/<command_id>", methods=["DELETE"])
-def api_cancel_command(command_id):
-    """Cancel a pending command before it's delivered to AI."""
-    try:
-        from managers.multi_project_manager import (
-            get_active_project_id,
-            load_project_memory,
-            save_project_memory
-        )
-
-        project_id = get_active_project_id()
-        if not project_id:
-            return jsonify({"status": "error", "message": "No active project"}), 400
-
-        memory = load_project_memory(project_id)
-        if not memory:
-            return jsonify({"status": "error", "message": "Project not found"}), 404
-
-        queue = memory.get("ai_queue", [])
-
-        # Find and remove the command
-        original_len = len(queue)
-        memory["ai_queue"] = [q for q in queue if q.get("id") != command_id]
-
-        if len(memory["ai_queue"]) == original_len:
-            return jsonify({"status": "error", "message": "Command not found"}), 404
-
-        # Add cancellation to audit log
-        if "command_audit" not in memory:
-            memory["command_audit"] = []
-
-        memory["command_audit"].append({
-            "id": command_id,
-            "action": "cancelled",
-            "timestamp": datetime.now().isoformat(),
-            "cancelled_by": "dashboard"
-        })
-
-        save_project_memory(project_id, memory)
-
-        return jsonify({
-            "status": "ok",
-            "message": f"Command {command_id} cancelled"
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
 

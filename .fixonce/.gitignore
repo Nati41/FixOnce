@@ -1,0 +1,12 @@
+# FixOnce - files not for Git
+# Embeddings are large binary files - rebuild from text
+embeddings/
+
+# Backups are local safety copies
+.backups/
+
+# Session data is temporary
+session.json
+
+# Project UUID (only needed for non-git projects)
+# project.json  # Uncomment if you don't want to track this

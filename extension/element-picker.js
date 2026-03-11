@@ -147,7 +147,10 @@
       const data = await response.json();
 
       if (data.has_highlight) {
-        executeHighlight(data.selector, data.message, data.mode, data.duration_ms);
+        executeHighlight(data.selector, data.message, data.mode, data.duration_ms, {
+          requireVisible: data.require_visible === true,
+          allowContextOpen: data.allow_context_open !== false
+        });
       }
     } catch (e) {}
   }
@@ -202,7 +205,55 @@
     activeHighlights.delete(selector);
   }
 
-  function executeHighlight(selector, message, mode, durationMs) {
+  function isElementVisiblyRenderable(el) {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    if (parseFloat(style.opacity || '1') < 0.05) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width > 2 && rect.height > 2;
+  }
+
+  function tryOpenUiContext(selector) {
+    // Known case: project switcher modal in FixOnce dashboard.
+    if (selector && selector.includes('#project-modal')) {
+      const modal = document.querySelector('#project-modal');
+      if (modal && !modal.classList.contains('show')) {
+        const opener = document.querySelector('[onclick*="openProjectSwitcher"]');
+        if (opener) {
+          opener.click();
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  async function resolveVisibleElement(selector, options = {}) {
+    const requireVisible = options.requireVisible === true;
+    const allowContextOpen = options.allowContextOpen !== false;
+
+    let el = document.querySelector(selector);
+    if (isElementVisiblyRenderable(el)) return el;
+
+    if (requireVisible && !allowContextOpen) return null;
+
+    const contextOpened = allowContextOpen ? tryOpenUiContext(selector) : false;
+    if (!contextOpened) return null;
+
+    const timeoutMs = 1500;
+    const pollEveryMs = 75;
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, pollEveryMs));
+      el = document.querySelector(selector);
+      if (isElementVisiblyRenderable(el)) return el;
+    }
+    return null;
+  }
+
+  async function executeHighlight(selector, message, mode, durationMs, options = {}) {
     const resolvedMode = mode || 'ack';
 
     if (resolvedMode === 'clear') {
@@ -225,9 +276,9 @@
     const highlightId = `${selector}-${Date.now()}`;
 
     try {
-      const el = document.querySelector(selector);
+      const el = await resolveVisibleElement(selector, options);
       if (!el) {
-        console.log('[FixOnce] Element not found:', selector);
+        console.log('[FixOnce] Highlight target not visible/found:', selector);
         return;
       }
 

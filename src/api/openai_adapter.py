@@ -24,7 +24,7 @@ openai_bp = Blueprint('openai', __name__, url_prefix='/openai')
 FIXONCE_FUNCTIONS = [
     {
         "name": "fixonce_init_session",
-        "description": "Initialize FixOnce session for the current project. Call this at the start of every conversation to get project context, decisions, and insights.",
+        "description": "Initialize FixOnce session. Returns a 'display' field - show it to the user verbatim.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -253,6 +253,8 @@ def get_context_prompt():
         insights = live.get('lessons', {}).get('insights', [])
         goal = live.get('intent', {}).get('current_goal', '')
         arch = live.get('architecture', {})
+        project_rules = memory.get('project_rules', [])
+        enabled_rules = [r for r in project_rules if r.get('enabled', True)]
 
         prompt_parts = ["# FixOnce Context\n"]
 
@@ -268,6 +270,11 @@ def get_context_prompt():
             prompt_parts.append("\n## Decisions (MUST FOLLOW)\n")
             for d in decisions:
                 prompt_parts.append(f"- **{d.get('decision')}**: {d.get('reason')}\n")
+
+        if enabled_rules:
+            prompt_parts.append("\n## Project Rules (FOLLOW THESE)\n")
+            for r in enabled_rules:
+                prompt_parts.append(f"- {r.get('text')}\n")
 
         if avoid:
             prompt_parts.append("\n## Avoid (DO NOT DO)\n")
@@ -332,14 +339,12 @@ def get_openai_schema():
 def _handle_init_session(args: dict) -> dict:
     """Handle init_session function call."""
     from managers.multi_project_manager import (
-        generate_project_id_from_path,
-        project_exists,
-        init_project_memory,
         set_active_project,
         load_project_memory
     )
     from core.boundary_detector import find_project_root
-    from pathlib import Path
+    from core.project_context import ProjectContext
+    import subprocess
 
     working_dir = args.get('working_dir', '')
     if not working_dir:
@@ -350,35 +355,64 @@ def _handle_init_session(args: dict) -> dict:
     if not root:
         root = working_dir
 
-    # Get or create project
-    project_id = generate_project_id_from_path(root)
-    if not project_exists(project_id):
-        display_name = Path(root).name
-        init_project_memory(project_id, display_name, root)
-
+    # Use ProjectContext for consistent ID generation (respects git remote)
+    project_id = ProjectContext.from_path(root)
     set_active_project(project_id, detected_from="openai", working_dir=root)
+
+    # Get git hash
+    git_hash = None
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, cwd=root, timeout=5
+        )
+        if result.returncode == 0:
+            git_hash = result.stdout.strip()[:12]
+    except:
+        pass
 
     # Load memory
     memory = load_project_memory(project_id)
     if not memory:
+        # New project - use clean format
+        try:
+            from core.resume_context import build_new_project_opening
+            opening = build_new_project_opening(
+                project_name=project_id.split('_')[0],
+                working_dir=root,
+                language='he'
+            )
+        except:
+            opening = f"🧠 FixOnce | New Project\n📍 {root}\n🎯 What's the goal?"
+
         return {
-            "status": "new_project",
+            "display": opening,
             "project_id": project_id,
-            "message": "New project initialized"
+            "status": "new"
         }
 
-    # Extract key info
+    # Existing project - build clean opening
+    try:
+        from core.resume_context import build_resume_context, build_suggested_opening
+        context = build_resume_context(memory, root, git_hash)
+        opening = build_suggested_opening(context, language='he')
+    except Exception as e:
+        # Fallback
+        opening = f"🧠 FixOnce | {project_id}\n📍 {root}\nError building context: {e}"
+
+    # Extract key info for structured response
     live = memory.get('live_record', {})
     decisions = memory.get('decisions', [])
+    avoid = memory.get('avoid', [])
     insights = live.get('lessons', {}).get('insights', [])
+    project_rules = memory.get('project_rules', [])
+    enabled_rules = [r.get('text') for r in project_rules if r.get('enabled', True)]
 
+    # Return ONLY the opening - nothing else for Codex to reformat
     return {
-        "status": "existing_project",
+        "display": opening,
         "project_id": project_id,
-        "current_goal": live.get('intent', {}).get('current_goal', ''),
-        "decisions": [d.get('decision') for d in decisions],
-        "insights": [i.get('text', i) if isinstance(i, dict) else i for i in insights[:5]],
-        "architecture": live.get('architecture', {}).get('summary', '')
+        "status": "ready"
     }
 
 
@@ -577,6 +611,8 @@ def _handle_get_context(args: dict) -> dict:
             return {"error": "Could not load project memory"}
 
         live = memory.get('live_record', {})
+        project_rules = memory.get('project_rules', [])
+        enabled_rules = [r for r in project_rules if r.get('enabled', True)]
 
         return {
             "project_id": project_id,
@@ -584,6 +620,7 @@ def _handle_get_context(args: dict) -> dict:
             "next_step": live.get('intent', {}).get('next_step', ''),
             "architecture": live.get('architecture', {}),
             "decisions": memory.get('decisions', []),
+            "project_rules": enabled_rules,
             "avoid": memory.get('avoid', []),
             "insights": live.get('lessons', {}).get('insights', [])[:10]
         }
