@@ -2918,7 +2918,26 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
         lines.append("")
 
     if status == "new":
-        lines.append("_This is a new project. Ask: 'רוצה שאסרוק את הפרויקט?'_")
+        # New project onboarding - bilingual, welcoming
+        lines.append("---")
+        lines.append("## 🆕 New Project")
+        lines.append("")
+        lines.append("**FixOnce is now connected to this project.**")
+        lines.append("")
+        lines.append("From now on, I will remember:")
+        lines.append("- 🔒 **Decisions** — architectural choices and their reasons")
+        lines.append("- 💡 **Insights** — what we learned during development")
+        lines.append("- ⚠️ **Avoid patterns** — mistakes we shouldn't repeat")
+        lines.append("- 🐛 **Solutions** — how we fixed errors")
+        lines.append("")
+        lines.append("This knowledge persists across sessions, so we never lose context.")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append("**Want me to scan the project?** I can detect the tech stack and structure.")
+        lines.append("")
+        lines.append("_Just say: 'scan' or 'סרוק'_")
+        lines.append("")
     else:
         # Show existing context
         lr = data.get('live_record', {})
