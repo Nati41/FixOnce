@@ -547,7 +547,8 @@ body.powered-off .logo .version::after {
 <button class="safety-btn" onclick="setSafetyPoint()">Set Safety Point</button>
 
 <script>
-const API = 'http://localhost:5000';
+// Auto-detect server URL (works on any port)
+const API = window.location.origin;
 
 async function fetchData() {
   try {
