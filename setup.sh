@@ -17,9 +17,9 @@ echo ""
 
 # Step 1: Install dependencies
 echo -e "${DIM}[1/3]${NC} Installing dependencies..."
-pip3 install -q flask flask-cors requests fastmcp scikit-learn watchdog 2>/dev/null || {
+pip3 install -q -r "$FIXONCE_DIR/requirements.txt" 2>/dev/null || {
     echo "  pip3 failed. Trying pip..."
-    pip install -q flask flask-cors requests fastmcp scikit-learn watchdog
+    pip install -q -r "$FIXONCE_DIR/requirements.txt"
 }
 echo -e "  ${GREEN}✓${NC} Dependencies installed"
 
@@ -130,5 +130,5 @@ echo "  1. Reload Cursor (Cmd+Shift+P → Reload Window)"
 echo "  2. Open any project and start chatting"
 echo "  3. FixOnce will automatically remember everything"
 echo ""
-echo -e "  Dashboard: ${BLUE}http://localhost:5000/v3${NC}"
+echo -e "  Dashboard: ${BLUE}http://localhost:5000/lite${NC}"
 echo ""

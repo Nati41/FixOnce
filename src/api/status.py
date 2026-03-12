@@ -175,7 +175,7 @@ def api_health():
         active_file = DATA_DIR / "active_project.json"
         if active_file.exists():
             import json
-            with open(active_file) as f:
+            with open(active_file, encoding='utf-8') as f:
                 active = json.load(f)
             health["checks"]["active_project"] = {
                 "status": "ok",
@@ -459,7 +459,7 @@ def api_dashboard_snapshot():
                     if emb_dir.exists():
                         config_file = emb_dir / "config.json"
                         if config_file.exists():
-                            with open(config_file, 'r') as cf:
+                            with open(config_file, 'r', encoding='utf-8') as cf:
                                 emb_config = json.load(cf)
                             semantic_info = {
                                 "indexed": True,
