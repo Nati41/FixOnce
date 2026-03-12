@@ -74,6 +74,9 @@ class IsolatedSession:
             "tool": tool_name,
             "timestamp": datetime.now().isoformat()
         })
+        # Prevent unbounded memory growth - keep last 100 calls
+        if len(self.tool_calls) > 100:
+            self.tool_calls = self.tool_calls[-100:]
         self.touch()
 
         # Track specific tools

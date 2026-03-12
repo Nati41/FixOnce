@@ -550,31 +550,44 @@ body.powered-off .logo .version::after {
 // Auto-detect server URL (works on any port)
 const API = window.location.origin;
 
+async function fetchWithTimeout(url, options = {}, timeout = 5000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return res;
+  } catch (e) {
+    clearTimeout(timeoutId);
+    throw e;
+  }
+}
+
 async function fetchData() {
   try {
     // Dashboard snapshot
-    const res = await fetch(`${API}/api/dashboard_snapshot`, { headers: { 'X-Dashboard': 'true' } });
+    const res = await fetchWithTimeout(`${API}/api/dashboard_snapshot`, { headers: { 'X-Dashboard': 'true' } });
     if (res.ok) {
       const data = await res.json();
       renderSnapshot(data.snapshot || {});
     }
 
     // Errors
-    const errRes = await fetch(`${API}/api/live-errors?since=300`);
+    const errRes = await fetchWithTimeout(`${API}/api/live-errors?since=300`);
     if (errRes.ok) {
       const data = await errRes.json();
       renderHealth(data.errors || []);
     }
 
     // Rules
-    const rulesRes = await fetch(`${API}/api/memory/rules`, { headers: { 'X-Dashboard': 'true' } });
+    const rulesRes = await fetchWithTimeout(`${API}/api/memory/rules`, { headers: { 'X-Dashboard': 'true' } });
     if (rulesRes.ok) {
       const data = await rulesRes.json();
       renderRules(data.rules || []);
     }
 
     // Activity
-    const actRes = await fetch(`${API}/api/activity/feed?limit=2`);
+    const actRes = await fetchWithTimeout(`${API}/api/activity/feed?limit=2`);
     if (actRes.ok) {
       const data = await actRes.json();
       renderActivity(data.activities || []);

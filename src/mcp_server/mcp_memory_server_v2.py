@@ -330,6 +330,9 @@ class SessionContext:
             "tool": tool_name,
             "timestamp": datetime.now().isoformat()
         })
+        # Prevent unbounded memory growth - keep last 100 calls
+        if len(self.tool_calls) > 100:
+            self.tool_calls = self.tool_calls[-100:]
         # Track specific tool calls for compliance
         if tool_name == "search_past_solutions":
             self.search_performed = True

@@ -47,6 +47,7 @@ async function discoverServer() {
 let errorQueue = [];
 let isServerAvailable = true;
 let flushTimer = null;
+const MAX_ERROR_QUEUE_SIZE = 500; // Prevent unbounded memory growth
 
 // ===== SMART AUTO-FOCUS =====
 
@@ -208,6 +209,10 @@ function scheduleFlush() {
 }
 
 function queueError(payload) {
+  // Prevent unbounded memory growth - drop oldest if full
+  if (errorQueue.length >= MAX_ERROR_QUEUE_SIZE) {
+    errorQueue.splice(0, 100); // Drop oldest 100
+  }
   errorQueue.push(payload);
 
   if (errorQueue.length >= BATCH_SIZE) {
