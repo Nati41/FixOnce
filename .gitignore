@@ -49,9 +49,19 @@ personal_solutions.db
 data/activity_log.json
 data/active_project.json
 data/mcp_session.json
+data/mcp_compliance.json
 data/boundary_state.json
 data/project_index.json
+data/session_registry.json
+data/system_mode.json
+data/fixonce_enabled.json
+data/current_port.txt
+data/server.log
+data/project_memory.json
+data/project_memory.json.migrated
 data/projects_v2/*
+data/global/*
 !data/projects_v2/.gitkeep
+!data/global/.gitkeep
 !data/.gitkeep
 

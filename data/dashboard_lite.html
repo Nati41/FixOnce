@@ -379,6 +379,7 @@ input:checked + .slider:before {
 
 /* Powered Off State */
 body.powered-off .status-section,
+body.powered-off .system-status,
 body.powered-off .project-section,
 body.powered-off .health-section,
 body.powered-off .memory-section,
@@ -402,6 +403,50 @@ body.powered-off .logo .version::after {
   content: " OFF";
   color: var(--red);
   margin-left: 4px;
+}
+
+/* System Status Panel */
+.system-status {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.system-status h3 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.status-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-icon.green { background: var(--green); }
+.status-icon.yellow { background: var(--amber); }
+.status-icon.red { background: var(--red); }
+
+.status-text {
+  color: var(--text);
+}
+
+.status-text.dim {
+  color: var(--text-dim);
 }
 
 /* Activity */
@@ -453,9 +498,213 @@ body.powered-off .logo .version::after {
   background: var(--green);
   color: var(--bg);
 }
+
+/* Setup Center Overlay */
+.setup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.setup-overlay.hidden {
+  display: none;
+}
+
+.setup-center {
+  width: 100%;
+  max-width: 360px;
+}
+
+.setup-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.setup-subtitle {
+  color: var(--text-dim);
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.setup-step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.setup-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.setup-step-name {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setup-step-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.setup-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.setup-dot.green { background: var(--green); }
+.setup-dot.yellow { background: var(--amber); }
+.setup-dot.red { background: var(--red); }
+
+.setup-action {
+  margin-top: 12px;
+}
+
+.setup-action button {
+  background: var(--blue);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.setup-action button:hover {
+  opacity: 0.9;
+}
+
+.setup-action button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.setup-done-btn {
+  width: 100%;
+  background: var(--green);
+  color: var(--bg);
+  border: none;
+  padding: 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 24px;
+}
+
+.setup-done-btn:disabled {
+  background: var(--border);
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+
+.setup-skip {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.setup-skip a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.setup-skip a:hover {
+  color: var(--text);
+}
 </style>
 </head>
 <body>
+
+<!-- Setup Center Overlay -->
+<div class="setup-overlay hidden" id="setupOverlay">
+  <div class="setup-center">
+    <div class="setup-title">FixOnce Setup</div>
+    <div class="setup-subtitle">Let's get everything connected</div>
+
+    <div class="setup-step" id="setupEngine">
+      <div class="setup-step-header">
+        <div class="setup-step-name">
+          <span>1.</span> FixOnce Engine
+        </div>
+        <div class="setup-step-status">
+          <div class="setup-dot" id="engineDot"></div>
+          <span id="engineStatus">Checking...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="setup-step" id="setupMCP">
+      <div class="setup-step-header">
+        <div class="setup-step-name">
+          <span>2.</span> AI Connection (MCP)
+        </div>
+        <div class="setup-step-status">
+          <div class="setup-dot" id="mcpDot"></div>
+          <span id="mcpStatus">Checking...</span>
+        </div>
+      </div>
+      <div class="setup-action" id="mcpAction" style="display:none;">
+        <button onclick="runInstall()">Configure MCP</button>
+      </div>
+    </div>
+
+    <div class="setup-step" id="setupExtension">
+      <div class="setup-step-header">
+        <div class="setup-step-name">
+          <span>3.</span> Browser Extension
+        </div>
+        <div class="setup-step-status">
+          <div class="setup-dot" id="extensionDot"></div>
+          <span id="extensionStatus">Checking...</span>
+        </div>
+      </div>
+      <div class="setup-action" id="extensionAction" style="display:none;">
+        <button onclick="openExtensionPage()">Install Extension</button>
+      </div>
+    </div>
+
+    <div class="setup-step" id="setupMemory">
+      <div class="setup-step-header">
+        <div class="setup-step-name">
+          <span>4.</span> Project Memory
+        </div>
+        <div class="setup-step-status">
+          <div class="setup-dot" id="memoryDot"></div>
+          <span id="memoryStatus">Checking...</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="setup-done-btn" id="setupDoneBtn" onclick="closeSetup()" disabled>
+      Open Dashboard
+    </button>
+
+    <div class="setup-skip">
+      <a href="#" onclick="closeSetup(); return false;">Skip setup</a>
+    </div>
+  </div>
+</div>
 
 <!-- Top Bar -->
 <div class="topbar">
@@ -493,6 +742,27 @@ body.powered-off .logo .version::after {
 <div class="status-section">
   <div class="status-label green" id="statusLabel">PROTECTED</div>
   <div class="roi-stat" id="roiStat"><span>0</span> decisions enforced</div>
+</div>
+
+<!-- System Status -->
+<div class="system-status">
+  <h3>System Status</h3>
+  <div class="status-row">
+    <div class="status-icon" id="statusFixonce"></div>
+    <span class="status-text" id="statusFixonceText">Checking...</span>
+  </div>
+  <div class="status-row">
+    <div class="status-icon" id="statusAI"></div>
+    <span class="status-text" id="statusAIText">Checking...</span>
+  </div>
+  <div class="status-row">
+    <div class="status-icon" id="statusExtension"></div>
+    <span class="status-text" id="statusExtensionText">Checking...</span>
+  </div>
+  <div class="status-row">
+    <div class="status-icon" id="statusMemory"></div>
+    <span class="status-text" id="statusMemoryText">Checking...</span>
+  </div>
 </div>
 
 <!-- Project Section -->
@@ -821,9 +1091,261 @@ function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+// System Status tracking
+let extensionConnected = false;
+let extensionLastSeen = null;
+let lastAIActivity = null;
+let memoryLoaded = false;
+let fixonceActive = false;
+
+function setStatus(id, status, text) {
+  const icon = document.getElementById(id);
+  const textEl = document.getElementById(id + 'Text');
+  if (icon) {
+    icon.className = 'status-icon ' + status;
+  }
+  if (textEl) {
+    textEl.textContent = text;
+    textEl.className = 'status-text' + (status === 'yellow' ? ' dim' : '');
+  }
+}
+
+async function updateSystemStatus() {
+  const now = Date.now();
+  const RECENT_MS = 5 * 60 * 1000; // 5 minutes
+  const IDLE_MS = 30 * 60 * 1000; // 30 minutes
+
+  // 1. FixOnce Active - check if backend responds
+  try {
+    const res = await fetchWithTimeout(`${API}/api/status`, {}, 3000);
+    if (res.ok) {
+      fixonceActive = true;
+      setStatus('statusFixonce', 'green', 'FixOnce Active');
+
+      // Parse extension status from response
+      const data = await res.json();
+      extensionConnected = data.extension_connected;
+      if (data.extension_last_seen) {
+        extensionLastSeen = new Date(data.extension_last_seen).getTime();
+      }
+    } else {
+      fixonceActive = false;
+      setStatus('statusFixonce', 'red', 'FixOnce Not Running');
+    }
+  } catch (e) {
+    fixonceActive = false;
+    setStatus('statusFixonce', 'red', 'FixOnce Not Running');
+  }
+
+  // 2. Active AI - check from dashboard snapshot
+  if (lastAIActivity && (now - lastAIActivity < RECENT_MS)) {
+    const aiName = document.getElementById('activeAI').textContent;
+    if (aiName && aiName !== 'Not connected' && aiName !== '-') {
+      setStatus('statusAI', 'green', 'Active AI: ' + aiName);
+    } else {
+      setStatus('statusAI', 'yellow', 'Waiting for AI connection');
+    }
+  } else {
+    setStatus('statusAI', 'yellow', 'Waiting for AI connection');
+  }
+
+  // 3. Browser Extension - check connection status from /api/status
+  if (extensionConnected && extensionLastSeen && (now - extensionLastSeen < RECENT_MS)) {
+    setStatus('statusExtension', 'green', 'Browser Extension Connected');
+  } else if (extensionConnected || (extensionLastSeen && (now - extensionLastSeen < IDLE_MS))) {
+    setStatus('statusExtension', 'yellow', 'Browser Extension Idle');
+  } else {
+    setStatus('statusExtension', 'red', 'Browser Extension Not Connected');
+  }
+
+  // 4. Project Memory - check if loaded
+  if (memoryLoaded) {
+    setStatus('statusMemory', 'green', 'Project Memory Loaded');
+  } else if (fixonceActive) {
+    setStatus('statusMemory', 'yellow', 'Loading Memory...');
+  } else {
+    setStatus('statusMemory', 'red', 'Project Memory Error');
+  }
+}
+
+// Extend renderSnapshot to track AI activity
+const originalRenderSnapshot = renderSnapshot;
+renderSnapshot = function(snap) {
+  originalRenderSnapshot(snap);
+
+  // Track AI activity
+  const ais = snap.active_ais || [];
+  const primary = ais.find(a => a.is_primary) || ais[0];
+  if (primary && primary.last_activity) {
+    lastAIActivity = new Date(primary.last_activity).getTime();
+  }
+
+  // Track memory loaded
+  const identity = snap.identity || {};
+  const knowledge = snap.knowledge || {};
+  memoryLoaded = !!(identity.name || knowledge.total_decisions > 0 || knowledge.total_insights > 0);
+
+  updateSystemStatus();
+};
+
+// Extend renderHealth to track extension activity from errors
+const originalRenderHealth = renderHealth;
+renderHealth = function(errors) {
+  originalRenderHealth(errors);
+
+  // If we receive errors, the extension is working
+  if (errors && errors.length > 0) {
+    extensionConnected = true;
+    const latestError = errors[0];
+    if (latestError.timestamp) {
+      extensionLastSeen = new Date(latestError.timestamp).getTime();
+    } else {
+      extensionLastSeen = Date.now();
+    }
+  }
+
+  updateSystemStatus();
+};
+
+// =============================================
+// Setup Center
+// =============================================
+let setupComplete = false;
+
+async function checkSetupStatus() {
+  try {
+    const res = await fetch(`${API}/api/setup/status`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+function updateSetupStep(stepId, dotId, statusId, status, text, showAction = false, actionId = null) {
+  const dot = document.getElementById(dotId);
+  const statusEl = document.getElementById(statusId);
+
+  dot.className = 'setup-dot ' + status;
+  statusEl.textContent = text;
+
+  if (actionId) {
+    document.getElementById(actionId).style.display = showAction ? 'block' : 'none';
+  }
+}
+
+async function refreshSetupStatus() {
+  const status = await checkSetupStatus();
+  if (!status) {
+    // API not available - engine not running
+    updateSetupStep('setupEngine', 'engineDot', 'engineStatus', 'red', 'Not Running');
+    return;
+  }
+
+  // Engine
+  if (status.engine.running) {
+    updateSetupStep('setupEngine', 'engineDot', 'engineStatus', 'green', `Running (port ${status.engine.port})`);
+  } else {
+    updateSetupStep('setupEngine', 'engineDot', 'engineStatus', 'red', 'Not Running');
+  }
+
+  // MCP
+  if (status.mcp.configured) {
+    updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'green', 'Configured', false, 'mcpAction');
+  } else {
+    updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'red', 'Not Configured', true, 'mcpAction');
+  }
+
+  // Extension
+  if (status.extension.connected) {
+    updateSetupStep('setupExtension', 'extensionDot', 'extensionStatus', 'green', 'Connected', false, 'extensionAction');
+  } else if (status.extension.installed) {
+    updateSetupStep('setupExtension', 'extensionDot', 'extensionStatus', 'yellow', 'Idle', false, 'extensionAction');
+  } else {
+    updateSetupStep('setupExtension', 'extensionDot', 'extensionStatus', 'yellow', 'Optional', true, 'extensionAction');
+  }
+
+  // Memory
+  if (status.memory.has_active_project) {
+    updateSetupStep('setupMemory', 'memoryDot', 'memoryStatus', 'green', `${status.memory.project_count} projects`);
+  } else if (status.memory.ready) {
+    updateSetupStep('setupMemory', 'memoryDot', 'memoryStatus', 'yellow', 'No active project');
+  } else {
+    updateSetupStep('setupMemory', 'memoryDot', 'memoryStatus', 'yellow', 'Ready for first project');
+  }
+
+  // Enable done button if critical items are OK
+  const doneBtn = document.getElementById('setupDoneBtn');
+  setupComplete = status.engine.running && status.mcp.configured;
+  doneBtn.disabled = !status.engine.running;
+}
+
+async function runInstall() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Installing...';
+
+  try {
+    const res = await fetch(`${API}/api/setup/run-install`, { method: 'POST' });
+    const data = await res.json();
+
+    if (data.success) {
+      showToast('MCP configured! Restart Claude Code to apply.');
+    } else {
+      showToast('Installation failed: ' + (data.error || 'Unknown error'), true);
+    }
+  } catch (e) {
+    showToast('Installation error: ' + e.message, true);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Configure MCP';
+  refreshSetupStatus();
+}
+
+function openExtensionPage() {
+  window.open('chrome://extensions/', '_blank');
+  showToast('Enable Developer Mode and load the extension folder');
+}
+
+function closeSetup() {
+  document.getElementById('setupOverlay').classList.add('hidden');
+  localStorage.setItem('fixonce_setup_dismissed', 'true');
+}
+
+function showSetup() {
+  document.getElementById('setupOverlay').classList.remove('hidden');
+  refreshSetupStatus();
+}
+
+async function initSetup() {
+  // Check if we should show setup
+  const dismissed = localStorage.getItem('fixonce_setup_dismissed');
+  const status = await checkSetupStatus();
+
+  // Show setup if:
+  // 1. Never dismissed AND (MCP not configured OR first launch)
+  // 2. Engine not running (critical error)
+
+  if (!status || !status.engine.running) {
+    // Engine not running - show setup
+    showSetup();
+    return;
+  }
+
+  if (!dismissed && (!status.mcp.configured || status.overall !== 'ready')) {
+    showSetup();
+    return;
+  }
+}
+
+// Init
+initSetup();
 fetchData();
 loadPowerState();
+updateSystemStatus();
 setInterval(fetchData, 5000);
+setInterval(refreshSetupStatus, 10000);
 </script>
 </body>
 </html>

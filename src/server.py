@@ -379,6 +379,10 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress startup messages")
     args = parser.parse_args()
 
+    # First launch initialization - create data files from templates
+    from core.first_launch import ensure_initialized
+    ensure_initialized()
+
     # Initialize databases
     init_all_databases()
 

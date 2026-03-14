@@ -5,7 +5,7 @@ This IS the FixOnce project itself - a persistent memory layer for AI coding ass
 ## On Session Start
 
 ```
-auto_init_session(cwd="/Users/haimdayan/Desktop/FixOnce")
+auto_init_session()  # Uses current working directory automatically
 ```
 
 ## Project Structure
@@ -14,7 +14,7 @@ auto_init_session(cwd="/Users/haimdayan/Desktop/FixOnce")
 - `src/mcp_server/mcp_memory_server_v2.py` - MCP tools
 - `src/core/` - Business logic
 - `src/api/` - REST endpoints
-- `data/dashboard_vnext.html` - Dashboard UI
+- `data/dashboard_lite.html` - Dashboard UI
 
 ## Active Decisions
 

@@ -95,6 +95,9 @@ from .activity import activity_bp
 # OpenAI adapter (for Codex, GPT, and other non-MCP AIs)
 from .openai_adapter import openai_bp
 
+# Setup center endpoints
+from .setup import setup_bp
+
 
 def register_blueprints(app):
     """Register all blueprints with the Flask app."""
@@ -105,3 +108,4 @@ def register_blueprints(app):
     app.register_blueprint(projects_bp, url_prefix='/api/projects')
     app.register_blueprint(activity_bp, url_prefix='/api/activity')
     app.register_blueprint(openai_bp)  # /openai/* endpoints
+    app.register_blueprint(setup_bp)  # /api/setup/* endpoints
