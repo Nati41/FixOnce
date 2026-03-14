@@ -181,16 +181,17 @@ def get_mcp_config_paths() -> dict:
     paths = {}
 
     if current_platform == 'mac':
-        paths['claude_code'] = home / '.claude' / 'settings.json'
+        # Claude Code uses ~/.claude.json (NOT ~/.claude/settings.json)
+        paths['claude_code'] = home / '.claude.json'
         paths['cursor'] = home / '.cursor' / 'mcp.json'
 
     elif current_platform == 'windows':
         app_data = Path(os.environ.get('APPDATA', home / 'AppData' / 'Roaming'))
-        paths['claude_code'] = home / '.claude' / 'settings.json'
+        paths['claude_code'] = home / '.claude.json'
         paths['cursor'] = app_data / 'Cursor' / 'mcp.json'
 
     else:  # Linux
-        paths['claude_code'] = home / '.claude' / 'settings.json'
+        paths['claude_code'] = home / '.claude.json'
         paths['cursor'] = home / '.cursor' / 'mcp.json'
 
     return paths
@@ -206,56 +207,139 @@ def configure_mcp(editors: dict) -> bool:
         print(f"  {Colors.RED}[ERROR]{Colors.END} MCP server not found at {mcp_server_path}")
         return False
 
-    mcp_config = {
-        "mcpServers": {
-            "fixonce": {
-                "command": sys.executable,
-                "args": [str(mcp_server_path)]
-            }
-        }
-    }
+    # Make MCP server executable
+    try:
+        os.chmod(mcp_server_path, 0o755)
+    except Exception:
+        pass
 
-    config_paths = get_mcp_config_paths()
+    src_path = str(fixonce_dir / "src")
+    python_path = sys.executable
     configured_count = 0
 
-    for editor, path in config_paths.items():
-        if not editors.get(editor, False):
-            continue
+    # Find fastmcp path
+    fastmcp_path = None
+    try:
+        result = subprocess.run(['which', 'fastmcp'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            fastmcp_path = result.stdout.strip()
+    except Exception:
+        pass
 
+    # Fallback paths for fastmcp
+    if not fastmcp_path:
+        possible_paths = [
+            Path(sys.executable).parent / 'fastmcp',
+            Path('/usr/local/bin/fastmcp'),
+            Path.home() / '.local' / 'bin' / 'fastmcp',
+        ]
+        for p in possible_paths:
+            if p.exists():
+                fastmcp_path = str(p)
+                break
+
+    # Configure Claude Code using the CLI (the proper way)
+    if editors.get('claude_code', False):
         try:
-            # Read existing config if exists
-            existing_config = {}
-            if path.exists():
-                with open(path, 'r', encoding='utf-8') as f:
-                    try:
-                        existing_config = json.load(f)
-                    except json.JSONDecodeError:
-                        existing_config = {}
+            # Remove existing fixonce config if any
+            subprocess.run(['claude', 'mcp', 'remove', 'fixonce', '-s', 'user'],
+                         capture_output=True, timeout=10)
 
-            # Merge configs
-            if 'mcpServers' not in existing_config:
-                existing_config['mcpServers'] = {}
+            # Use fastmcp run if available, otherwise direct python
+            if fastmcp_path:
+                mcp_json = json.dumps({
+                    "command": fastmcp_path,
+                    "args": ["run", str(mcp_server_path), "--transport", "stdio", "--no-banner"],
+                    "env": {
+                        "PYTHONPATH": src_path,
+                        "FASTMCP_SHOW_CLI_BANNER": "false",
+                        "FASTMCP_CHECK_FOR_UPDATES": "false"
+                    }
+                })
+            else:
+                mcp_json = json.dumps({
+                    "command": python_path,
+                    "args": [str(mcp_server_path)],
+                    "env": {"PYTHONPATH": src_path}
+                })
 
-            existing_config['mcpServers']['fixonce'] = mcp_config['mcpServers']['fixonce']
+            result = subprocess.run(
+                ['claude', 'mcp', 'add-json', 'fixonce', mcp_json, '-s', 'user'],
+                capture_output=True, text=True, timeout=10
+            )
 
-            # Ensure parent directory exists
-            path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Write config
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(existing_config, f, indent=2)
-
-            editor_name = editor.replace('_', ' ').title()
-            print(f"  {Colors.GREEN}[OK]{Colors.END} {editor_name} configured: {path}")
-            configured_count += 1
+            if result.returncode == 0:
+                print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code configured via CLI")
+                configured_count += 1
+            else:
+                print(f"  {Colors.YELLOW}[WARN]{Colors.END} Claude CLI config failed, trying file method...")
+                # Fallback to file method
+                _configure_mcp_file(Path.home() / '.claude.json', python_path, str(mcp_server_path), src_path, fastmcp_path)
+                configured_count += 1
 
         except Exception as e:
-            print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure {editor}: {e}")
+            print(f"  {Colors.YELLOW}[WARN]{Colors.END} Claude CLI not available: {e}")
+            # Fallback to file method
+            try:
+                _configure_mcp_file(Path.home() / '.claude.json', python_path, str(mcp_server_path), src_path, fastmcp_path)
+                print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code configured via file")
+                configured_count += 1
+            except Exception as e2:
+                print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Claude Code: {e2}")
+
+    # Configure Cursor using file method
+    if editors.get('cursor', False):
+        cursor_path = Path.home() / '.cursor' / 'mcp.json'
+        try:
+            _configure_mcp_file(cursor_path, python_path, str(mcp_server_path), src_path, fastmcp_path)
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Cursor configured: {cursor_path}")
+            configured_count += 1
+        except Exception as e:
+            print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Cursor: {e}")
 
     if configured_count == 0:
         print(f"  {Colors.YELLOW}[INFO]{Colors.END} No editors to configure (install Claude Code or Cursor first)")
 
     return True
+
+
+def _configure_mcp_file(path: Path, python_cmd: str, server_path: str, pythonpath: str, fastmcp_path: str = None):
+    """Helper to configure MCP via config file"""
+    existing_config = {}
+    if path.exists():
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                existing_config = json.load(f)
+        except json.JSONDecodeError:
+            existing_config = {}
+
+    if 'mcpServers' not in existing_config:
+        existing_config['mcpServers'] = {}
+
+    # Use fastmcp run if available
+    if fastmcp_path:
+        existing_config['mcpServers']['fixonce'] = {
+            "command": fastmcp_path,
+            "args": ["run", server_path, "--transport", "stdio", "--no-banner"],
+            "env": {
+                "PYTHONPATH": pythonpath,
+                "FASTMCP_SHOW_CLI_BANNER": "false",
+                "FASTMCP_CHECK_FOR_UPDATES": "false"
+            }
+        }
+    else:
+        existing_config['mcpServers']['fixonce'] = {
+            "command": python_cmd,
+            "args": [server_path],
+            "env": {"PYTHONPATH": pythonpath}
+        }
+
+    # Ensure parent directory exists
+    if path.parent != Path.home():
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(existing_config, f, indent=2)
 
 # ============ Step 4: Configure Editor Rules ============
 

@@ -1,7 +1,7 @@
 # FixOnce Context
 
 > **Auto-generated file.** Do not edit manually.
-> Last updated: 2026-03-11 21:02
+> Last updated: 2026-03-11 22:38
 
 ---
 
@@ -9,9 +9,9 @@
 
 ## Current Goal
 
-**תשתית בדיקות לפני release**
+**בדיקת תאימות Windows + הפצה**
 
-Next step: Produce a focused report on widgets, user flows, strengths, and gaps
+Next step: בדיקת Windows או הפצה
 
 ---
 
@@ -211,6 +211,10 @@ Next step: Produce a focused report on widgets, user flows, strengths, and gaps
 ### Opening format v7: Clean scannable sections - header, DECISIONS, AVOID, CONTEXT, STATE
 
 *Reason:* נרטיבי ארוך מדי. פורמט חדש כמו Cursor/Linear - קצר, חד, סריק. מפתחים רוצים: איפה אנחנו, מה חשוב, מה הבא.
+
+### Goal חייב להתעדכן מיד כשמתחילים משימה חדשה - זה לא אופציונלי
+
+*Reason:* Dashboard צריך לשקף בזמן אמת מה הבינה עושה. בלי זה המשתמש לא יודע מה קורה.
 
 ---
 

@@ -65,10 +65,13 @@ TEST_PROJECT_DIR = "/tmp/fixonce_stress_test_project"
 # Store original active project to restore after tests
 ORIGINAL_ACTIVE_PROJECT = None
 
+# Module-level storage for test results (used by run_all_tests)
+_stress_test_results: Dict[str, 'Result'] = {}
+
 
 @dataclass
-class TestResult:
-    """Result of a single test."""
+class Result:
+    """Result of a single stress test (not a pytest test class)."""
     name: str
     passed: bool
     duration: float
@@ -84,7 +87,7 @@ class StressTestReport:
     passed: int
     failed: int
     duration: float
-    results: List[TestResult]
+    results: List[Result]
 
     def to_dict(self) -> Dict:
         return {
@@ -195,12 +198,29 @@ def cleanup_test_project():
         except Exception as e:
             print(f"⚠️  Could not clean up folder: {e}")
 
+    # Also clean any /tmp test directories from boundary tests
+    for tmp_dir in Path("/tmp").glob("fixonce_boundary_test_*"):
+        try:
+            shutil.rmtree(tmp_dir)
+            print(f"🧹 Cleaned up temp folder: {tmp_dir}")
+        except Exception:
+            pass
+
     # Clean project data files from FixOnce data directory
     data_dir = Path(__file__).parent.parent / "data" / "projects_v2"
     if data_dir.exists():
-        test_patterns = ["fixonce_stress_test_project_", "subproject_", "project_a-build_"]
+        # Patterns for test-generated project files
+        test_patterns = [
+            "fixonce_stress_test_project",
+            "stress_test_project",
+            "subproject_",
+            "project_a-build",
+            "project_a_",
+            "boundary_test",
+        ]
         for json_file in data_dir.glob("*.json"):
-            if any(pattern in json_file.name for pattern in test_patterns):
+            filename_lower = json_file.name.lower()
+            if any(pattern in filename_lower for pattern in test_patterns):
                 try:
                     json_file.unlink()
                     print(f"🧹 Cleaned up data file: {json_file.name}")
@@ -216,6 +236,11 @@ def cleanup_test_project():
             print(f"🔄 Restored original active project: {ORIGINAL_ACTIVE_PROJECT.get('active_id', 'unknown')}")
         except Exception as e:
             print(f"⚠️  Could not restore active project: {e}")
+
+
+# Pytest fixture for automatic cleanup
+import atexit
+atexit.register(cleanup_test_project)
 
 
 def ensure_test_project_active() -> bool:
@@ -240,7 +265,7 @@ def ensure_test_project_active() -> bool:
 # Test 1: Load Test (Memory Explosion)
 # ============================================================================
 
-def test_load_high_volume() -> TestResult:
+def test_load_high_volume() -> None:
     """
     Test 1: Memory Explosion
 
@@ -255,7 +280,7 @@ def test_load_high_volume() -> TestResult:
 
     # CRITICAL: Ensure we're writing to test project, not real project!
     if not ensure_test_project_active():
-        return TestResult(
+        return Result(
             name="Load Test (High Volume)",
             passed=False,
             duration=0,
@@ -348,20 +373,22 @@ def test_load_high_volume() -> TestResult:
     print(f"📊 Throughput: {ops_per_second:.1f} ops/sec")
     print(f"{'✅ PASSED' if passed else '❌ FAILED'}")
 
-    return TestResult(
+    result = Result(
         name="Load Test (High Volume)",
         passed=passed,
         duration=duration,
         details=details,
         errors=errors[:10]  # Keep first 10 errors
     )
+    _stress_test_results["load_high_volume"] = result
+    assert passed, f"Load test failed: {errors[:3]}"
 
 
 # ============================================================================
 # Test 2: Crash Recovery (Mid-Write Termination)
 # ============================================================================
 
-def test_crash_recovery() -> TestResult:
+def test_crash_recovery() -> None:
     """
     Test 2: Crash Recovery
 
@@ -377,7 +404,7 @@ def test_crash_recovery() -> TestResult:
 
     # CRITICAL: Ensure we're writing to test project, not real project!
     if not ensure_test_project_active():
-        return TestResult(
+        return Result(
             name="Crash Recovery (Atomic Write)",
             passed=False,
             duration=0,
@@ -440,20 +467,22 @@ def test_crash_recovery() -> TestResult:
         for e in errors[:5]:
             print(f"  ❌ {e}")
 
-    return TestResult(
+    result = Result(
         name="Crash Recovery (Atomic Write)",
         passed=passed,
         duration=duration,
         details=f"Rapid writes: 50, Errors: {len(errors)}",
         errors=errors
     )
+    _stress_test_results["crash_recovery"] = result
+    assert passed, f"Crash recovery failed: {errors[:3]}"
 
 
 # ============================================================================
 # Test 3: Concurrent Access (Dual Identity)
 # ============================================================================
 
-def test_concurrent_access() -> TestResult:
+def test_concurrent_access() -> None:
     """
     Test 3: Concurrent Access
 
@@ -466,7 +495,7 @@ def test_concurrent_access() -> TestResult:
 
     # CRITICAL: Ensure we're writing to test project, not real project!
     if not ensure_test_project_active():
-        return TestResult(
+        return Result(
             name="Concurrent Access (Race Condition)",
             passed=False,
             duration=0,
@@ -545,20 +574,22 @@ def test_concurrent_access() -> TestResult:
 
     print(f"\n{'✅ PASSED' if passed else '❌ FAILED'}")
 
-    return TestResult(
+    result = Result(
         name="Concurrent Access (Race Condition)",
         passed=passed,
         duration=duration,
         details=details,
         errors=errors
     )
+    _stress_test_results["concurrent_access"] = result
+    assert passed, f"Concurrent access failed: {errors[:3]}"
 
 
 # ============================================================================
 # Test 4: Boundary Detection Torture
 # ============================================================================
 
-def test_boundary_detection() -> TestResult:
+def test_boundary_detection() -> None:
     """
     Test 4: Boundary Detection
 
@@ -653,20 +684,22 @@ def test_boundary_detection() -> TestResult:
 
     print(f"\n{'✅ PASSED' if passed else '❌ FAILED'}")
 
-    return TestResult(
+    result = Result(
         name="Boundary Detection Torture",
         passed=passed,
         duration=duration,
         details=f"Test structures created and verified",
         errors=errors
     )
+    _stress_test_results["boundary_detection"] = result
+    assert passed, f"Boundary detection failed: {errors[:3]}"
 
 
 # ============================================================================
 # Test 5: UX Edge Cases
 # ============================================================================
 
-def test_ux_edge_cases() -> TestResult:
+def test_ux_edge_cases() -> None:
     """
     Test 5: UX Edge Cases
 
@@ -681,7 +714,7 @@ def test_ux_edge_cases() -> TestResult:
 
     # CRITICAL: Ensure we're writing to test project, not real project!
     if not ensure_test_project_active():
-        return TestResult(
+        return Result(
             name="UX Edge Cases",
             passed=False,
             duration=0,
@@ -772,13 +805,15 @@ def test_ux_edge_cases() -> TestResult:
 
     print(f"\n{'✅ PASSED' if passed else '❌ FAILED'} ({tests_passed}/{tests_run})")
 
-    return TestResult(
+    result = Result(
         name="UX Edge Cases",
         passed=passed,
         duration=duration,
         details=f"Edge cases: {tests_passed}/{tests_run} passed",
         errors=errors
     )
+    _stress_test_results["ux_edge_cases"] = result
+    assert passed, f"UX edge cases failed: {errors[:3]}"
 
 
 # ============================================================================
@@ -808,29 +843,35 @@ def run_all_tests() -> StressTestReport:
         sys.exit(1)
 
     start_time = time.time()
-    results = []
+
+    # Clear previous results
+    _stress_test_results.clear()
 
     # Run tests
     tests = [
-        test_load_high_volume,
-        test_crash_recovery,
-        test_concurrent_access,
-        test_boundary_detection,
-        test_ux_edge_cases,
+        ("load_high_volume", test_load_high_volume),
+        ("crash_recovery", test_crash_recovery),
+        ("concurrent_access", test_concurrent_access),
+        ("boundary_detection", test_boundary_detection),
+        ("ux_edge_cases", test_ux_edge_cases),
     ]
 
-    for test_func in tests:
+    for test_key, test_func in tests:
         try:
-            result = test_func()
-            results.append(result)
+            test_func()
+        except AssertionError:
+            # Test failed but result is already stored in _stress_test_results
+            pass
         except Exception as e:
-            results.append(TestResult(
+            _stress_test_results[test_key] = Result(
                 name=test_func.__name__,
                 passed=False,
                 duration=0,
                 details=f"Test crashed: {str(e)}",
                 errors=[str(e)]
-            ))
+            )
+
+    results = list(_stress_test_results.values())
 
     # Generate report
     total_duration = time.time() - start_time
@@ -893,15 +934,19 @@ def main():
 
     if args.test:
         test_map = {
-            "load": test_load_high_volume,
-            "crash": test_crash_recovery,
-            "concurrent": test_concurrent_access,
-            "boundary": test_boundary_detection,
-            "ux": test_ux_edge_cases,
+            "load": ("load_high_volume", test_load_high_volume),
+            "crash": ("crash_recovery", test_crash_recovery),
+            "concurrent": ("concurrent_access", test_concurrent_access),
+            "boundary": ("boundary_detection", test_boundary_detection),
+            "ux": ("ux_edge_cases", test_ux_edge_cases),
         }
         if check_server_running():
-            result = test_map[args.test]()
-            sys.exit(0 if result.passed else 1)
+            test_key, test_func = test_map[args.test]
+            try:
+                test_func()
+                sys.exit(0)
+            except AssertionError:
+                sys.exit(1)
         else:
             print("❌ Server not running")
             sys.exit(1)
