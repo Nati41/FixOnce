@@ -181,16 +181,16 @@ def get_mcp_config_paths() -> dict:
     paths = {}
 
     if current_platform == 'mac':
-        paths['claude_code'] = home / '.claude.json'
+        paths['claude_code'] = home / '.claude' / 'settings.json'
         paths['cursor'] = home / '.cursor' / 'mcp.json'
 
     elif current_platform == 'windows':
         app_data = Path(os.environ.get('APPDATA', home / 'AppData' / 'Roaming'))
-        paths['claude_code'] = home / '.claude.json'
+        paths['claude_code'] = home / '.claude' / 'settings.json'
         paths['cursor'] = app_data / 'Cursor' / 'mcp.json'
 
     else:  # Linux
-        paths['claude_code'] = home / '.claude.json'
+        paths['claude_code'] = home / '.claude' / 'settings.json'
         paths['cursor'] = home / '.cursor' / 'mcp.json'
 
     return paths
