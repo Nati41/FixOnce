@@ -25,6 +25,22 @@ def _log(*args, **kwargs):
     print(*args, file=sys.stderr, flush=True, **kwargs)
 
 
+def _debug_log(message: str):
+    """
+    Write debug message to user-specific log file.
+    Uses ~/.fixonce/mcp_debug.log to avoid permission issues with /tmp.
+    Silently fails if can't write - debug logs are non-critical.
+    """
+    try:
+        log_dir = Path.home() / ".fixonce"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / "mcp_debug.log"
+        with open(log_file, "a") as f:
+            f.write(f"[{datetime.now().isoformat()}] {message}\n")
+    except Exception:
+        pass  # Silent fail - debug logs are non-critical
+
+
 # Safe File Operations (auto-backup, atomic writes)
 _safe_file_available = False
 try:
@@ -1877,8 +1893,7 @@ def auto_init_session(cwd: str = "", sync_to_active: bool = False) -> str:
             active_working_dir = active.get("working_dir")
             if active_working_dir and os.path.isdir(active_working_dir):
                 _log(f"[MCP] Multi-AI Sync: Joining active project at {active_working_dir}")
-                with open("/tmp/fixonce_mcp_debug.log", "a") as f:
-                    f.write(f"[{datetime.now().isoformat()}] SYNC_TO_ACTIVE: joining {active_working_dir}\n")
+                _debug_log(f"SYNC_TO_ACTIVE: joining {active_working_dir}")
                 return _do_init_session(active_working_dir)
         except Exception as e:
             _log(f"[MCP] Multi-AI Sync failed: {e}")
@@ -1886,9 +1901,7 @@ def auto_init_session(cwd: str = "", sync_to_active: bool = False) -> str:
     # DEBUG: Log what cwd is received
     import sys
     _log(f"[MCP DEBUG] auto_init_session called with cwd='{cwd}'", file=sys.stderr)
-    # Also write to file for debugging
-    with open("/tmp/fixonce_mcp_debug.log", "a") as f:
-        f.write(f"[{datetime.now().isoformat()}] auto_init_session cwd='{cwd}'\n")
+    _debug_log(f"auto_init_session cwd='{cwd}'")
 
     working_dir = None
     boundary_triggered = False
