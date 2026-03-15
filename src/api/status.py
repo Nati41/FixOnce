@@ -30,6 +30,20 @@ def set_extension_connected(connected: bool, last_seen: str = None):
     EXTENSION_LAST_SEEN = last_seen or datetime.now().isoformat()
 
 
+@status_bp.route("/ping")
+def api_ping():
+    """Simple ping endpoint for service discovery.
+
+    Used by Chrome extension to find which port FixOnce is running on.
+    Returns minimal response with service identifier.
+    """
+    return jsonify({
+        "service": "fixonce",
+        "status": "ok",
+        "port": ACTUAL_PORT
+    })
+
+
 def set_actual_port(port: int):
     """Set the actual port being used."""
     global ACTUAL_PORT
