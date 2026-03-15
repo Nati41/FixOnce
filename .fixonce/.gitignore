@@ -10,3 +10,8 @@ session.json
 
 # Project UUID (only needed for non-git projects)
 # project.json  # Uncomment if you don't want to track this
+
+# Memory files - user-specific, do not track
+decisions.json
+avoid.json
+solutions.json
