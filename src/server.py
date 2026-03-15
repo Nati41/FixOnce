@@ -363,7 +363,9 @@ def _run_flask():
     port_file.write_text(str(ACTUAL_PORT))
 
     if ACTUAL_PORT != DEFAULT_PORT:
-        print(f"[WARNING] Port {DEFAULT_PORT} is in use, using port {ACTUAL_PORT} instead")
+        print()
+        print(f"\033[1;33m⚠️  Port {DEFAULT_PORT} busy. FixOnce is live on http://localhost:{ACTUAL_PORT}\033[0m")
+        print()
 
     flask_app.run(host="0.0.0.0", port=ACTUAL_PORT, debug=False, use_reloader=False)
 

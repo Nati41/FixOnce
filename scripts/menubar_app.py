@@ -29,6 +29,9 @@ except ImportError:
 
 
 class FixOnceMenuBar(rumps.App):
+    DEFAULT_PORT = 5000
+    PORT_RANGE = range(5000, 5010)
+
     def __init__(self):
         super().__init__(
             name="FixOnce",
@@ -37,6 +40,7 @@ class FixOnceMenuBar(rumps.App):
         )
 
         self.server_running = False
+        self.server_port = self.DEFAULT_PORT
         self.current_project = None
         self.current_goal = None
         self.stats = {"decisions": 0, "insights": 0, "avoids": 0}
@@ -68,10 +72,44 @@ class FixOnceMenuBar(rumps.App):
                 pass
             time.sleep(5)
 
+    def _discover_port(self):
+        """Find which port FixOnce server is running on."""
+        # First try current_port.txt for a fast hint
+        port_file = os.path.join(DATA_DIR, 'current_port.txt')
+        if os.path.exists(port_file):
+            try:
+                hint_port = int(open(port_file).read().strip())
+                url = f'http://localhost:{hint_port}/api/ping'
+                with urllib.request.urlopen(url, timeout=1) as resp:
+                    data = json.loads(resp.read().decode())
+                    if data.get('service') == 'fixonce':
+                        return hint_port
+            except Exception:
+                pass
+
+        # Fallback: scan port range
+        for port in self.PORT_RANGE:
+            try:
+                url = f'http://localhost:{port}/api/ping'
+                with urllib.request.urlopen(url, timeout=1) as resp:
+                    data = json.loads(resp.read().decode())
+                    if data.get('service') == 'fixonce':
+                        return port
+            except Exception:
+                continue
+        return None
+
     def update_status(self):
         """Fetch and update status from server."""
         try:
-            url = 'http://localhost:5000/api/dashboard_snapshot'
+            discovered = self._discover_port()
+            if not discovered:
+                self.server_running = False
+                self._update_menu()
+                return
+
+            self.server_port = discovered
+            url = f'http://localhost:{self.server_port}/api/dashboard_snapshot'
             with urllib.request.urlopen(url, timeout=2) as response:
                 data = json.loads(response.read().decode())
                 self.server_running = True
@@ -140,19 +178,19 @@ class FixOnceMenuBar(rumps.App):
     def open_dashboard(self, _):
         """Open the dashboard in browser."""
         import webbrowser
-        webbrowser.open("http://localhost:5000/")
+        webbrowser.open(f"http://localhost:{self.server_port}/")
 
     @rumps.clicked("Open Dashboard (vNext)")
     def open_dashboard_vnext(self, _):
         """Open the vNext dashboard."""
         import webbrowser
-        webbrowser.open("http://localhost:5000/next")
+        webbrowser.open(f"http://localhost:{self.server_port}/next")
 
     @rumps.clicked("Switch Project")
     def show_projects(self, _):
         """Show project switcher (opens dashboard)."""
         import webbrowser
-        webbrowser.open("http://localhost:5000/next#projects")
+        webbrowser.open(f"http://localhost:{self.server_port}/next#projects")
 
     @rumps.clicked("Start Server")
     def toggle_server(self, sender):
