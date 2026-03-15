@@ -571,8 +571,23 @@ def check_server_health(port: int = 5000, max_attempts: int = 10) -> tuple:
     import urllib.request
     import urllib.error
 
+    fixonce_dir = get_fixonce_dir()
+    port_file = fixonce_dir / "data" / "current_port.txt"
+
+    # First try to read actual port from file (server writes this on startup)
+    ports_to_try = list(range(port, port + 10))  # 5000-5009
+    if port_file.exists():
+        try:
+            saved_port = int(port_file.read_text().strip())
+            # Put saved port first in the list
+            if saved_port in ports_to_try:
+                ports_to_try.remove(saved_port)
+            ports_to_try.insert(0, saved_port)
+        except (ValueError, IOError):
+            pass
+
     for attempt in range(max_attempts):
-        for p in [port, port + 1, port + 2]:  # Try a few ports
+        for p in ports_to_try:
             try:
                 url = f"http://localhost:{p}/api/health"
                 req = urllib.request.urlopen(url, timeout=2)
@@ -583,6 +598,12 @@ def check_server_health(port: int = 5000, max_attempts: int = 10) -> tuple:
         import time
         time.sleep(0.5)
 
+    # Return saved port if available, else default
+    if port_file.exists():
+        try:
+            return False, int(port_file.read_text().strip())
+        except (ValueError, IOError):
+            pass
     return False, port
 
 
