@@ -65,3 +65,4 @@ data/global/*
 !data/global/.gitkeep
 !data/.gitkeep
 
+.mcp.json

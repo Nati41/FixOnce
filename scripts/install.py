@@ -300,6 +300,41 @@ def configure_mcp(editors: dict) -> bool:
     if configured_count == 0:
         print(f"  {Colors.YELLOW}[INFO]{Colors.END} No editors to configure (install Claude Code or Cursor first)")
 
+    # Create project-level .mcp.json with CORRECT paths for this machine
+    # This is what Claude Code reads when opening the project
+    project_mcp_path = fixonce_dir / ".mcp.json"
+    try:
+        if fastmcp_path:
+            project_mcp_config = {
+                "mcpServers": {
+                    "fixonce": {
+                        "command": fastmcp_path,
+                        "args": ["run", str(mcp_server_path), "--transport", "stdio", "--no-banner"],
+                        "env": {
+                            "PYTHONPATH": src_path,
+                            "FASTMCP_SHOW_CLI_BANNER": "false",
+                            "FASTMCP_CHECK_FOR_UPDATES": "false"
+                        }
+                    }
+                }
+            }
+        else:
+            project_mcp_config = {
+                "mcpServers": {
+                    "fixonce": {
+                        "command": python_path,
+                        "args": [str(mcp_server_path)],
+                        "env": {"PYTHONPATH": src_path}
+                    }
+                }
+            }
+
+        with open(project_mcp_path, 'w', encoding='utf-8') as f:
+            json.dump(project_mcp_config, f, indent=2)
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Created .mcp.json with correct paths")
+    except Exception as e:
+        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not create .mcp.json: {e}")
+
     return True
 
 
