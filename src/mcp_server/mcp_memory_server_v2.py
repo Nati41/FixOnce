@@ -67,6 +67,44 @@ _session_registry_available = False
 _policy_available = False
 _policy_error = None
 
+# ============================================================
+# SESSION INITIALIZATION ENFORCEMENT
+# ============================================================
+# Track if auto_init_session was called this session.
+# If not, other tools will return a reminder.
+# This works for ALL AI clients (Claude, Cursor, Codex, etc.)
+
+_session_initialized = False
+_session_init_lock = threading.Lock()
+
+
+def _mark_session_initialized():
+    """Mark that auto_init_session was called."""
+    global _session_initialized
+    with _session_init_lock:
+        _session_initialized = True
+
+
+def _is_session_initialized() -> bool:
+    """Check if session was initialized."""
+    with _session_init_lock:
+        return _session_initialized
+
+
+def _get_init_reminder() -> str:
+    """Get reminder message if session not initialized."""
+    if _is_session_initialized():
+        return ""
+    return """
+⚠️ **FixOnce Not Connected!**
+
+You MUST call `auto_init_session(cwd="/path/to/project")` FIRST before using other tools.
+
+This connects FixOnce to your project and loads context, decisions, and insights.
+Without this, you're working without memory.
+
+"""
+
 
 def _detect_editor_with_confidence() -> tuple:
     """
@@ -759,6 +797,13 @@ def _universal_gate(tool_name: str) -> tuple:
 
     # BUILD CONTEXT HEADER (injected into response)
     context = _build_context_header()
+
+    # ADD INIT REMINDER if session not properly initialized
+    # Skip for init tools themselves
+    init_tools = {"auto_init_session", "init_session", "sync_to_active_project"}
+    if tool_name not in init_tools and not _is_session_initialized():
+        init_reminder = _get_init_reminder()
+        context = init_reminder + context
 
     return (None, context)
 
@@ -2073,6 +2118,9 @@ def _do_init_session(working_dir: str) -> str:
     session = _get_session()
     session.mark_initialized()
     session.log_tool_call("auto_init_session")
+
+    # Mark global session as initialized (for cross-tool reminder)
+    _mark_session_initialized()
 
     # Update global compliance state for dashboard
     _compliance_state["last_session_init"] = datetime.now().isoformat()
