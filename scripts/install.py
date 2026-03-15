@@ -426,6 +426,9 @@ def sync_rules() -> bool:
     except Exception as e:
         print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not update CLAUDE.md: {e}")
 
+    # Configure Claude Code hooks (CRITICAL for auto-connect!)
+    configure_claude_hooks(fixonce_dir)
+
     # Import and run project-level sync
     sys.path.insert(0, str(fixonce_dir / "src"))
 
@@ -442,6 +445,89 @@ def sync_rules() -> bool:
         return True
     except Exception as e:
         return True
+
+
+def configure_claude_hooks(fixonce_dir: Path) -> bool:
+    """Configure Claude Code hooks for auto-connect.
+
+    This is CRITICAL - hooks ensure Claude calls auto_init_session
+    on every conversation start.
+    """
+    settings_path = Path.home() / ".claude" / "settings.json"
+
+    try:
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Read existing settings
+        existing = {}
+        if settings_path.exists():
+            with open(settings_path, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+
+        # Prepare hooks config
+        hooks_dir = fixonce_dir / "hooks"
+        session_start = str(hooks_dir / "session_start.sh")
+        session_end = str(hooks_dir / "session_end.sh")
+        post_tool = str(hooks_dir / "post_tool_use.sh")
+
+        # Make hooks executable
+        for hook_file in [session_start, session_end, post_tool]:
+            if Path(hook_file).exists():
+                os.chmod(hook_file, 0o755)
+
+        # Configure hooks
+        existing["hooks"] = {
+            "SessionStart": [
+                {
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": session_start,
+                            "timeout": 5
+                        }
+                    ]
+                }
+            ],
+            "SessionEnd": [
+                {
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": session_end,
+                            "timeout": 5
+                        }
+                    ]
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "Edit|Write|NotebookEdit|Bash",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": post_tool,
+                            "timeout": 5
+                        }
+                    ]
+                }
+            ]
+        }
+
+        # Enable MCP for all projects
+        existing["enableAllProjectMcpServers"] = True
+
+        # Save settings
+        with open(settings_path, 'w', encoding='utf-8') as f:
+            json.dump(existing, f, indent=2)
+
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code hooks configured (auto-connect enabled)")
+        return True
+
+    except Exception as e:
+        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not configure hooks: {e}")
+        return False
 
 # ============ Step 5: Start Server & Open Dashboard ============
 
