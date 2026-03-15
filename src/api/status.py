@@ -122,12 +122,6 @@ def api_status():
     })
 
 
-@status_bp.route("/ping")
-def api_ping():
-    """Simple endpoint for Extension to discover the server."""
-    return jsonify({"status": "ok", "service": "fixonce", "port": ACTUAL_PORT})
-
-
 @status_bp.route("/health")
 def api_health():
     """
