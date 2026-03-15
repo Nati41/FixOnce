@@ -94,6 +94,318 @@ def run_command(cmd: list, silent: bool = False) -> tuple:
     except Exception as e:
         return False, str(e)
 
+
+# ============ PREFLIGHT CHECK ============
+
+class PreflightResult:
+    """Result of a single preflight check."""
+    def __init__(self, name: str, passed: bool, critical: bool = False,
+                 message: str = "", fix_hint: str = ""):
+        self.name = name
+        self.passed = passed
+        self.critical = critical  # If critical and failed, abort install
+        self.message = message
+        self.fix_hint = fix_hint
+
+    def __repr__(self):
+        status = "✅" if self.passed else ("❌" if self.critical else "⚠️")
+        return f"{status} {self.name}: {self.message}"
+
+
+def check_python_version() -> PreflightResult:
+    """Check Python version is 3.8+"""
+    version = sys.version_info
+    version_str = f"{version.major}.{version.minor}.{version.micro}"
+
+    if version.major < 3 or (version.major == 3 and version.minor < 8):
+        return PreflightResult(
+            name="Python Version",
+            passed=False,
+            critical=True,
+            message=f"Python {version_str} is too old (need 3.8+)",
+            fix_hint="Install Python 3.8 or newer: https://python.org/downloads"
+        )
+
+    return PreflightResult(
+        name="Python Version",
+        passed=True,
+        message=f"Python {version_str}"
+    )
+
+
+def check_write_permissions() -> PreflightResult:
+    """Check write permissions for all required directories."""
+    fixonce_dir = get_fixonce_dir()
+    data_dir = fixonce_dir / "data"
+
+    # Directories we need to write to
+    dirs_to_check = [
+        (data_dir, "data directory"),
+        (fixonce_dir / "src", "source directory"),
+    ]
+
+    # Also check user home for .fixonce
+    home = Path.home()
+    dirs_to_check.append((home / ".fixonce", "~/.fixonce config"))
+
+    failed = []
+
+    for dir_path, name in dirs_to_check:
+        # For directories that should exist, check write permission
+        if dir_path.exists():
+            test_file = dir_path / ".write_test_fixonce"
+            try:
+                test_file.write_text("test")
+                test_file.unlink()
+            except (PermissionError, OSError) as e:
+                failed.append(f"{name} ({dir_path})")
+        else:
+            # Try to create it
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+                # Also test we can write inside
+                test_file = dir_path / ".write_test_fixonce"
+                test_file.write_text("test")
+                test_file.unlink()
+            except (PermissionError, OSError) as e:
+                failed.append(f"{name} ({dir_path})")
+
+    if failed:
+        return PreflightResult(
+            name="Write Permissions",
+            passed=False,
+            critical=True,
+            message=f"Cannot write to: {', '.join(failed)}",
+            fix_hint="Check folder permissions or run from a different location"
+        )
+
+    return PreflightResult(
+        name="Write Permissions",
+        passed=True,
+        message="All directories writable"
+    )
+
+
+def check_install_path() -> PreflightResult:
+    """Check install path is valid and contains expected files."""
+    fixonce_dir = get_fixonce_dir()
+
+    # Required files/dirs
+    required = [
+        ("src/server.py", "server script"),
+        ("requirements.txt", "requirements file"),
+        ("data", "data directory"),
+    ]
+
+    missing = []
+    for path, name in required:
+        if not (fixonce_dir / path).exists():
+            missing.append(name)
+
+    if missing:
+        return PreflightResult(
+            name="Install Path",
+            passed=False,
+            critical=True,
+            message=f"Missing: {', '.join(missing)}",
+            fix_hint=f"Incomplete installation at {fixonce_dir}"
+        )
+
+    return PreflightResult(
+        name="Install Path",
+        passed=True,
+        message=str(fixonce_dir)
+    )
+
+
+def check_port_availability() -> PreflightResult:
+    """Check if at least one port in 5000-5009 range is available."""
+    import socket
+
+    available_port = None
+    checked_ports = []
+
+    for port in range(5000, 5010):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            result = s.connect_ex(('localhost', port))
+            if result != 0:  # Port is free
+                available_port = port
+                break
+            checked_ports.append(port)
+
+    if available_port is None:
+        return PreflightResult(
+            name="Port Availability",
+            passed=False,
+            critical=False,  # Not critical - can still try
+            message=f"Ports 5000-5009 all in use",
+            fix_hint="Close other applications or FixOnce instances"
+        )
+
+    if available_port == 5000:
+        return PreflightResult(
+            name="Port Availability",
+            passed=True,
+            message="Port 5000 available"
+        )
+    else:
+        return PreflightResult(
+            name="Port Availability",
+            passed=True,
+            message=f"Port 5000 busy, will use {available_port}"
+        )
+
+
+def check_browser() -> PreflightResult:
+    """Check if a supported browser is installed."""
+    current_platform = get_platform()
+
+    browsers_found = []
+
+    if current_platform == 'mac':
+        browser_paths = [
+            ("/Applications/Google Chrome.app", "Chrome"),
+            ("/Applications/Brave Browser.app", "Brave"),
+            ("/Applications/Microsoft Edge.app", "Edge"),
+            ("/Applications/Arc.app", "Arc"),
+            ("/Applications/Firefox.app", "Firefox"),
+        ]
+        for path, name in browser_paths:
+            if Path(path).exists():
+                browsers_found.append(name)
+
+    elif current_platform == 'windows':
+        # Check common Windows browser paths
+        program_files = [
+            Path(os.environ.get('PROGRAMFILES', 'C:\\Program Files')),
+            Path(os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)')),
+            Path(os.environ.get('LOCALAPPDATA', ''))
+        ]
+        browser_checks = [
+            ("Google/Chrome/Application/chrome.exe", "Chrome"),
+            ("BraveSoftware/Brave-Browser/Application/brave.exe", "Brave"),
+            ("Microsoft/Edge/Application/msedge.exe", "Edge"),
+        ]
+        for base in program_files:
+            for rel_path, name in browser_checks:
+                if (base / rel_path).exists():
+                    if name not in browsers_found:
+                        browsers_found.append(name)
+
+    if not browsers_found:
+        return PreflightResult(
+            name="Browser",
+            passed=False,
+            critical=False,  # Not critical - extension is optional
+            message="No supported browser found",
+            fix_hint="Install Chrome, Brave, or Edge for browser extension"
+        )
+
+    # Check specifically for Chrome (best extension support)
+    if "Chrome" in browsers_found:
+        return PreflightResult(
+            name="Browser",
+            passed=True,
+            message=f"Chrome found (+ {len(browsers_found)-1} others)" if len(browsers_found) > 1 else "Chrome"
+        )
+
+    return PreflightResult(
+        name="Browser",
+        passed=True,
+        message=f"{browsers_found[0]} (extension may have limited support)"
+    )
+
+
+def check_disk_space() -> PreflightResult:
+    """Check if there's enough disk space (at least 100MB)."""
+    fixonce_dir = get_fixonce_dir()
+
+    try:
+        if platform.system() == 'Windows':
+            import ctypes
+            free_bytes = ctypes.c_ulonglong(0)
+            ctypes.windll.kernel32.GetDiskFreeSpaceExW(
+                ctypes.c_wchar_p(str(fixonce_dir)), None, None, ctypes.pointer(free_bytes)
+            )
+            free_mb = free_bytes.value / (1024 * 1024)
+        else:
+            stat = os.statvfs(fixonce_dir)
+            free_mb = (stat.f_bavail * stat.f_frsize) / (1024 * 1024)
+
+        if free_mb < 100:
+            return PreflightResult(
+                name="Disk Space",
+                passed=False,
+                critical=False,
+                message=f"Only {free_mb:.0f}MB free",
+                fix_hint="Free up at least 100MB of disk space"
+            )
+
+        return PreflightResult(
+            name="Disk Space",
+            passed=True,
+            message=f"{free_mb:.0f}MB free"
+        )
+    except Exception as e:
+        return PreflightResult(
+            name="Disk Space",
+            passed=True,  # Assume OK if can't check
+            message="Could not check (assuming OK)"
+        )
+
+
+def run_preflight_checks() -> bool:
+    """
+    Run all preflight checks before installation.
+
+    Returns True if all critical checks pass, False otherwise.
+    """
+    print(f"\n{Colors.BLUE}{'═' * 50}{Colors.END}")
+    print(f"{Colors.BOLD}  PREFLIGHT CHECK{Colors.END}")
+    print(f"{Colors.BLUE}{'═' * 50}{Colors.END}\n")
+
+    checks = [
+        check_python_version(),
+        check_install_path(),
+        check_write_permissions(),
+        check_port_availability(),
+        check_browser(),
+        check_disk_space(),
+    ]
+
+    critical_failures = []
+    warnings = []
+
+    for result in checks:
+        if result.passed:
+            print(f"  {Colors.GREEN}✅{Colors.END} {result.name}: {result.message}")
+        elif result.critical:
+            print(f"  {Colors.RED}❌{Colors.END} {result.name}: {result.message}")
+            if result.fix_hint:
+                print(f"     {Colors.YELLOW}→ {result.fix_hint}{Colors.END}")
+            critical_failures.append(result)
+        else:
+            print(f"  {Colors.YELLOW}⚠️{Colors.END}  {result.name}: {result.message}")
+            if result.fix_hint:
+                print(f"     {Colors.YELLOW}→ {result.fix_hint}{Colors.END}")
+            warnings.append(result)
+
+    print(f"\n{Colors.BLUE}{'─' * 50}{Colors.END}")
+
+    if critical_failures:
+        print(f"\n{Colors.RED}{Colors.BOLD}❌ PREFLIGHT FAILED{Colors.END}")
+        print(f"{Colors.RED}Cannot continue installation. Fix the issues above.{Colors.END}\n")
+        return False
+
+    if warnings:
+        print(f"\n{Colors.YELLOW}⚠️  {len(warnings)} warning(s) - installation will continue{Colors.END}")
+    else:
+        print(f"\n{Colors.GREEN}✅ All checks passed{Colors.END}")
+
+    print()
+    return True
+
+
 # ============ Step 1: Python Dependencies ============
 
 def install_dependencies() -> bool:
@@ -1130,6 +1442,11 @@ def main():
     print(f"{Colors.BOLD}Platform:{Colors.END} {get_platform().title()}")
     print(f"{Colors.BOLD}Python:{Colors.END} {sys.version.split()[0]}")
     print(f"{Colors.BOLD}Location:{Colors.END} {get_fixonce_dir()}")
+
+    # PREFLIGHT CHECK - must pass before anything else
+    if not run_preflight_checks():
+        print(f"{Colors.RED}Installation aborted.{Colors.END}")
+        sys.exit(1)
 
     # Step 1: Initialize fresh data
     initialize_fresh_data()
