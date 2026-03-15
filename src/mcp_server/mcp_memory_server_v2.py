@@ -1967,15 +1967,37 @@ def auto_init_session(cwd: str = "", sync_to_active: bool = False) -> str:
     if working_dir:
         return _do_init_session(working_dir)
 
-    # No valid workspace - return clear error
-    return """FixOnce requires a valid workspace directory.
+    # No valid workspace - return clear, actionable error
+    home_dir = str(Path.home())
+    is_home = cwd == home_dir if cwd else True
 
-The AI client must provide cwd (current working directory) when calling auto_init_session.
+    if is_home:
+        return f"""🏠 You're in your home directory ({home_dir}).
 
-If you're seeing this:
-1. Ensure Claude Code/Cursor is opened in a project folder (not home directory)
-2. The folder should contain project files (.git, package.json, etc.)
-3. Try: `init_session(working_dir="/path/to/project")`"""
+FixOnce needs a project folder to work with.
+
+**What to do:**
+1. Close this terminal
+2. Open Claude Code **from inside a project folder**:
+   ```
+   cd ~/your-project
+   claude
+   ```
+
+Or use `init_session(working_dir="/path/to/project")` to connect manually.
+
+---
+🏠 אתה בתיקיית הבית. FixOnce צריך תיקיית פרויקט.
+פתח Claude Code מתוך תיקיית פרויקט (cd ~/project && claude)"""
+    else:
+        return f"""📁 This folder doesn't look like a project: {cwd}
+
+FixOnce needs a project folder with files like:
+.git, package.json, requirements.txt, etc.
+
+**What to do:**
+Navigate to your project root and try again, or:
+`init_session(working_dir="/path/to/your/project")`"""
 
 
 def _is_valid_project_dir(path: str) -> bool:

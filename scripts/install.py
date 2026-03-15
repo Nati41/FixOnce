@@ -343,23 +343,31 @@ def _configure_mcp_file(path: Path, python_cmd: str, server_path: str, pythonpat
 
 # ============ Step 4: Configure Editor Rules ============
 
-FIXONCE_RULES = """You have FixOnce MCP tools for persistent project memory.
+FIXONCE_RULES = """# FixOnce - AI Memory Layer
 
-On ANY greeting (hi, היי, hello, שלום, hey, מה קורה, מה המצב):
-1. Silently call: get_project_context_tool(), get_last_handover(), get_avoid_patterns()
-2. Present in Hebrew:
-   היי! FixOnce חיבר אותי לפרויקט [name].
-   🎯 הקשר: [stack] - [focus]
-   📜 חוקי בית: [key decision]
-   ⏸️ איפה עצרנו: [handover]
-   מאיפה ממשיכים?
+## CRITICAL: Auto-Connect on EVERY Conversation
 
-During work:
-- Before fixing: call search_past_solutions() first
-- After fixing: call update_solution_status() with keywords
-- Decisions: call log_project_decision()
+On EVERY conversation start (ANY greeting like hi, hey, hello, היי, שלום, מה קורה):
 
-On exit (bye, סיימתי, done): call create_handover() with summary.
+1. **IMMEDIATELY call** `auto_init_session` with the current working directory
+2. If successful, show the project context
+3. If it fails (wrong directory), tell user to open from a project folder
+
+Example flow:
+```
+User: hi
+AI: [calls auto_init_session(cwd="current/path")]
+AI: 🧠 FixOnce | Connected to [project]
+    ...shows context...
+```
+
+## During Work
+- Before fixing errors: call `search_past_solutions()` first
+- After fixing: call `solution_applied()` to save the fix
+- Important decisions: call `log_decision()`
+
+## Session End
+On exit (bye, done, סיימתי): summarize what was done.
 
 Core principle: Never debug the same bug twice."""
 
@@ -396,16 +404,27 @@ def sync_rules() -> bool:
 
     # Note: GitHub Copilot uses prompts from dashboard, no global rules file
 
-    # Configure Claude Code CLAUDE.md
+    # Configure Claude Code CLAUDE.md (always update to latest rules)
     claude_md_path = Path.home() / ".claude" / "CLAUDE.md"
-    if not claude_md_path.exists():
-        try:
-            claude_md_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(claude_md_path, 'w', encoding='utf-8') as f:
-                f.write(f"# FixOnce - Your Debugging Memory\n\n{FIXONCE_RULES}\n")
-            print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code CLAUDE.md configured")
-        except Exception:
-            pass
+    try:
+        claude_md_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Read existing content if any
+        existing_content = ""
+        if claude_md_path.exists():
+            with open(claude_md_path, 'r', encoding='utf-8') as f:
+                existing_content = f.read()
+
+        # Check if FixOnce rules are already there
+        if "FixOnce" not in existing_content:
+            # Append FixOnce rules
+            with open(claude_md_path, 'a', encoding='utf-8') as f:
+                f.write(f"\n\n{FIXONCE_RULES}\n")
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Added FixOnce rules to CLAUDE.md")
+        else:
+            print(f"  {Colors.GREEN}[OK]{Colors.END} CLAUDE.md already has FixOnce rules")
+    except Exception as e:
+        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not update CLAUDE.md: {e}")
 
     # Import and run project-level sync
     sys.path.insert(0, str(fixonce_dir / "src"))
@@ -820,6 +839,40 @@ def start_app():
 
 # ============ Main Installation ============
 
+def initialize_fresh_data():
+    """Initialize fresh data directory for new installation."""
+    print(f"\n{Colors.BLUE}[0/7]{Colors.END} Initializing fresh data...")
+
+    fixonce_dir = get_fixonce_dir()
+    data_dir = fixonce_dir / "data"
+
+    # Create necessary directories
+    (data_dir / "projects_v2").mkdir(parents=True, exist_ok=True)
+    (data_dir / "global").mkdir(parents=True, exist_ok=True)
+
+    # Create empty active_project.json (no project selected)
+    active_project_file = data_dir / "active_project.json"
+    if not active_project_file.exists():
+        with open(active_project_file, 'w') as f:
+            json.dump({"active_id": None, "working_dir": None}, f, indent=2)
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Created empty active_project.json")
+
+    # Create empty session registry
+    session_file = data_dir / "session_registry.json"
+    if not session_file.exists():
+        with open(session_file, 'w') as f:
+            json.dump({"sessions": {}}, f, indent=2)
+
+    # Create activity log
+    activity_file = data_dir / "activity_log.json"
+    if not activity_file.exists():
+        with open(activity_file, 'w') as f:
+            json.dump({"activities": []}, f, indent=2)
+
+    print(f"  {Colors.GREEN}[OK]{Colors.END} Data directory ready")
+    return True
+
+
 def main():
     """Main installation process"""
     print_banner()
@@ -827,6 +880,9 @@ def main():
     print(f"{Colors.BOLD}Platform:{Colors.END} {get_platform().title()}")
     print(f"{Colors.BOLD}Python:{Colors.END} {sys.version.split()[0]}")
     print(f"{Colors.BOLD}Location:{Colors.END} {get_fixonce_dir()}")
+
+    # Step 0: Initialize fresh data
+    initialize_fresh_data()
 
     # Run installation steps
     steps = [
@@ -864,20 +920,28 @@ def main():
     # Step 7: Start server and launch app
     start_app()
 
-    # Done!
+    # Show final status
     print(f"""
 {'═' * 60}
 
   {Colors.GREEN}✓ Installation Complete!{Colors.END}
 
-  {Colors.BOLD}FixOnce is now in your Dock/Desktop!{Colors.END}
-  Just click the FixOnce icon to start.
+  {Colors.BOLD}What was installed:{Colors.END}
+    ✓ FixOnce Engine (running on port 5000)
+    ✓ MCP configured for: {', '.join([e for e, v in editors.items() if v]) or 'None'}
+    ✓ Auto-start on login enabled
+    ✓ Dashboard: http://localhost:5000
 
-  {Colors.BOLD}To start a session:{Colors.END}
-    In Claude Code / Cursor / GitHub Copilot, just say:
-    "היי" or "מה המצב?" or "hello"
+  {Colors.BOLD}How to use:{Colors.END}
+    1. Open your terminal IN A PROJECT FOLDER:
+       {Colors.YELLOW}cd ~/your-project && claude{Colors.END}
 
-  {Colors.YELLOW}NOTE: Restart Cursor/GitHub Copilot to apply changes!{Colors.END}
+    2. Just say "hi" and FixOnce will connect automatically
+
+  {Colors.RED}IMPORTANT:{Colors.END} Claude Code must be opened FROM a project folder!
+  (Not from home directory)
+
+  {Colors.YELLOW}If you have Cursor open, restart it to apply MCP changes.{Colors.END}
 
 {'═' * 60}
 """)
