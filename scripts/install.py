@@ -167,6 +167,340 @@ def run_command(cmd: list, silent: bool = False) -> tuple:
     except Exception as e:
         return False, str(e)
 
+
+# ============ PREFLIGHT CHECK ============
+
+class PreflightResult:
+    """Result of a single preflight check."""
+    def __init__(self, name: str, passed: bool, critical: bool = False,
+                 message: str = "", fix_hint: str = ""):
+        self.name = name
+        self.passed = passed
+        self.critical = critical  # If critical and failed, abort install
+        self.message = message
+        self.fix_hint = fix_hint
+
+    def __repr__(self):
+        status = "✅" if self.passed else ("❌" if self.critical else "⚠️")
+        return f"{status} {self.name}: {self.message}"
+
+
+def check_python_version() -> PreflightResult:
+    """Check Python version is 3.8+"""
+    version = sys.version_info
+    version_str = f"{version.major}.{version.minor}.{version.micro}"
+
+    if version.major < 3 or (version.major == 3 and version.minor < 8):
+        return PreflightResult(
+            name="Python Version",
+            passed=False,
+            critical=True,
+            message=f"Python {version_str} is too old (need 3.8+)",
+            fix_hint="Install Python 3.8 or newer: https://python.org/downloads"
+        )
+
+    return PreflightResult(
+        name="Python Version",
+        passed=True,
+        message=f"Python {version_str}"
+    )
+
+
+def check_write_permissions() -> PreflightResult:
+    """Check write permissions for all required directories."""
+    fixonce_dir = get_fixonce_dir()
+    data_dir = fixonce_dir / "data"
+
+    dirs_to_check = [
+        (data_dir, "data directory"),
+        (fixonce_dir / "src", "source directory"),
+    ]
+
+    home = Path.home()
+    dirs_to_check.append((home / ".fixonce", "~/.fixonce config"))
+
+    failed = []
+
+    for dir_path, name in dirs_to_check:
+        if dir_path.exists():
+            test_file = dir_path / ".write_test_fixonce"
+            try:
+                test_file.write_text("test")
+                test_file.unlink()
+            except (PermissionError, OSError):
+                failed.append(f"{name} ({dir_path})")
+        else:
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+                test_file = dir_path / ".write_test_fixonce"
+                test_file.write_text("test")
+                test_file.unlink()
+            except (PermissionError, OSError):
+                failed.append(f"{name} ({dir_path})")
+
+    if failed:
+        return PreflightResult(
+            name="Write Permissions",
+            passed=False,
+            critical=True,
+            message=f"Cannot write to: {', '.join(failed)}",
+            fix_hint="Check folder permissions or run from a different location"
+        )
+
+    return PreflightResult(
+        name="Write Permissions",
+        passed=True,
+        message="All directories writable"
+    )
+
+
+def check_install_path() -> PreflightResult:
+    """Check install path is valid and contains expected files."""
+    fixonce_dir = get_fixonce_dir()
+
+    required = [
+        ("src/server.py", "server script"),
+        ("requirements.txt", "requirements file"),
+        ("data", "data directory"),
+    ]
+
+    missing = []
+    for path, name in required:
+        if not (fixonce_dir / path).exists():
+            missing.append(name)
+
+    if missing:
+        return PreflightResult(
+            name="Install Path",
+            passed=False,
+            critical=True,
+            message=f"Missing: {', '.join(missing)}",
+            fix_hint=f"Incomplete installation at {fixonce_dir}"
+        )
+
+    return PreflightResult(
+        name="Install Path",
+        passed=True,
+        message=str(fixonce_dir)
+    )
+
+
+def check_port_availability() -> PreflightResult:
+    """Check if at least one port in 5000-5009 range is available."""
+    import socket
+
+    available_port = None
+
+    for port in range(5000, 5010):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            result = s.connect_ex(('localhost', port))
+            if result != 0:
+                available_port = port
+                break
+
+    if available_port is None:
+        return PreflightResult(
+            name="Port Availability",
+            passed=False,
+            critical=False,
+            message="Ports 5000-5009 all in use",
+            fix_hint="Close other applications or FixOnce instances"
+        )
+
+    if available_port == 5000:
+        return PreflightResult(
+            name="Port Availability",
+            passed=True,
+            message="Port 5000 available"
+        )
+    else:
+        return PreflightResult(
+            name="Port Availability",
+            passed=True,
+            message=f"Port 5000 busy, will use {available_port}"
+        )
+
+
+def check_browser() -> PreflightResult:
+    """Check if a supported browser is installed."""
+    current_platform = get_platform()
+    browsers_found = []
+
+    if current_platform == 'mac':
+        browser_paths = [
+            ("/Applications/Google Chrome.app", "Chrome"),
+            ("/Applications/Brave Browser.app", "Brave"),
+            ("/Applications/Microsoft Edge.app", "Edge"),
+            ("/Applications/Arc.app", "Arc"),
+            ("/Applications/Firefox.app", "Firefox"),
+        ]
+        for path, name in browser_paths:
+            if Path(path).exists():
+                browsers_found.append(name)
+
+    elif current_platform == 'windows':
+        program_files = [
+            Path(os.environ.get('PROGRAMFILES', 'C:\\Program Files')),
+            Path(os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)')),
+            Path(os.environ.get('LOCALAPPDATA', ''))
+        ]
+        browser_checks = [
+            ("Google/Chrome/Application/chrome.exe", "Chrome"),
+            ("BraveSoftware/Brave-Browser/Application/brave.exe", "Brave"),
+            ("Microsoft/Edge/Application/msedge.exe", "Edge"),
+        ]
+        for base in program_files:
+            for rel_path, name in browser_checks:
+                if (base / rel_path).exists():
+                    if name not in browsers_found:
+                        browsers_found.append(name)
+
+    if not browsers_found:
+        return PreflightResult(
+            name="Browser",
+            passed=False,
+            critical=False,
+            message="No supported browser found",
+            fix_hint="Install Chrome, Brave, or Edge for browser extension"
+        )
+
+    if "Chrome" in browsers_found:
+        return PreflightResult(
+            name="Browser",
+            passed=True,
+            message=f"Chrome found (+ {len(browsers_found)-1} others)" if len(browsers_found) > 1 else "Chrome"
+        )
+
+    return PreflightResult(
+        name="Browser",
+        passed=True,
+        message=f"{browsers_found[0]} (extension may have limited support)"
+    )
+
+
+def check_disk_space() -> PreflightResult:
+    """Check if there's enough disk space (at least 100MB)."""
+    fixonce_dir = get_fixonce_dir()
+
+    try:
+        if platform.system() == 'Windows':
+            import ctypes
+            free_bytes = ctypes.c_ulonglong(0)
+            ctypes.windll.kernel32.GetDiskFreeSpaceExW(
+                ctypes.c_wchar_p(str(fixonce_dir)), None, None, ctypes.pointer(free_bytes)
+            )
+            free_mb = free_bytes.value / (1024 * 1024)
+        else:
+            stat = os.statvfs(fixonce_dir)
+            free_mb = (stat.f_bavail * stat.f_frsize) / (1024 * 1024)
+
+        if free_mb < 100:
+            return PreflightResult(
+                name="Disk Space",
+                passed=False,
+                critical=False,
+                message=f"Only {free_mb:.0f}MB free",
+                fix_hint="Free up at least 100MB of disk space"
+            )
+
+        return PreflightResult(
+            name="Disk Space",
+            passed=True,
+            message=f"{free_mb:.0f}MB free"
+        )
+    except Exception:
+        return PreflightResult(
+            name="Disk Space",
+            passed=True,
+            message="Could not check (assuming OK)"
+        )
+
+
+def check_fixonce_portable() -> PreflightResult:
+    """Check for existing .fixonce/ directory (portable project memory)."""
+    fixonce_dir = get_fixonce_dir()
+    project_fixonce = fixonce_dir / ".fixonce"
+
+    if project_fixonce.exists():
+        metadata_file = project_fixonce / "metadata.json"
+        if metadata_file.exists():
+            try:
+                import json
+                with open(metadata_file) as f:
+                    metadata = json.load(f)
+                project_id = metadata.get("project_id", "unknown")
+                return PreflightResult(
+                    name="Project Memory",
+                    passed=True,
+                    message=f"Found .fixonce/ (ID: {project_id}) - will preserve"
+                )
+            except Exception:
+                pass
+        return PreflightResult(
+            name="Project Memory",
+            passed=True,
+            message="Found .fixonce/ - will preserve"
+        )
+
+    return PreflightResult(
+        name="Project Memory",
+        passed=True,
+        message="No existing .fixonce/ (new install)"
+    )
+
+
+def run_preflight_checks() -> bool:
+    """
+    Run all preflight checks before installation.
+    Returns True if all critical checks pass, False otherwise.
+    """
+    print(f"\n{Colors.BLUE}{'═' * 50}{Colors.END}")
+    print(f"{Colors.BOLD}  PREFLIGHT CHECK{Colors.END}")
+    print(f"{Colors.BLUE}{'═' * 50}{Colors.END}\n")
+
+    checks = [
+        check_python_version(),
+        check_install_path(),
+        check_write_permissions(),
+        check_port_availability(),
+        check_browser(),
+        check_disk_space(),
+        check_fixonce_portable(),
+    ]
+
+    critical_failures = []
+    warnings = []
+
+    for result in checks:
+        if result.passed:
+            print(f"  {Colors.GREEN}✅{Colors.END} {result.name}: {result.message}")
+        elif result.critical:
+            print(f"  {Colors.RED}❌{Colors.END} {result.name}: {result.message}")
+            if result.fix_hint:
+                print(f"     {Colors.YELLOW}→ {result.fix_hint}{Colors.END}")
+            critical_failures.append(result)
+        else:
+            print(f"  {Colors.YELLOW}⚠️{Colors.END}  {result.name}: {result.message}")
+            if result.fix_hint:
+                print(f"     {Colors.YELLOW}→ {result.fix_hint}{Colors.END}")
+            warnings.append(result)
+
+    print(f"\n{Colors.BLUE}{'─' * 50}{Colors.END}")
+
+    if critical_failures:
+        print(f"\n{Colors.RED}{Colors.BOLD}❌ PREFLIGHT FAILED{Colors.END}")
+        print(f"{Colors.RED}Cannot continue installation. Fix the issues above.{Colors.END}\n")
+        return False
+
+    if warnings:
+        print(f"\n{Colors.YELLOW}⚠️  {len(warnings)} warning(s) - installation will continue{Colors.END}")
+    else:
+        print(f"\n{Colors.GREEN}✅ All checks passed{Colors.END}")
+
+    print()
+    return True
+
+
 # ============ Step 1: Python Dependencies ============
 
 def install_dependencies() -> bool:
@@ -1041,13 +1375,29 @@ def start_app():
 # ============ Main Installation ============
 
 def initialize_fresh_data():
-    """Initialize fresh data directory for new installation."""
-    print(f"\n{Colors.BLUE}[0/7]{Colors.END} Initializing fresh data...")
+    """
+    Initialize data directory for FixOnce installation.
+
+    NON-DESTRUCTIVE POLICY:
+    - Creates files/dirs only if they don't exist
+    - NEVER deletes existing data
+    - NEVER touches .fixonce/ directories (project memory)
+    - Preserves all decisions, insights, and solutions
+
+    This function only initializes the FixOnce APPLICATION data,
+    not user project memory (which lives in each project's .fixonce/).
+    """
+    print(f"\n{Colors.BLUE}[0/7]{Colors.END} Initializing data directory...")
 
     fixonce_dir = get_fixonce_dir()
     data_dir = fixonce_dir / "data"
 
-    # Create necessary directories
+    # PROTECTION: Never touch .fixonce/ (project memory)
+    project_fixonce = fixonce_dir / ".fixonce"
+    if project_fixonce.exists():
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Found existing .fixonce/ - preserving project memory")
+
+    # Create necessary directories (only if missing)
     (data_dir / "projects_v2").mkdir(parents=True, exist_ok=True)
     (data_dir / "global").mkdir(parents=True, exist_ok=True)
 
@@ -1166,7 +1516,12 @@ def main():
     print(f"{Colors.BOLD}Python:{Colors.END} {sys.version.split()[0]}")
     print(f"{Colors.BOLD}Location:{Colors.END} {get_fixonce_dir()}")
 
-    # Step 1: Initialize fresh data
+    # PREFLIGHT CHECK - must pass before anything else
+    if not run_preflight_checks():
+        print(f"{Colors.RED}Installation aborted.{Colors.END}")
+        sys.exit(1)
+
+    # Step 1: Initialize data (NON-DESTRUCTIVE - never deletes existing data)
     initialize_fresh_data()
 
     # Step 2: Install dependencies
@@ -1213,5 +1568,340 @@ def main():
     if get_platform() == 'windows':
         input("\nPress Enter to close...")
 
+
+# ============ DOCTOR / REPAIR MODE ============
+
+class DoctorCheck:
+    """Result of a doctor check with optional repair action."""
+    def __init__(self, name: str, status: str, message: str = "",
+                 repair_fn=None, repair_hint: str = ""):
+        self.name = name
+        self.status = status  # "ok", "warning", "error"
+        self.message = message
+        self.repair_fn = repair_fn
+        self.repair_hint = repair_hint
+
+
+def doctor_check_server() -> DoctorCheck:
+    """Check if FixOnce server is running."""
+    is_running, port = check_server_health(5000, max_attempts=2)
+
+    if is_running:
+        return DoctorCheck(
+            name="Server",
+            status="ok",
+            message=f"Running on port {port}"
+        )
+
+    return DoctorCheck(
+        name="Server",
+        status="error",
+        message="Not running",
+        repair_fn=repair_server,
+        repair_hint="Start server"
+    )
+
+
+def repair_server() -> bool:
+    """Start the FixOnce server."""
+    print(f"    {Colors.BLUE}Starting server...{Colors.END}")
+    fixonce_dir = get_fixonce_dir()
+    server_script = fixonce_dir / "src" / "server.py"
+
+    try:
+        subprocess.Popen(
+            [sys.executable, str(server_script), '--flask-only'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=str(fixonce_dir / "src"),
+            start_new_session=True
+        )
+        import time
+        time.sleep(2)
+        is_running, port = check_server_health(5000, max_attempts=5)
+        if is_running:
+            print(f"    {Colors.GREEN}✅ Server started on port {port}{Colors.END}")
+            return True
+        else:
+            print(f"    {Colors.RED}❌ Server failed to start{Colors.END}")
+            return False
+    except Exception as e:
+        print(f"    {Colors.RED}❌ Error: {e}{Colors.END}")
+        return False
+
+
+def doctor_check_mcp() -> DoctorCheck:
+    """Check if MCP is configured for Claude Code."""
+    home = Path.home()
+    claude_config = home / ".claude.json"
+
+    if not claude_config.exists():
+        return DoctorCheck(
+            name="MCP Config",
+            status="error",
+            message="Not found",
+            repair_fn=repair_mcp,
+            repair_hint="Create MCP config"
+        )
+
+    try:
+        with open(claude_config) as f:
+            config = json.load(f)
+
+        mcp_servers = config.get("mcpServers", {})
+        if "fixonce" not in mcp_servers:
+            return DoctorCheck(
+                name="MCP Config",
+                status="error",
+                message="FixOnce not in config",
+                repair_fn=repair_mcp,
+                repair_hint="Add FixOnce to MCP"
+            )
+
+        return DoctorCheck(
+            name="MCP Config",
+            status="ok",
+            message="Configured for Claude Code"
+        )
+
+    except (json.JSONDecodeError, KeyError) as e:
+        return DoctorCheck(
+            name="MCP Config",
+            status="error",
+            message=f"Invalid config: {e}",
+            repair_fn=repair_mcp,
+            repair_hint="Recreate config"
+        )
+
+
+def repair_mcp() -> bool:
+    """Repair MCP configuration."""
+    print(f"    {Colors.BLUE}Configuring MCP...{Colors.END}")
+    editors = detect_editors()
+    success = configure_mcp(editors)
+    if success:
+        print(f"    {Colors.GREEN}✅ MCP configured{Colors.END}")
+        print(f"    {Colors.YELLOW}→ Restart Claude Code to apply changes{Colors.END}")
+    return success
+
+
+def doctor_check_extension() -> DoctorCheck:
+    """Check if Chrome extension is connected."""
+    import urllib.request
+
+    try:
+        is_running, port = check_server_health(5000, max_attempts=1)
+        if not is_running:
+            return DoctorCheck(
+                name="Extension",
+                status="warning",
+                message="Server not running (can't check)",
+                repair_hint="Start server first"
+            )
+
+        url = f"http://localhost:{port}/api/status"
+        req = urllib.request.urlopen(url, timeout=2)
+        data = json.loads(req.read().decode())
+
+        if data.get("extension_connected"):
+            return DoctorCheck(name="Extension", status="ok", message="Connected")
+        else:
+            return DoctorCheck(
+                name="Extension",
+                status="warning",
+                message="Not connected",
+                repair_hint="Install from Chrome Web Store"
+            )
+
+    except Exception:
+        return DoctorCheck(
+            name="Extension",
+            status="warning",
+            message="Could not check",
+            repair_hint="Ensure server is running"
+        )
+
+
+def doctor_check_data() -> DoctorCheck:
+    """Check if data directory is healthy."""
+    fixonce_dir = get_fixonce_dir()
+    data_dir = fixonce_dir / "data"
+
+    issues = []
+
+    if not data_dir.exists():
+        return DoctorCheck(
+            name="Data Directory",
+            status="error",
+            message="Missing",
+            repair_fn=repair_data,
+            repair_hint="Create data directory"
+        )
+
+    required_dirs = ["projects_v2", "global"]
+    for d in required_dirs:
+        if not (data_dir / d).exists():
+            issues.append(f"missing {d}/")
+
+    required_files = ["active_project.json"]
+    for f in required_files:
+        if not (data_dir / f).exists():
+            issues.append(f"missing {f}")
+
+    test_file = data_dir / ".doctor_test"
+    try:
+        test_file.write_text("test")
+        test_file.unlink()
+    except (PermissionError, OSError):
+        issues.append("not writable")
+
+    if issues:
+        return DoctorCheck(
+            name="Data Directory",
+            status="error" if "not writable" in issues else "warning",
+            message=", ".join(issues),
+            repair_fn=repair_data,
+            repair_hint="Initialize data directory"
+        )
+
+    return DoctorCheck(name="Data Directory", status="ok", message="Healthy")
+
+
+def repair_data() -> bool:
+    """Repair data directory."""
+    print(f"    {Colors.BLUE}Initializing data directory...{Colors.END}")
+    try:
+        initialize_fresh_data()
+        print(f"    {Colors.GREEN}✅ Data directory initialized{Colors.END}")
+        return True
+    except Exception as e:
+        print(f"    {Colors.RED}❌ Error: {e}{Colors.END}")
+        return False
+
+
+def doctor_check_fixonce_portable() -> DoctorCheck:
+    """Check for .fixonce/ portable project memory."""
+    fixonce_dir = get_fixonce_dir()
+    project_fixonce = fixonce_dir / ".fixonce"
+
+    if project_fixonce.exists():
+        metadata_file = project_fixonce / "metadata.json"
+        if metadata_file.exists():
+            try:
+                with open(metadata_file) as f:
+                    metadata = json.load(f)
+                project_id = metadata.get("project_id", "unknown")
+                return DoctorCheck(
+                    name="Project Memory",
+                    status="ok",
+                    message=f".fixonce/ exists (ID: {project_id})"
+                )
+            except Exception:
+                return DoctorCheck(
+                    name="Project Memory",
+                    status="warning",
+                    message=".fixonce/ exists but metadata invalid"
+                )
+        return DoctorCheck(
+            name="Project Memory",
+            status="warning",
+            message=".fixonce/ exists but no metadata.json"
+        )
+
+    return DoctorCheck(
+        name="Project Memory",
+        status="ok",
+        message="No .fixonce/ (will be created on first use)"
+    )
+
+
+def run_doctor():
+    """Run the FixOnce Doctor to diagnose and repair issues."""
+    print(f"\n{Colors.BLUE}{'═' * 50}{Colors.END}")
+    print(f"{Colors.BOLD}  🩺 FixOnce Doctor{Colors.END}")
+    print(f"{Colors.BLUE}{'═' * 50}{Colors.END}\n")
+
+    checks = [
+        doctor_check_server(),
+        doctor_check_mcp(),
+        doctor_check_extension(),
+        doctor_check_data(),
+        doctor_check_fixonce_portable(),
+    ]
+
+    repairable = []
+
+    for i, check in enumerate(checks):
+        if check.status == "ok":
+            icon = f"{Colors.GREEN}✅{Colors.END}"
+        elif check.status == "warning":
+            icon = f"{Colors.YELLOW}⚠️{Colors.END} "
+        else:
+            icon = f"{Colors.RED}❌{Colors.END}"
+
+        print(f"  {icon} {check.name}: {check.message}")
+
+        if check.repair_fn:
+            repairable.append((i, check))
+            print(f"       {Colors.YELLOW}[{len(repairable)}] {check.repair_hint}{Colors.END}")
+        elif check.repair_hint and check.status != "ok":
+            print(f"       {Colors.YELLOW}→ {check.repair_hint}{Colors.END}")
+
+    print(f"\n{Colors.BLUE}{'─' * 50}{Colors.END}")
+
+    errors = sum(1 for c in checks if c.status == "error")
+    warnings = sum(1 for c in checks if c.status == "warning")
+
+    if errors == 0 and warnings == 0:
+        print(f"\n{Colors.GREEN}✅ All systems healthy!{Colors.END}\n")
+        return True
+
+    if repairable:
+        print(f"\n{Colors.BOLD}Repair Options:{Colors.END}")
+        print(f"  [A] Repair All ({len(repairable)} issues)")
+        for i, (_, check) in enumerate(repairable, 1):
+            print(f"  [{i}] {check.repair_hint}")
+        print(f"  [Q] Quit")
+
+        choice = input(f"\n{Colors.BOLD}Choice:{Colors.END} ").strip().upper()
+
+        if choice == 'A':
+            print(f"\n{Colors.BOLD}Repairing all issues...{Colors.END}\n")
+            for _, check in repairable:
+                print(f"  {Colors.BLUE}▶{Colors.END} {check.name}:")
+                check.repair_fn()
+                print()
+            print(f"{Colors.GREEN}Repair complete. Run doctor again to verify.{Colors.END}\n")
+
+        elif choice.isdigit() and 1 <= int(choice) <= len(repairable):
+            idx = int(choice) - 1
+            _, check = repairable[idx]
+            print(f"\n  {Colors.BLUE}▶{Colors.END} {check.name}:")
+            check.repair_fn()
+            print()
+
+        elif choice == 'Q':
+            print("Bye!")
+        else:
+            print(f"{Colors.YELLOW}Invalid choice{Colors.END}")
+
+    return errors == 0
+
+
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="FixOnce Installer & Doctor")
+    parser.add_argument('--doctor', '-d', action='store_true',
+                        help='Run Doctor mode to diagnose and repair issues')
+    parser.add_argument('--preflight', '-p', action='store_true',
+                        help='Run only preflight checks')
+    args = parser.parse_args()
+
+    if args.doctor:
+        print_banner()
+        run_doctor()
+    elif args.preflight:
+        print_banner()
+        run_preflight_checks()
+    else:
+        main()
