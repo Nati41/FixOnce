@@ -1495,5 +1495,468 @@ def main():
     if get_platform() == 'windows':
         input("\nPress Enter to close...")
 
+
+# ============ DOCTOR / REPAIR MODE ============
+
+class DoctorCheck:
+    """Result of a doctor check with optional repair action."""
+    def __init__(self, name: str, status: str, message: str = "",
+                 repair_fn=None, repair_hint: str = ""):
+        self.name = name
+        self.status = status  # "ok", "warning", "error"
+        self.message = message
+        self.repair_fn = repair_fn  # Function to call for repair
+        self.repair_hint = repair_hint
+
+
+def doctor_check_server() -> DoctorCheck:
+    """Check if FixOnce server is running."""
+    is_running, port = check_server_health(5000, max_attempts=2)
+
+    if is_running:
+        return DoctorCheck(
+            name="Server",
+            status="ok",
+            message=f"Running on port {port}"
+        )
+
+    return DoctorCheck(
+        name="Server",
+        status="error",
+        message="Not running",
+        repair_fn=repair_server,
+        repair_hint="Start server"
+    )
+
+
+def repair_server() -> bool:
+    """Start the FixOnce server."""
+    print(f"    {Colors.BLUE}Starting server...{Colors.END}")
+    fixonce_dir = get_fixonce_dir()
+    server_script = fixonce_dir / "src" / "server.py"
+
+    try:
+        subprocess.Popen(
+            [sys.executable, str(server_script), '--flask-only'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=str(fixonce_dir / "src"),
+            start_new_session=True
+        )
+        import time
+        time.sleep(2)
+        is_running, port = check_server_health(5000, max_attempts=5)
+        if is_running:
+            print(f"    {Colors.GREEN}✅ Server started on port {port}{Colors.END}")
+            return True
+        else:
+            print(f"    {Colors.RED}❌ Server failed to start{Colors.END}")
+            return False
+    except Exception as e:
+        print(f"    {Colors.RED}❌ Error: {e}{Colors.END}")
+        return False
+
+
+def doctor_check_mcp() -> DoctorCheck:
+    """Check if MCP is configured for Claude Code."""
+    home = Path.home()
+    claude_config = home / ".claude" / "claude_desktop_config.json"
+
+    if not claude_config.exists():
+        return DoctorCheck(
+            name="MCP Config",
+            status="error",
+            message="Not found",
+            repair_fn=repair_mcp,
+            repair_hint="Create MCP config"
+        )
+
+    try:
+        with open(claude_config) as f:
+            config = json.load(f)
+
+        mcp_servers = config.get("mcpServers", {})
+        if "fixonce" not in mcp_servers:
+            return DoctorCheck(
+                name="MCP Config",
+                status="error",
+                message="FixOnce not in config",
+                repair_fn=repair_mcp,
+                repair_hint="Add FixOnce to MCP"
+            )
+
+        # Check if path is correct
+        fixonce_config = mcp_servers["fixonce"]
+        config_path = fixonce_config.get("args", [""])[0] if fixonce_config.get("args") else ""
+        fixonce_dir = get_fixonce_dir()
+        expected_path = str(fixonce_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py")
+
+        if config_path != expected_path:
+            return DoctorCheck(
+                name="MCP Config",
+                status="warning",
+                message=f"Path mismatch",
+                repair_fn=repair_mcp,
+                repair_hint="Update MCP path"
+            )
+
+        return DoctorCheck(
+            name="MCP Config",
+            status="ok",
+            message="Configured for Claude Code"
+        )
+
+    except (json.JSONDecodeError, KeyError) as e:
+        return DoctorCheck(
+            name="MCP Config",
+            status="error",
+            message=f"Invalid config: {e}",
+            repair_fn=repair_mcp,
+            repair_hint="Recreate config"
+        )
+
+
+def repair_mcp() -> bool:
+    """Repair MCP configuration."""
+    print(f"    {Colors.BLUE}Configuring MCP...{Colors.END}")
+    editors = detect_editors()
+    success = configure_mcp(editors)
+    if success:
+        print(f"    {Colors.GREEN}✅ MCP configured{Colors.END}")
+        print(f"    {Colors.YELLOW}→ Restart Claude Code to apply changes{Colors.END}")
+    return success
+
+
+def doctor_check_extension() -> DoctorCheck:
+    """Check if Chrome extension is connected."""
+    import urllib.request
+    import urllib.error
+
+    try:
+        # Check via the server's status endpoint
+        is_running, port = check_server_health(5000, max_attempts=1)
+        if not is_running:
+            return DoctorCheck(
+                name="Extension",
+                status="warning",
+                message="Server not running (can't check)",
+                repair_hint="Start server first"
+            )
+
+        url = f"http://localhost:{port}/api/status"
+        req = urllib.request.urlopen(url, timeout=2)
+        data = json.loads(req.read().decode())
+
+        if data.get("extension_connected"):
+            return DoctorCheck(
+                name="Extension",
+                status="ok",
+                message="Connected"
+            )
+        else:
+            return DoctorCheck(
+                name="Extension",
+                status="warning",
+                message="Not connected",
+                repair_hint="Install from Chrome Web Store"
+            )
+
+    except Exception:
+        return DoctorCheck(
+            name="Extension",
+            status="warning",
+            message="Could not check",
+            repair_hint="Ensure server is running"
+        )
+
+
+def doctor_check_data() -> DoctorCheck:
+    """Check if data directory is healthy."""
+    fixonce_dir = get_fixonce_dir()
+    data_dir = fixonce_dir / "data"
+
+    issues = []
+
+    # Check directory exists
+    if not data_dir.exists():
+        return DoctorCheck(
+            name="Data Directory",
+            status="error",
+            message="Missing",
+            repair_fn=repair_data,
+            repair_hint="Create data directory"
+        )
+
+    # Check required subdirs
+    required_dirs = ["projects_v2", "global"]
+    for d in required_dirs:
+        if not (data_dir / d).exists():
+            issues.append(f"missing {d}/")
+
+    # Check required files
+    required_files = ["active_project.json"]
+    for f in required_files:
+        if not (data_dir / f).exists():
+            issues.append(f"missing {f}")
+
+    # Check write permission
+    test_file = data_dir / ".doctor_test"
+    try:
+        test_file.write_text("test")
+        test_file.unlink()
+    except (PermissionError, OSError):
+        issues.append("not writable")
+
+    if issues:
+        return DoctorCheck(
+            name="Data Directory",
+            status="error" if "not writable" in issues else "warning",
+            message=", ".join(issues),
+            repair_fn=repair_data,
+            repair_hint="Initialize data directory"
+        )
+
+    return DoctorCheck(
+        name="Data Directory",
+        status="ok",
+        message="Healthy"
+    )
+
+
+def repair_data() -> bool:
+    """Repair data directory."""
+    print(f"    {Colors.BLUE}Initializing data directory...{Colors.END}")
+    try:
+        initialize_fresh_data()
+        print(f"    {Colors.GREEN}✅ Data directory initialized{Colors.END}")
+        return True
+    except Exception as e:
+        print(f"    {Colors.RED}❌ Error: {e}{Colors.END}")
+        return False
+
+
+def doctor_check_databases() -> DoctorCheck:
+    """Check if databases are accessible."""
+    fixonce_dir = get_fixonce_dir()
+    data_dir = fixonce_dir / "data"
+
+    db_files = [
+        "solutions.db",
+        "projects_v2/__global__.json",
+    ]
+
+    issues = []
+    for db in db_files:
+        db_path = data_dir / db
+        if db_path.exists():
+            # Try to read
+            try:
+                if db.endswith('.db'):
+                    import sqlite3
+                    conn = sqlite3.connect(db_path)
+                    conn.execute("SELECT 1")
+                    conn.close()
+                else:
+                    with open(db_path) as f:
+                        json.load(f)
+            except Exception as e:
+                issues.append(f"{db} corrupted")
+        # Not existing is OK - will be created
+
+    if issues:
+        return DoctorCheck(
+            name="Databases",
+            status="warning",
+            message=", ".join(issues),
+            repair_hint="May need manual cleanup"
+        )
+
+    return DoctorCheck(
+        name="Databases",
+        status="ok",
+        message="Accessible"
+    )
+
+
+def doctor_check_stale_state() -> DoctorCheck:
+    """Check for stale state that might cause issues."""
+    fixonce_dir = get_fixonce_dir()
+    data_dir = fixonce_dir / "data"
+
+    issues = []
+
+    # Check for stale port file
+    port_file = data_dir / "current_port.txt"
+    if port_file.exists():
+        try:
+            port = int(port_file.read_text().strip())
+            is_running, _ = check_server_health(port, max_attempts=1)
+            if not is_running:
+                issues.append("stale port file")
+        except:
+            issues.append("invalid port file")
+
+    # Check for stale install state
+    install_state = data_dir / "install_state.json"
+    if install_state.exists():
+        try:
+            with open(install_state) as f:
+                state = json.load(f)
+            if state.get("installing"):
+                issues.append("interrupted install")
+        except:
+            pass
+
+    if issues:
+        return DoctorCheck(
+            name="Stale State",
+            status="warning",
+            message=", ".join(issues),
+            repair_fn=repair_stale_state,
+            repair_hint="Clean stale files"
+        )
+
+    return DoctorCheck(
+        name="Stale State",
+        status="ok",
+        message="Clean"
+    )
+
+
+def repair_stale_state() -> bool:
+    """Clean up stale state files."""
+    print(f"    {Colors.BLUE}Cleaning stale state...{Colors.END}")
+    fixonce_dir = get_fixonce_dir()
+    data_dir = fixonce_dir / "data"
+
+    cleaned = []
+
+    # Remove stale port file if server not running
+    port_file = data_dir / "current_port.txt"
+    if port_file.exists():
+        try:
+            port = int(port_file.read_text().strip())
+            is_running, _ = check_server_health(port, max_attempts=1)
+            if not is_running:
+                port_file.unlink()
+                cleaned.append("port file")
+        except:
+            port_file.unlink()
+            cleaned.append("port file")
+
+    # Clear interrupted install state
+    install_state = data_dir / "install_state.json"
+    if install_state.exists():
+        try:
+            with open(install_state) as f:
+                state = json.load(f)
+            if state.get("installing"):
+                state["installing"] = False
+                with open(install_state, 'w') as f:
+                    json.dump(state, f, indent=2)
+                cleaned.append("install state")
+        except:
+            pass
+
+    if cleaned:
+        print(f"    {Colors.GREEN}✅ Cleaned: {', '.join(cleaned)}{Colors.END}")
+    else:
+        print(f"    {Colors.GREEN}✅ Nothing to clean{Colors.END}")
+    return True
+
+
+def run_doctor():
+    """Run the FixOnce Doctor to diagnose and repair issues."""
+    print(f"\n{Colors.BLUE}{'═' * 50}{Colors.END}")
+    print(f"{Colors.BOLD}  🩺 FixOnce Doctor{Colors.END}")
+    print(f"{Colors.BLUE}{'═' * 50}{Colors.END}\n")
+
+    checks = [
+        doctor_check_server(),
+        doctor_check_mcp(),
+        doctor_check_extension(),
+        doctor_check_data(),
+        doctor_check_databases(),
+        doctor_check_stale_state(),
+    ]
+
+    repairable = []
+
+    # Display all checks
+    for i, check in enumerate(checks):
+        if check.status == "ok":
+            icon = f"{Colors.GREEN}✅{Colors.END}"
+        elif check.status == "warning":
+            icon = f"{Colors.YELLOW}⚠️{Colors.END} "
+        else:
+            icon = f"{Colors.RED}❌{Colors.END}"
+
+        print(f"  {icon} {check.name}: {check.message}")
+
+        if check.repair_fn:
+            repairable.append((i, check))
+            print(f"       {Colors.YELLOW}[{len(repairable)}] {check.repair_hint}{Colors.END}")
+        elif check.repair_hint and check.status != "ok":
+            print(f"       {Colors.YELLOW}→ {check.repair_hint}{Colors.END}")
+
+    print(f"\n{Colors.BLUE}{'─' * 50}{Colors.END}")
+
+    # Count issues
+    errors = sum(1 for c in checks if c.status == "error")
+    warnings = sum(1 for c in checks if c.status == "warning")
+
+    if errors == 0 and warnings == 0:
+        print(f"\n{Colors.GREEN}✅ All systems healthy!{Colors.END}\n")
+        return True
+
+    # Show repair options
+    if repairable:
+        print(f"\n{Colors.BOLD}Repair Options:{Colors.END}")
+        print(f"  [A] Repair All ({len(repairable)} issues)")
+        for i, (_, check) in enumerate(repairable, 1):
+            print(f"  [{i}] {check.repair_hint}")
+        print(f"  [Q] Quit")
+
+        choice = input(f"\n{Colors.BOLD}Choice:{Colors.END} ").strip().upper()
+
+        if choice == 'A':
+            print(f"\n{Colors.BOLD}Repairing all issues...{Colors.END}\n")
+            for _, check in repairable:
+                print(f"  {Colors.BLUE}▶{Colors.END} {check.name}:")
+                check.repair_fn()
+                print()
+
+            print(f"{Colors.GREEN}Repair complete. Run doctor again to verify.{Colors.END}\n")
+
+        elif choice.isdigit() and 1 <= int(choice) <= len(repairable):
+            idx = int(choice) - 1
+            _, check = repairable[idx]
+            print(f"\n  {Colors.BLUE}▶{Colors.END} {check.name}:")
+            check.repair_fn()
+            print()
+
+        elif choice == 'Q':
+            print("Bye!")
+        else:
+            print(f"{Colors.YELLOW}Invalid choice{Colors.END}")
+
+    return errors == 0
+
+
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="FixOnce Installer & Doctor")
+    parser.add_argument('--doctor', '-d', action='store_true',
+                        help='Run Doctor mode to diagnose and repair issues')
+    parser.add_argument('--preflight', '-p', action='store_true',
+                        help='Run only preflight checks')
+    args = parser.parse_args()
+
+    if args.doctor:
+        print_banner()
+        run_doctor()
+    elif args.preflight:
+        print_banner()
+        run_preflight_checks()
+    else:
+        main()
