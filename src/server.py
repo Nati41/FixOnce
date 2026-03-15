@@ -116,6 +116,21 @@ def dashboard():
     return _send_dashboard_file(dashboard_path)
 
 
+@flask_app.route("/install")
+def install_wizard():
+    """Serve the installer wizard."""
+    from flask import redirect
+
+    # If already installed, redirect to dashboard
+    if _is_installed():
+        return redirect("/")
+
+    installer_path = DATA_DIR / "installer.html"
+    if installer_path.exists():
+        return _send_dashboard_file(installer_path)
+    return "Installer not found", 404
+
+
 @flask_app.route("/next")
 @flask_app.route("/vnext")
 def dashboard_vnext():
