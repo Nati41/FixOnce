@@ -67,7 +67,10 @@ except ImportError as e:
 # ---------------------------------------------------------------------------
 # Flask Application
 # ---------------------------------------------------------------------------
-flask_app = Flask(__name__)
+# Configure Flask with data directory for templates and static files
+flask_app = Flask(__name__,
+                  template_folder=str(DATA_DIR),
+                  static_folder=str(DATA_DIR))
 CORS(flask_app)
 
 # Register all route blueprints
