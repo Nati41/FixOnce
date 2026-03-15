@@ -13,8 +13,10 @@ import sys
 import json
 import os
 import subprocess
+import getpass
 
 from . import status_bp, get_project_from_request
+from config import PROJECT_ROOT
 from core.system_mode import get_system_mode, set_system_mode, VALID_MODES
 
 # Global state (will be set by main app)
@@ -35,12 +37,15 @@ def api_ping():
     """Simple ping endpoint for service discovery.
 
     Used by Chrome extension to find which port FixOnce is running on.
-    Returns minimal response with service identifier.
+    Also used by installer to validate server ownership (cross-user isolation).
+    Returns service identifier + ownership info for multi-user safety.
     """
     return jsonify({
         "service": "fixonce",
         "status": "ok",
-        "port": ACTUAL_PORT
+        "port": ACTUAL_PORT,
+        "user": getpass.getuser(),
+        "install_path": str(PROJECT_ROOT)
     })
 
 

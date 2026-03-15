@@ -955,13 +955,21 @@ def configure_claude_hooks(fixonce_dir: Path) -> bool:
 # ============ Step 5: Start Server & Open Dashboard ============
 
 def check_server_health(port: int = 5000, max_attempts: int = 10) -> tuple:
-    """Check if FixOnce server is running. Returns (is_healthy, actual_port)"""
+    """
+    Check if FixOnce server is running FOR THIS USER.
+
+    Cross-user safety: Only returns True if the server belongs to
+    the current user AND the same installation path.
+    """
     import urllib.request
     import urllib.error
     import json
+    import getpass
 
     fixonce_dir = get_fixonce_dir()
     port_file = fixonce_dir / "data" / "current_port.txt"
+    current_user = getpass.getuser()
+    my_install_path = str(fixonce_dir)
 
     # First try to read actual port from file (server writes this on startup)
     ports_to_try = list(range(port, port + 10))  # 5000-5009
@@ -978,14 +986,24 @@ def check_server_health(port: int = 5000, max_attempts: int = 10) -> tuple:
     for attempt in range(max_attempts):
         for p in ports_to_try:
             try:
-                # Use /api/ping which returns {"service": "fixonce"}
+                # Use /api/ping which returns {"service": "fixonce", "user": "...", "install_path": "..."}
                 url = f"http://localhost:{p}/api/ping"
                 req = urllib.request.urlopen(url, timeout=2)
                 if req.status == 200:
                     data = json.loads(req.read().decode())
-                    # Verify it's actually FixOnce, not AirPlay or other service
+                    # Verify it's actually FixOnce
                     if data.get("service") == "fixonce":
-                        return True, p
+                        # Cross-user check: verify this is OUR server
+                        server_user = data.get("user", "")
+                        server_path = data.get("install_path", "")
+
+                        if server_user == current_user and server_path == my_install_path:
+                            # This is OUR server
+                            return True, p
+                        else:
+                            # Server belongs to different user/installation - skip
+                            print(f"  {Colors.YELLOW}[INFO]{Colors.END} Port {p}: server belongs to '{server_user}' - skipping")
+                            continue
             except (urllib.error.URLError, json.JSONDecodeError, Exception):
                 pass
         import time
