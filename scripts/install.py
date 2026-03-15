@@ -1027,18 +1027,40 @@ def open_web_installer():
     is_running, port = check_server_health(5000, max_attempts=2)
     if not is_running:
         print(f"  Starting FixOnce server...")
-        subprocess.Popen(
-            [sys.executable, str(server_script), '--flask-only'],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            cwd=str(fixonce_dir / "src"),
-            start_new_session=True
-        )
 
-        # Wait for server
-        is_running, port = check_server_health(5000, max_attempts=15)
-        if not is_running:
+        # Write server output to log file for debugging
+        log_file = fixonce_dir / "data" / "server_startup.log"
+        with open(log_file, 'w') as log:
+            process = subprocess.Popen(
+                [sys.executable, str(server_script), '--flask-only'],
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                cwd=str(fixonce_dir / "src"),
+                start_new_session=True
+            )
+
+        # Wait for server to start (check port file first, then health)
+        import time
+        port_file = fixonce_dir / "data" / "current_port.txt"
+        for _ in range(30):  # Wait up to 15 seconds
+            if port_file.exists():
+                try:
+                    port = int(port_file.read_text().strip())
+                    # Verify server is responding
+                    is_running, port = check_server_health(port, max_attempts=3)
+                    if is_running:
+                        break
+                except (ValueError, IOError):
+                    pass
+            time.sleep(0.5)
+        else:
+            # Show log on failure
             print(f"  {Colors.RED}[ERROR]{Colors.END} Server failed to start")
+            if log_file.exists():
+                print(f"  Check log: {log_file}")
+                with open(log_file) as f:
+                    for line in f.readlines()[-10:]:
+                        print(f"    {line.rstrip()}")
             return False
 
     # Open installer in browser
