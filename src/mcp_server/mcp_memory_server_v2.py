@@ -452,6 +452,7 @@ _compliance_state = {
 # Session persistence file (survives MCP restarts)
 SESSION_FILE = SRC_DIR.parent / "data" / "mcp_session.json"
 COMPLIANCE_FILE = SRC_DIR.parent / "data" / "mcp_compliance.json"
+AI_CONNECTIONS_FILE = SRC_DIR.parent / "data" / "ai_connections.json"
 
 
 def _persist_compliance():
@@ -486,6 +487,33 @@ def _persist_session(project_id: str, working_dir: str):
             json.dump(data, f)
     except Exception:
         pass
+
+
+def _persist_ai_connection(actor_identity: Dict[str, Any], project_id: Optional[str] = None):
+    """Persist last-seen heartbeat for the current AI client."""
+    try:
+        editor = actor_identity.get("editor", "unknown")
+        if editor == "unknown":
+            return
+
+        payload = {"clients": {}}
+        if AI_CONNECTIONS_FILE.exists():
+            with open(AI_CONNECTIONS_FILE, 'r', encoding='utf-8') as f:
+                payload = json.load(f)
+            if "clients" not in payload:
+                payload["clients"] = {}
+
+        payload["clients"][editor] = {
+            "last_seen": datetime.now().isoformat(),
+            "actor_source": actor_identity.get("source", "fallback"),
+            "actor_confidence": actor_identity.get("confidence", 0.0),
+            "project_id": project_id,
+        }
+
+        with open(AI_CONNECTIONS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        _log(f"[MCP] Failed to persist AI connection: {e}")
 
 
 def _recover_session() -> Optional[tuple]:
@@ -769,6 +797,7 @@ def _universal_gate(tool_name: str) -> tuple:
     # Resolve actor for this tool call
     actor_identity = _resolve_actor_identity()
     _compliance_state["editor"] = actor_identity["editor"]
+    _persist_ai_connection(actor_identity, project_id=session.project_id)
 
     # Log tool call
     session.log_tool_call(tool_name)
@@ -935,6 +964,7 @@ def _update_active_ai(actor_identity: Optional[Dict[str, Any]] = None):
                 _log(f"[MCP] AI Handoff: {old_editor} → {detected_editor}")
 
         _save_project(project_id, data)
+        _persist_ai_connection(actor_identity, project_id=project_id)
 
     except Exception as e:
         # Don't break tool calls if update fails

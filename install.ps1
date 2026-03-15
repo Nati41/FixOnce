@@ -142,11 +142,15 @@ try {
 Write-Step "Configuring MCP for AI editors..."
 
 $mcpServerPath = Join-Path $ScriptDir "src\mcp_server\mcp_memory_server_v2.py"
+$srcPath = Join-Path $ScriptDir "src"
 $mcpConfig = @{
     mcpServers = @{
         fixonce = @{
             command = $pythonCmd
             args = @($mcpServerPath)
+            env = @{
+                PYTHONPATH = $srcPath
+            }
         }
     }
 }
@@ -183,6 +187,44 @@ try {
     Write-OK "Cursor configured"
 } catch {
     Write-Warn "Could not configure Cursor: $_"
+}
+
+# Codex config
+$codexDir = Join-Path $env:USERPROFILE ".codex"
+$codexConfig = Join-Path $codexDir "config.toml"
+$codexProjectDir = Join-Path $ScriptDir ".codex"
+$codexProjectConfig = Join-Path $codexProjectDir "config.toml"
+$codexBlock = @"
+[mcp_servers.fixonce]
+command = "$pythonCmd"
+args = ["$mcpServerPath"]
+
+[mcp_servers.fixonce.env]
+PYTHONPATH = "$srcPath"
+"@
+
+try {
+    if (-not (Test-Path $codexDir)) { New-Item -ItemType Directory -Path $codexDir -Force | Out-Null }
+    $existing = ""
+    if (Test-Path $codexConfig) {
+        $existing = Get-Content $codexConfig -Raw
+        $existing = [regex]::Replace($existing, '(?ms)^\[mcp_servers\.fixonce\]\r?\n(?:.*\r?\n)*?(?=^\[|\z)', '')
+        $existing = [regex]::Replace($existing, '(?ms)^\[mcp_servers\.fixonce\.env\]\r?\n(?:.*\r?\n)*?(?=^\[|\z)', '')
+        $existing = $existing.Trim()
+    }
+    $final = if ([string]::IsNullOrWhiteSpace($existing)) { $codexBlock } else { "$existing`r`n`r`n$codexBlock" }
+    $final | Out-File $codexConfig -Encoding UTF8
+    Write-OK "Codex configured"
+} catch {
+    Write-Warn "Could not configure Codex: $_"
+}
+
+try {
+    if (-not (Test-Path $codexProjectDir)) { New-Item -ItemType Directory -Path $codexProjectDir -Force | Out-Null }
+    $codexBlock | Out-File $codexProjectConfig -Encoding UTF8
+    Write-OK "Project Codex config created"
+} catch {
+    Write-Warn "Could not create project Codex config: $_"
 }
 
 # ============ Step 6: Configure Auto-Start ============

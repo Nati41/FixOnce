@@ -17,7 +17,7 @@ Write-Host "This will remove FixOnce from your system." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "What will be removed:"
 Write-Host "  - Scheduled Task (auto-start)"
-Write-Host "  - MCP configuration from Claude/Cursor"
+Write-Host "  - MCP configuration from Codex/Claude/Cursor"
 Write-Host "  - Desktop shortcuts"
 Write-Host ""
 Write-Host "What will NOT be removed:"
@@ -89,6 +89,22 @@ if (Test-Path $cursorConfig) {
     }
 } else {
     Write-Warn "Cursor config not found"
+}
+
+# Remove MCP from Codex
+$codexConfig = Join-Path $env:USERPROFILE ".codex\config.toml"
+if (Test-Path $codexConfig) {
+    try {
+        $content = Get-Content $codexConfig -Raw
+        $content = [regex]::Replace($content, '(?ms)^\[mcp_servers\.fixonce\]\r?\n(?:.*\r?\n)*?(?=^\[|\z)', '')
+        $content = [regex]::Replace($content, '(?ms)^\[mcp_servers\.fixonce\.env\]\r?\n(?:.*\r?\n)*?(?=^\[|\z)', '')
+        $content.TrimEnd() | Out-File $codexConfig -Encoding UTF8
+        Write-OK "Removed from Codex"
+    } catch {
+        Write-Warn "Could not update Codex config"
+    }
+} else {
+    Write-Warn "Codex config not found"
 }
 
 # Remove desktop shortcut

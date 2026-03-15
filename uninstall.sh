@@ -20,7 +20,7 @@ echo -e "${YELLOW}This will remove FixOnce from your system.${NC}"
 echo ""
 echo "What will be removed:"
 echo "  - LaunchAgent (auto-start)"
-echo "  - MCP configuration from Claude/Cursor"
+echo "  - MCP configuration from Codex/Claude/Cursor"
 echo "  - Desktop/Dock shortcuts"
 echo ""
 echo "What will NOT be removed:"
@@ -99,6 +99,29 @@ except Exception as e:
 "
 else
     echo -e "  ${YELLOW}⚠${NC} Cursor config not found"
+fi
+
+# Remove MCP config from Codex
+CODEX_CONFIG="$HOME/.codex/config.toml"
+if [ -f "$CODEX_CONFIG" ]; then
+    python3 -c "
+from pathlib import Path
+import re
+try:
+    path = Path('$CODEX_CONFIG')
+    content = path.read_text(encoding='utf-8')
+    for pattern in (
+        r'(?ms)^\[mcp_servers\.fixonce\]\n(?:.*\n)*?(?=^\[|\Z)',
+        r'(?ms)^\[mcp_servers\.fixonce\.env\]\n(?:.*\n)*?(?=^\[|\Z)',
+    ):
+        content = re.sub(pattern, '', content)
+    path.write_text(content.strip() + ('\n' if content.strip() else ''), encoding='utf-8')
+    print('  ✓ Removed from Codex')
+except Exception as e:
+    print(f'  ⚠ Could not update Codex config: {e}')
+"
+else
+    echo -e "  ${YELLOW}⚠${NC} Codex config not found"
 fi
 
 # Remove from Dock (best effort)

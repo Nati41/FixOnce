@@ -2,7 +2,7 @@
 
 > **Your AI Never Forgets.**
 
-FixOnce gives AI coding assistants (Claude, Cursor) persistent memory across sessions. Your AI remembers decisions, solutions, and context — picking up exactly where you left off.
+FixOnce gives AI coding assistants (Codex, Claude, Cursor) persistent memory across sessions. Your AI remembers decisions, solutions, and context — picking up exactly where you left off.
 
 ---
 
@@ -16,7 +16,7 @@ bash setup.sh
 
 That's it. The setup script:
 1. Installs dependencies
-2. Configures MCP for Cursor and Claude Code
+2. Configures MCP for Codex, Cursor, and Claude Code
 3. Starts the server
 
 After setup: **Reload Cursor** (Cmd+Shift+P → Reload Window) and start chatting. FixOnce works automatically.
@@ -61,6 +61,17 @@ pip3 install flask flask-cors requests fastmcp scikit-learn watchdog
     }
   }
 }
+```
+
+**Codex** — add to `~/.codex/config.toml` or `.codex/config.toml` in your project:
+
+```toml
+[mcp_servers.fixonce]
+command = "python3"
+args = ["/absolute/path/to/FixOnce/src/mcp_server/mcp_memory_server_v2.py"]
+
+[mcp_servers.fixonce.env]
+PYTHONPATH = "/absolute/path/to/FixOnce/src"
 ```
 
 ### 3. Start Server
@@ -127,6 +138,7 @@ Three layers:
 
 | Editor | Integration | Setup |
 |--------|-------------|-------|
+| **Codex** | MCP (automatic) | `setup.sh`, `scripts/install.py`, or manual `config.toml` |
 | **Cursor** | MCP (automatic) | `setup.sh` or manual `mcp.json` |
 | **Claude Code** | MCP (automatic) | `setup.sh` or manual `settings.json` |
 

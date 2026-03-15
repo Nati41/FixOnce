@@ -6,11 +6,63 @@ Endpoints for the web-based installer.
 import json
 import subprocess
 import sys
+import re
 from pathlib import Path
 from datetime import datetime
 from flask import Blueprint, jsonify, send_file, request
 
 installer_bp = Blueprint('installer', __name__)
+
+
+def _build_stdio_mcp_config(mcp_server: Path, src_path: str, fastmcp_path: str = None) -> dict:
+    """Build a stdio MCP config shared by all editors."""
+    if fastmcp_path:
+        return {
+            "command": fastmcp_path,
+            "args": ["run", str(mcp_server), "--transport", "stdio", "--no-banner"],
+            "env": {
+                "PYTHONPATH": src_path,
+                "FASTMCP_SHOW_CLI_BANNER": "false",
+                "FASTMCP_CHECK_FOR_UPDATES": "false"
+            }
+        }
+
+    return {
+        "command": sys.executable,
+        "args": [str(mcp_server)],
+        "env": {"PYTHONPATH": src_path}
+    }
+
+
+def _toml_quote(value: str) -> str:
+    return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+def _write_codex_config(path: Path, server_name: str, config: dict):
+    """Write or update a Codex MCP server entry."""
+    content = path.read_text(encoding='utf-8') if path.exists() else ""
+    for pattern in (
+        rf'(?ms)^\[mcp_servers\.{re.escape(server_name)}\]\n(?:.*\n)*?(?=^\[|\Z)',
+        rf'(?ms)^\[mcp_servers\.{re.escape(server_name)}\.env\]\n(?:.*\n)*?(?=^\[|\Z)',
+    ):
+        content = re.sub(pattern, '', content)
+    content = content.strip()
+
+    lines = [
+        f"[mcp_servers.{server_name}]",
+        f"command = {_toml_quote(config['command'])}",
+        f"args = [{', '.join(_toml_quote(arg) for arg in config.get('args', []))}]",
+    ]
+
+    env = config.get("env", {})
+    if env:
+        lines.append("")
+        lines.append(f"[mcp_servers.{server_name}.env]")
+        for key, value in env.items():
+            lines.append(f"{key} = {_toml_quote(value)}")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text((content + "\n\n" + "\n".join(lines) if content else "\n".join(lines)) + "\n", encoding='utf-8')
 
 # Installation state file
 def _get_install_state_file() -> Path:
@@ -86,27 +138,14 @@ def configure_mcp():
     except Exception:
         pass
 
+    stdio_config = _build_stdio_mcp_config(mcp_server, src_path, fastmcp_path)
+
     # Try to configure Claude Code
     try:
         subprocess.run(['claude', 'mcp', 'remove', 'fixonce', '-s', 'user'],
                       capture_output=True, timeout=10)
 
-        if fastmcp_path:
-            mcp_json = json.dumps({
-                "command": fastmcp_path,
-                "args": ["run", str(mcp_server), "--transport", "stdio", "--no-banner"],
-                "env": {
-                    "PYTHONPATH": src_path,
-                    "FASTMCP_SHOW_CLI_BANNER": "false",
-                    "FASTMCP_CHECK_FOR_UPDATES": "false"
-                }
-            })
-        else:
-            mcp_json = json.dumps({
-                "command": sys.executable,
-                "args": [str(mcp_server)],
-                "env": {"PYTHONPATH": src_path}
-            })
+        mcp_json = json.dumps(stdio_config)
 
         result = subprocess.run(
             ['claude', 'mcp', 'add-json', 'fixonce', mcp_json, '-s', 'user'],
@@ -131,26 +170,20 @@ def configure_mcp():
         if 'mcpServers' not in existing:
             existing['mcpServers'] = {}
 
-        if fastmcp_path:
-            existing['mcpServers']['fixonce'] = {
-                "command": fastmcp_path,
-                "args": ["run", str(mcp_server), "--transport", "stdio", "--no-banner"],
-                "env": {
-                    "PYTHONPATH": src_path,
-                    "FASTMCP_SHOW_CLI_BANNER": "false"
-                }
-            }
-        else:
-            existing['mcpServers']['fixonce'] = {
-                "command": sys.executable,
-                "args": [str(mcp_server)],
-                "env": {"PYTHONPATH": src_path}
-            }
+        existing['mcpServers']['fixonce'] = stdio_config
 
         with open(cursor_config, 'w') as f:
             json.dump(existing, f, indent=2)
 
         configured.append("Cursor")
+    except Exception:
+        pass
+
+    # Configure Codex
+    try:
+        codex_config = Path.home() / '.codex' / 'config.toml'
+        _write_codex_config(codex_config, 'fixonce', stdio_config)
+        configured.append("Codex")
     except Exception:
         pass
 

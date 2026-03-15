@@ -13,7 +13,6 @@ import sys
 import json
 import os
 import subprocess
-import getpass
 
 from . import status_bp, get_project_from_request
 from core.system_mode import get_system_mode, set_system_mode, VALID_MODES
@@ -35,16 +34,13 @@ def set_extension_connected(connected: bool, last_seen: str = None):
 def api_ping():
     """Simple ping endpoint for service discovery.
 
-    Used by Chrome extension and installer to find which port FixOnce is running on.
-    Returns service identifier + ownership info to prevent cross-user conflicts.
+    Used by Chrome extension to find which port FixOnce is running on.
+    Returns minimal response with service identifier.
     """
-    from config import PROJECT_ROOT
     return jsonify({
         "service": "fixonce",
         "status": "ok",
-        "port": ACTUAL_PORT,
-        "user": getpass.getuser(),
-        "install_path": str(PROJECT_ROOT)
+        "port": ACTUAL_PORT
     })
 
 

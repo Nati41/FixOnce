@@ -28,8 +28,10 @@ echo -e "${DIM}[2/3]${NC} Configuring AI editors..."
 
 CURSOR_MCP="$HOME/.cursor/mcp.json"
 CLAUDE_MCP="$HOME/.claude/settings.json"
+CODEX_MCP="$HOME/.codex/config.toml"
 MCP_SERVER_PATH="$FIXONCE_DIR/src/mcp_server/mcp_memory_server_v2.py"
 PYTHON_PATH="$(which python3 2>/dev/null || which python)"
+PROJECT_CODEX_MCP="$FIXONCE_DIR/.codex/config.toml"
 
 # Cursor
 if [ -d "$HOME/.cursor" ]; then
@@ -109,6 +111,63 @@ MCPEOF
 else
     echo -e "  ${DIM}–${NC} Claude Code not found, skipping"
 fi
+
+# Codex
+if command -v codex >/dev/null 2>&1 || [ -d "$HOME/.codex" ]; then
+    mkdir -p "$(dirname "$CODEX_MCP")"
+    python3 - << PY
+from pathlib import Path
+import re
+
+path = Path("$CODEX_MCP")
+server_name = "fixonce"
+command = "$PYTHON_PATH"
+server_path = "$MCP_SERVER_PATH"
+pythonpath = "$FIXONCE_DIR/src"
+
+content = path.read_text(encoding="utf-8") if path.exists() else ""
+for pattern in (
+    rf'(?ms)^\\[mcp_servers\\.{re.escape(server_name)}\\]\\n(?:.*\\n)*?(?=^\\[|\\Z)',
+    rf'(?ms)^\\[mcp_servers\\.{re.escape(server_name)}\\.env\\]\\n(?:.*\\n)*?(?=^\\[|\\Z)',
+):
+    content = re.sub(pattern, '', content)
+content = content.strip()
+
+block = (
+    f'[mcp_servers.{server_name}]\\n'
+    f'command = "{command}"\\n'
+    f'args = ["{server_path}"]\\n\\n'
+    f'[mcp_servers.{server_name}.env]\\n'
+    f'PYTHONPATH = "{pythonpath}"\\n'
+)
+
+path.write_text((content + "\\n\\n" + block if content else block), encoding="utf-8")
+PY
+    echo -e "  ${GREEN}✓${NC} Codex MCP configured"
+else
+    echo -e "  ${DIM}–${NC} Codex not found, skipping"
+fi
+
+# Project-level Codex config
+mkdir -p "$(dirname "$PROJECT_CODEX_MCP")"
+python3 - << PY
+from pathlib import Path
+
+path = Path("$PROJECT_CODEX_MCP")
+command = "$PYTHON_PATH"
+server_path = "$MCP_SERVER_PATH"
+pythonpath = "$FIXONCE_DIR/src"
+
+path.write_text(
+    '[mcp_servers.fixonce]\\n'
+    f'command = "{command}"\\n'
+    f'args = ["{server_path}"]\\n\\n'
+    '[mcp_servers.fixonce.env]\\n'
+    f'PYTHONPATH = "{pythonpath}"\\n',
+    encoding="utf-8"
+)
+PY
+echo -e "  ${GREEN}✓${NC} Project Codex MCP configured"
 
 # Step 3: Start server
 echo -e "${DIM}[3/3]${NC} Starting FixOnce server..."

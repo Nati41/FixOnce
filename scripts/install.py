@@ -10,6 +10,7 @@ import json
 import shutil
 import platform
 import subprocess
+import re
 from pathlib import Path
 
 # Colors for terminal (work on both platforms with colorama fallback)
@@ -81,6 +82,78 @@ def get_windows_pythonw(executable: str) -> str:
     # Fallback: keep python.exe if pythonw is unavailable
     return executable
 
+
+def _build_stdio_mcp_config(command: str, server_path: str, pythonpath: str, fastmcp_path: str = None) -> dict:
+    """Build a stdio MCP config shared by all supported editors."""
+    if fastmcp_path:
+        return {
+            "command": fastmcp_path,
+            "args": ["run", server_path, "--transport", "stdio", "--no-banner"],
+            "env": {
+                "PYTHONPATH": pythonpath,
+                "FASTMCP_SHOW_CLI_BANNER": "false",
+                "FASTMCP_CHECK_FOR_UPDATES": "false"
+            }
+        }
+
+    return {
+        "command": command,
+        "args": [server_path],
+        "env": {"PYTHONPATH": pythonpath}
+    }
+
+
+def _toml_quote(value: str) -> str:
+    """Quote a string for TOML output."""
+    return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+def _remove_codex_server_blocks(content: str, server_name: str) -> str:
+    """Remove previous FixOnce server blocks from a Codex TOML config."""
+    patterns = [
+        rf'(?ms)^\[mcp_servers\.{re.escape(server_name)}\]\n(?:.*\n)*?(?=^\[|\Z)',
+        rf'(?ms)^\[mcp_servers\.{re.escape(server_name)}\.env\]\n(?:.*\n)*?(?=^\[|\Z)',
+    ]
+
+    updated = content
+    for pattern in patterns:
+        updated = re.sub(pattern, '', updated)
+    return updated.strip()
+
+
+def _configure_codex_mcp_file(path: Path, server_name: str, config: dict):
+    """Write or update a Codex MCP server entry in config.toml."""
+    existing = ""
+    if path.exists():
+        existing = path.read_text(encoding='utf-8')
+
+    existing = _remove_codex_server_blocks(existing, server_name)
+
+    block_lines = [
+        f"[mcp_servers.{server_name}]",
+        f"command = {_toml_quote(config['command'])}",
+    ]
+
+    args = ", ".join(_toml_quote(arg) for arg in config.get("args", []))
+    block_lines.append(f"args = [{args}]")
+
+    env = config.get("env", {})
+    if env:
+        block_lines.append("")
+        block_lines.append(f"[mcp_servers.{server_name}.env]")
+        for key, value in env.items():
+            block_lines.append(f"{key} = {_toml_quote(value)}")
+
+    new_block = "\n".join(block_lines).rstrip() + "\n"
+
+    if existing:
+        new_content = existing + "\n\n" + new_block
+    else:
+        new_content = new_block
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(new_content, encoding='utf-8')
+
 def run_command(cmd: list, silent: bool = False) -> tuple:
     """Run a command and return (success, output)"""
     try:
@@ -93,318 +166,6 @@ def run_command(cmd: list, silent: bool = False) -> tuple:
         return result.returncode == 0, result.stdout + result.stderr
     except Exception as e:
         return False, str(e)
-
-
-# ============ PREFLIGHT CHECK ============
-
-class PreflightResult:
-    """Result of a single preflight check."""
-    def __init__(self, name: str, passed: bool, critical: bool = False,
-                 message: str = "", fix_hint: str = ""):
-        self.name = name
-        self.passed = passed
-        self.critical = critical  # If critical and failed, abort install
-        self.message = message
-        self.fix_hint = fix_hint
-
-    def __repr__(self):
-        status = "✅" if self.passed else ("❌" if self.critical else "⚠️")
-        return f"{status} {self.name}: {self.message}"
-
-
-def check_python_version() -> PreflightResult:
-    """Check Python version is 3.8+"""
-    version = sys.version_info
-    version_str = f"{version.major}.{version.minor}.{version.micro}"
-
-    if version.major < 3 or (version.major == 3 and version.minor < 8):
-        return PreflightResult(
-            name="Python Version",
-            passed=False,
-            critical=True,
-            message=f"Python {version_str} is too old (need 3.8+)",
-            fix_hint="Install Python 3.8 or newer: https://python.org/downloads"
-        )
-
-    return PreflightResult(
-        name="Python Version",
-        passed=True,
-        message=f"Python {version_str}"
-    )
-
-
-def check_write_permissions() -> PreflightResult:
-    """Check write permissions for all required directories."""
-    fixonce_dir = get_fixonce_dir()
-    data_dir = fixonce_dir / "data"
-
-    # Directories we need to write to
-    dirs_to_check = [
-        (data_dir, "data directory"),
-        (fixonce_dir / "src", "source directory"),
-    ]
-
-    # Also check user home for .fixonce
-    home = Path.home()
-    dirs_to_check.append((home / ".fixonce", "~/.fixonce config"))
-
-    failed = []
-
-    for dir_path, name in dirs_to_check:
-        # For directories that should exist, check write permission
-        if dir_path.exists():
-            test_file = dir_path / ".write_test_fixonce"
-            try:
-                test_file.write_text("test")
-                test_file.unlink()
-            except (PermissionError, OSError) as e:
-                failed.append(f"{name} ({dir_path})")
-        else:
-            # Try to create it
-            try:
-                dir_path.mkdir(parents=True, exist_ok=True)
-                # Also test we can write inside
-                test_file = dir_path / ".write_test_fixonce"
-                test_file.write_text("test")
-                test_file.unlink()
-            except (PermissionError, OSError) as e:
-                failed.append(f"{name} ({dir_path})")
-
-    if failed:
-        return PreflightResult(
-            name="Write Permissions",
-            passed=False,
-            critical=True,
-            message=f"Cannot write to: {', '.join(failed)}",
-            fix_hint="Check folder permissions or run from a different location"
-        )
-
-    return PreflightResult(
-        name="Write Permissions",
-        passed=True,
-        message="All directories writable"
-    )
-
-
-def check_install_path() -> PreflightResult:
-    """Check install path is valid and contains expected files."""
-    fixonce_dir = get_fixonce_dir()
-
-    # Required files/dirs
-    required = [
-        ("src/server.py", "server script"),
-        ("requirements.txt", "requirements file"),
-        ("data", "data directory"),
-    ]
-
-    missing = []
-    for path, name in required:
-        if not (fixonce_dir / path).exists():
-            missing.append(name)
-
-    if missing:
-        return PreflightResult(
-            name="Install Path",
-            passed=False,
-            critical=True,
-            message=f"Missing: {', '.join(missing)}",
-            fix_hint=f"Incomplete installation at {fixonce_dir}"
-        )
-
-    return PreflightResult(
-        name="Install Path",
-        passed=True,
-        message=str(fixonce_dir)
-    )
-
-
-def check_port_availability() -> PreflightResult:
-    """Check if at least one port in 5000-5009 range is available."""
-    import socket
-
-    available_port = None
-    checked_ports = []
-
-    for port in range(5000, 5010):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            result = s.connect_ex(('localhost', port))
-            if result != 0:  # Port is free
-                available_port = port
-                break
-            checked_ports.append(port)
-
-    if available_port is None:
-        return PreflightResult(
-            name="Port Availability",
-            passed=False,
-            critical=False,  # Not critical - can still try
-            message=f"Ports 5000-5009 all in use",
-            fix_hint="Close other applications or FixOnce instances"
-        )
-
-    if available_port == 5000:
-        return PreflightResult(
-            name="Port Availability",
-            passed=True,
-            message="Port 5000 available"
-        )
-    else:
-        return PreflightResult(
-            name="Port Availability",
-            passed=True,
-            message=f"Port 5000 busy, will use {available_port}"
-        )
-
-
-def check_browser() -> PreflightResult:
-    """Check if a supported browser is installed."""
-    current_platform = get_platform()
-
-    browsers_found = []
-
-    if current_platform == 'mac':
-        browser_paths = [
-            ("/Applications/Google Chrome.app", "Chrome"),
-            ("/Applications/Brave Browser.app", "Brave"),
-            ("/Applications/Microsoft Edge.app", "Edge"),
-            ("/Applications/Arc.app", "Arc"),
-            ("/Applications/Firefox.app", "Firefox"),
-        ]
-        for path, name in browser_paths:
-            if Path(path).exists():
-                browsers_found.append(name)
-
-    elif current_platform == 'windows':
-        # Check common Windows browser paths
-        program_files = [
-            Path(os.environ.get('PROGRAMFILES', 'C:\\Program Files')),
-            Path(os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)')),
-            Path(os.environ.get('LOCALAPPDATA', ''))
-        ]
-        browser_checks = [
-            ("Google/Chrome/Application/chrome.exe", "Chrome"),
-            ("BraveSoftware/Brave-Browser/Application/brave.exe", "Brave"),
-            ("Microsoft/Edge/Application/msedge.exe", "Edge"),
-        ]
-        for base in program_files:
-            for rel_path, name in browser_checks:
-                if (base / rel_path).exists():
-                    if name not in browsers_found:
-                        browsers_found.append(name)
-
-    if not browsers_found:
-        return PreflightResult(
-            name="Browser",
-            passed=False,
-            critical=False,  # Not critical - extension is optional
-            message="No supported browser found",
-            fix_hint="Install Chrome, Brave, or Edge for browser extension"
-        )
-
-    # Check specifically for Chrome (best extension support)
-    if "Chrome" in browsers_found:
-        return PreflightResult(
-            name="Browser",
-            passed=True,
-            message=f"Chrome found (+ {len(browsers_found)-1} others)" if len(browsers_found) > 1 else "Chrome"
-        )
-
-    return PreflightResult(
-        name="Browser",
-        passed=True,
-        message=f"{browsers_found[0]} (extension may have limited support)"
-    )
-
-
-def check_disk_space() -> PreflightResult:
-    """Check if there's enough disk space (at least 100MB)."""
-    fixonce_dir = get_fixonce_dir()
-
-    try:
-        if platform.system() == 'Windows':
-            import ctypes
-            free_bytes = ctypes.c_ulonglong(0)
-            ctypes.windll.kernel32.GetDiskFreeSpaceExW(
-                ctypes.c_wchar_p(str(fixonce_dir)), None, None, ctypes.pointer(free_bytes)
-            )
-            free_mb = free_bytes.value / (1024 * 1024)
-        else:
-            stat = os.statvfs(fixonce_dir)
-            free_mb = (stat.f_bavail * stat.f_frsize) / (1024 * 1024)
-
-        if free_mb < 100:
-            return PreflightResult(
-                name="Disk Space",
-                passed=False,
-                critical=False,
-                message=f"Only {free_mb:.0f}MB free",
-                fix_hint="Free up at least 100MB of disk space"
-            )
-
-        return PreflightResult(
-            name="Disk Space",
-            passed=True,
-            message=f"{free_mb:.0f}MB free"
-        )
-    except Exception as e:
-        return PreflightResult(
-            name="Disk Space",
-            passed=True,  # Assume OK if can't check
-            message="Could not check (assuming OK)"
-        )
-
-
-def run_preflight_checks() -> bool:
-    """
-    Run all preflight checks before installation.
-
-    Returns True if all critical checks pass, False otherwise.
-    """
-    print(f"\n{Colors.BLUE}{'═' * 50}{Colors.END}")
-    print(f"{Colors.BOLD}  PREFLIGHT CHECK{Colors.END}")
-    print(f"{Colors.BLUE}{'═' * 50}{Colors.END}\n")
-
-    checks = [
-        check_python_version(),
-        check_install_path(),
-        check_write_permissions(),
-        check_port_availability(),
-        check_browser(),
-        check_disk_space(),
-    ]
-
-    critical_failures = []
-    warnings = []
-
-    for result in checks:
-        if result.passed:
-            print(f"  {Colors.GREEN}✅{Colors.END} {result.name}: {result.message}")
-        elif result.critical:
-            print(f"  {Colors.RED}❌{Colors.END} {result.name}: {result.message}")
-            if result.fix_hint:
-                print(f"     {Colors.YELLOW}→ {result.fix_hint}{Colors.END}")
-            critical_failures.append(result)
-        else:
-            print(f"  {Colors.YELLOW}⚠️{Colors.END}  {result.name}: {result.message}")
-            if result.fix_hint:
-                print(f"     {Colors.YELLOW}→ {result.fix_hint}{Colors.END}")
-            warnings.append(result)
-
-    print(f"\n{Colors.BLUE}{'─' * 50}{Colors.END}")
-
-    if critical_failures:
-        print(f"\n{Colors.RED}{Colors.BOLD}❌ PREFLIGHT FAILED{Colors.END}")
-        print(f"{Colors.RED}Cannot continue installation. Fix the issues above.{Colors.END}\n")
-        return False
-
-    if warnings:
-        print(f"\n{Colors.YELLOW}⚠️  {len(warnings)} warning(s) - installation will continue{Colors.END}")
-    else:
-        print(f"\n{Colors.GREEN}✅ All checks passed{Colors.END}")
-
-    print()
-    return True
-
 
 # ============ Step 1: Python Dependencies ============
 
@@ -439,6 +200,7 @@ def detect_editors() -> dict:
     editors = {
         'claude_code': False,
         'cursor': False,
+        'codex': False,
         'vscode': False,
         'copilot': False
     }
@@ -446,6 +208,9 @@ def detect_editors() -> dict:
     current_platform = get_platform()
 
     if current_platform == 'mac':
+        success, _ = run_command(['which', 'codex'])
+        editors['codex'] = success or (Path.home() / '.codex').exists()
+
         # Check for Claude Code CLI
         success, _ = run_command(['which', 'claude'])
         editors['claude_code'] = success
@@ -458,6 +223,9 @@ def detect_editors() -> dict:
         editors['copilot'] = editors['vscode']  # Copilot is a VS Code extension
 
     elif current_platform == 'windows':
+        success, _ = run_command(['where', 'codex'], silent=True)
+        editors['codex'] = success or (Path.home() / '.codex').exists()
+
         # Check common Windows paths
         local_app_data = Path(os.environ.get('LOCALAPPDATA', ''))
         app_data = Path(os.environ.get('APPDATA', ''))
@@ -474,6 +242,10 @@ def detect_editors() -> dict:
 
         # VS Code
         editors['vscode'] = (local_app_data / 'Programs' / 'Microsoft VS Code').exists()
+
+    else:
+        success, _ = run_command(['which', 'codex'])
+        editors['codex'] = success or (Path.home() / '.codex').exists()
 
     # Print results
     for editor, installed in editors.items():
@@ -550,6 +322,13 @@ def configure_mcp(editors: dict) -> bool:
                 fastmcp_path = str(p)
                 break
 
+    stdio_config = _build_stdio_mcp_config(
+        python_path,
+        str(mcp_server_path),
+        src_path,
+        fastmcp_path
+    )
+
     # Configure Claude Code using the CLI (the proper way)
     if editors.get('claude_code', False):
         try:
@@ -558,22 +337,7 @@ def configure_mcp(editors: dict) -> bool:
                          capture_output=True, timeout=10)
 
             # Use fastmcp run if available, otherwise direct python
-            if fastmcp_path:
-                mcp_json = json.dumps({
-                    "command": fastmcp_path,
-                    "args": ["run", str(mcp_server_path), "--transport", "stdio", "--no-banner"],
-                    "env": {
-                        "PYTHONPATH": src_path,
-                        "FASTMCP_SHOW_CLI_BANNER": "false",
-                        "FASTMCP_CHECK_FOR_UPDATES": "false"
-                    }
-                })
-            else:
-                mcp_json = json.dumps({
-                    "command": python_path,
-                    "args": [str(mcp_server_path)],
-                    "env": {"PYTHONPATH": src_path}
-                })
+            mcp_json = json.dumps(stdio_config)
 
             result = subprocess.run(
                 ['claude', 'mcp', 'add-json', 'fixonce', mcp_json, '-s', 'user'],
@@ -586,14 +350,14 @@ def configure_mcp(editors: dict) -> bool:
             else:
                 print(f"  {Colors.YELLOW}[WARN]{Colors.END} Claude CLI config failed, trying file method...")
                 # Fallback to file method
-                _configure_mcp_file(Path.home() / '.claude.json', python_path, str(mcp_server_path), src_path, fastmcp_path)
+                _configure_mcp_file(Path.home() / '.claude.json', stdio_config)
                 configured_count += 1
 
         except Exception as e:
             print(f"  {Colors.YELLOW}[WARN]{Colors.END} Claude CLI not available: {e}")
             # Fallback to file method
             try:
-                _configure_mcp_file(Path.home() / '.claude.json', python_path, str(mcp_server_path), src_path, fastmcp_path)
+                _configure_mcp_file(Path.home() / '.claude.json', stdio_config)
                 print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code configured via file")
                 configured_count += 1
             except Exception as e2:
@@ -603,43 +367,31 @@ def configure_mcp(editors: dict) -> bool:
     if editors.get('cursor', False):
         cursor_path = Path.home() / '.cursor' / 'mcp.json'
         try:
-            _configure_mcp_file(cursor_path, python_path, str(mcp_server_path), src_path, fastmcp_path)
+            _configure_mcp_file(cursor_path, stdio_config)
             print(f"  {Colors.GREEN}[OK]{Colors.END} Cursor configured: {cursor_path}")
             configured_count += 1
         except Exception as e:
             print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Cursor: {e}")
 
+    # Configure Codex
+    if editors.get('codex', False):
+        codex_config = Path.home() / '.codex' / 'config.toml'
+        try:
+            _configure_codex_mcp_file(codex_config, 'fixonce', stdio_config)
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Codex configured: {codex_config}")
+            configured_count += 1
+        except Exception as e:
+            print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Codex: {e}")
+
     if configured_count == 0:
-        print(f"  {Colors.YELLOW}[INFO]{Colors.END} No editors to configure (install Claude Code or Cursor first)")
+        print(f"  {Colors.YELLOW}[INFO]{Colors.END} No editors to configure (install Codex, Claude Code, or Cursor first)")
 
     # Create project-level .mcp.json with CORRECT paths for this machine
     # This is what Claude Code reads when opening the project
     project_mcp_path = fixonce_dir / ".mcp.json"
+    project_codex_path = fixonce_dir / ".codex" / "config.toml"
     try:
-        if fastmcp_path:
-            project_mcp_config = {
-                "mcpServers": {
-                    "fixonce": {
-                        "command": fastmcp_path,
-                        "args": ["run", str(mcp_server_path), "--transport", "stdio", "--no-banner"],
-                        "env": {
-                            "PYTHONPATH": src_path,
-                            "FASTMCP_SHOW_CLI_BANNER": "false",
-                            "FASTMCP_CHECK_FOR_UPDATES": "false"
-                        }
-                    }
-                }
-            }
-        else:
-            project_mcp_config = {
-                "mcpServers": {
-                    "fixonce": {
-                        "command": python_path,
-                        "args": [str(mcp_server_path)],
-                        "env": {"PYTHONPATH": src_path}
-                    }
-                }
-            }
+        project_mcp_config = {"mcpServers": {"fixonce": stdio_config}}
 
         with open(project_mcp_path, 'w', encoding='utf-8') as f:
             json.dump(project_mcp_config, f, indent=2)
@@ -647,10 +399,16 @@ def configure_mcp(editors: dict) -> bool:
     except Exception as e:
         print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not create .mcp.json: {e}")
 
+    try:
+        _configure_codex_mcp_file(project_codex_path, 'fixonce', stdio_config)
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Created .codex/config.toml with correct paths")
+    except Exception as e:
+        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not create .codex/config.toml: {e}")
+
     return True
 
 
-def _configure_mcp_file(path: Path, python_cmd: str, server_path: str, pythonpath: str, fastmcp_path: str = None):
+def _configure_mcp_file(path: Path, server_config: dict):
     """Helper to configure MCP via config file"""
     existing_config = {}
     if path.exists():
@@ -663,23 +421,7 @@ def _configure_mcp_file(path: Path, python_cmd: str, server_path: str, pythonpat
     if 'mcpServers' not in existing_config:
         existing_config['mcpServers'] = {}
 
-    # Use fastmcp run if available
-    if fastmcp_path:
-        existing_config['mcpServers']['fixonce'] = {
-            "command": fastmcp_path,
-            "args": ["run", server_path, "--transport", "stdio", "--no-banner"],
-            "env": {
-                "PYTHONPATH": pythonpath,
-                "FASTMCP_SHOW_CLI_BANNER": "false",
-                "FASTMCP_CHECK_FOR_UPDATES": "false"
-            }
-        }
-    else:
-        existing_config['mcpServers']['fixonce'] = {
-            "command": python_cmd,
-            "args": [server_path],
-            "env": {"PYTHONPATH": pythonpath}
-        }
+    existing_config['mcpServers']['fixonce'] = server_config
 
     # Ensure parent directory exists
     if path.parent != Path.home():
@@ -879,21 +621,13 @@ def configure_claude_hooks(fixonce_dir: Path) -> bool:
 # ============ Step 5: Start Server & Open Dashboard ============
 
 def check_server_health(port: int = 5000, max_attempts: int = 10) -> tuple:
-    """Check if FixOnce server is running. Returns (is_healthy, actual_port)
-
-    Cross-user safety: Only returns True if the server belongs to the current user
-    AND the same installation path. This prevents conflicts when multiple users
-    run FixOnce on the same machine.
-    """
+    """Check if FixOnce server is running. Returns (is_healthy, actual_port)"""
     import urllib.request
     import urllib.error
     import json
-    import getpass
 
     fixonce_dir = get_fixonce_dir()
     port_file = fixonce_dir / "data" / "current_port.txt"
-    current_user = getpass.getuser()
-    my_install_path = str(fixonce_dir)
 
     # First try to read actual port from file (server writes this on startup)
     ports_to_try = list(range(port, port + 10))  # 5000-5009
@@ -910,25 +644,14 @@ def check_server_health(port: int = 5000, max_attempts: int = 10) -> tuple:
     for attempt in range(max_attempts):
         for p in ports_to_try:
             try:
-                # Use /api/ping which returns {"service": "fixonce", "user": "...", "install_path": "..."}
+                # Use /api/ping which returns {"service": "fixonce"}
                 url = f"http://localhost:{p}/api/ping"
                 req = urllib.request.urlopen(url, timeout=2)
                 if req.status == 200:
                     data = json.loads(req.read().decode())
                     # Verify it's actually FixOnce, not AirPlay or other service
                     if data.get("service") == "fixonce":
-                        # Cross-user check: verify this is OUR FixOnce instance
-                        server_user = data.get("user", "")
-                        server_path = data.get("install_path", "")
-
-                        if server_user == current_user and server_path == my_install_path:
-                            # This is our server!
-                            return True, p
-                        else:
-                            # FixOnce is running, but belongs to different user/installation
-                            # Skip this port and continue searching
-                            print(f"  {Colors.YELLOW}[INFO]{Colors.END} Port {p} has FixOnce for user '{server_user}' - skipping")
-                            continue
+                        return True, p
             except (urllib.error.URLError, json.JSONDecodeError, Exception):
                 pass
         import time
@@ -1443,11 +1166,6 @@ def main():
     print(f"{Colors.BOLD}Python:{Colors.END} {sys.version.split()[0]}")
     print(f"{Colors.BOLD}Location:{Colors.END} {get_fixonce_dir()}")
 
-    # PREFLIGHT CHECK - must pass before anything else
-    if not run_preflight_checks():
-        print(f"{Colors.RED}Installation aborted.{Colors.END}")
-        sys.exit(1)
-
     # Step 1: Initialize fresh data
     initialize_fresh_data()
 
@@ -1495,468 +1213,5 @@ def main():
     if get_platform() == 'windows':
         input("\nPress Enter to close...")
 
-
-# ============ DOCTOR / REPAIR MODE ============
-
-class DoctorCheck:
-    """Result of a doctor check with optional repair action."""
-    def __init__(self, name: str, status: str, message: str = "",
-                 repair_fn=None, repair_hint: str = ""):
-        self.name = name
-        self.status = status  # "ok", "warning", "error"
-        self.message = message
-        self.repair_fn = repair_fn  # Function to call for repair
-        self.repair_hint = repair_hint
-
-
-def doctor_check_server() -> DoctorCheck:
-    """Check if FixOnce server is running."""
-    is_running, port = check_server_health(5000, max_attempts=2)
-
-    if is_running:
-        return DoctorCheck(
-            name="Server",
-            status="ok",
-            message=f"Running on port {port}"
-        )
-
-    return DoctorCheck(
-        name="Server",
-        status="error",
-        message="Not running",
-        repair_fn=repair_server,
-        repair_hint="Start server"
-    )
-
-
-def repair_server() -> bool:
-    """Start the FixOnce server."""
-    print(f"    {Colors.BLUE}Starting server...{Colors.END}")
-    fixonce_dir = get_fixonce_dir()
-    server_script = fixonce_dir / "src" / "server.py"
-
-    try:
-        subprocess.Popen(
-            [sys.executable, str(server_script), '--flask-only'],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            cwd=str(fixonce_dir / "src"),
-            start_new_session=True
-        )
-        import time
-        time.sleep(2)
-        is_running, port = check_server_health(5000, max_attempts=5)
-        if is_running:
-            print(f"    {Colors.GREEN}✅ Server started on port {port}{Colors.END}")
-            return True
-        else:
-            print(f"    {Colors.RED}❌ Server failed to start{Colors.END}")
-            return False
-    except Exception as e:
-        print(f"    {Colors.RED}❌ Error: {e}{Colors.END}")
-        return False
-
-
-def doctor_check_mcp() -> DoctorCheck:
-    """Check if MCP is configured for Claude Code."""
-    home = Path.home()
-    claude_config = home / ".claude" / "claude_desktop_config.json"
-
-    if not claude_config.exists():
-        return DoctorCheck(
-            name="MCP Config",
-            status="error",
-            message="Not found",
-            repair_fn=repair_mcp,
-            repair_hint="Create MCP config"
-        )
-
-    try:
-        with open(claude_config) as f:
-            config = json.load(f)
-
-        mcp_servers = config.get("mcpServers", {})
-        if "fixonce" not in mcp_servers:
-            return DoctorCheck(
-                name="MCP Config",
-                status="error",
-                message="FixOnce not in config",
-                repair_fn=repair_mcp,
-                repair_hint="Add FixOnce to MCP"
-            )
-
-        # Check if path is correct
-        fixonce_config = mcp_servers["fixonce"]
-        config_path = fixonce_config.get("args", [""])[0] if fixonce_config.get("args") else ""
-        fixonce_dir = get_fixonce_dir()
-        expected_path = str(fixonce_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py")
-
-        if config_path != expected_path:
-            return DoctorCheck(
-                name="MCP Config",
-                status="warning",
-                message=f"Path mismatch",
-                repair_fn=repair_mcp,
-                repair_hint="Update MCP path"
-            )
-
-        return DoctorCheck(
-            name="MCP Config",
-            status="ok",
-            message="Configured for Claude Code"
-        )
-
-    except (json.JSONDecodeError, KeyError) as e:
-        return DoctorCheck(
-            name="MCP Config",
-            status="error",
-            message=f"Invalid config: {e}",
-            repair_fn=repair_mcp,
-            repair_hint="Recreate config"
-        )
-
-
-def repair_mcp() -> bool:
-    """Repair MCP configuration."""
-    print(f"    {Colors.BLUE}Configuring MCP...{Colors.END}")
-    editors = detect_editors()
-    success = configure_mcp(editors)
-    if success:
-        print(f"    {Colors.GREEN}✅ MCP configured{Colors.END}")
-        print(f"    {Colors.YELLOW}→ Restart Claude Code to apply changes{Colors.END}")
-    return success
-
-
-def doctor_check_extension() -> DoctorCheck:
-    """Check if Chrome extension is connected."""
-    import urllib.request
-    import urllib.error
-
-    try:
-        # Check via the server's status endpoint
-        is_running, port = check_server_health(5000, max_attempts=1)
-        if not is_running:
-            return DoctorCheck(
-                name="Extension",
-                status="warning",
-                message="Server not running (can't check)",
-                repair_hint="Start server first"
-            )
-
-        url = f"http://localhost:{port}/api/status"
-        req = urllib.request.urlopen(url, timeout=2)
-        data = json.loads(req.read().decode())
-
-        if data.get("extension_connected"):
-            return DoctorCheck(
-                name="Extension",
-                status="ok",
-                message="Connected"
-            )
-        else:
-            return DoctorCheck(
-                name="Extension",
-                status="warning",
-                message="Not connected",
-                repair_hint="Install from Chrome Web Store"
-            )
-
-    except Exception:
-        return DoctorCheck(
-            name="Extension",
-            status="warning",
-            message="Could not check",
-            repair_hint="Ensure server is running"
-        )
-
-
-def doctor_check_data() -> DoctorCheck:
-    """Check if data directory is healthy."""
-    fixonce_dir = get_fixonce_dir()
-    data_dir = fixonce_dir / "data"
-
-    issues = []
-
-    # Check directory exists
-    if not data_dir.exists():
-        return DoctorCheck(
-            name="Data Directory",
-            status="error",
-            message="Missing",
-            repair_fn=repair_data,
-            repair_hint="Create data directory"
-        )
-
-    # Check required subdirs
-    required_dirs = ["projects_v2", "global"]
-    for d in required_dirs:
-        if not (data_dir / d).exists():
-            issues.append(f"missing {d}/")
-
-    # Check required files
-    required_files = ["active_project.json"]
-    for f in required_files:
-        if not (data_dir / f).exists():
-            issues.append(f"missing {f}")
-
-    # Check write permission
-    test_file = data_dir / ".doctor_test"
-    try:
-        test_file.write_text("test")
-        test_file.unlink()
-    except (PermissionError, OSError):
-        issues.append("not writable")
-
-    if issues:
-        return DoctorCheck(
-            name="Data Directory",
-            status="error" if "not writable" in issues else "warning",
-            message=", ".join(issues),
-            repair_fn=repair_data,
-            repair_hint="Initialize data directory"
-        )
-
-    return DoctorCheck(
-        name="Data Directory",
-        status="ok",
-        message="Healthy"
-    )
-
-
-def repair_data() -> bool:
-    """Repair data directory."""
-    print(f"    {Colors.BLUE}Initializing data directory...{Colors.END}")
-    try:
-        initialize_fresh_data()
-        print(f"    {Colors.GREEN}✅ Data directory initialized{Colors.END}")
-        return True
-    except Exception as e:
-        print(f"    {Colors.RED}❌ Error: {e}{Colors.END}")
-        return False
-
-
-def doctor_check_databases() -> DoctorCheck:
-    """Check if databases are accessible."""
-    fixonce_dir = get_fixonce_dir()
-    data_dir = fixonce_dir / "data"
-
-    db_files = [
-        "solutions.db",
-        "projects_v2/__global__.json",
-    ]
-
-    issues = []
-    for db in db_files:
-        db_path = data_dir / db
-        if db_path.exists():
-            # Try to read
-            try:
-                if db.endswith('.db'):
-                    import sqlite3
-                    conn = sqlite3.connect(db_path)
-                    conn.execute("SELECT 1")
-                    conn.close()
-                else:
-                    with open(db_path) as f:
-                        json.load(f)
-            except Exception as e:
-                issues.append(f"{db} corrupted")
-        # Not existing is OK - will be created
-
-    if issues:
-        return DoctorCheck(
-            name="Databases",
-            status="warning",
-            message=", ".join(issues),
-            repair_hint="May need manual cleanup"
-        )
-
-    return DoctorCheck(
-        name="Databases",
-        status="ok",
-        message="Accessible"
-    )
-
-
-def doctor_check_stale_state() -> DoctorCheck:
-    """Check for stale state that might cause issues."""
-    fixonce_dir = get_fixonce_dir()
-    data_dir = fixonce_dir / "data"
-
-    issues = []
-
-    # Check for stale port file
-    port_file = data_dir / "current_port.txt"
-    if port_file.exists():
-        try:
-            port = int(port_file.read_text().strip())
-            is_running, _ = check_server_health(port, max_attempts=1)
-            if not is_running:
-                issues.append("stale port file")
-        except:
-            issues.append("invalid port file")
-
-    # Check for stale install state
-    install_state = data_dir / "install_state.json"
-    if install_state.exists():
-        try:
-            with open(install_state) as f:
-                state = json.load(f)
-            if state.get("installing"):
-                issues.append("interrupted install")
-        except:
-            pass
-
-    if issues:
-        return DoctorCheck(
-            name="Stale State",
-            status="warning",
-            message=", ".join(issues),
-            repair_fn=repair_stale_state,
-            repair_hint="Clean stale files"
-        )
-
-    return DoctorCheck(
-        name="Stale State",
-        status="ok",
-        message="Clean"
-    )
-
-
-def repair_stale_state() -> bool:
-    """Clean up stale state files."""
-    print(f"    {Colors.BLUE}Cleaning stale state...{Colors.END}")
-    fixonce_dir = get_fixonce_dir()
-    data_dir = fixonce_dir / "data"
-
-    cleaned = []
-
-    # Remove stale port file if server not running
-    port_file = data_dir / "current_port.txt"
-    if port_file.exists():
-        try:
-            port = int(port_file.read_text().strip())
-            is_running, _ = check_server_health(port, max_attempts=1)
-            if not is_running:
-                port_file.unlink()
-                cleaned.append("port file")
-        except:
-            port_file.unlink()
-            cleaned.append("port file")
-
-    # Clear interrupted install state
-    install_state = data_dir / "install_state.json"
-    if install_state.exists():
-        try:
-            with open(install_state) as f:
-                state = json.load(f)
-            if state.get("installing"):
-                state["installing"] = False
-                with open(install_state, 'w') as f:
-                    json.dump(state, f, indent=2)
-                cleaned.append("install state")
-        except:
-            pass
-
-    if cleaned:
-        print(f"    {Colors.GREEN}✅ Cleaned: {', '.join(cleaned)}{Colors.END}")
-    else:
-        print(f"    {Colors.GREEN}✅ Nothing to clean{Colors.END}")
-    return True
-
-
-def run_doctor():
-    """Run the FixOnce Doctor to diagnose and repair issues."""
-    print(f"\n{Colors.BLUE}{'═' * 50}{Colors.END}")
-    print(f"{Colors.BOLD}  🩺 FixOnce Doctor{Colors.END}")
-    print(f"{Colors.BLUE}{'═' * 50}{Colors.END}\n")
-
-    checks = [
-        doctor_check_server(),
-        doctor_check_mcp(),
-        doctor_check_extension(),
-        doctor_check_data(),
-        doctor_check_databases(),
-        doctor_check_stale_state(),
-    ]
-
-    repairable = []
-
-    # Display all checks
-    for i, check in enumerate(checks):
-        if check.status == "ok":
-            icon = f"{Colors.GREEN}✅{Colors.END}"
-        elif check.status == "warning":
-            icon = f"{Colors.YELLOW}⚠️{Colors.END} "
-        else:
-            icon = f"{Colors.RED}❌{Colors.END}"
-
-        print(f"  {icon} {check.name}: {check.message}")
-
-        if check.repair_fn:
-            repairable.append((i, check))
-            print(f"       {Colors.YELLOW}[{len(repairable)}] {check.repair_hint}{Colors.END}")
-        elif check.repair_hint and check.status != "ok":
-            print(f"       {Colors.YELLOW}→ {check.repair_hint}{Colors.END}")
-
-    print(f"\n{Colors.BLUE}{'─' * 50}{Colors.END}")
-
-    # Count issues
-    errors = sum(1 for c in checks if c.status == "error")
-    warnings = sum(1 for c in checks if c.status == "warning")
-
-    if errors == 0 and warnings == 0:
-        print(f"\n{Colors.GREEN}✅ All systems healthy!{Colors.END}\n")
-        return True
-
-    # Show repair options
-    if repairable:
-        print(f"\n{Colors.BOLD}Repair Options:{Colors.END}")
-        print(f"  [A] Repair All ({len(repairable)} issues)")
-        for i, (_, check) in enumerate(repairable, 1):
-            print(f"  [{i}] {check.repair_hint}")
-        print(f"  [Q] Quit")
-
-        choice = input(f"\n{Colors.BOLD}Choice:{Colors.END} ").strip().upper()
-
-        if choice == 'A':
-            print(f"\n{Colors.BOLD}Repairing all issues...{Colors.END}\n")
-            for _, check in repairable:
-                print(f"  {Colors.BLUE}▶{Colors.END} {check.name}:")
-                check.repair_fn()
-                print()
-
-            print(f"{Colors.GREEN}Repair complete. Run doctor again to verify.{Colors.END}\n")
-
-        elif choice.isdigit() and 1 <= int(choice) <= len(repairable):
-            idx = int(choice) - 1
-            _, check = repairable[idx]
-            print(f"\n  {Colors.BLUE}▶{Colors.END} {check.name}:")
-            check.repair_fn()
-            print()
-
-        elif choice == 'Q':
-            print("Bye!")
-        else:
-            print(f"{Colors.YELLOW}Invalid choice{Colors.END}")
-
-    return errors == 0
-
-
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="FixOnce Installer & Doctor")
-    parser.add_argument('--doctor', '-d', action='store_true',
-                        help='Run Doctor mode to diagnose and repair issues')
-    parser.add_argument('--preflight', '-p', action='store_true',
-                        help='Run only preflight checks')
-    args = parser.parse_args()
-
-    if args.doctor:
-        print_banner()
-        run_doctor()
-    elif args.preflight:
-        print_banner()
-        run_preflight_checks()
-    else:
-        main()
+    main()

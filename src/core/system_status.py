@@ -12,6 +12,7 @@ This module provides unified status for:
 
 import json
 import subprocess
+import shutil
 import requests
 from pathlib import Path
 from datetime import datetime
@@ -29,11 +30,27 @@ class EngineStatus:
 
 
 @dataclass
+class AIClientStatus:
+    """Per-AI connection status."""
+    name: str
+    installed: bool = False
+    configured: bool = False
+    connected: bool = False
+    last_seen: Optional[str] = None
+    config_scope: Optional[str] = None
+    actor_source: Optional[str] = None
+    actor_confidence: float = 0.0
+    error: Optional[str] = None
+
+
+@dataclass
 class MCPStatus:
-    """MCP configuration status."""
+    """Aggregate MCP configuration status."""
     configured: bool = False
     claude_code: bool = False
     cursor: bool = False
+    codex: bool = False
+    clients: Dict[str, AIClientStatus] = field(default_factory=dict)
     error: Optional[str] = None
 
 
@@ -84,6 +101,56 @@ def _get_data_dir() -> Path:
     return Path(__file__).parent.parent.parent / "data"
 
 
+def _get_project_root() -> Path:
+    """Get FixOnce project root."""
+    return Path(__file__).parent.parent.parent
+
+
+def _mcp_runtime_file() -> Path:
+    """Global runtime heartbeat file written by the MCP server."""
+    return _get_data_dir() / "ai_connections.json"
+
+
+def _is_recent(timestamp: Optional[str], threshold_seconds: int = 300) -> bool:
+    """Return True when timestamp is recent enough to count as connected."""
+    if not timestamp:
+        return False
+    try:
+        seen = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        now = datetime.now(seen.tzinfo) if seen.tzinfo else datetime.now()
+        return (now - seen).total_seconds() <= threshold_seconds
+    except Exception:
+        return False
+
+
+def _load_runtime_ai_status() -> Dict[str, Dict[str, Any]]:
+    """Load last-seen runtime data for AI clients."""
+    path = _mcp_runtime_file()
+    if not path.exists():
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            payload = json.load(f)
+        return payload.get("clients", {})
+    except Exception:
+        return {}
+
+
+def _detect_installed_clients() -> Dict[str, bool]:
+    """Best-effort local install detection for supported AI clients."""
+    home = Path.home()
+    checks = {
+        "codex": bool(shutil.which("codex") or (home / ".codex").exists()),
+        "claude": bool(shutil.which("claude") or (home / ".claude").exists() or (home / ".claude.json").exists()),
+        "cursor": bool(
+            (home / ".cursor").exists()
+            or Path("/Applications/Cursor.app").exists()
+            or Path.home().joinpath("AppData", "Roaming", "Cursor").exists()
+        ),
+    }
+    return checks
+
+
 def _check_engine(port: int = 5000) -> EngineStatus:
     """Check if the FixOnce engine is running."""
     status = EngineStatus()
@@ -113,9 +180,47 @@ def _check_engine(port: int = 5000) -> EngineStatus:
 
 
 def _check_mcp() -> MCPStatus:
-    """Check MCP configuration in Claude Code and Cursor."""
+    """Check MCP configuration in Codex, Claude Code, and Cursor."""
     status = MCPStatus()
     home = Path.home()
+    runtime_clients = _load_runtime_ai_status()
+    installed_clients = _detect_installed_clients()
+
+    clients = {
+        "codex": AIClientStatus(name="Codex", installed=installed_clients.get("codex", False)),
+        "claude": AIClientStatus(name="Claude Code", installed=installed_clients.get("claude", False)),
+        "cursor": AIClientStatus(name="Cursor", installed=installed_clients.get("cursor", False)),
+    }
+
+    for key, client in clients.items():
+        runtime = runtime_clients.get(key, {})
+        client.last_seen = runtime.get("last_seen")
+        client.actor_source = runtime.get("actor_source")
+        client.actor_confidence = float(runtime.get("actor_confidence", 0.0) or 0.0)
+        client.connected = _is_recent(client.last_seen)
+
+    # Check Codex config (~/.codex/config.toml)
+    codex_config = home / ".codex" / "config.toml"
+    if codex_config.exists():
+        try:
+            codex_text = codex_config.read_text(encoding='utf-8')
+            if "[mcp_servers.fixonce]" in codex_text:
+                clients["codex"].configured = True
+                clients["codex"].config_scope = "global"
+        except Exception as e:
+            clients["codex"].error = str(e)
+            status.error = str(e)
+
+    project_root = _get_project_root()
+    project_codex = project_root / ".codex" / "config.toml"
+    if not clients["codex"].configured and project_codex.exists():
+        try:
+            codex_text = project_codex.read_text(encoding='utf-8')
+            if "[mcp_servers.fixonce]" in codex_text:
+                clients["codex"].configured = True
+                clients["codex"].config_scope = "project"
+        except Exception as e:
+            clients["codex"].error = str(e)
 
     # Check Claude Code config (~/.claude.json)
     claude_json = home / ".claude.json"
@@ -127,18 +232,30 @@ def _check_mcp() -> MCPStatus:
             # Check global mcpServers
             mcp_servers = config.get("mcpServers", {})
             if "fixonce" in mcp_servers:
-                status.claude_code = True
-                status.configured = True
+                clients["claude"].configured = True
+                clients["claude"].config_scope = "global"
 
             # Check project-level configs
             projects = config.get("projects", {})
             for project_data in projects.values():
                 if "fixonce" in project_data.get("mcpServers", {}):
-                    status.claude_code = True
-                    status.configured = True
+                    clients["claude"].configured = True
+                    clients["claude"].config_scope = "project"
                     break
         except Exception as e:
+            clients["claude"].error = str(e)
             status.error = str(e)
+
+    claude_settings = home / ".claude" / "settings.json"
+    if claude_settings.exists() and not clients["claude"].configured:
+        try:
+            with open(claude_settings, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            if "fixonce" in config.get("mcpServers", {}):
+                clients["claude"].configured = True
+                clients["claude"].config_scope = "global"
+        except Exception as e:
+            clients["claude"].error = str(e)
 
     # Check Cursor config (~/.cursor/mcp.json)
     cursor_mcp = home / ".cursor" / "mcp.json"
@@ -147,10 +264,27 @@ def _check_mcp() -> MCPStatus:
             with open(cursor_mcp, 'r') as f:
                 config = json.load(f)
             if "fixonce" in config.get("mcpServers", {}):
-                status.cursor = True
-                status.configured = True
-        except Exception:
-            pass
+                clients["cursor"].configured = True
+                clients["cursor"].config_scope = "global"
+        except Exception as e:
+            clients["cursor"].error = str(e)
+
+    project_mcp = project_root / ".mcp.json"
+    if project_mcp.exists() and not clients["cursor"].configured:
+        try:
+            with open(project_mcp, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            if "fixonce" in config.get("mcpServers", {}):
+                clients["cursor"].configured = True
+                clients["cursor"].config_scope = "project"
+        except Exception as e:
+            clients["cursor"].error = str(e)
+
+    status.codex = clients["codex"].configured
+    status.claude_code = clients["claude"].configured
+    status.cursor = clients["cursor"].configured
+    status.clients = clients
+    status.configured = any(client.configured for client in clients.values())
 
     return status
 
@@ -328,6 +462,8 @@ def get_status_for_dashboard() -> Dict[str, Any]:
             editors.append("Claude Code")
         if status.mcp.cursor:
             editors.append("Cursor")
+        if status.mcp.codex:
+            editors.append("Codex")
         checks.append({
             "name": "MCP Connection",
             "status": "ok",
@@ -367,6 +503,15 @@ def get_status_for_dashboard() -> Dict[str, Any]:
             "status": "info",
             "message": f"None ({status.project.project_count} available)"
         })
+
+    checks.append({
+        "name": "AI Connections",
+        "status": "ok" if any(client.connected for client in status.mcp.clients.values()) else "warning",
+        "message": ", ".join(
+            f"{client.name}: {'live' if client.connected else 'idle'}"
+            for client in status.mcp.clients.values()
+        )
+    })
 
     return {
         "status": status.to_dict(),

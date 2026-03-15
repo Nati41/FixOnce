@@ -449,6 +449,139 @@ body.powered-off .logo .version::after {
   color: var(--text-dim);
 }
 
+.ai-connections {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.ai-connections h3 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.ai-client {
+  display: grid;
+  grid-template-columns: 68px 1fr;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.ai-client:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.ai-client-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ai-client-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ai-client-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ai-test-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-test-btn:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.ai-test-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.ai-pill {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ai-pill.green {
+  background: rgba(0, 230, 118, 0.12);
+  color: var(--green);
+}
+
+.ai-pill.yellow {
+  background: rgba(255, 179, 0, 0.12);
+  color: var(--amber);
+}
+
+.ai-pill.red {
+  background: rgba(255, 82, 82, 0.12);
+  color: var(--red);
+}
+
+.ai-client-detail {
+  grid-column: 2;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.ai-test-result {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+}
+
+.ai-test-result.success {
+  border-color: rgba(0, 230, 118, 0.22);
+}
+
+.ai-test-result.error {
+  border-color: rgba(255, 82, 82, 0.22);
+}
+
+.ai-test-title {
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.ai-test-summary {
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.ai-test-steps {
+  margin-left: 16px;
+  color: var(--text-dim);
+}
+
+.ai-test-steps li {
+  margin-bottom: 4px;
+}
+
 /* Activity */
 .activity-section {
   background: var(--surface);
@@ -795,11 +928,18 @@ body.powered-off .logo .version::after {
   </div>
 </div>
 
+<div class="ai-connections">
+  <h3>AI Connections</h3>
+  <div id="aiConnectionsList">
+    <div class="status-text dim">Checking AI connections...</div>
+  </div>
+</div>
+
 <!-- Empty State (no active project) - shown by default until project loads -->
 <div class="empty-state" id="emptyState">
   <div class="empty-state-title">No active project yet</div>
   <div class="empty-state-desc">
-    Open a project in Claude or Cursor and FixOnce will begin tracking architecture and insights.
+    Open a project in Codex, Claude, or Cursor and FixOnce will begin tracking architecture and insights.
   </div>
 </div>
 
@@ -1160,6 +1300,9 @@ let extensionLastSeen = null;
 let lastAIActivity = null;
 let memoryLoaded = false;
 let fixonceActive = false;
+let aiClientStatus = {};
+let aiTestResults = {};
+let aiTestRunning = {};
 
 function setStatus(id, status, text) {
   const icon = document.getElementById(id);
@@ -1170,6 +1313,109 @@ function setStatus(id, status, text) {
   if (textEl) {
     textEl.textContent = text;
     textEl.className = 'status-text' + (status === 'yellow' ? ' dim' : '');
+  }
+}
+
+function relativeTime(timestamp) {
+  if (!timestamp) return 'Never seen';
+  const then = new Date(timestamp).getTime();
+  if (Number.isNaN(then)) return 'Seen recently';
+  const diffMs = Date.now() - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'Seen just now';
+  if (diffMin < 60) return `Seen ${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `Seen ${diffHr}h ago`;
+  return `Seen ${Math.floor(diffHr / 24)}d ago`;
+}
+
+function renderAIConnections(clients) {
+  aiClientStatus = clients || {};
+  const container = document.getElementById('aiConnectionsList');
+  const ordered = ['codex', 'claude', 'cursor']
+    .filter(key => aiClientStatus[key])
+    .map(key => aiClientStatus[key]);
+
+  if (!ordered.length) {
+    container.innerHTML = '<div class="status-text dim">No AI clients detected yet.</div>';
+    return;
+  }
+
+  container.innerHTML = ordered.map(client => {
+    const installed = client.installed ? ['green', 'Installed'] : ['red', 'Not installed'];
+    const configured = client.configured
+      ? ['green', client.config_scope === 'project' ? 'Project config' : 'Global config']
+      : ['yellow', 'Not configured'];
+    const live = client.connected ? ['green', 'Live'] : (client.last_seen ? ['yellow', 'Idle'] : ['red', 'No heartbeat']);
+    const key = (client.name || '').toLowerCase().includes('claude')
+      ? 'claude'
+      : (client.name || '').toLowerCase();
+    const result = aiTestResults[key];
+    const running = !!aiTestRunning[key];
+    return `
+      <div class="ai-client">
+        <div class="ai-client-name">${escapeHtml(client.name)}</div>
+        <div class="ai-client-meta">
+          <span class="ai-pill ${installed[0]}">${installed[1]}</span>
+          <span class="ai-pill ${configured[0]}">${configured[1]}</span>
+          <span class="ai-pill ${live[0]}">${live[1]}</span>
+        </div>
+        <div class="ai-client-actions">
+          <button class="ai-test-btn" onclick="testAIConnection('${key}')" ${running ? 'disabled' : ''}>
+            ${running ? 'Testing...' : 'Test'}
+          </button>
+        </div>
+        <div class="ai-client-detail">${escapeHtml(relativeTime(client.last_seen))}</div>
+        ${result ? renderAITestResult(result) : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderAITestResult(result) {
+  if (result.success) {
+    const preview = (result.tools_preview || []).slice(0, 4).join(', ');
+    return `
+      <div class="ai-test-result success">
+        <div class="ai-test-title">Smoke test passed</div>
+        <div class="ai-test-summary">Loaded ${result.tool_count || 0} tools${preview ? `: ${escapeHtml(preview)}` : ''}</div>
+      </div>
+    `;
+  }
+
+  const doctor = result.doctor || {};
+  const steps = (doctor.steps || []).map(step => `<li>${escapeHtml(step)}</li>`).join('');
+  return `
+    <div class="ai-test-result error">
+      <div class="ai-test-title">${escapeHtml(doctor.title || 'Connection test failed')}</div>
+      <div class="ai-test-summary">${escapeHtml(doctor.summary || result.code || 'Unknown error')}</div>
+      ${steps ? `<ol class="ai-test-steps">${steps}</ol>` : ''}
+    </div>
+  `;
+}
+
+async function testAIConnection(client) {
+  aiTestRunning[client] = true;
+  renderAIConnections(aiClientStatus);
+
+  try {
+    const res = await fetch(`${API}/api/setup/test-ai/${client}`, { method: 'POST' });
+    const data = await res.json();
+    aiTestResults[client] = data;
+    showToast(data.success ? `${capitalize(client)} test passed` : `${capitalize(client)} test failed`, !data.success);
+  } catch (e) {
+    aiTestResults[client] = {
+      success: false,
+      doctor: {
+        title: 'Dashboard test failed',
+        summary: e.message,
+        steps: ['Retry the test after confirming FixOnce is running.']
+      }
+    };
+    showToast(`Failed to test ${capitalize(client)}`, true);
+  } finally {
+    aiTestRunning[client] = false;
+    renderAIConnections(aiClientStatus);
   }
 }
 
@@ -1305,6 +1551,8 @@ async function refreshSetupStatus() {
     return;
   }
 
+  renderAIConnections(status.mcp.clients || {});
+
   // Engine
   if (status.engine.running) {
     updateSetupStep('setupEngine', 'engineDot', 'engineStatus', 'green', `Running (port ${status.engine.port})`);
@@ -1314,7 +1562,10 @@ async function refreshSetupStatus() {
 
   // MCP
   if (status.mcp.configured) {
-    updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'green', 'Configured', false, 'mcpAction');
+    const configuredCount = Object.values(status.mcp.clients || {}).filter(client => client.configured).length;
+    const liveCount = Object.values(status.mcp.clients || {}).filter(client => client.connected).length;
+    const summary = liveCount > 0 ? `${configuredCount} configured, ${liveCount} live` : `${configuredCount} configured`;
+    updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'green', summary, false, 'mcpAction');
   } else {
     updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'red', 'Not Configured', true, 'mcpAction');
   }
