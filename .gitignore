@@ -57,6 +57,7 @@ data/system_mode.json
 data/fixonce_enabled.json
 data/current_port.txt
 data/server.log
+data/install_state.json
 data/project_memory.json
 data/project_memory.json.migrated
 data/projects_v2/*

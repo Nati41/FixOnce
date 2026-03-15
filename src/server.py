@@ -86,9 +86,29 @@ def _send_dashboard_file(path):
     return response
 
 
+def _is_installed() -> bool:
+    """Check if FixOnce installation is complete."""
+    install_state = DATA_DIR / "install_state.json"
+    if not install_state.exists():
+        return False
+    try:
+        import json
+        with open(install_state, 'r') as f:
+            state = json.load(f)
+        return state.get("installed", False)
+    except Exception:
+        return False
+
+
 @flask_app.route("/")
 def dashboard():
-    """Serve the main dashboard (lite)."""
+    """Serve the main dashboard or redirect to installer."""
+    from flask import redirect
+
+    # If not installed, redirect to installer
+    if not _is_installed():
+        return redirect("/install")
+
     dashboard_path = DATA_DIR / "dashboard_lite.html"
     return _send_dashboard_file(dashboard_path)
 

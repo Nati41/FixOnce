@@ -98,6 +98,9 @@ from .openai_adapter import openai_bp
 # Setup center endpoints
 from .setup import setup_bp
 
+# Installer endpoints
+from .installer import installer_bp
+
 
 def register_blueprints(app):
     """Register all blueprints with the Flask app."""
@@ -109,3 +112,4 @@ def register_blueprints(app):
     app.register_blueprint(activity_bp, url_prefix='/api/activity')
     app.register_blueprint(openai_bp)  # /openai/* endpoints
     app.register_blueprint(setup_bp)  # /api/setup/* endpoints
+    app.register_blueprint(installer_bp)  # /install + /api/installer/* endpoints

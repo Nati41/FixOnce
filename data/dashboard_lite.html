@@ -480,6 +480,36 @@ body.powered-off .logo .version::after {
   color: var(--text);
 }
 
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  margin-bottom: 20px;
+}
+
+.empty-state.hidden {
+  display: none;
+}
+
+.empty-state-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.empty-state-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.content-sections.hidden {
+  display: none;
+}
+
 /* Safety Point Button */
 .safety-btn {
   width: 100%;
@@ -765,6 +795,17 @@ body.powered-off .logo .version::after {
   </div>
 </div>
 
+<!-- Empty State (no active project) - shown by default until project loads -->
+<div class="empty-state" id="emptyState">
+  <div class="empty-state-title">No active project yet</div>
+  <div class="empty-state-desc">
+    Open a project in Claude or Cursor and FixOnce will begin tracking architecture and insights.
+  </div>
+</div>
+
+<!-- Content Sections (shown when project is active) - hidden by default -->
+<div class="content-sections hidden" id="contentSections">
+
 <!-- Project Section -->
 <div class="project-section">
   <div>
@@ -793,6 +834,8 @@ body.powered-off .logo .version::after {
     <div class="memory-stat" id="avoidStat" style="display:none;"><span id="avoidCount">0</span> avoids</div>
   </div>
 </div>
+
+</div><!-- End content-sections -->
 
 <!-- AI Rules -->
 <div class="rules-section">
@@ -909,19 +952,39 @@ function renderSnapshot(snap) {
   const decisions = identity.counts?.decisions || snap.knowledge?.total_decisions || 0;
   document.getElementById('roiStat').innerHTML = `<span>${decisions}</span> decisions enforced`;
 
-  // Project + Goal
-  document.getElementById('projectName').textContent = identity.name || '-';
-  document.getElementById('projectGoal').textContent = identity.current_goal || '-';
+  // Check if there's an active project
+  const hasProject = identity.name && identity.name !== '-' && identity.name.trim() !== '';
+  const emptyState = document.getElementById('emptyState');
+  const contentSections = document.getElementById('contentSections');
 
-  // Memory stats
-  const knowledge = snap.knowledge || {};
-  document.getElementById('decisionCount').textContent = knowledge.total_decisions || 0;
-  document.getElementById('insightCount').textContent = knowledge.total_insights || 0;
+  if (hasProject) {
+    // Show project content, hide empty state
+    emptyState.classList.add('hidden');
+    contentSections.classList.remove('hidden');
 
-  const avoids = knowledge.total_avoids || 0;
-  if (avoids > 0) {
-    document.getElementById('avoidCount').textContent = avoids;
-    document.getElementById('avoidStat').style.display = '';
+    // Project + Goal
+    document.getElementById('projectName').textContent = identity.name;
+    document.getElementById('projectGoal').textContent = identity.current_goal || '-';
+
+    // Memory stats
+    const knowledge = snap.knowledge || {};
+    document.getElementById('decisionCount').textContent = knowledge.total_decisions || 0;
+    document.getElementById('insightCount').textContent = knowledge.total_insights || 0;
+
+    const avoids = knowledge.total_avoids || 0;
+    if (avoids > 0) {
+      document.getElementById('avoidCount').textContent = avoids;
+      document.getElementById('avoidStat').style.display = '';
+    }
+  } else {
+    // No project - show empty state
+    emptyState.classList.remove('hidden');
+    contentSections.classList.add('hidden');
+
+    // Also update status to "ACTIVE" instead of "PROTECTED" when no project
+    statusEl.className = 'status-label green';
+    statusEl.textContent = 'ACTIVE';
+    document.getElementById('roiStat').textContent = '';
   }
 }
 

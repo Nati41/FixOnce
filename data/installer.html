@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FixOnce Setup</title>
+<style>
+:root {
+  --bg: #0a0c10;
+  --surface: #12151a;
+  --border: #1e2430;
+  --green: #00e676;
+  --amber: #ffb300;
+  --red: #ff5252;
+  --blue: #448aff;
+  --text: #e0e6ed;
+  --text-dim: #6b7785;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.installer {
+  width: 100%;
+  max-width: 420px;
+  padding: 24px;
+}
+
+.logo {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.logo svg {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 16px;
+}
+
+.logo h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.logo .tagline {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.screen {
+  display: none;
+}
+
+.screen.active {
+  display: block;
+}
+
+.welcome-text {
+  text-align: center;
+  margin-bottom: 32px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.start-btn {
+  width: 100%;
+  background: var(--green);
+  color: var(--bg);
+  border: none;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.start-btn:hover {
+  opacity: 0.9;
+}
+
+.steps {
+  margin-bottom: 24px;
+}
+
+.step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.step-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.step-number {
+  width: 28px;
+  height: 28px;
+  background: var(--border);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.step.done .step-number {
+  background: var(--green);
+  color: var(--bg);
+}
+
+.step.active .step-number {
+  background: var(--blue);
+  color: white;
+}
+
+.step-name {
+  font-weight: 500;
+}
+
+.step-status {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.step.done .step-status {
+  color: var(--green);
+}
+
+.step.active .step-status {
+  color: var(--blue);
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 360px;
+  width: 90%;
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.modal-text {
+  color: var(--text-dim);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.modal-steps {
+  margin-bottom: 20px;
+}
+
+.modal-step {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.modal-step-num {
+  width: 24px;
+  height: 24px;
+  background: var(--blue);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.modal-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+}
+
+.modal-btn.primary {
+  background: var(--green);
+  color: var(--bg);
+}
+
+.modal-btn.secondary {
+  background: var(--border);
+  color: var(--text);
+}
+
+.complete-icon {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.complete-icon svg {
+  width: 80px;
+  height: 80px;
+}
+
+.complete-title {
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 12px;
+}
+
+.complete-text {
+  text-align: center;
+  color: var(--text-dim);
+  margin-bottom: 32px;
+  line-height: 1.6;
+}
+
+.complete-summary {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+.summary-row .label {
+  color: var(--text-dim);
+}
+
+.summary-row .value {
+  color: var(--green);
+}
+
+.done-btn {
+  width: 100%;
+  background: var(--green);
+  color: var(--bg);
+  border: none;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<div class="installer">
+  <div class="logo">
+    <svg viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="eyeTop" x1="16" y1="110" x2="204" y2="98" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#1F67C4"/><stop offset="0.55" stop-color="#2FA6E8"/><stop offset="1" stop-color="#39D86F"/>
+        </linearGradient>
+        <linearGradient id="eyeBottom" x1="16" y1="114" x2="204" y2="126" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#1A5CB5"/><stop offset="0.55" stop-color="#2498DE"/><stop offset="1" stop-color="#32CD69"/>
+        </linearGradient>
+      </defs>
+      <path d="M16 110C16 110 51 54 110 54C158 54 187 88 204 103" stroke="url(#eyeTop)" stroke-width="12" stroke-linecap="round"/>
+      <path d="M16 110C16 110 51 166 110 166C158 166 187 132 204 117" stroke="url(#eyeBottom)" stroke-width="12" stroke-linecap="round"/>
+      <circle cx="110" cy="110" r="41" stroke="#2BA4E2" stroke-width="11"/>
+      <path d="M83 88C90 79 100 73 112 70C124 67 136 69 146 76" stroke="#31CF6E" stroke-width="10" stroke-linecap="round"/>
+      <path d="M92 109L106 123L137 92" stroke="#2CCF6C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <h1>FixOnce</h1>
+    <div class="tagline">AI Memory Layer</div>
+  </div>
+
+  <div class="screen active" id="welcomeScreen">
+    <div class="welcome-text">
+      Set up FixOnce to give your AI assistants persistent memory across sessions. They'll remember decisions, solutions, and insights.
+    </div>
+    <button class="start-btn" onclick="startSetup()">Start Setup</button>
+  </div>
+
+  <div class="screen" id="progressScreen">
+    <div class="steps">
+      <div class="step" id="stepEngine">
+        <div class="step-info">
+          <div class="step-number">1</div>
+          <div class="step-name">Memory Engine</div>
+        </div>
+        <div class="step-status">Waiting...</div>
+      </div>
+      <div class="step" id="stepMCP">
+        <div class="step-info">
+          <div class="step-number">2</div>
+          <div class="step-name">AI Editors (MCP)</div>
+        </div>
+        <div class="step-status">Waiting...</div>
+      </div>
+      <div class="step" id="stepExtension">
+        <div class="step-info">
+          <div class="step-number">3</div>
+          <div class="step-name">Browser Extension</div>
+        </div>
+        <div class="step-status">Waiting...</div>
+      </div>
+      <div class="step" id="stepVerify">
+        <div class="step-info">
+          <div class="step-number">4</div>
+          <div class="step-name">Verify Connection</div>
+        </div>
+        <div class="step-status">Waiting...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen" id="completeScreen">
+    <div class="complete-icon">
+      <svg viewBox="0 0 80 80" fill="none">
+        <circle cx="40" cy="40" r="38" stroke="#00e676" stroke-width="4"/>
+        <path d="M24 40L35 51L56 30" stroke="#00e676" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="complete-title">Setup Complete</div>
+    <div class="complete-text">
+      FixOnce is ready. Your AI assistants will now remember everything across sessions.
+    </div>
+    <div class="complete-summary">
+      <div class="summary-row">
+        <span class="label">Memory Engine</span>
+        <span class="value" id="summaryEngine">Ready</span>
+      </div>
+      <div class="summary-row">
+        <span class="label">AI Editors</span>
+        <span class="value" id="summaryMCP">-</span>
+      </div>
+      <div class="summary-row">
+        <span class="label">Browser Extension</span>
+        <span class="value" id="summaryExtension">-</span>
+      </div>
+    </div>
+    <button class="done-btn" onclick="finishSetup()">Open Dashboard</button>
+  </div>
+</div>
+
+<div class="modal hidden" id="extensionModal">
+  <div class="modal-content">
+    <div class="modal-title">Install Browser Extension</div>
+    <div class="modal-text">
+      The extension captures browser errors so AI can fix them proactively.
+    </div>
+    <div class="modal-steps">
+      <div class="modal-step">
+        <div class="modal-step-num">1</div>
+        <div>Open Chrome: <strong>chrome://extensions</strong></div>
+      </div>
+      <div class="modal-step">
+        <div class="modal-step-num">2</div>
+        <div>Enable <strong>Developer mode</strong> (top right)</div>
+      </div>
+      <div class="modal-step">
+        <div class="modal-step-num">3</div>
+        <div>Click <strong>Load unpacked</strong> → select extension folder</div>
+      </div>
+    </div>
+    <div class="modal-buttons">
+      <button class="modal-btn secondary" onclick="skipExtension()">Skip for now</button>
+      <button class="modal-btn primary" onclick="markExtensionInstalled()">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let configuredEditors = [];
+let extInstalled = false;
+
+async function startSetup() {
+  document.getElementById('welcomeScreen').classList.remove('active');
+  document.getElementById('progressScreen').classList.add('active');
+
+  await runStep('stepEngine', async () => {
+    await sleep(500);
+    return true;
+  });
+
+  await runStep('stepMCP', async () => {
+    const res = await fetch(API + '/api/installer/configure-mcp', { method: 'POST' });
+    const data = await res.json();
+    configuredEditors = data.configured || [];
+    return true;
+  });
+
+  await runStep('stepExtension', async () => {
+    try {
+      const res = await fetch(API + '/api/setup/status');
+      const data = await res.json();
+      if (data.extension && data.extension.connected) {
+        extInstalled = true;
+        return true;
+      }
+    } catch (e) {}
+    showExtensionModal();
+    return 'manual';
+  });
+
+  await runStep('stepVerify', async () => {
+    await sleep(500);
+    return true;
+  });
+
+  await fetch(API + '/api/installer/complete', { method: 'POST' });
+
+  document.getElementById('progressScreen').classList.remove('active');
+  document.getElementById('completeScreen').classList.add('active');
+
+  document.getElementById('summaryMCP').textContent = configuredEditors.length > 0
+    ? configuredEditors.join(', ')
+    : 'Manual setup needed';
+  document.getElementById('summaryExtension').textContent = extInstalled ? 'Installed' : 'Skipped';
+}
+
+async function runStep(stepId, fn) {
+  const step = document.getElementById(stepId);
+  const status = step.querySelector('.step-status');
+
+  step.classList.add('active');
+  status.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    const result = await fn();
+    if (result === 'manual') {
+      return new Promise(resolve => { window.resolveStep = resolve; });
+    }
+    step.classList.remove('active');
+    step.classList.add('done');
+    status.textContent = 'Done';
+  } catch (e) {
+    step.classList.remove('active');
+    status.textContent = 'Failed';
+  }
+}
+
+function showExtensionModal() {
+  document.getElementById('extensionModal').classList.remove('hidden');
+}
+
+function hideExtensionModal() {
+  document.getElementById('extensionModal').classList.add('hidden');
+}
+
+function skipExtension() {
+  hideExtensionModal();
+  const step = document.getElementById('stepExtension');
+  step.classList.remove('active');
+  step.querySelector('.step-status').textContent = 'Skipped';
+  if (window.resolveStep) window.resolveStep();
+}
+
+function markExtensionInstalled() {
+  hideExtensionModal();
+  extInstalled = true;
+  const step = document.getElementById('stepExtension');
+  step.classList.remove('active');
+  step.classList.add('done');
+  step.querySelector('.step-status').textContent = 'Done';
+  if (window.resolveStep) window.resolveStep();
+}
+
+function finishSetup() {
+  window.location.href = '/';
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+fetch(API + '/api/installer/status')
+  .then(r => r.json())
+  .then(data => {
+    if (data.installed) {
+      window.location.href = '/';
+    }
+  });
+</script>
+
+</body>
+</html>

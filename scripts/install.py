@@ -994,66 +994,88 @@ def initialize_fresh_data():
     return True
 
 
+def open_web_installer():
+    """Open the web-based installer in browser."""
+    print(f"\n{Colors.BLUE}[INSTALLER]{Colors.END} Opening FixOnce installer...")
+
+    fixonce_dir = get_fixonce_dir()
+    current_platform = get_platform()
+    server_script = fixonce_dir / "src" / "server.py"
+
+    # Start server if not running
+    is_running, port = check_server_health(5000, max_attempts=2)
+    if not is_running:
+        print(f"  Starting FixOnce server...")
+        subprocess.Popen(
+            [sys.executable, str(server_script), '--flask-only'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=str(fixonce_dir / "src"),
+            start_new_session=True
+        )
+
+        # Wait for server
+        is_running, port = check_server_health(5000, max_attempts=15)
+        if not is_running:
+            print(f"  {Colors.RED}[ERROR]{Colors.END} Server failed to start")
+            return False
+
+    # Open installer in browser
+    installer_url = f"http://localhost:{port}/install"
+    try:
+        if current_platform == 'mac':
+            subprocess.run(['open', installer_url], capture_output=True)
+        elif current_platform == 'windows':
+            subprocess.run(f'start "" "{installer_url}"', shell=True, capture_output=True)
+        else:
+            subprocess.run(['xdg-open', installer_url], capture_output=True)
+
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Installer opened: {installer_url}")
+        return True
+    except Exception as e:
+        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not open browser: {e}")
+        print(f"  Open manually: {installer_url}")
+        return True
+
+
 def main():
-    """Main installation process"""
+    """Main installation process - minimal setup then open web installer."""
     print_banner()
 
     print(f"{Colors.BOLD}Platform:{Colors.END} {get_platform().title()}")
     print(f"{Colors.BOLD}Python:{Colors.END} {sys.version.split()[0]}")
     print(f"{Colors.BOLD}Location:{Colors.END} {get_fixonce_dir()}")
 
-    # Step 0: Initialize fresh data
+    # Step 1: Initialize fresh data
     initialize_fresh_data()
 
-    # Run installation steps
-    steps = [
-        ("Dependencies", install_dependencies),
-        ("Detect Editors", detect_editors),
-        ("Configure MCP", lambda: configure_mcp(detect_editors())),
-        ("Sync Rules", sync_rules),
-        ("Start Server", start_server_and_open_dashboard),
-    ]
-
-    # Step 1: Dependencies
+    # Step 2: Install dependencies
     install_dependencies()
 
-    # Step 2: Detect editors
+    # Step 3: Detect editors and configure MCP
     editors = detect_editors()
-
-    # Step 3: Configure MCP
     configure_mcp(editors)
 
-    # Step 4: Sync rules
+    # Step 4: Configure rules
     sync_rules()
 
-    # Create launcher scripts
+    # Step 5: Create launcher scripts
     create_launcher_scripts()
 
-    # Add to Dock/Desktop
-    add_to_dock_or_desktop()
-
-    # Step 5: Configure auto-start (NEW!)
+    # Step 6: Configure auto-start
     configure_auto_start()
 
-    # Step 6: Chrome Extension instructions (NEW!)
-    show_chrome_extension_instructions()
+    # Step 7: Open web installer
+    open_web_installer()
 
-    # Step 7: Start server and launch app
-    start_app()
-
-    # Show final status
     print(f"""
 {'═' * 60}
 
-  {Colors.GREEN}✓ Installation Complete!{Colors.END}
+  {Colors.GREEN}FixOnce Installer opened in your browser!{Colors.END}
 
-  {Colors.BOLD}What was installed:{Colors.END}
-    ✓ FixOnce Engine (running on port 5000)
-    ✓ MCP configured for: {', '.join([e for e, v in editors.items() if v]) or 'None'}
-    ✓ Auto-start on login enabled
-    ✓ Dashboard: http://localhost:5000
+  Complete the setup there and you're ready to go.
 
-  {Colors.BOLD}How to use:{Colors.END}
+  {Colors.BOLD}After installation:{Colors.END}
     1. Open your terminal IN A PROJECT FOLDER:
        {Colors.YELLOW}cd ~/your-project && claude{Colors.END}
 
