@@ -567,9 +567,10 @@ def configure_claude_hooks(fixonce_dir: Path) -> bool:
 # ============ Step 5: Start Server & Open Dashboard ============
 
 def check_server_health(port: int = 5000, max_attempts: int = 10) -> tuple:
-    """Check if server is running and healthy. Returns (is_healthy, actual_port)"""
+    """Check if FixOnce server is running. Returns (is_healthy, actual_port)"""
     import urllib.request
     import urllib.error
+    import json
 
     fixonce_dir = get_fixonce_dir()
     port_file = fixonce_dir / "data" / "current_port.txt"
@@ -589,11 +590,15 @@ def check_server_health(port: int = 5000, max_attempts: int = 10) -> tuple:
     for attempt in range(max_attempts):
         for p in ports_to_try:
             try:
-                url = f"http://localhost:{p}/api/health"
+                # Use /api/ping which returns {"service": "fixonce"}
+                url = f"http://localhost:{p}/api/ping"
                 req = urllib.request.urlopen(url, timeout=2)
                 if req.status == 200:
-                    return True, p
-            except (urllib.error.URLError, Exception):
+                    data = json.loads(req.read().decode())
+                    # Verify it's actually FixOnce, not AirPlay or other service
+                    if data.get("service") == "fixonce":
+                        return True, p
+            except (urllib.error.URLError, json.JSONDecodeError, Exception):
                 pass
         import time
         time.sleep(0.5)
