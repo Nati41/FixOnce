@@ -84,14 +84,38 @@ GLOBAL_DIR.mkdir(exist_ok=True)
 # PROJECT ID GENERATION (Canonical: working_dir based)
 # ============================================================
 
-def generate_project_id_from_path(working_dir: str) -> str:
+def generate_project_id_from_path(working_dir: str, create_if_missing: bool = True) -> str:
     """
-    Generate project ID from working directory.
-    This is the ONLY way to generate IDs now.
+    Get or generate project ID from working directory.
 
-    Format: {folder_name}_{md5_hash[:12]}
-    Example: /Users/x/my-app -> my-app_a1b2c3d4e5f6
+    PORTABLE: First checks .fixonce/metadata.json for stored project_id.
+    This ensures the same ID is used when project is cloned to another machine.
+
+    Args:
+        working_dir: Project root directory
+        create_if_missing: If True, creates .fixonce/metadata.json for new projects
+
+    Returns:
+        project_id string (stable across machines if .fixonce exists)
     """
+    # FIRST: Check for portable project_id in .fixonce/
+    try:
+        from core.committed_knowledge import get_portable_project_id, get_or_create_project_metadata
+
+        portable_id = get_portable_project_id(working_dir)
+        if portable_id:
+            return portable_id
+
+        # No .fixonce exists - create one if allowed
+        if create_if_missing:
+            metadata = get_or_create_project_metadata(working_dir)
+            return metadata.get("project_id")
+    except ImportError:
+        pass  # Fall back to hash-based ID
+    except Exception as e:
+        print(f"[MultiProject] Warning: Could not access .fixonce: {e}")
+
+    # FALLBACK: Generate hash-based ID (not portable, but works)
     path_hash = hashlib.md5(working_dir.encode()).hexdigest()[:12]
     name = Path(working_dir).name
     return f"{name}_{path_hash}"
@@ -462,6 +486,125 @@ def load_project_memory(project_id: str) -> Dict[str, Any]:
     except Exception as e:
         print(f"[MultiProject] Error loading {project_id}: {e}")
         return init_project_memory(project_id)
+
+
+def load_project_from_working_dir(working_dir: str) -> tuple:
+    """
+    Load project memory from working directory - PRIMARY ENTRY POINT.
+
+    This is the PORTABLE way to load a project:
+    1. Checks .fixonce/ in project root FIRST (source of truth)
+    2. Falls back to projects_v2/ cache if .fixonce/ missing
+    3. Creates new .fixonce/ for new projects
+
+    Args:
+        working_dir: Project root directory
+
+    Returns:
+        Tuple of (project_id, memory_dict)
+    """
+    from pathlib import Path
+
+    if not working_dir or not Path(working_dir).is_dir():
+        raise ValueError(f"Invalid working_dir: {working_dir}")
+
+    try:
+        from core.committed_knowledge import (
+            get_project_metadata,
+            get_or_create_project_metadata,
+            read_committed_knowledge,
+            sync_from_committed
+        )
+
+        # Step 1: Check if .fixonce/ exists with metadata
+        existing_metadata = get_project_metadata(working_dir)
+
+        if existing_metadata and existing_metadata.get("project_id"):
+            # EXISTING PROJECT - .fixonce/ is source of truth
+            project_id = existing_metadata["project_id"]
+            print(f"[MultiProject] Loading from .fixonce/ (portable): {project_id}")
+
+            # Check if we have cached memory in projects_v2/
+            cache_path = get_project_path(project_id)
+            if cache_path.exists():
+                # Load from cache (faster)
+                memory = load_project_memory(project_id)
+                # Sync any new committed knowledge (in case repo was updated)
+                memory = sync_from_committed(working_dir, memory)
+            else:
+                # No cache - build from .fixonce/
+                memory = _build_memory_from_fixonce(working_dir, project_id, existing_metadata)
+
+            return project_id, memory
+
+        else:
+            # NEW PROJECT - create .fixonce/
+            print(f"[MultiProject] New project, creating .fixonce/")
+            metadata = get_or_create_project_metadata(working_dir)
+            project_id = metadata["project_id"]
+
+            # Initialize fresh memory
+            memory = init_project_memory(project_id, metadata.get("name"), working_dir)
+
+            return project_id, memory
+
+    except ImportError as e:
+        print(f"[MultiProject] committed_knowledge not available: {e}")
+        # Fallback to legacy behavior
+        project_id = generate_project_id_from_path(working_dir, create_if_missing=False)
+        return project_id, load_project_memory(project_id)
+
+
+def _build_memory_from_fixonce(working_dir: str, project_id: str, metadata: dict) -> dict:
+    """
+    Build complete memory from .fixonce/ files.
+
+    Called when project exists in .fixonce/ but not in local cache.
+    (e.g., cloned repo on new machine)
+    """
+    from core.committed_knowledge import read_committed_knowledge
+
+    committed = read_committed_knowledge(working_dir)
+
+    # Build memory structure
+    memory = {
+        "project_info": {
+            "project_id": project_id,
+            "name": metadata.get("name", Path(working_dir).name),
+            "working_dir": working_dir,
+            "created_at": metadata.get("created_at", datetime.now().isoformat()),
+            "source": "fixonce_portable"
+        },
+        "decisions": committed.get("decisions", []),
+        "avoid": committed.get("avoid", []),
+        "debug_sessions": committed.get("solutions", []),
+        "live_record": {
+            "lessons": {
+                "insights": committed.get("insights", [])
+            },
+            "gps": {
+                "working_dir": working_dir
+            }
+        },
+        "stats": {
+            "created_at": metadata.get("created_at", datetime.now().isoformat()),
+            "last_updated": datetime.now().isoformat()
+        }
+    }
+
+    # Save to cache for future fast access
+    cache_path = get_project_path(project_id)
+    try:
+        if SAFE_FILE_AVAILABLE:
+            atomic_json_write(str(cache_path), memory, create_backup=False)
+        else:
+            with open(cache_path, 'w', encoding='utf-8') as f:
+                json.dump(memory, f, ensure_ascii=False, indent=2)
+        print(f"[MultiProject] Cached project from .fixonce/: {project_id}")
+    except Exception as e:
+        print(f"[MultiProject] Warning: Could not cache project: {e}")
+
+    return memory
 
 
 def save_project_memory(project_id: str, memory: Dict[str, Any] = None) -> bool:

@@ -204,9 +204,10 @@ class ProjectContext:
         Resolve full project identity using hybrid strategy.
 
         Priority:
+        0. .fixonce/metadata.json → PORTABLE (stored in project, travels with git)
         1. Git remote URL → hash(normalized_url)
         2. Git local (no remote) → hash(repo_root_path)
-        3. No git → UUID from .fixonce/project.json
+        3. No git → create new .fixonce/metadata.json
 
         Args:
             project_root: Path to project directory
@@ -224,6 +225,28 @@ class ProjectContext:
             return cached
 
         project_name = root_path.name
+
+        # Strategy 0: .fixonce/metadata.json (PORTABLE - highest priority)
+        # This ensures the same project_id is used when project is cloned/moved
+        try:
+            from core.committed_knowledge import get_project_metadata, get_or_create_project_metadata
+
+            existing_metadata = get_project_metadata(str(root_path))
+            if existing_metadata and existing_metadata.get("project_id"):
+                project_id = existing_metadata["project_id"]
+                identity = ProjectIdentity(
+                    project_id=project_id,
+                    strategy="fixonce_portable",
+                    source_value=str(root_path / ".fixonce" / "metadata.json"),
+                    project_name=existing_metadata.get("name", project_name)
+                )
+                _log_context("Resolved", project_id, "fixonce_portable")
+                cls._cache[cache_key] = identity
+                return identity
+        except ImportError:
+            pass  # Fall through to git strategies
+        except Exception as e:
+            _log_context(f".fixonce check error: {e}", "", "error")
 
         # Strategy 1: Git remote
         remote_url, repo_root = cls._get_git_info(str(root_path))
@@ -258,18 +281,33 @@ class ProjectContext:
             _log_context("Resolved", project_id, "git_local")
 
         else:
-            # No git - use UUID
-            project_uuid = cls._get_or_create_uuid(str(root_path))
-            uuid_hash = hashlib.md5(project_uuid.encode()).hexdigest()[:12]
-            project_id = f"{project_name}_{uuid_hash}"
+            # No git - create .fixonce/metadata.json for portability
+            try:
+                from core.committed_knowledge import get_or_create_project_metadata
+                metadata = get_or_create_project_metadata(str(root_path))
+                project_id = metadata["project_id"]
 
-            identity = ProjectIdentity(
-                project_id=project_id,
-                strategy="uuid",
-                source_value=project_uuid,
-                project_name=project_name
-            )
-            _log_context("Resolved", project_id, "uuid")
+                identity = ProjectIdentity(
+                    project_id=project_id,
+                    strategy="fixonce_created",
+                    source_value=str(root_path / ".fixonce" / "metadata.json"),
+                    project_name=metadata.get("name", project_name)
+                )
+                _log_context("Resolved", project_id, "fixonce_created")
+            except Exception as e:
+                # Fallback to legacy UUID if .fixonce creation fails
+                _log_context(f".fixonce creation failed: {e}", "", "fallback")
+                project_uuid = cls._get_or_create_uuid(str(root_path))
+                uuid_hash = hashlib.md5(project_uuid.encode()).hexdigest()[:12]
+                project_id = f"{project_name}_{uuid_hash}"
+
+                identity = ProjectIdentity(
+                    project_id=project_id,
+                    strategy="uuid_fallback",
+                    source_value=project_uuid,
+                    project_name=project_name
+                )
+                _log_context("Resolved", project_id, "uuid_fallback")
 
         # Cache result
         cls._cache[cache_key] = identity

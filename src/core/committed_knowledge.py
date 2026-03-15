@@ -416,6 +416,111 @@ session.json
     return fixonce_dir
 
 
+# ============================================================
+# PROJECT METADATA (Portable Identity)
+# ============================================================
+
+def get_project_metadata(working_dir: str) -> Optional[Dict[str, Any]]:
+    """
+    Read project metadata from .fixonce/metadata.json.
+
+    This is the portable project identity that travels with the repo.
+    Contains project_id that remains stable across machines.
+
+    Returns:
+        Metadata dict or None if not found
+    """
+    fixonce_dir = get_fixonce_dir(working_dir)
+    metadata_path = fixonce_dir / "metadata.json"
+
+    if not metadata_path.exists():
+        return None
+
+    try:
+        if SAFE_FILE_AVAILABLE:
+            return atomic_json_read(str(metadata_path), default=None)
+        else:
+            with open(metadata_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception:
+        return None
+
+
+def get_or_create_project_metadata(working_dir: str, display_name: str = None) -> Dict[str, Any]:
+    """
+    Get existing metadata or create new metadata for a project.
+
+    This ensures every project has a stable project_id that:
+    - Is stored IN the project (not derived from path)
+    - Remains the same when cloned to another machine
+    - Is human-readable (name_uuid format)
+
+    Args:
+        working_dir: Project root directory
+        display_name: Optional display name (defaults to folder name)
+
+    Returns:
+        Metadata dict with project_id, name, created_at, etc.
+    """
+    import uuid
+
+    # Check for existing metadata
+    existing = get_project_metadata(working_dir)
+    if existing and existing.get("project_id"):
+        return existing
+
+    # Create new metadata
+    folder_name = Path(working_dir).name
+    name = display_name or folder_name
+
+    # Generate stable project_id: name_uuid8
+    # UUID is random, not path-based, so it's truly portable
+    project_uuid = uuid.uuid4().hex[:8]
+    project_id = f"{folder_name}_{project_uuid}"
+
+    metadata = {
+        "fixonce_version": FIXONCE_VERSION,
+        "project_id": project_id,
+        "name": name,
+        "created_at": datetime.now().isoformat(),
+        "working_dir_original": working_dir,  # For reference only, not used for identity
+    }
+
+    # Write metadata
+    fixonce_dir = ensure_fixonce_dir(working_dir)
+    metadata_path = fixonce_dir / "metadata.json"
+
+    try:
+        if SAFE_FILE_AVAILABLE:
+            atomic_json_write(str(metadata_path), metadata, create_backup=False)
+        else:
+            with open(metadata_path, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[CommittedKnowledge] Failed to write metadata: {e}")
+
+    return metadata
+
+
+def get_portable_project_id(working_dir: str) -> Optional[str]:
+    """
+    Get the portable project_id from .fixonce/metadata.json.
+
+    This is the PREFERRED way to get project_id - it's stable across machines.
+    Falls back to None if .fixonce doesn't exist (new project).
+
+    Args:
+        working_dir: Project root directory
+
+    Returns:
+        project_id string or None
+    """
+    metadata = get_project_metadata(working_dir)
+    if metadata:
+        return metadata.get("project_id")
+    return None
+
+
 def _get_decision_key(d: Dict[str, Any]) -> str:
     """Get unique key for a decision (for diff comparison)."""
     return d.get("decision", "")[:100]
