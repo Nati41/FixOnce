@@ -11,6 +11,7 @@ from datetime import datetime
 
 from flask import Flask, send_file, jsonify, request, make_response
 from flask_cors import CORS
+from werkzeug.serving import make_server
 
 # MCP import - may fail if mcp package has issues
 try:
@@ -387,25 +388,26 @@ def _run_flask():
     global ACTUAL_PORT
 
     try:
-        ACTUAL_PORT = find_available_port(DEFAULT_PORT)
+        requested_port = find_available_port(DEFAULT_PORT)
     except RuntimeError as e:
         print(f"[WARNING] {e}")
         print("   Kill other processes or free up a port.")
         return
 
-    # Update status module with actual port
-    set_actual_port(ACTUAL_PORT)
-
-    # Save port to file so Extension can find it
-    port_file = DATA_DIR / "current_port.txt"
-    port_file.write_text(str(ACTUAL_PORT))
+    server = make_server("0.0.0.0", requested_port, flask_app)
+    ACTUAL_PORT = int(server.server_port)
 
     if ACTUAL_PORT != DEFAULT_PORT:
         print()
         print(f"\033[1;33m⚠️  Port {DEFAULT_PORT} busy. FixOnce is live on http://localhost:{ACTUAL_PORT}\033[0m")
         print()
 
-    flask_app.run(host="0.0.0.0", port=ACTUAL_PORT, debug=False, use_reloader=False)
+    # Update the discovered port after the server socket is actually bound.
+    set_actual_port(ACTUAL_PORT)
+    port_file = DATA_DIR / "current_port.txt"
+    port_file.write_text(str(ACTUAL_PORT))
+
+    server.serve_forever()
 
 
 # ---------------------------------------------------------------------------
