@@ -1028,10 +1028,14 @@ def open_web_installer():
 
     # Delete old port file to ensure we get fresh port
     if port_file.exists():
+        print(f"  Removing old port file...")
         port_file.unlink()
 
-    # Check if server already running
+    # Check if server already running (scan ports 5000-5009)
+    print(f"  Checking for running server...")
     is_running, port = check_server_health(5000, max_attempts=2)
+    if is_running:
+        print(f"  Found existing server on port {port}")
 
     if not is_running:
         print(f"  Starting FixOnce server...")
