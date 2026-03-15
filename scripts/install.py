@@ -1019,19 +1019,26 @@ def open_web_installer():
     """Open the web-based installer in browser."""
     print(f"\n{Colors.BLUE}[INSTALLER]{Colors.END} Opening FixOnce installer...")
 
+    import time
     fixonce_dir = get_fixonce_dir()
     current_platform = get_platform()
     server_script = fixonce_dir / "src" / "server.py"
+    port_file = fixonce_dir / "data" / "current_port.txt"
+    log_file = fixonce_dir / "data" / "server_startup.log"
 
-    # Start server if not running
+    # Delete old port file to ensure we get fresh port
+    if port_file.exists():
+        port_file.unlink()
+
+    # Check if server already running
     is_running, port = check_server_health(5000, max_attempts=2)
+
     if not is_running:
         print(f"  Starting FixOnce server...")
 
-        # Write server output to log file for debugging
-        log_file = fixonce_dir / "data" / "server_startup.log"
+        # Start server with logging
         with open(log_file, 'w') as log:
-            process = subprocess.Popen(
+            subprocess.Popen(
                 [sys.executable, str(server_script), '--flask-only'],
                 stdout=log,
                 stderr=subprocess.STDOUT,
@@ -1039,29 +1046,36 @@ def open_web_installer():
                 start_new_session=True
             )
 
-        # Wait for server to start (check port file first, then health)
-        import time
-        port_file = fixonce_dir / "data" / "current_port.txt"
-        for _ in range(30):  # Wait up to 15 seconds
+        # Wait for port file (server writes this immediately on startup)
+        print(f"  Waiting for server...")
+        for i in range(30):  # 15 seconds max
             if port_file.exists():
                 try:
                     port = int(port_file.read_text().strip())
-                    # Verify server is responding
-                    is_running, port = check_server_health(port, max_attempts=3)
-                    if is_running:
-                        break
+                    print(f"  Server starting on port {port}...")
+                    break
                 except (ValueError, IOError):
                     pass
             time.sleep(0.5)
         else:
-            # Show log on failure
-            print(f"  {Colors.RED}[ERROR]{Colors.END} Server failed to start")
+            print(f"  {Colors.RED}[ERROR]{Colors.END} Server didn't write port file")
             if log_file.exists():
-                print(f"  Check log: {log_file}")
-                with open(log_file) as f:
-                    for line in f.readlines()[-10:]:
-                        print(f"    {line.rstrip()}")
+                print(f"  Log: {log_file}")
             return False
+
+        # Wait for server to respond
+        for i in range(20):  # 10 seconds max
+            try:
+                import urllib.request
+                req = urllib.request.urlopen(f"http://localhost:{port}/api/health", timeout=1)
+                if req.status == 200:
+                    print(f"  {Colors.GREEN}[OK]{Colors.END} Server running on port {port}")
+                    break
+            except Exception:
+                pass
+            time.sleep(0.5)
+        else:
+            print(f"  {Colors.YELLOW}[WARN]{Colors.END} Server may still be starting...")
 
     # Open installer in browser
     installer_url = f"http://localhost:{port}/install"
