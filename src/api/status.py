@@ -170,20 +170,25 @@ def api_health():
     if not EXTENSION_CONNECTED:
         issues.append("Chrome extension not connected")
 
-    # Check 6: Active project
+    # Check 6: Active project (no project is a valid state)
     try:
-        active_file = DATA_DIR / "active_project.json"
-        if active_file.exists():
-            import json
-            with open(active_file, encoding='utf-8') as f:
-                active = json.load(f)
+        from core.system_status import _check_project
+        project_status = _check_project()
+
+        if project_status.has_project:
             health["checks"]["active_project"] = {
                 "status": "ok",
-                "project_id": active.get("active_id"),
-                "working_dir": active.get("working_dir")
+                "project_id": project_status.project_id,
+                "project_name": project_status.project_name,
+                "working_dir": project_status.working_dir
             }
         else:
-            health["checks"]["active_project"] = {"status": "warning", "message": "No active project"}
+            # No active project is valid - not a warning
+            health["checks"]["active_project"] = {
+                "status": "info",
+                "message": "No active project",
+                "project_count": project_status.project_count
+            }
     except Exception as e:
         health["checks"]["active_project"] = {"status": "error", "error": str(e)}
 
@@ -193,6 +198,18 @@ def api_health():
         health["issues"] = issues
 
     return jsonify(health)
+
+
+@status_bp.route("/system/status", methods=["GET"])
+def api_system_status():
+    """
+    Unified system status - single source of truth.
+
+    This endpoint returns the complete system status in one call.
+    Use this for dashboard initialization and status checks.
+    """
+    from core.system_status import get_status_for_dashboard
+    return jsonify(get_status_for_dashboard())
 
 
 @status_bp.route("/system/mode", methods=["GET"])
