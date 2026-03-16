@@ -113,7 +113,7 @@ def dashboard():
     if not _is_installed():
         return redirect("/install")
 
-    dashboard_path = DATA_DIR / "dashboard_lite.html"
+    dashboard_path = DATA_DIR / "dashboard.html"
     return _send_dashboard_file(dashboard_path)
 
 
@@ -134,10 +134,11 @@ def install_wizard():
 
 @flask_app.route("/next")
 @flask_app.route("/vnext")
-def dashboard_vnext():
-    """Redirect to lite dashboard (vnext disabled)."""
+@flask_app.route("/lite")
+def dashboard_legacy_redirects():
+    """Redirect legacy routes to main dashboard."""
     from flask import redirect
-    return redirect("/lite")
+    return redirect("/")
 
 
 @flask_app.route("/app")
@@ -145,13 +146,6 @@ def dashboard_app():
     """Serve the compact app dashboard (for native window)."""
     app_path = DATA_DIR / "dashboard_app.html"
     return _send_dashboard_file(app_path)
-
-
-@flask_app.route("/lite")
-def dashboard_lite():
-    """Serve the minimal Dashboard Lite."""
-    lite_path = DATA_DIR / "dashboard_lite.html"
-    return _send_dashboard_file(lite_path)
 
 
 @flask_app.route("/test-error")
