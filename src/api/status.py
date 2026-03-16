@@ -86,6 +86,20 @@ def _is_dev_mode() -> bool:
     return env_flag or flask_env or runtime_flag or loopback_host
 
 
+def _paths_share_project_scope(path_a: str, path_b: str) -> bool:
+    """Return True when two paths are the same project root or nested within each other."""
+    if not path_a or not path_b:
+        return False
+
+    try:
+        resolved_a = os.path.realpath(path_a)
+        resolved_b = os.path.realpath(path_b)
+        common = os.path.commonpath([resolved_a, resolved_b])
+        return common == resolved_a or common == resolved_b
+    except Exception:
+        return False
+
+
 def _dev_only_guard():
     if _is_dev_mode():
         return None
@@ -310,6 +324,15 @@ def api_dashboard_snapshot():
             "persona": None,
             "compliance_percent": None,
             "reason": None
+        },
+        "protocol_watchdog": {
+            "out_of_protocol": False,
+            "reason": "",
+            "active_project_path": None,
+            "observed_working_dir": None,
+            "observed_project_id": None,
+            "timestamp": None,
+            "actor": None
         },
         "system_mode": {
             "mode": "full",
@@ -738,6 +761,7 @@ def api_dashboard_snapshot():
                     activity_data = json.load(f)
 
                 activities = activity_data.get("activities", [])[:50]  # First 50 (newest first)
+                latest_observed = None
 
                 # Get active project ID for filtering
                 active_project_id = None
@@ -749,6 +773,17 @@ def api_dashboard_snapshot():
 
                 for act in activities:
                     act_project_id = act.get("project_id", "__global__")
+                    observed_cwd = (act.get("cwd") or "").strip()
+                    observed_file = (act.get("file") or "").strip()
+                    observed_path = observed_cwd or (os.path.dirname(observed_file) if observed_file else "")
+
+                    if not latest_observed and observed_path:
+                        latest_observed = {
+                            "path": observed_path,
+                            "project_id": act_project_id,
+                            "timestamp": act.get("timestamp"),
+                            "actor": act.get("editor") or act.get("actor") or "unknown"
+                        }
 
                     # Include activity if:
                     # 1. It's from the active project, OR
@@ -773,6 +808,23 @@ def api_dashboard_snapshot():
 
                 # Limit to 30 activities (already in newest-first order)
                 snapshot["activity"] = snapshot["activity"][:30]
+
+                active_path = snapshot["environment"].get("working_dir")
+                if latest_observed:
+                    snapshot["protocol_watchdog"].update({
+                        "observed_working_dir": latest_observed["path"],
+                        "observed_project_id": latest_observed["project_id"],
+                        "timestamp": latest_observed["timestamp"],
+                        "actor": latest_observed["actor"],
+                        "active_project_path": active_path
+                    })
+
+                    if not active_path:
+                        snapshot["protocol_watchdog"]["out_of_protocol"] = True
+                        snapshot["protocol_watchdog"]["reason"] = "no_active_project"
+                    elif not _paths_share_project_scope(latest_observed["path"], active_path):
+                        snapshot["protocol_watchdog"]["out_of_protocol"] = True
+                        snapshot["protocol_watchdog"]["reason"] = "working_dir_mismatch"
         except Exception:
             pass
 
@@ -982,5 +1034,4 @@ def api_mark_stable(name):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
