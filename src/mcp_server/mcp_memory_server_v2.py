@@ -521,12 +521,18 @@ def _persist_ai_connection(actor_identity: Dict[str, Any], project_id: Optional[
             "actor_source": actor_identity.get("source", "fallback"),
             "actor_confidence": actor_identity.get("confidence", 0.0),
             "project_id": project_id,
+            "connected": True,
         }
+
+        # Ensure parent directory exists
+        AI_CONNECTIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
         with open(AI_CONNECTIONS_FILE, 'w', encoding='utf-8') as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
+
+        _log(f"[MCP] AI connection persisted: {editor} -> {AI_CONNECTIONS_FILE}")
     except Exception as e:
-        _log(f"[MCP] Failed to persist AI connection: {e}")
+        _log(f"[MCP] Failed to persist AI connection: {e} (path: {AI_CONNECTIONS_FILE})")
 
 
 def _recover_session() -> Optional[tuple]:
