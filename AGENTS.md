@@ -5,7 +5,7 @@ This IS the FixOnce project itself - a persistent memory layer for AI coding ass
 ## On Session Start
 
 ```
-auto_init_session()  # Uses current working directory automatically
+auto_init_session()  # Mandatory before other FixOnce work
 ```
 
 ## Project Structure

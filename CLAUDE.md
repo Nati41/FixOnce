@@ -1,6 +1,6 @@
 # FixOnce — AI Memory Layer
 
-> FixOnce never blocks development. It only enhances it.
+> FixOnce is mandatory for tracked work in this project.
 
 ## Disable
 
@@ -8,10 +8,12 @@ If the user says "work without FixOnce" or "no fixonce" — stop calling all MCP
 
 ## Session Start
 
-Try: `init_session(working_dir="/path/to/project")` or `init_session(port=5000)`
+Mandatory first step: `auto_init_session(cwd="/path/to/project")`
 
-**If it works** — show context and follow rules below.
-**If it fails** — proceed normally.
+Fallback: `init_session(working_dir="/path/to/project")` or `init_session(port=5000)`
+
+Do not continue with other FixOnce tools until session initialization succeeds.
+If initialization fails, surface the failure and resolve it before continuing tracked work.
 
 ---
 
@@ -27,6 +29,12 @@ Try: `init_session(working_dir="/path/to/project")` or `init_session(port=5000)`
 ## New Project (status: NEW)
 
 Ask "Want me to scan?" → `scan_project()` → save with `update_live_record`
+
+## Enforcement
+
+- FixOnce is in mandatory enforcement mode for MCP usage.
+- Non-init FixOnce tools are blocked until explicit session initialization occurs.
+- Do not bypass FixOnce by starting tracked work without an active session.
 
 ## Tools
 
