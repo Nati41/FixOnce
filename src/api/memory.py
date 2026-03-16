@@ -64,7 +64,14 @@ def api_add_decision():
 
     try:
         from managers.project_memory_manager import log_decision
-        result = log_decision(decision, reason, data.get("context", ""))
+        result = log_decision(
+            decision,
+            reason,
+            context=data.get("context", ""),
+            modules=data.get("modules"),
+            files=data.get("files"),
+            tags=data.get("tags")
+        )
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500

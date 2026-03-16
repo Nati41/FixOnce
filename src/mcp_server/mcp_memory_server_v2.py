@@ -2521,7 +2521,26 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
     decisions = [d for d in all_decisions if not d.get('superseded')]
     superseded_count = len(all_decisions) - len(decisions)
 
-    if decisions:
+    # LAYER 2: Contextual filtering - prioritize relevant decisions
+    lr = data.get('live_record', {}) if data else {}
+    last_file = lr.get('intent', {}).get('last_file', '')
+    work_area = lr.get('intent', {}).get('work_area', '')
+
+    # Apply contextual filter
+    contextual_decisions = _filter_decisions_by_context(
+        decisions,
+        current_file=last_file,
+        current_module=work_area
+    )
+
+    # If filtering reduced too much, include some global decisions
+    if len(contextual_decisions) < 3 and len(decisions) > len(contextual_decisions):
+        global_decisions = [d for d in decisions if not d.get('scope')]
+        for gd in global_decisions:
+            if gd not in contextual_decisions:
+                contextual_decisions.append(gd)
+
+    if contextual_decisions:
         lines.append("---")
         lines.append("## 🚨 ACTIVE DECISIONS - YOU MUST RESPECT THESE")
         lines.append("")
@@ -2530,7 +2549,7 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
         lines.append("")
         # MCP DIET: Limit to 8 most recent decisions (same as _format_init_response)
         MAX_DECISIONS = 8
-        decisions_to_show = decisions[-MAX_DECISIONS:]
+        decisions_to_show = contextual_decisions[-MAX_DECISIONS:]
         for dec in decisions_to_show:
             # Truncate long decisions
             dec_text = dec.get('decision', '')[:100]
@@ -2538,9 +2557,13 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
             lines.append(f"🔒 **{dec_text}**")
             lines.append(f"   _Reason: {reason_text}_")
             lines.append("")
-        hidden_count = len(decisions) - len(decisions_to_show) + superseded_count
-        if hidden_count > 0:
-            lines.append(f"_(...{hidden_count} more decisions. Use `get_policy_status()` for full list)_")
+        # Show count: contextual shown + hidden contextual + other scoped
+        hidden_contextual = len(contextual_decisions) - len(decisions_to_show)
+        other_scoped = len(decisions) - len(contextual_decisions)
+        total_hidden = hidden_contextual + other_scoped + superseded_count
+        if total_hidden > 0:
+            scope_note = f" ({other_scoped} scoped to other modules)" if other_scoped > 0 else ""
+            lines.append(f"_(...{total_hidden} more decisions{scope_note}. Use `get_policy_status()` for full list)_")
             lines.append("")
         lines.append("---")
         lines.append("")
@@ -3061,7 +3084,27 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
         decisions = [d for d in all_decisions if not d.get('superseded')]
         superseded_count = len(all_decisions) - len(decisions)
 
-        if decisions:
+        # LAYER 2: Contextual filtering - prioritize relevant decisions
+        lr = data.get('live_record', {})
+        last_file = lr.get('intent', {}).get('last_file', '')
+        work_area = lr.get('intent', {}).get('work_area', '')
+
+        # Apply contextual filter
+        contextual_decisions = _filter_decisions_by_context(
+            decisions,
+            current_file=last_file,
+            current_module=work_area
+        )
+
+        # If filtering reduced too much, include some global decisions
+        if len(contextual_decisions) < 3 and len(decisions) > len(contextual_decisions):
+            # Add global decisions (no scope) that weren't already included
+            global_decisions = [d for d in decisions if not d.get('scope')]
+            for gd in global_decisions:
+                if gd not in contextual_decisions:
+                    contextual_decisions.append(gd)
+
+        if contextual_decisions:
             lines.append("---")
             lines.append("## 🚨 ACTIVE DECISIONS - YOU MUST RESPECT THESE")
             lines.append("")
@@ -3070,7 +3113,7 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
             lines.append("")
             # MCP DIET: Limit to 8 most recent decisions
             MAX_DECISIONS = 8
-            decisions_to_show = decisions[-MAX_DECISIONS:]
+            decisions_to_show = contextual_decisions[-MAX_DECISIONS:]
             for dec in decisions_to_show:
                 # Truncate long decisions
                 dec_text = dec.get('decision', '')[:100]
@@ -3078,9 +3121,14 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
                 lines.append(f"🔒 **{dec_text}**")
                 lines.append(f"   _Reason: {reason_text}_")
                 lines.append("")
-            hidden_count = len(decisions) - len(decisions_to_show) + superseded_count
-            if hidden_count > 0:
-                lines.append(f"_(...{hidden_count} more decisions. Use `get_policy_status()` for full list)_")
+            # Show count: contextual shown + hidden contextual + other scoped (not shown)
+            hidden_contextual = len(contextual_decisions) - len(decisions_to_show)
+            other_scoped = len(decisions) - len(contextual_decisions)
+            total_hidden = hidden_contextual + other_scoped + superseded_count
+
+            if total_hidden > 0:
+                scope_note = f" ({other_scoped} scoped to other modules)" if other_scoped > 0 else ""
+                lines.append(f"_(...{total_hidden} more decisions{scope_note}. Use `get_policy_status()` for full list)_")
                 lines.append("")
             lines.append("---")
             lines.append("")
@@ -3637,8 +3685,88 @@ def get_live_record() -> str:
     return context + json.dumps(summarized, indent=2, ensure_ascii=False)
 
 
+def _filter_decisions_by_context(
+    decisions: list,
+    current_file: str = None,
+    current_module: str = None
+) -> list:
+    """
+    Filter decisions by contextual relevance.
+
+    Layer 2 Contextual Memory: Returns only decisions relevant to the current context.
+    Decisions without scope are considered "global" and always included.
+
+    Args:
+        decisions: List of decision entries
+        current_file: File being edited (e.g., "server.py", "src/api/status.py")
+        current_module: Module context (e.g., "api", "dashboard", "installer")
+
+    Returns:
+        Filtered list of relevant decisions (global + context-matched)
+    """
+    if not decisions:
+        return []
+
+    # Extract filename from path if needed
+    if current_file and "/" in current_file:
+        filename = current_file.split("/")[-1]
+        # Also extract module from path (e.g., "src/api/status.py" -> "api")
+        parts = current_file.split("/")
+        if len(parts) >= 2:
+            path_module = parts[-2] if parts[-2] != "src" else (parts[-3] if len(parts) >= 3 else None)
+        else:
+            path_module = None
+    else:
+        filename = current_file
+        path_module = None
+
+    relevant = []
+    for d in decisions:
+        # Skip superseded decisions
+        if d.get("superseded"):
+            continue
+
+        scope = d.get("scope")
+
+        # No scope = global decision, always include
+        if not scope:
+            relevant.append(d)
+            continue
+
+        # Check module match
+        if current_module and scope.get("modules"):
+            if current_module.lower() in [m.lower() for m in scope["modules"]]:
+                relevant.append(d)
+                continue
+
+        # Check path-derived module match
+        if path_module and scope.get("modules"):
+            if path_module.lower() in [m.lower() for m in scope["modules"]]:
+                relevant.append(d)
+                continue
+
+        # Check file match
+        if current_file and scope.get("files"):
+            scope_files = [f.lower() for f in scope["files"]]
+            if filename and filename.lower() in scope_files:
+                relevant.append(d)
+                continue
+            if current_file.lower() in scope_files:
+                relevant.append(d)
+                continue
+
+    return relevant
+
+
 @mcp.tool()
-def log_decision(decision: str, reason: str, force: bool = False) -> str:
+def log_decision(
+    decision: str,
+    reason: str,
+    force: bool = False,
+    modules: list = None,
+    files: list = None,
+    tags: list = None
+) -> str:
     """
     Log an architectural decision. Decisions NEVER decay - they are permanent.
 
@@ -3646,9 +3774,15 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
         decision: The decision text
         reason: Why this decision was made
         force: If True, override conflict detection and log anyway
+        modules: Optional list of relevant modules (e.g., ["api", "core", "dashboard"])
+        files: Optional list of relevant files (e.g., ["server.py", "status.py"])
+        tags: Optional list of tags (e.g., ["#stability", "#ui", "#performance"])
 
     Returns:
         Success message or BLOCK message if conflict detected
+
+    Scope metadata enables contextual filtering - decisions will surface
+    only when AI works on relevant modules/files.
     """
     error, context = _universal_gate("log_decision")
     if error:
@@ -3694,15 +3828,28 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
                 policy_message = f"\n⚠️ **Similar decision exists:** {existing.get('decision', '')[:60]}..."
                 break
 
+    # Build scope metadata (only include non-empty fields)
+    scope = {}
+    if modules:
+        scope["modules"] = modules
+    if files:
+        scope["files"] = files
+    if tags:
+        scope["tags"] = tags
+
     # Log the decision
-    memory['decisions'].append({
+    entry = {
         "type": "decision",
         "decision": decision,
         "reason": reason,
         "timestamp": datetime.now().isoformat(),
         "importance": "permanent",
         "forced": force if force else None
-    })
+    }
+    if scope:
+        entry["scope"] = scope
+
+    memory['decisions'].append(entry)
 
     _save_project(session.project_id, memory)
 

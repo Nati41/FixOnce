@@ -787,7 +787,14 @@ MAX_DECISIONS = 20
 MAX_AVOID = 10
 
 
-def log_decision(decision: str, reason: str, context: str = "") -> Dict[str, Any]:
+def log_decision(
+    decision: str,
+    reason: str,
+    context: str = "",
+    modules: list = None,
+    files: list = None,
+    tags: list = None
+) -> Dict[str, Any]:
     """
     Log an architectural or design decision.
 
@@ -795,6 +802,9 @@ def log_decision(decision: str, reason: str, context: str = "") -> Dict[str, Any
         decision: What was decided (e.g., "Use Redux instead of Context")
         reason: Why this decision was made
         context: Optional additional context
+        modules: Optional list of relevant modules (e.g., ["api", "core"])
+        files: Optional list of relevant files (e.g., ["server.py"])
+        tags: Optional list of tags (e.g., ["#stability", "#ui"])
 
     Returns:
         Status of the operation
@@ -812,6 +822,15 @@ def log_decision(decision: str, reason: str, context: str = "") -> Dict[str, Any
             if existing['decision'].lower() == decision_lower:
                 return {"status": "exists", "message": "Similar decision already logged"}
 
+        # Build scope metadata (only include non-empty fields)
+        scope = {}
+        if modules:
+            scope["modules"] = modules
+        if files:
+            scope["files"] = files
+        if tags:
+            scope["tags"] = tags
+
         # Add new decision with used_by_ai tracking
         entry = {
             "id": f"dec_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -822,6 +841,9 @@ def log_decision(decision: str, reason: str, context: str = "") -> Dict[str, Any
             "used_by_ai": False,  # Track if AI actually used this
             "use_count": 0  # How many times AI referenced this
         }
+        if scope:
+            entry["scope"] = scope
+
         memory['decisions'].append(entry)
 
         # Keep only the most recent MAX_DECISIONS
