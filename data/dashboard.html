@@ -1317,7 +1317,7 @@ function setStatus(id, status, text) {
 }
 
 function relativeTime(timestamp) {
-  if (!timestamp) return 'Never seen';
+  if (!timestamp) return 'Not used yet';
   const then = new Date(timestamp).getTime();
   if (Number.isNaN(then)) return 'Seen recently';
   const diffMs = Date.now() - then;
@@ -1346,7 +1346,10 @@ function renderAIConnections(clients) {
     const configured = client.configured
       ? ['green', client.config_scope === 'project' ? 'Project config' : 'Global config']
       : ['yellow', 'Not configured'];
-    const live = client.connected ? ['green', 'Live'] : (client.last_seen ? ['yellow', 'Idle'] : ['red', 'No heartbeat']);
+    // Simplified: show activity status based on last_seen, no fake "heartbeat"
+    const live = client.connected
+      ? ['green', 'Active now']
+      : (client.last_seen ? ['yellow', 'Last: ' + relativeTime(client.last_seen).replace('Seen ', '')] : ['gray', 'Waiting']);
     const key = (client.name || '').toLowerCase().includes('claude')
       ? 'claude'
       : (client.name || '').toLowerCase();
