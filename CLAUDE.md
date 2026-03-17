@@ -1,30 +1,50 @@
 # FixOnce — AI Memory Layer
 
 > FixOnce is mandatory for tracked work in this project.
+> **DOGFOODING RULE**: This IS the FixOnce project. AI MUST demonstrate proper usage.
 
 ## Disable
 
 If the user says "work without FixOnce" or "no fixonce" — stop calling all MCP tools. Work normally.
 
-## Session Start
+## 🚨 CRITICAL: Session Start (FIRST THING!)
 
-Mandatory first step: `auto_init_session(cwd="/path/to/project")`
+**BEFORE ANY OTHER RESPONSE**, call:
+```
+auto_init_session(cwd="/Users/haimdayan/Desktop/FixOnce")
+```
 
-Fallback: `init_session(working_dir="/path/to/project")` or `init_session(port=5000)`
+This is NOT optional. Do NOT skip this step. Do NOT respond to the user before calling this.
 
-Do not continue with other FixOnce tools until session initialization succeeds.
-If initialization fails, surface the failure and resolve it before continuing tracked work.
+If initialization fails, fix it before doing anything else.
+
+---
+
+## 🎯 Goal Update (MANDATORY)
+
+**EVERY TIME the user gives a new task**, IMMEDIATELY call:
+```
+update_work_context(current_goal="...", work_area="...")
+```
+
+The Dashboard shows the Goal in real-time. A stale Goal = protocol violation.
+
+Examples:
+- User asks to fix installer → `update_work_context(current_goal="Fix installer port detection")`
+- User asks about tests → `update_work_context(current_goal="Review test results")`
+- User asks to add feature → `update_work_context(current_goal="Add [feature name]")`
 
 ---
 
 ## When Active
 
-- **Smart sync**: Check `get_live_record()` at key moments: session start, before significant code changes, when user mentions rules changed
+- **Smart sync**: Check `get_live_record()` at key moments
 - **Respect decisions** returned from init. Ask before contradicting.
-- **Update goal** before work: `update_live_record("intent", ...)`
+- **Update goal** before work: `update_work_context(current_goal=...)`
 - **Log insights**: `update_live_record("lessons", ...)`
 - **Log decisions**: `log_decision("...", "...")`
 - **Search first**: `search_past_solutions("...")`
+- **After changes**: `update_work_context(last_change="...", last_file="...")`
 
 ## New Project (status: NEW)
 
