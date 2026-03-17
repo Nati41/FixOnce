@@ -346,17 +346,34 @@ EOF
 start_and_open() {
     log "${BLUE}Starting FixOnce server...${NC}"
 
-    # Wait for server to start
-    sleep 2
+    CURRENT_USER=$(whoami)
 
-    # Find the running port
-    PORT=5000
-    for p in 5000 5001 5002 5003 5004; do
-        if curl -s "http://localhost:$p/api/ping" 2>/dev/null | grep -q "fixonce"; then
-            PORT=$p
-            break
+    # Wait for server to start
+    sleep 3
+
+    # Find OUR running port (verify ownership)
+    PORT=""
+    for p in 5000 5001 5002 5003 5004 5005 5006 5007 5008 5009; do
+        RESPONSE=$(curl -s "http://localhost:$p/api/ping" 2>/dev/null)
+        if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
+            OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
+            if [ "$OWNER" = "$CURRENT_USER" ]; then
+                PORT=$p
+                break
+            else
+                log "${YELLOW}!${NC} Port $p in use by user: $OWNER"
+            fi
         fi
     done
+
+    if [ -z "$PORT" ]; then
+        log "${RED}✗${NC} Server failed to start - no available port"
+        return 1
+    fi
+
+    # Save port to config
+    mkdir -p "$HOME/.fixonce"
+    echo "{\"port\": $PORT, \"user\": \"$CURRENT_USER\"}" > "$HOME/.fixonce/config.json"
 
     log "${GREEN}✓${NC} Server running on port $PORT"
 
@@ -377,15 +394,51 @@ create_cli() {
 
     cat > "$CLI_SCRIPT" << 'CLISCRIPT'
 #!/bin/bash
-# FixOnce CLI
+# FixOnce CLI - Multi-user aware
 
 FIXONCE_DIR="$HOME/FixOnce"
 PLIST="$HOME/Library/LaunchAgents/com.fixonce.server.plist"
+CONFIG_FILE="$HOME/.fixonce/config.json"
+CURRENT_USER=$(whoami)
+
+# Find our port (checks user ownership via /api/ping)
+find_my_port() {
+    # First check saved config
+    if [ -f "$CONFIG_FILE" ]; then
+        SAVED_PORT=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('port', ''))" 2>/dev/null)
+        if [ -n "$SAVED_PORT" ]; then
+            # Verify it's ours
+            OWNER=$(curl -s "http://localhost:$SAVED_PORT/api/ping" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
+            if [ "$OWNER" = "$CURRENT_USER" ]; then
+                echo "$SAVED_PORT"
+                return
+            fi
+        fi
+    fi
+
+    # Scan ports to find ours
+    for p in 5000 5001 5002 5003 5004 5005 5006 5007 5008 5009; do
+        RESPONSE=$(curl -s "http://localhost:$p/api/ping" 2>/dev/null)
+        if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
+            OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
+            if [ "$OWNER" = "$CURRENT_USER" ]; then
+                echo "$p"
+                return
+            fi
+        fi
+    done
+}
 
 case "$1" in
     start)
         launchctl load "$PLIST" 2>/dev/null
-        echo "FixOnce started"
+        sleep 2
+        PORT=$(find_my_port)
+        if [ -n "$PORT" ]; then
+            echo "FixOnce started on port $PORT"
+        else
+            echo "FixOnce started (finding port...)"
+        fi
         ;;
     stop)
         launchctl unload "$PLIST" 2>/dev/null
@@ -395,14 +448,32 @@ case "$1" in
         launchctl unload "$PLIST" 2>/dev/null
         sleep 1
         launchctl load "$PLIST"
-        echo "FixOnce restarted"
+        sleep 2
+        PORT=$(find_my_port)
+        echo "FixOnce restarted on port ${PORT:-?}"
         ;;
     status)
-        if curl -s "http://localhost:5000/api/ping" 2>/dev/null | grep -q "fixonce"; then
-            echo "FixOnce is running"
+        PORT=$(find_my_port)
+        if [ -n "$PORT" ]; then
+            echo "FixOnce is running on port $PORT (user: $CURRENT_USER)"
         else
-            echo "FixOnce is not running"
+            echo "FixOnce is not running for user $CURRENT_USER"
         fi
+        ;;
+    port)
+        # Show port status for all users
+        echo "Port status:"
+        for p in 5000 5001 5002 5003 5004 5005; do
+            RESPONSE=$(curl -s "http://localhost:$p/api/ping" 2>/dev/null)
+            if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
+                OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
+                if [ "$OWNER" = "$CURRENT_USER" ]; then
+                    echo "  Port $p: FixOnce (yours)"
+                else
+                    echo "  Port $p: FixOnce (user: $OWNER)"
+                fi
+            fi
+        done
         ;;
     doctor)
         cd "$FIXONCE_DIR"
@@ -410,16 +481,25 @@ case "$1" in
         python scripts/install.py --doctor
         ;;
     dashboard)
-        for p in 5000 5001 5002 5003 5004; do
-            if curl -s "http://localhost:$p/api/ping" 2>/dev/null | grep -q "fixonce"; then
-                open "http://localhost:$p"
-                exit 0
-            fi
-        done
-        echo "FixOnce server not found. Try: fixonce start"
+        PORT=$(find_my_port)
+        if [ -n "$PORT" ]; then
+            open "http://localhost:$PORT"
+        else
+            echo "FixOnce server not found. Try: fixonce start"
+            exit 1
+        fi
         ;;
     *)
-        echo "Usage: fixonce {start|stop|restart|status|doctor|dashboard}"
+        echo "Usage: fixonce {start|stop|restart|status|port|doctor|dashboard}"
+        echo ""
+        echo "Commands:"
+        echo "  start      Start FixOnce server"
+        echo "  stop       Stop FixOnce server"
+        echo "  restart    Restart FixOnce server"
+        echo "  status     Show if FixOnce is running"
+        echo "  port       Show port allocation for all users"
+        echo "  doctor     Run diagnostics"
+        echo "  dashboard  Open dashboard in browser"
         exit 1
         ;;
 esac

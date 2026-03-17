@@ -30,26 +30,33 @@ from core.db_solutions import init_all_databases, find_solution_hybrid
 from api import register_blueprints, errors_bp
 from core.error_store import get_error_log, get_log_lock
 from api.status import set_actual_port, set_extension_connected
+from core.port_manager import (
+    find_available_port as pm_find_port,
+    set_preferred_port,
+    get_preferred_port,
+    is_port_available
+)
 
 # ---------------------------------------------------------------------------
-# Port Management
+# Port Management (uses core.port_manager for multi-user support)
 # ---------------------------------------------------------------------------
 ACTUAL_PORT = DEFAULT_PORT
 
 
 def is_port_in_use(port: int) -> bool:
     """Check if a port is already in use."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('localhost', port)) == 0
+    return not is_port_available(port)
 
 
 def find_available_port(start_port: int = DEFAULT_PORT, max_attempts: int = MAX_PORT_ATTEMPTS) -> int:
-    """Find an available port starting from start_port."""
-    for i in range(max_attempts):
-        port = start_port + i
-        if not is_port_in_use(port):
-            return port
-    raise RuntimeError(f"No available port found in range {start_port}-{start_port + max_attempts - 1}")
+    """Find an available port, respecting user's preferred port."""
+    # First try user's preferred port
+    preferred = get_preferred_port()
+    if preferred and is_port_available(preferred):
+        return preferred
+
+    # Use port manager's logic
+    return pm_find_port(preferred)
 
 
 # ---------------------------------------------------------------------------
@@ -398,6 +405,11 @@ def _run_flask():
 
     # Update the discovered port after the server socket is actually bound.
     set_actual_port(ACTUAL_PORT)
+
+    # Save port to multiple locations for different consumers:
+    # 1. User-specific config (~/.fixonce/config.json) - for multi-user isolation
+    set_preferred_port(ACTUAL_PORT)
+    # 2. Project data dir (for legacy/backup)
     port_file = DATA_DIR / "current_port.txt"
     port_file.write_text(str(ACTUAL_PORT))
 
