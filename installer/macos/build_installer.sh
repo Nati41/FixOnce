@@ -53,9 +53,9 @@ cat > "$CONTENTS/Info.plist" << 'PLIST'
     <key>CFBundleIdentifier</key>
     <string>com.fixonce.installer</string>
     <key>CFBundleVersion</key>
-    <string>1.0.1</string>
+    <string>1.0.2</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.1</string>
+    <string>1.0.2</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
@@ -238,18 +238,65 @@ install_dependencies() {
 
     cd "$INSTALL_DIR"
 
+    # Verify requirements.txt exists
+    if [ ! -f "$INSTALL_DIR/requirements.txt" ]; then
+        log "${RED}✗${NC} requirements.txt not found!"
+        show_error "Installation failed: requirements.txt missing.\n\nPlease re-download the installer."
+        exit 1
+    fi
+
     # Create virtual environment if it doesn't exist
     if [ ! -d "$INSTALL_DIR/venv" ]; then
-        python3 -m venv venv
+        log "  Creating virtual environment..."
+        if ! python3 -m venv "$INSTALL_DIR/venv"; then
+            log "${RED}✗${NC} Failed to create virtual environment"
+            show_error "Installation failed: Could not create Python virtual environment.\n\nMake sure Python 3 is properly installed."
+            exit 1
+        fi
         log "${GREEN}✓${NC} Created virtual environment"
     fi
 
-    # Activate and install
-    source venv/bin/activate
-    pip install --upgrade pip -q
-    pip install -r requirements.txt -q
+    # Use absolute paths for venv python/pip
+    VENV_PYTHON="$INSTALL_DIR/venv/bin/python3"
+    VENV_PIP="$INSTALL_DIR/venv/bin/pip"
 
-    log "${GREEN}✓${NC} Dependencies installed"
+    # Verify venv python exists
+    if [ ! -f "$VENV_PYTHON" ]; then
+        log "${RED}✗${NC} venv Python not found at $VENV_PYTHON"
+        show_error "Installation failed: Virtual environment is corrupted.\n\nTry deleting ~/FixOnce/venv and reinstalling."
+        exit 1
+    fi
+
+    # Upgrade pip first
+    log "  Upgrading pip..."
+    if ! "$VENV_PYTHON" -m pip install --upgrade pip 2>&1 | tee -a "$LOG_FILE"; then
+        log "${YELLOW}!${NC} pip upgrade failed (continuing anyway)"
+    fi
+
+    # Install dependencies with explicit path and error checking
+    log "  Installing dependencies from requirements.txt..."
+    if ! "$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements.txt" 2>&1 | tee -a "$LOG_FILE"; then
+        log "${RED}✗${NC} pip install failed!"
+        show_error "Installation failed: Could not install Python dependencies.\n\nCheck the log at:\n$LOG_FILE\n\nCommon fixes:\n• Check internet connection\n• Try: pip install flask flask-cors"
+        exit 1
+    fi
+
+    # Verify critical packages are installed
+    log "  Verifying installation..."
+    MISSING_PACKAGES=""
+    for pkg in flask flask_cors; do
+        if ! "$VENV_PYTHON" -c "import $pkg" 2>/dev/null; then
+            MISSING_PACKAGES="$MISSING_PACKAGES $pkg"
+        fi
+    done
+
+    if [ -n "$MISSING_PACKAGES" ]; then
+        log "${RED}✗${NC} Missing packages:$MISSING_PACKAGES"
+        show_error "Installation incomplete: Some packages failed to install.\n\nMissing:$MISSING_PACKAGES\n\nTry running:\n$VENV_PIP install$MISSING_PACKAGES"
+        exit 1
+    fi
+
+    log "${GREEN}✓${NC} Dependencies installed and verified"
 }
 
 # ============================================================
@@ -394,12 +441,57 @@ create_cli() {
 
     cat > "$CLI_SCRIPT" << 'CLISCRIPT'
 #!/bin/bash
-# FixOnce CLI - Multi-user aware
+# FixOnce CLI - Multi-user aware with self-healing
 
 FIXONCE_DIR="$HOME/FixOnce"
+VENV_PYTHON="$FIXONCE_DIR/venv/bin/python3"
+VENV_PIP="$FIXONCE_DIR/venv/bin/pip"
 PLIST="$HOME/Library/LaunchAgents/com.fixonce.server.plist"
 CONFIG_FILE="$HOME/.fixonce/config.json"
 CURRENT_USER=$(whoami)
+
+# Check if dependencies are installed
+check_deps() {
+    if [ ! -f "$VENV_PYTHON" ]; then
+        echo "ERROR: Virtual environment not found at $FIXONCE_DIR/venv"
+        echo "Try reinstalling FixOnce."
+        return 1
+    fi
+
+    MISSING=""
+    for pkg in flask flask_cors; do
+        if ! "$VENV_PYTHON" -c "import $pkg" 2>/dev/null; then
+            MISSING="$MISSING $pkg"
+        fi
+    done
+
+    if [ -n "$MISSING" ]; then
+        echo "WARNING: Missing Python packages:$MISSING"
+        return 1
+    fi
+    return 0
+}
+
+# Self-healing: install missing dependencies
+repair_deps() {
+    echo "Repairing dependencies..."
+    if [ ! -f "$FIXONCE_DIR/requirements.txt" ]; then
+        echo "ERROR: requirements.txt not found"
+        return 1
+    fi
+
+    echo "Running: pip install -r requirements.txt"
+    "$VENV_PYTHON" -m pip install -r "$FIXONCE_DIR/requirements.txt"
+
+    if check_deps; then
+        echo "Dependencies repaired successfully!"
+        return 0
+    else
+        echo "Repair failed. Try manual fix:"
+        echo "  $VENV_PIP install flask flask-cors mcp requests"
+        return 1
+    fi
+}
 
 # Find our port (checks user ownership via /api/ping)
 find_my_port() {
@@ -407,7 +499,6 @@ find_my_port() {
     if [ -f "$CONFIG_FILE" ]; then
         SAVED_PORT=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('port', ''))" 2>/dev/null)
         if [ -n "$SAVED_PORT" ]; then
-            # Verify it's ours
             OWNER=$(curl -s "http://localhost:$SAVED_PORT/api/ping" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
             if [ "$OWNER" = "$CURRENT_USER" ]; then
                 echo "$SAVED_PORT"
@@ -431,13 +522,25 @@ find_my_port() {
 
 case "$1" in
     start)
+        # Check deps before starting
+        if ! check_deps; then
+            echo ""
+            read -p "Would you like to repair dependencies? [y/N] " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                repair_deps || exit 1
+            else
+                exit 1
+            fi
+        fi
+
         launchctl load "$PLIST" 2>/dev/null
         sleep 2
         PORT=$(find_my_port)
         if [ -n "$PORT" ]; then
             echo "FixOnce started on port $PORT"
         else
-            echo "FixOnce started (finding port...)"
+            echo "FixOnce may have failed to start. Check: fixonce doctor"
         fi
         ;;
     stop)
@@ -458,10 +561,13 @@ case "$1" in
             echo "FixOnce is running on port $PORT (user: $CURRENT_USER)"
         else
             echo "FixOnce is not running for user $CURRENT_USER"
+            # Check if it's a dependency issue
+            if ! check_deps; then
+                echo "Run 'fixonce repair' to fix missing dependencies"
+            fi
         fi
         ;;
     port)
-        # Show port status for all users
         echo "Port status:"
         for p in 5000 5001 5002 5003 5004 5005; do
             RESPONSE=$(curl -s "http://localhost:$p/api/ping" 2>/dev/null)
@@ -475,22 +581,34 @@ case "$1" in
             fi
         done
         ;;
+    repair)
+        repair_deps
+        ;;
     doctor)
+        # Check deps first
+        if ! check_deps; then
+            echo "Dependencies missing - attempting repair first..."
+            repair_deps
+        fi
         cd "$FIXONCE_DIR"
-        source venv/bin/activate
-        python scripts/install.py --doctor
+        "$VENV_PYTHON" scripts/install.py --doctor
         ;;
     dashboard)
         PORT=$(find_my_port)
         if [ -n "$PORT" ]; then
             open "http://localhost:$PORT"
         else
-            echo "FixOnce server not found. Try: fixonce start"
+            echo "FixOnce server not found."
+            if ! check_deps; then
+                echo "Dependencies missing. Run: fixonce repair"
+            else
+                echo "Try: fixonce start"
+            fi
             exit 1
         fi
         ;;
     *)
-        echo "Usage: fixonce {start|stop|restart|status|port|doctor|dashboard}"
+        echo "Usage: fixonce {start|stop|restart|status|port|repair|doctor|dashboard}"
         echo ""
         echo "Commands:"
         echo "  start      Start FixOnce server"
@@ -498,6 +616,7 @@ case "$1" in
         echo "  restart    Restart FixOnce server"
         echo "  status     Show if FixOnce is running"
         echo "  port       Show port allocation for all users"
+        echo "  repair     Reinstall Python dependencies"
         echo "  doctor     Run diagnostics"
         echo "  dashboard  Open dashboard in browser"
         exit 1
