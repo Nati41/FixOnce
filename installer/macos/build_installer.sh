@@ -53,9 +53,9 @@ cat > "$CONTENTS/Info.plist" << 'PLIST'
     <key>CFBundleIdentifier</key>
     <string>com.fixonce.installer</string>
     <key>CFBundleVersion</key>
-    <string>1.0.2</string>
+    <string>1.0.3</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.2</string>
+    <string>1.0.3</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
@@ -387,47 +387,97 @@ EOF
 }
 
 # ============================================================
-# Start Server & Open Dashboard
+# Start Server & Open Dashboard (Smart Launch)
 # ============================================================
 
 start_and_open() {
     log "${BLUE}Starting FixOnce server...${NC}"
 
     CURRENT_USER=$(whoami)
-
-    # Wait for server to start
-    sleep 3
-
-    # Find OUR running port (verify ownership)
     PORT=""
-    for p in 5000 5001 5002 5003 5004 5005 5006 5007 5008 5009; do
-        RESPONSE=$(curl -s "http://localhost:$p/api/ping" 2>/dev/null)
-        if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
-            OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
-            if [ "$OWNER" = "$CURRENT_USER" ]; then
-                PORT=$p
-                break
-            else
-                log "${YELLOW}!${NC} Port $p in use by user: $OWNER"
+    MAX_ATTEMPTS=15
+    ATTEMPT=0
+
+    # Method 1: Read port from server's port file (most reliable)
+    PORT_FILE="$INSTALL_DIR/data/current_port.txt"
+
+    log "  Waiting for server to start..."
+
+    while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+        ATTEMPT=$((ATTEMPT + 1))
+        sleep 1
+
+        # Check if port file was written by server
+        if [ -f "$PORT_FILE" ]; then
+            FILE_PORT=$(cat "$PORT_FILE" 2>/dev/null)
+            if [ -n "$FILE_PORT" ]; then
+                # Verify this port is responding and belongs to us
+                RESPONSE=$(curl -s "http://localhost:$FILE_PORT/api/ping" 2>/dev/null)
+                if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
+                    OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
+                    if [ "$OWNER" = "$CURRENT_USER" ]; then
+                        PORT=$FILE_PORT
+                        log "  Found server on port $PORT (from port file)"
+                        break
+                    fi
+                fi
             fi
+        fi
+
+        # Method 2: Scan ports if port file not ready
+        for p in 5000 5001 5002 5003 5004 5005 5006 5007 5008 5009; do
+            RESPONSE=$(curl -s --connect-timeout 1 "http://localhost:$p/api/ping" 2>/dev/null)
+            if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
+                OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
+                if [ "$OWNER" = "$CURRENT_USER" ]; then
+                    PORT=$p
+                    log "  Found server on port $PORT (from scan)"
+                    break 2
+                fi
+            fi
+        done
+
+        # Show progress
+        if [ $((ATTEMPT % 3)) -eq 0 ]; then
+            log "  Still waiting... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
         fi
     done
 
     if [ -z "$PORT" ]; then
-        log "${RED}✗${NC} Server failed to start - no available port"
+        log "${RED}✗${NC} Server failed to start after $MAX_ATTEMPTS seconds"
+        log "  Check logs: $INSTALL_DIR/data/server.error.log"
+
+        # Show last error
+        if [ -f "$INSTALL_DIR/data/server.error.log" ]; then
+            log "  Last error:"
+            tail -5 "$INSTALL_DIR/data/server.error.log" | while read line; do
+                log "    $line"
+            done
+        fi
+
+        show_error "Server failed to start.\n\nTry running in terminal:\n$INSTALL_DIR/fixonce doctor"
         return 1
     fi
 
-    # Save port to config
+    # Save port to user config (source of truth for CLI)
     mkdir -p "$HOME/.fixonce"
-    echo "{\"port\": $PORT, \"user\": \"$CURRENT_USER\"}" > "$HOME/.fixonce/config.json"
+    cat > "$HOME/.fixonce/config.json" << EOF
+{
+  "port": $PORT,
+  "user": "$CURRENT_USER",
+  "install_dir": "$INSTALL_DIR",
+  "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+EOF
 
     log "${GREEN}✓${NC} Server running on port $PORT"
 
-    # Open dashboard
-    open "http://localhost:$PORT"
+    # Open dashboard with the CORRECT port
+    DASHBOARD_URL="http://localhost:$PORT"
+    log "  Opening: $DASHBOARD_URL"
+    open "$DASHBOARD_URL"
 
-    log "${GREEN}✓${NC} Dashboard opened"
+    log "${GREEN}✓${NC} Dashboard opened at $DASHBOARD_URL"
 }
 
 # ============================================================
