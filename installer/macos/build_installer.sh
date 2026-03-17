@@ -53,9 +53,9 @@ cat > "$CONTENTS/Info.plist" << 'PLIST'
     <key>CFBundleIdentifier</key>
     <string>com.fixonce.installer</string>
     <key>CFBundleVersion</key>
-    <string>1.0.3</string>
+    <string>1.0.4</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.3</string>
+    <string>1.0.4</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
@@ -284,16 +284,36 @@ install_dependencies() {
     # Verify critical packages are installed
     log "  Verifying installation..."
     MISSING_PACKAGES=""
-    for pkg in flask flask_cors; do
+    # Check all critical packages including mcp and fastmcp
+    for pkg in flask flask_cors mcp requests; do
         if ! "$VENV_PYTHON" -c "import $pkg" 2>/dev/null; then
             MISSING_PACKAGES="$MISSING_PACKAGES $pkg"
         fi
     done
 
+    # Also check fastmcp which is needed for MCP server
+    if ! "$VENV_PYTHON" -c "from fastmcp import FastMCP" 2>/dev/null; then
+        MISSING_PACKAGES="$MISSING_PACKAGES fastmcp"
+    fi
+
     if [ -n "$MISSING_PACKAGES" ]; then
         log "${RED}✗${NC} Missing packages:$MISSING_PACKAGES"
-        show_error "Installation incomplete: Some packages failed to install.\n\nMissing:$MISSING_PACKAGES\n\nTry running:\n$VENV_PIP install$MISSING_PACKAGES"
-        exit 1
+        log "  Attempting manual install..."
+        # Try to install missing packages
+        "$VENV_PYTHON" -m pip install $MISSING_PACKAGES 2>&1 | tee -a "$LOG_FILE"
+
+        # Re-verify
+        STILL_MISSING=""
+        for pkg in flask flask_cors mcp requests; do
+            if ! "$VENV_PYTHON" -c "import $pkg" 2>/dev/null; then
+                STILL_MISSING="$STILL_MISSING $pkg"
+            fi
+        done
+
+        if [ -n "$STILL_MISSING" ]; then
+            show_error "Installation incomplete: Some packages failed to install.\n\nMissing:$STILL_MISSING\n\nTry running:\n$VENV_PIP install flask flask-cors mcp fastmcp requests"
+            exit 1
+        fi
     fi
 
     log "${GREEN}✓${NC} Dependencies installed and verified"

@@ -1,42 +1,68 @@
 """
 FixOnce Configuration
 Central configuration for all server components.
+
+MULTI-USER ARCHITECTURE:
+- INSTALL_DATA_DIR: Installation assets (dashboard.html, templates) - shared, read-only
+- USER_DATA_DIR: Per-user data (~/.fixonce/) - private, read-write
+- DATA_DIR: Legacy alias pointing to USER_DATA_DIR for compatibility
 """
 
 import sys
+import os
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Paths
+# Paths - Multi-User Safe
 # ---------------------------------------------------------------------------
 SRC_DIR = Path(__file__).parent
 PROJECT_ROOT = SRC_DIR.parent
 
-# Use Windows bootstrap for EXE mode, local data/ for development
+# Installation data directory (templates, dashboard, static files)
+# This is shared across users - READ ONLY
+INSTALL_DATA_DIR = PROJECT_ROOT / "data"
+
+# User-specific data directory (~/.fixonce/)
+# This is private per user - READ/WRITE
+def get_user_data_dir() -> Path:
+    """Get the user-specific data directory."""
+    user_dir = Path.home() / ".fixonce"
+    user_dir.mkdir(exist_ok=True)
+    return user_dir
+
+# Use Windows bootstrap for EXE mode, user home for normal operation
 if getattr(sys, 'frozen', False):
     # Running as PyInstaller EXE - import bootstrap module
     try:
         from src.windows_bootstrap import get_data_dir
-        DATA_DIR = get_data_dir()
+        USER_DATA_DIR = get_data_dir()
     except ImportError:
         from windows_bootstrap import get_data_dir
-        DATA_DIR = get_data_dir()
+        USER_DATA_DIR = get_data_dir()
 else:
-    # Running as script (development)
-    DATA_DIR = PROJECT_ROOT / "data"
+    # Running as script - use user's home directory
+    USER_DATA_DIR = get_user_data_dir()
+
+# DATA_DIR now points to USER data (private per user)
+# For templates/dashboard, use INSTALL_DATA_DIR
+DATA_DIR = USER_DATA_DIR
+
+# Ensure user data directory exists with subdirectories
+(USER_DATA_DIR / "projects_v2").mkdir(exist_ok=True)
+(USER_DATA_DIR / "logs").mkdir(exist_ok=True)
 
 # Legacy alias for compatibility
 SERVER_DIR = SRC_DIR
 
-# Database paths
-PERSONAL_DB_PATH = DATA_DIR / "personal_solutions.db"
-TEAM_DB_PATH = None  # Set to a shared path for team DB, e.g.: Path("/shared/team_solutions.db")
+# Database paths - USER SPECIFIC
+PERSONAL_DB_PATH = USER_DATA_DIR / "personal_solutions.db"
+TEAM_DB_PATH = None  # Set to a shared path for team DB
 
-# Memory file
-MEMORY_FILE = DATA_DIR / "project_memory.json"
+# Memory file - USER SPECIFIC
+MEMORY_FILE = USER_DATA_DIR / "project_memory.json"
 
-# Template file
-MEMORY_TEMPLATE = DATA_DIR / "project_memory.template.json"
+# Template file - from INSTALLATION (read-only)
+MEMORY_TEMPLATE = INSTALL_DATA_DIR / "project_memory.template.json"
 
 # ---------------------------------------------------------------------------
 # Server Configuration

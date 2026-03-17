@@ -25,7 +25,7 @@ except ImportError as e:
 # Add server directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import VERSION, APP_NAME, DEFAULT_PORT, MAX_PORT_ATTEMPTS, DATA_DIR, PROJECT_ROOT as PROJECT_DIR
+from config import VERSION, APP_NAME, DEFAULT_PORT, MAX_PORT_ATTEMPTS, DATA_DIR, INSTALL_DATA_DIR, PROJECT_ROOT as PROJECT_DIR
 from core.db_solutions import init_all_databases, find_solution_hybrid
 from api import register_blueprints, errors_bp
 from core.error_store import get_error_log, get_log_lock
@@ -76,9 +76,11 @@ except ImportError as e:
 # Flask Application
 # ---------------------------------------------------------------------------
 # Configure Flask with data directory for templates and static files
+# Flask serves static files from INSTALL directory (dashboard, templates)
+# User data goes to USER_DATA_DIR (~/.fixonce/)
 flask_app = Flask(__name__,
-                  template_folder=str(DATA_DIR),
-                  static_folder=str(DATA_DIR))
+                  template_folder=str(INSTALL_DATA_DIR),
+                  static_folder=str(INSTALL_DATA_DIR))
 CORS(flask_app)
 
 # Register all route blueprints
@@ -120,7 +122,7 @@ def dashboard():
     if not _is_installed():
         return redirect("/install")
 
-    dashboard_path = DATA_DIR / "dashboard.html"
+    dashboard_path = INSTALL_DATA_DIR / "dashboard.html"
     return _send_dashboard_file(dashboard_path)
 
 
@@ -133,7 +135,7 @@ def install_wizard():
     if _is_installed():
         return redirect("/")
 
-    installer_path = DATA_DIR / "installer.html"
+    installer_path = INSTALL_DATA_DIR / "installer.html"
     if installer_path.exists():
         return _send_dashboard_file(installer_path)
     return "Installer not found", 404
@@ -151,21 +153,21 @@ def dashboard_legacy_redirects():
 @flask_app.route("/app")
 def dashboard_app():
     """Serve the compact app dashboard (for native window)."""
-    app_path = DATA_DIR / "dashboard_app.html"
+    app_path = INSTALL_DATA_DIR / "dashboard_app.html"
     return _send_dashboard_file(app_path)
 
 
 @flask_app.route("/test-error")
 def test_error_page():
     """Serve test error page for debugging error capture."""
-    test_path = DATA_DIR / "test_error.html"
+    test_path = INSTALL_DATA_DIR / "test_error.html"
     return _send_dashboard_file(test_path)
 
 
 @flask_app.route("/logo.png")
 def serve_logo():
     """Serve the FixOnce logo."""
-    logo_path = DATA_DIR / "logo.png"
+    logo_path = INSTALL_DATA_DIR / "logo.png"
     if logo_path.exists():
         return send_file(logo_path, mimetype='image/png')
     # Fallback - return 404
@@ -175,7 +177,7 @@ def serve_logo():
 @flask_app.route("/app-icon.png")
 def serve_app_icon():
     """Serve the FixOnce app icon."""
-    icon_path = DATA_DIR / "app-icon.png"
+    icon_path = INSTALL_DATA_DIR / "app-icon.png"
     if icon_path.exists():
         return send_file(icon_path, mimetype='image/png')
     return "App icon not found", 404
@@ -184,7 +186,7 @@ def serve_app_icon():
 @flask_app.route("/fixonce-logo.svg")
 def serve_fixonce_logo():
     """Serve the FixOnce SVG logo."""
-    logo_path = DATA_DIR / "fixonce_logo.svg"
+    logo_path = INSTALL_DATA_DIR / "fixonce_logo.svg"
     if logo_path.exists():
         return send_file(logo_path, mimetype='image/svg+xml')
     return "FixOnce logo not found", 404

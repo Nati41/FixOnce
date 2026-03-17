@@ -317,15 +317,30 @@ except ImportError as e:
     BOUNDARY_DETECTION_ENABLED = False
     _log(f"[MCP] Boundary detection not available: {e}")
 
-# Data directory
-DATA_DIR = SRC_DIR.parent / "data" / "projects_v2"
+# ===========================================================================
+# MULTI-USER DATA PATHS
+# All user data goes to ~/.fixonce/ - NEVER to installation directory
+# ===========================================================================
+def _get_user_data_dir() -> Path:
+    """Get user-specific data directory (~/.fixonce/)."""
+    user_dir = Path.home() / ".fixonce"
+    user_dir.mkdir(exist_ok=True)
+    return user_dir
+
+USER_DATA_DIR = _get_user_data_dir()
+
+# Data directory for projects - USER SPECIFIC
+DATA_DIR = USER_DATA_DIR / "projects_v2"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Project index file (for caching)
-INDEX_FILE = SRC_DIR.parent / "data" / "project_index.json"
+# Project index file - USER SPECIFIC
+INDEX_FILE = USER_DATA_DIR / "project_index.json"
 
-# Global on/off toggle (controlled by dashboard)
-ENABLED_FLAG_FILE = SRC_DIR.parent / "data" / "fixonce_enabled.json"
+# Global on/off toggle - USER SPECIFIC
+ENABLED_FLAG_FILE = USER_DATA_DIR / "fixonce_enabled.json"
+
+# Installation data directory (for reading templates only)
+INSTALL_DATA_DIR = SRC_DIR.parent / "data"
 
 
 def _is_fixonce_enabled() -> bool:
@@ -460,10 +475,10 @@ _compliance_state = {
 }
 
 
-# Session persistence file (survives MCP restarts)
-SESSION_FILE = SRC_DIR.parent / "data" / "mcp_session.json"
-COMPLIANCE_FILE = SRC_DIR.parent / "data" / "mcp_compliance.json"
-AI_CONNECTIONS_FILE = SRC_DIR.parent / "data" / "ai_connections.json"
+# Session persistence files - USER SPECIFIC
+SESSION_FILE = USER_DATA_DIR / "mcp_session.json"
+COMPLIANCE_FILE = USER_DATA_DIR / "mcp_compliance.json"
+AI_CONNECTIONS_FILE = USER_DATA_DIR / "ai_connections.json"
 
 
 def _persist_compliance():
@@ -1877,7 +1892,7 @@ def _find_and_migrate_legacy_project(new_project_id: str, working_dir: str) -> O
 
 def _get_recent_activity_summary(working_dir: str, limit: int = 5) -> str:
     """Get recent activity summary for init_session response."""
-    activity_file = SRC_DIR.parent / "data" / "activity_log.json"
+    activity_file = USER_DATA_DIR / "activity_log.json"
 
     if not activity_file.exists():
         return ""
@@ -1930,10 +1945,8 @@ def _get_recent_activity_summary(working_dir: str, limit: int = 5) -> str:
 def _get_active_port_from_dashboard() -> Optional[int]:
     """Read active project port from dashboard."""
     try:
-        active_file = DATA_DIR.parent.parent / "data" / "active_project.json"
-        if not active_file.exists():
-            # Try alternate location
-            active_file = SRC_DIR.parent / "data" / "active_project.json"
+        # User-specific active project file
+        active_file = USER_DATA_DIR / "active_project.json"
 
         if active_file.exists():
             with open(active_file, 'r') as f:
@@ -2124,7 +2137,7 @@ def _is_valid_project_dir(path: str) -> bool:
 def _get_working_dir_from_recent_activity() -> Optional[str]:
     """Get the most recent project directory from activity log."""
     try:
-        activity_file = SRC_DIR.parent / "data" / "activity_log.json"
+        activity_file = USER_DATA_DIR / "activity_log.json"
         if not activity_file.exists():
             return None
 
@@ -5036,7 +5049,7 @@ def get_recent_activity(limit: int = 10) -> str:
         Recent activity list with timestamps and human-readable names
     """
     session = _get_session()
-    activity_file = SRC_DIR.parent / "data" / "activity_log.json"
+    activity_file = USER_DATA_DIR / "activity_log.json"
 
     if not activity_file.exists():
         return "No activity log found."
