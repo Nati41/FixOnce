@@ -13,6 +13,13 @@ import subprocess
 import re
 from pathlib import Path
 
+# FastMCP environment settings
+# FASTMCP_CHECK_FOR_UPDATES accepts: 'stable', 'prerelease', 'off' (NOT 'true'/'false')
+FASTMCP_ENV = {
+    "FASTMCP_SHOW_CLI_BANNER": "false",
+    "FASTMCP_CHECK_FOR_UPDATES": "off",
+}
+
 # Colors for terminal (work on both platforms with colorama fallback)
 class Colors:
     HEADER = '\033[95m'
@@ -89,11 +96,7 @@ def _build_stdio_mcp_config(command: str, server_path: str, pythonpath: str, fas
         return {
             "command": fastmcp_path,
             "args": ["run", server_path, "--transport", "stdio", "--no-banner"],
-            "env": {
-                "PYTHONPATH": pythonpath,
-                "FASTMCP_SHOW_CLI_BANNER": "false",
-                "FASTMCP_CHECK_FOR_UPDATES": "false"
-            }
+            "env": {"PYTHONPATH": pythonpath, **FASTMCP_ENV}
         }
 
     return {

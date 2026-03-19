@@ -1,4 +1,4 @@
 """FixOnce Version"""
 
-__version__ = "1.0.4"
+__version__ = "1.0.10"
 VERSION = __version__

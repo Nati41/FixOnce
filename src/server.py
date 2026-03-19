@@ -103,13 +103,17 @@ def _is_installed() -> bool:
     """Check if FixOnce installation is complete."""
     install_state = DATA_DIR / "install_state.json"
     if not install_state.exists():
+        print(f"[DEBUG] _is_installed: {install_state} does not exist → False")
         return False
     try:
         import json
         with open(install_state, 'r') as f:
             state = json.load(f)
-        return state.get("installed", False)
-    except Exception:
+        result = state.get("installed", False)
+        print(f"[DEBUG] _is_installed: {install_state} → installed={result}")
+        return result
+    except Exception as e:
+        print(f"[DEBUG] _is_installed: {install_state} error: {e} → False")
         return False
 
 

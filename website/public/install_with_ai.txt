@@ -1,0 +1,185 @@
+# FixOnce AI Installation
+
+Install FixOnce on this machine. Follow these steps exactly. Do NOT skip any step. Do NOT silently ignore failures.
+
+## Step 1: Detect Environment
+
+1. Detect OS (macOS, Linux, or Windows)
+2. Find Python executable:
+   ```bash
+   python3 --version
+   ```
+3. Verify version is >= 3.10
+
+**STOP RULE:** If Python version < 3.10 or Python not found:
+- Tell user: "Python 3.10 or newer is required. Install from https://python.org/downloads"
+- Do NOT proceed further
+
+## Step 2: Locate FixOnce
+
+Find the FixOnce directory. Check these locations:
+- ~/Downloads/FixOnce
+- ~/Desktop/FixOnce
+- Current working directory
+
+If not found, ask user: "Where did you extract FixOnce?"
+
+**STOP RULE:** Verify requirements.txt exists:
+```bash
+ls <fixonce_directory>/requirements.txt
+```
+If missing, tell user: "requirements.txt not found. FixOnce may be incomplete or corrupted."
+
+Also verify these files exist:
+- src/server.py
+- src/mcp_server/mcp_memory_server_v2.py
+
+## Step 3: Create Virtual Environment
+
+```bash
+cd <fixonce_directory>
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+## Step 4: Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+**Import Validation:** After install, verify these imports work:
+```python
+python3 -c "import flask; import flask_cors; import requests; import fastmcp; print('All imports OK')"
+```
+
+If any import fails:
+- Report which package failed
+- Suggest: `pip install <package_name>`
+- Do NOT proceed until all imports succeed
+
+## Step 5: Start Server
+
+```bash
+cd <fixonce_directory>/src
+python server.py --flask-only &
+```
+
+Wait 3 seconds, then verify server is running:
+```bash
+curl -s http://localhost:5000/api/health || curl -s http://localhost:5001/api/health
+```
+
+**Port Handling:**
+- Default port is 5000
+- If port 5000 is busy, server will try 5001, 5002, ... up to 5009
+- Check actual port from server output or:
+  ```bash
+  cat <fixonce_directory>/data/current_port.txt
+  ```
+- Remember the actual port for the dashboard URL
+
+## Step 6: Configure MCP (CRITICAL - Follow Exactly)
+
+### MCP CONFIG SAFETY RULES:
+- NEVER write `FASTMCP_CHECK_FOR_UPDATES: "false"` - this value is INVALID and breaks MCP
+- Allowed values: `"stable"`, `"prerelease"`, `"off"`
+- ALWAYS use `"off"` as the default
+- ALWAYS create timestamped backup before modifying any config file
+- NEVER overwrite unrelated config entries
+- If existing JSON/TOML is invalid, STOP and tell user - do not corrupt further
+
+### Backup Command:
+```bash
+cp <config_file> <config_file>.backup_$(date +%Y%m%d_%H%M%S)
+```
+
+### For Claude Code:
+
+Check if CLI exists:
+```bash
+which claude
+```
+
+**If CLI exists (preferred):**
+```bash
+claude mcp remove fixonce -s user 2>/dev/null
+claude mcp add-json fixonce '{
+  "command": "fastmcp",
+  "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"],
+  "env": {
+    "PYTHONPATH": "<fixonce_dir>/src",
+    "FASTMCP_CHECK_FOR_UPDATES": "off"
+  }
+}' -s user
+```
+
+**If CLI doesn't exist (fallback to file):**
+1. Create backup of ~/.claude.json
+2. Read existing config (may be empty or not exist)
+3. Merge fixonce entry under mcpServers (do NOT overwrite other servers)
+4. Validate JSON syntax before writing
+5. Write updated config
+
+### For Cursor:
+
+1. Create backup of ~/.cursor/mcp.json if it exists
+2. Read or create config
+3. Merge fixonce entry under mcpServers
+4. Validate JSON
+5. Write config
+
+### For Codex:
+
+1. Create backup of ~/.codex/config.toml if it exists
+2. Add or update TOML section:
+```toml
+[mcp_servers.fixonce]
+command = "fastmcp"
+args = ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"]
+
+[mcp_servers.fixonce.env]
+PYTHONPATH = "<fixonce_dir>/src"
+FASTMCP_CHECK_FOR_UPDATES = "off"
+```
+
+## Step 7: Verify Installation
+
+```bash
+curl -s http://localhost:<actual_port>/api/health
+```
+
+Should return JSON containing `"status": "ok"` or similar success indicator.
+
+## Step 8: Report Final Status
+
+Tell user:
+
+```
+FixOnce Installation Complete
+
+Server: http://localhost:<actual_port>
+Dashboard: http://localhost:<actual_port>
+
+MCP configured for: [list which editors were configured]
+Backups created: [list backup files created]
+
+IMPORTANT - Connection Status:
+- MCP connection will NOT be active in this current session
+- You MUST open a NEW chat/session in your AI tool
+- In the new session, say "hi" and FixOnce will confirm connection
+
+Next Steps:
+1. Open a new Claude Code / Cursor / Codex session
+2. Navigate to any project directory
+3. Start chatting - FixOnce will remember everything
+```
+
+## Error Handling Rules
+
+- If ANY step fails, report the exact error message
+- Do NOT silently skip failures
+- Do NOT modify FixOnce source code
+- If JSON/TOML config is already corrupted, tell user and stop
+- Always report what was changed and where backups are located
+- If port detection fails, tell user to check server output manually

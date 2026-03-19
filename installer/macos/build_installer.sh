@@ -53,9 +53,9 @@ cat > "$CONTENTS/Info.plist" << 'PLIST'
     <key>CFBundleIdentifier</key>
     <string>com.fixonce.installer</string>
     <key>CFBundleVersion</key>
-    <string>1.0.4</string>
+    <string>1.0.10</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.4</string>
+    <string>1.0.10</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
@@ -150,18 +150,63 @@ ask_continue() {
 # Pre-flight Checks
 # ============================================================
 
+# Global: selected Python interpreter (set by preflight)
+SELECTED_PYTHON=""
+SELECTED_PYTHON_VERSION=""
+
 preflight() {
     log "${BLUE}Running pre-flight checks...${NC}"
 
-    # Check Python
-    if ! command -v python3 &> /dev/null; then
-        show_error "Python 3 is required but not installed.\n\nPlease install Python 3 from python.org or via Homebrew:\n\nbrew install python3"
+    # ========== PYTHON DISCOVERY ==========
+    # Find Python >= 3.10 with absolute path
+    # Priority: python3.13, python3.12, python3.11, python3.10, then python3 if version OK
+    log "  Searching for Python >= 3.10..."
+
+    PYTHON_CANDIDATES=(
+        "/usr/local/bin/python3.13"
+        "/opt/homebrew/bin/python3.13"
+        "/usr/local/bin/python3.12"
+        "/opt/homebrew/bin/python3.12"
+        "/usr/local/bin/python3.11"
+        "/opt/homebrew/bin/python3.11"
+        "/usr/local/bin/python3.10"
+        "/opt/homebrew/bin/python3.10"
+        "/usr/local/bin/python3"
+        "/opt/homebrew/bin/python3"
+        "/usr/bin/python3"
+    )
+
+    for candidate in "${PYTHON_CANDIDATES[@]}"; do
+        if [ -x "$candidate" ]; then
+            # Get version
+            VERSION=$("$candidate" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
+            MAJOR=$("$candidate" -c 'import sys; print(sys.version_info.major)' 2>/dev/null)
+            MINOR=$("$candidate" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null)
+
+            if [ -n "$MAJOR" ] && [ -n "$MINOR" ]; then
+                log "    Found: $candidate (Python $VERSION)"
+
+                # Check version >= 3.10
+                if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -ge 10 ]; then
+                    SELECTED_PYTHON="$candidate"
+                    SELECTED_PYTHON_VERSION="$VERSION"
+                    log "  ${GREEN}✓${NC} Selected: $SELECTED_PYTHON (Python $SELECTED_PYTHON_VERSION)"
+                    break
+                else
+                    log "    ${YELLOW}!${NC} Skipping $candidate (Python $VERSION < 3.10)"
+                fi
+            fi
+        fi
+    done
+
+    # Fail if no suitable Python found
+    if [ -z "$SELECTED_PYTHON" ]; then
+        log "${RED}✗${NC} No Python >= 3.10 found!"
+        show_error "Python 3.10 or higher is required.\n\nFound interpreters are too old.\n\nInstall Python 3.10+ from:\n• python.org\n• brew install python@3.12"
         exit 1
     fi
 
-    PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-    log "${GREEN}✓${NC} Python $PYTHON_VERSION found"
-
+    # ========== OTHER CHECKS ==========
     # Check if already installed
     if [ -d "$INSTALL_DIR" ]; then
         if ! ask_continue "FixOnce is already installed at:\n$INSTALL_DIR\n\nDo you want to upgrade/reinstall?"; then
@@ -191,42 +236,97 @@ preflight() {
 }
 
 # ============================================================
-# Installation
+# Installation (Complete Purge + Fresh Copy)
 # ============================================================
 
 install_files() {
     log "${BLUE}Installing FixOnce...${NC}"
 
-    # Create installation directory
+    # ========== COMPLETE PURGE ==========
+    # Remove any existing installation to ensure clean state
+    if [ -d "$INSTALL_DIR" ]; then
+        log "  Removing old installation at $INSTALL_DIR..."
+        rm -rf "$INSTALL_DIR"
+    fi
+
+    # Remove old CLI symlink
+    if [ -L "/usr/local/bin/fixonce" ] || [ -f "/usr/local/bin/fixonce" ]; then
+        log "  Removing old CLI symlink..."
+        rm -f "/usr/local/bin/fixonce" 2>/dev/null || sudo rm -f "/usr/local/bin/fixonce" 2>/dev/null || true
+    fi
+
+    # ========== FRESH INSTALL ==========
+    log "  Creating fresh installation directory..."
     mkdir -p "$INSTALL_DIR"
 
-    # Copy files
-    cp -R "$RESOURCES/src" "$INSTALL_DIR/"
-    cp -R "$RESOURCES/scripts" "$INSTALL_DIR/"
-    cp -R "$RESOURCES/data" "$INSTALL_DIR/"
-    cp -R "$RESOURCES/extension" "$INSTALL_DIR/" 2>/dev/null || true
-    cp "$RESOURCES/requirements.txt" "$INSTALL_DIR/"
-    cp "$RESOURCES/CLAUDE.md" "$INSTALL_DIR/" 2>/dev/null || true
+    # Copy ALL files using cp -a (preserves attributes, follows structure)
+    log "  Copying source files..."
+    cp -a "$RESOURCES/src" "$INSTALL_DIR/"
+    cp -a "$RESOURCES/scripts" "$INSTALL_DIR/"
+    cp -a "$RESOURCES/data" "$INSTALL_DIR/"
+    cp -a "$RESOURCES/extension" "$INSTALL_DIR/" 2>/dev/null || true
+    cp -a "$RESOURCES/requirements.txt" "$INSTALL_DIR/"
+    cp -a "$RESOURCES/CLAUDE.md" "$INSTALL_DIR/" 2>/dev/null || true
 
-    log "${GREEN}✓${NC} Files copied to $INSTALL_DIR"
+    # ========== VERIFY COPY ==========
+    log "  Verifying installation..."
 
-    # Create .fixonce directory if needed
+    # Check critical files exist
+    CRITICAL_FILES=(
+        "src/config.py"
+        "src/server.py"
+        "src/version.py"
+        "src/mcp_server/mcp_memory_server_v2.py"
+        "src/core/port_manager.py"
+        "scripts/install.py"
+        "requirements.txt"
+        "data/dashboard.html"
+    )
+
+    MISSING_FILES=""
+    for file in "${CRITICAL_FILES[@]}"; do
+        if [ ! -f "$INSTALL_DIR/$file" ]; then
+            MISSING_FILES="$MISSING_FILES\n  - $file"
+        fi
+    done
+
+    if [ -n "$MISSING_FILES" ]; then
+        log "${RED}✗${NC} Copy failed! Missing files:$MISSING_FILES"
+        show_error "Installation failed: Source files not copied correctly.\n\nMissing files:$MISSING_FILES\n\nPlease re-download the installer."
+        exit 1
+    fi
+
+    # Verify config.py has Path.home() (not hardcoded paths)
+    if ! grep -q "Path.home()" "$INSTALL_DIR/src/config.py"; then
+        log "${RED}✗${NC} config.py doesn't use Path.home() - wrong version!"
+        show_error "Installation failed: Wrong version of config.py bundled."
+        exit 1
+    fi
+
+    log "${GREEN}✓${NC} Files copied and verified at $INSTALL_DIR"
+
+    # ========== USER DATA DIRECTORY ==========
+    # Create user-specific data directory
+    USER_DATA="$HOME/.fixonce"
+    mkdir -p "$USER_DATA"
+    mkdir -p "$USER_DATA/projects_v2"
+    mkdir -p "$USER_DATA/logs"
+
+    log "${GREEN}✓${NC} User data directory created at $USER_DATA"
+
+    # Create .fixonce metadata in INSTALL_DIR for project detection
     mkdir -p "$INSTALL_DIR/.fixonce"
-
-    # Create metadata.json if not exists
-    if [ ! -f "$INSTALL_DIR/.fixonce/metadata.json" ]; then
-        PROJECT_ID="FixOnce_$(openssl rand -hex 4)"
-        cat > "$INSTALL_DIR/.fixonce/metadata.json" << EOF
+    PROJECT_ID="FixOnce_$(openssl rand -hex 4)"
+    cat > "$INSTALL_DIR/.fixonce/metadata.json" << EOF
 {
-  "fixonce_version": "1.0.0",
+  "fixonce_version": "1.0.10",
   "project_id": "$PROJECT_ID",
   "name": "FixOnce",
   "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "working_dir_original": "$INSTALL_DIR"
 }
 EOF
-        log "${GREEN}✓${NC} Created project metadata"
-    fi
+    log "${GREEN}✓${NC} Created project metadata"
 }
 
 # ============================================================
@@ -245,19 +345,23 @@ install_dependencies() {
         exit 1
     fi
 
-    # Create virtual environment if it doesn't exist
-    if [ ! -d "$INSTALL_DIR/venv" ]; then
-        log "  Creating virtual environment..."
-        if ! python3 -m venv "$INSTALL_DIR/venv"; then
-            log "${RED}✗${NC} Failed to create virtual environment"
-            show_error "Installation failed: Could not create Python virtual environment.\n\nMake sure Python 3 is properly installed."
-            exit 1
-        fi
-        log "${GREEN}✓${NC} Created virtual environment"
+    # Create virtual environment using SELECTED_PYTHON (set by preflight)
+    # Always recreate to ensure correct Python version
+    if [ -d "$INSTALL_DIR/venv" ]; then
+        log "  Removing old venv (may have wrong Python version)..."
+        rm -rf "$INSTALL_DIR/venv"
     fi
 
+    log "  Creating virtual environment with $SELECTED_PYTHON..."
+    if ! "$SELECTED_PYTHON" -m venv "$INSTALL_DIR/venv"; then
+        log "${RED}✗${NC} Failed to create virtual environment"
+        show_error "Installation failed: Could not create Python virtual environment.\n\nUsed: $SELECTED_PYTHON\n\nTry: brew install python@3.12"
+        exit 1
+    fi
+    log "${GREEN}✓${NC} Created virtual environment"
+
     # Use absolute paths for venv python/pip
-    VENV_PYTHON="$INSTALL_DIR/venv/bin/python3"
+    VENV_PYTHON="$INSTALL_DIR/venv/bin/python"
     VENV_PIP="$INSTALL_DIR/venv/bin/pip"
 
     # Verify venv python exists
@@ -266,6 +370,20 @@ install_dependencies() {
         show_error "Installation failed: Virtual environment is corrupted.\n\nTry deleting ~/FixOnce/venv and reinstalling."
         exit 1
     fi
+
+    # Verify venv Python version >= 3.10
+    VENV_VERSION=$("$VENV_PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
+    VENV_MAJOR=$("$VENV_PYTHON" -c 'import sys; print(sys.version_info.major)' 2>/dev/null)
+    VENV_MINOR=$("$VENV_PYTHON" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null)
+
+    log "  venv Python version: $VENV_VERSION"
+
+    if [ "$VENV_MAJOR" -ne 3 ] || [ "$VENV_MINOR" -lt 10 ]; then
+        log "${RED}✗${NC} venv Python $VENV_VERSION < 3.10 - fastmcp won't work!"
+        show_error "Virtual environment created with wrong Python.\n\nvenv Python: $VENV_VERSION (need >= 3.10)\n\nInstall Python 3.10+:\nbrew install python@3.12"
+        exit 1
+    fi
+    log "${GREEN}✓${NC} venv Python $VENV_VERSION >= 3.10"
 
     # Upgrade pip first
     log "  Upgrading pip..."
@@ -282,18 +400,47 @@ install_dependencies() {
     fi
 
     # Verify critical packages are installed
-    log "  Verifying installation..."
+    log "  Verifying packages..."
     MISSING_PACKAGES=""
-    # Check all critical packages including mcp and fastmcp
-    for pkg in flask flask_cors mcp requests; do
-        if ! "$VENV_PYTHON" -c "import $pkg" 2>/dev/null; then
-            MISSING_PACKAGES="$MISSING_PACKAGES $pkg"
-        fi
-    done
 
-    # Also check fastmcp which is needed for MCP server
-    if ! "$VENV_PYTHON" -c "from fastmcp import FastMCP" 2>/dev/null; then
+    # Check each package individually with logging
+    # flask
+    if "$VENV_PYTHON" -c "import flask" 2>/dev/null; then
+        log "    ${GREEN}✓${NC} flask"
+    else
+        log "    ${RED}✗${NC} flask"
+        MISSING_PACKAGES="$MISSING_PACKAGES flask"
+    fi
+
+    # flask_cors
+    if "$VENV_PYTHON" -c "from flask_cors import CORS" 2>/dev/null; then
+        log "    ${GREEN}✓${NC} flask-cors"
+    else
+        log "    ${RED}✗${NC} flask-cors"
+        MISSING_PACKAGES="$MISSING_PACKAGES flask-cors"
+    fi
+
+    # requests
+    if "$VENV_PYTHON" -c "import requests" 2>/dev/null; then
+        log "    ${GREEN}✓${NC} requests"
+    else
+        log "    ${RED}✗${NC} requests"
+        MISSING_PACKAGES="$MISSING_PACKAGES requests"
+    fi
+
+    # fastmcp (MCP server)
+    if "$VENV_PYTHON" -c "from fastmcp import FastMCP" 2>/dev/null; then
+        log "    ${GREEN}✓${NC} fastmcp"
+    else
+        log "    ${RED}✗${NC} fastmcp"
         MISSING_PACKAGES="$MISSING_PACKAGES fastmcp"
+    fi
+
+    # watchdog (optional but helpful)
+    if "$VENV_PYTHON" -c "import watchdog" 2>/dev/null; then
+        log "    ${GREEN}✓${NC} watchdog"
+    else
+        log "    ${YELLOW}!${NC} watchdog (optional)"
     fi
 
     if [ -n "$MISSING_PACKAGES" ]; then
@@ -302,18 +449,30 @@ install_dependencies() {
         # Try to install missing packages
         "$VENV_PYTHON" -m pip install $MISSING_PACKAGES 2>&1 | tee -a "$LOG_FILE"
 
-        # Re-verify
+        # Re-verify EACH package
+        log "  Re-verifying after manual install..."
         STILL_MISSING=""
-        for pkg in flask flask_cors mcp requests; do
-            if ! "$VENV_PYTHON" -c "import $pkg" 2>/dev/null; then
-                STILL_MISSING="$STILL_MISSING $pkg"
-            fi
-        done
+
+        if ! "$VENV_PYTHON" -c "import flask" 2>/dev/null; then
+            STILL_MISSING="$STILL_MISSING flask"
+        fi
+        if ! "$VENV_PYTHON" -c "from flask_cors import CORS" 2>/dev/null; then
+            STILL_MISSING="$STILL_MISSING flask-cors"
+        fi
+        if ! "$VENV_PYTHON" -c "import requests" 2>/dev/null; then
+            STILL_MISSING="$STILL_MISSING requests"
+        fi
+        if ! "$VENV_PYTHON" -c "from fastmcp import FastMCP" 2>/dev/null; then
+            STILL_MISSING="$STILL_MISSING fastmcp"
+        fi
 
         if [ -n "$STILL_MISSING" ]; then
-            show_error "Installation incomplete: Some packages failed to install.\n\nMissing:$STILL_MISSING\n\nTry running:\n$VENV_PIP install flask flask-cors mcp fastmcp requests"
+            log "${RED}✗${NC} Still missing after retry:$STILL_MISSING"
+            show_error "Installation incomplete: Some packages failed to install.\n\nMissing:$STILL_MISSING\n\nTry running:\n$VENV_PIP install flask flask-cors fastmcp requests"
             exit 1
         fi
+
+        log "${GREEN}✓${NC} Manual install succeeded"
     fi
 
     log "${GREEN}✓${NC} Dependencies installed and verified"
@@ -357,7 +516,7 @@ configure_mcp() {
 }
 
 # ============================================================
-# Setup LaunchAgent
+# Setup LaunchAgent (creates plist but does NOT load yet)
 # ============================================================
 
 setup_launchagent() {
@@ -365,8 +524,13 @@ setup_launchagent() {
 
     LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
     PLIST_FILE="$LAUNCH_AGENTS/com.fixonce.server.plist"
+    USER_LOGS="$HOME/.fixonce/logs"
 
     mkdir -p "$LAUNCH_AGENTS"
+    mkdir -p "$USER_LOGS"
+
+    # Unload any existing agent first
+    launchctl unload "$PLIST_FILE" 2>/dev/null || true
 
     cat > "$PLIST_FILE" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -387,9 +551,9 @@ setup_launchagent() {
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$INSTALL_DIR/data/server.log</string>
+    <string>$USER_LOGS/server.log</string>
     <key>StandardErrorPath</key>
-    <string>$INSTALL_DIR/data/server.error.log</string>
+    <string>$USER_LOGS/server.error.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
@@ -399,87 +563,104 @@ setup_launchagent() {
 </plist>
 EOF
 
-    # Load the agent
-    launchctl unload "$PLIST_FILE" 2>/dev/null || true
-    launchctl load "$PLIST_FILE"
-
-    log "${GREEN}✓${NC} LaunchAgent installed and loaded"
+    log "${GREEN}✓${NC} LaunchAgent plist created (not loaded yet - waiting for health check)"
 }
 
 # ============================================================
-# Start Server & Open Dashboard (Smart Launch)
+# Health Gate: Verify server works BEFORE enabling LaunchAgent
 # ============================================================
 
-start_and_open() {
-    log "${BLUE}Starting FixOnce server...${NC}"
+verify_and_enable_service() {
+    log "${BLUE}Verifying server can start...${NC}"
 
+    VENV_PYTHON="$INSTALL_DIR/venv/bin/python"
+    SERVER_SCRIPT="$INSTALL_DIR/src/server.py"
+    PLIST_FILE="$HOME/Library/LaunchAgents/com.fixonce.server.plist"
+    USER_LOGS="$HOME/.fixonce/logs"
     CURRENT_USER=$(whoami)
+
+    # Start server manually in background for testing
+    log "  Starting server for health check..."
+    "$VENV_PYTHON" "$SERVER_SCRIPT" --flask-only > "$USER_LOGS/health_check.log" 2>&1 &
+    SERVER_PID=$!
+
+    # Wait for server to start (max 15 seconds)
     PORT=""
     MAX_ATTEMPTS=15
     ATTEMPT=0
-
-    # Method 1: Read port from server's port file (most reliable)
-    PORT_FILE="$INSTALL_DIR/data/current_port.txt"
-
-    log "  Waiting for server to start..."
 
     while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
         ATTEMPT=$((ATTEMPT + 1))
         sleep 1
 
-        # Check if port file was written by server
-        if [ -f "$PORT_FILE" ]; then
-            FILE_PORT=$(cat "$PORT_FILE" 2>/dev/null)
-            if [ -n "$FILE_PORT" ]; then
-                # Verify this port is responding and belongs to us
-                RESPONSE=$(curl -s "http://localhost:$FILE_PORT/api/ping" 2>/dev/null)
-                if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
-                    OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
-                    if [ "$OWNER" = "$CURRENT_USER" ]; then
-                        PORT=$FILE_PORT
-                        log "  Found server on port $PORT (from port file)"
-                        break
-                    fi
-                fi
+        # Check if process is still alive
+        if ! kill -0 $SERVER_PID 2>/dev/null; then
+            log "${RED}✗${NC} Server process died!"
+            log "  Last 10 lines of log:"
+            tail -10 "$USER_LOGS/health_check.log" 2>/dev/null | while read line; do
+                log "    $line"
+            done
+
+            # Check for common errors
+            if grep -q "ModuleNotFoundError" "$USER_LOGS/health_check.log" 2>/dev/null; then
+                MISSING_MODULE=$(grep "ModuleNotFoundError" "$USER_LOGS/health_check.log" | head -1)
+                log "${RED}✗${NC} Missing Python module: $MISSING_MODULE"
+                show_error "Server failed to start: Missing Python module.\n\n$MISSING_MODULE\n\nTry running:\n$INSTALL_DIR/venv/bin/pip install flask flask-cors mcp fastmcp requests"
+                return 1
             fi
+
+            show_error "Server failed to start.\n\nCheck log: $USER_LOGS/health_check.log"
+            return 1
         fi
 
-        # Method 2: Scan ports if port file not ready
-        for p in 5000 5001 5002 5003 5004 5005 5006 5007 5008 5009; do
+        # Check /api/ping on common ports
+        for p in 5000 5001 5002 5003 5004 5005; do
             RESPONSE=$(curl -s --connect-timeout 1 "http://localhost:$p/api/ping" 2>/dev/null)
             if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
                 OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
                 if [ "$OWNER" = "$CURRENT_USER" ]; then
                     PORT=$p
-                    log "  Found server on port $PORT (from scan)"
                     break 2
                 fi
             fi
         done
 
-        # Show progress
         if [ $((ATTEMPT % 3)) -eq 0 ]; then
-            log "  Still waiting... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+            log "  Waiting for server... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
         fi
     done
 
-    if [ -z "$PORT" ]; then
-        log "${RED}✗${NC} Server failed to start after $MAX_ATTEMPTS seconds"
-        log "  Check logs: $INSTALL_DIR/data/server.error.log"
+    # Stop the test server
+    kill $SERVER_PID 2>/dev/null || true
+    wait $SERVER_PID 2>/dev/null || true
 
-        # Show last error
-        if [ -f "$INSTALL_DIR/data/server.error.log" ]; then
-            log "  Last error:"
-            tail -5 "$INSTALL_DIR/data/server.error.log" | while read line; do
+    if [ -z "$PORT" ]; then
+        log "${RED}✗${NC} Server failed health check - /api/ping not responding"
+        log "  Check log: $USER_LOGS/health_check.log"
+
+        # Show relevant error info
+        if [ -f "$USER_LOGS/health_check.log" ]; then
+            log "  Last 5 lines:"
+            tail -5 "$USER_LOGS/health_check.log" | while read line; do
                 log "    $line"
             done
         fi
 
-        show_error "Server failed to start.\n\nTry running in terminal:\n$INSTALL_DIR/fixonce doctor"
+        show_error "Server health check failed.\n\nThe server started but /api/ping did not respond.\n\nCheck: $USER_LOGS/health_check.log"
         return 1
     fi
 
-    # Save port to user config (source of truth for CLI)
+    log "${GREEN}✓${NC} Health check passed! Server responded on port $PORT"
+
+    # NOW it's safe to load the LaunchAgent
+    log "  Loading LaunchAgent..."
+    if launchctl load "$PLIST_FILE" 2>&1; then
+        log "${GREEN}✓${NC} LaunchAgent loaded successfully"
+    else
+        log "${YELLOW}!${NC} LaunchAgent load warning (may already be loaded)"
+    fi
+
+    # Save port to user config
     mkdir -p "$HOME/.fixonce"
     cat > "$HOME/.fixonce/config.json" << EOF
 {
@@ -490,9 +671,43 @@ start_and_open() {
 }
 EOF
 
-    log "${GREEN}✓${NC} Server running on port $PORT"
+    return 0
+}
 
-    # Open dashboard with the CORRECT port
+# ============================================================
+# Open Dashboard (after health gate passed)
+# ============================================================
+
+open_dashboard() {
+    log "${BLUE}Opening dashboard...${NC}"
+
+    CURRENT_USER=$(whoami)
+    CONFIG_FILE="$HOME/.fixonce/config.json"
+
+    # Read port from config (set by verify_and_enable_service)
+    if [ -f "$CONFIG_FILE" ]; then
+        PORT=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('port', ''))" 2>/dev/null)
+    fi
+
+    # Fallback: scan for our port
+    if [ -z "$PORT" ]; then
+        for p in 5000 5001 5002 5003 5004 5005; do
+            RESPONSE=$(curl -s --connect-timeout 1 "http://localhost:$p/api/ping" 2>/dev/null)
+            if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
+                OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
+                if [ "$OWNER" = "$CURRENT_USER" ]; then
+                    PORT=$p
+                    break
+                fi
+            fi
+        done
+    fi
+
+    if [ -z "$PORT" ]; then
+        log "${YELLOW}!${NC} Could not find server port - try 'fixonce dashboard' later"
+        return 1
+    fi
+
     DASHBOARD_URL="http://localhost:$PORT"
     log "  Opening: $DASHBOARD_URL"
     open "$DASHBOARD_URL"
@@ -514,7 +729,7 @@ create_cli() {
 # FixOnce CLI - Multi-user aware with self-healing
 
 FIXONCE_DIR="$HOME/FixOnce"
-VENV_PYTHON="$FIXONCE_DIR/venv/bin/python3"
+VENV_PYTHON="$FIXONCE_DIR/venv/bin/python"
 VENV_PIP="$FIXONCE_DIR/venv/bin/pip"
 PLIST="$HOME/Library/LaunchAgents/com.fixonce.server.plist"
 CONFIG_FILE="$HOME/.fixonce/config.json"
@@ -529,11 +744,22 @@ check_deps() {
     fi
 
     MISSING=""
-    for pkg in flask flask_cors; do
-        if ! "$VENV_PYTHON" -c "import $pkg" 2>/dev/null; then
-            MISSING="$MISSING $pkg"
-        fi
-    done
+    # Check flask
+    if ! "$VENV_PYTHON" -c "import flask" 2>/dev/null; then
+        MISSING="$MISSING flask"
+    fi
+    # Check flask-cors
+    if ! "$VENV_PYTHON" -c "from flask_cors import CORS" 2>/dev/null; then
+        MISSING="$MISSING flask-cors"
+    fi
+    # Check requests
+    if ! "$VENV_PYTHON" -c "import requests" 2>/dev/null; then
+        MISSING="$MISSING requests"
+    fi
+    # Check fastmcp (MCP server)
+    if ! "$VENV_PYTHON" -c "from fastmcp import FastMCP" 2>/dev/null; then
+        MISSING="$MISSING fastmcp"
+    fi
 
     if [ -n "$MISSING" ]; then
         echo "WARNING: Missing Python packages:$MISSING"
@@ -558,7 +784,7 @@ repair_deps() {
         return 0
     else
         echo "Repair failed. Try manual fix:"
-        echo "  $VENV_PIP install flask flask-cors mcp requests"
+        echo "  $VENV_PIP install flask flask-cors fastmcp requests"
         return 1
     fi
 }
@@ -662,6 +888,23 @@ case "$1" in
         fi
         cd "$FIXONCE_DIR"
         "$VENV_PYTHON" scripts/install.py --doctor
+        echo ""
+        echo "Log files: ~/.fixonce/logs/"
+        ls -la "$HOME/.fixonce/logs/" 2>/dev/null || echo "  (no logs yet)"
+        ;;
+    logs)
+        LOG_DIR="$HOME/.fixonce/logs"
+        if [ ! -d "$LOG_DIR" ]; then
+            echo "No logs directory found at $LOG_DIR"
+            exit 1
+        fi
+        echo "=== Server Log (last 20 lines) ==="
+        tail -20 "$LOG_DIR/server.log" 2>/dev/null || echo "(empty)"
+        echo ""
+        echo "=== Error Log (last 20 lines) ==="
+        tail -20 "$LOG_DIR/server.error.log" 2>/dev/null || echo "(empty)"
+        echo ""
+        echo "Log files: $LOG_DIR/"
         ;;
     dashboard)
         PORT=$(find_my_port)
@@ -678,7 +921,7 @@ case "$1" in
         fi
         ;;
     *)
-        echo "Usage: fixonce {start|stop|restart|status|port|repair|doctor|dashboard}"
+        echo "Usage: fixonce {start|stop|restart|status|port|repair|doctor|logs|dashboard}"
         echo ""
         echo "Commands:"
         echo "  start      Start FixOnce server"
@@ -688,6 +931,7 @@ case "$1" in
         echo "  port       Show port allocation for all users"
         echo "  repair     Reinstall Python dependencies"
         echo "  doctor     Run diagnostics"
+        echo "  logs       Show server logs"
         echo "  dashboard  Open dashboard in browser"
         exit 1
         ;;
@@ -726,9 +970,23 @@ main() {
     install_files
     install_dependencies
     configure_mcp
-    setup_launchagent
+    setup_launchagent      # Creates plist but doesn't load
     create_cli
-    start_and_open
+
+    # Health gate: verify server works BEFORE enabling LaunchAgent
+    if ! verify_and_enable_service; then
+        log "${RED}Installation failed: Server health check failed${NC}"
+        log "LaunchAgent was NOT loaded to prevent crash loop."
+        log ""
+        log "Debug steps:"
+        log "  1. Check: $HOME/.fixonce/logs/health_check.log"
+        log "  2. Try: $INSTALL_DIR/venv/bin/pip install flask flask-cors mcp fastmcp requests"
+        log "  3. Run: fixonce doctor"
+        show_error "Installation incomplete!\n\nServer failed health check.\nLaunchAgent was NOT enabled to prevent crash loop.\n\nSee logs at:\n$HOME/.fixonce/logs/"
+        exit 1
+    fi
+
+    open_dashboard
 
     log ""
     log "${GREEN}========================================"

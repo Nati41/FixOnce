@@ -11,7 +11,17 @@ from pathlib import Path
 from datetime import datetime
 from flask import Blueprint, jsonify, send_file, request
 
+# Import DATA_DIR from config to ensure consistent install state location
+from config import DATA_DIR
+
 installer_bp = Blueprint('installer', __name__)
+
+# FastMCP environment settings
+# FASTMCP_CHECK_FOR_UPDATES accepts: 'stable', 'prerelease', 'off' (NOT 'true'/'false')
+FASTMCP_ENV = {
+    "FASTMCP_SHOW_CLI_BANNER": "false",
+    "FASTMCP_CHECK_FOR_UPDATES": "off",
+}
 
 
 def _build_stdio_mcp_config(mcp_server: Path, src_path: str, fastmcp_path: str = None) -> dict:
@@ -20,11 +30,7 @@ def _build_stdio_mcp_config(mcp_server: Path, src_path: str, fastmcp_path: str =
         return {
             "command": fastmcp_path,
             "args": ["run", str(mcp_server), "--transport", "stdio", "--no-banner"],
-            "env": {
-                "PYTHONPATH": src_path,
-                "FASTMCP_SHOW_CLI_BANNER": "false",
-                "FASTMCP_CHECK_FOR_UPDATES": "false"
-            }
+            "env": {"PYTHONPATH": src_path, **FASTMCP_ENV}
         }
 
     return {
@@ -64,10 +70,13 @@ def _write_codex_config(path: Path, server_name: str, config: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text((content + "\n\n" + "\n".join(lines) if content else "\n".join(lines)) + "\n", encoding='utf-8')
 
-# Installation state file
+# Installation state file - MUST use DATA_DIR (same as server.py)
 def _get_install_state_file() -> Path:
-    """Get the installation state file path."""
-    return Path(__file__).parent.parent.parent / "data" / "install_state.json"
+    """Get the installation state file path.
+
+    Uses DATA_DIR (~/.fixonce/) to ensure consistency with server.py routing.
+    """
+    return DATA_DIR / "install_state.json"
 
 
 def _is_installed() -> bool:

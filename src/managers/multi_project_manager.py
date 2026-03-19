@@ -67,10 +67,17 @@ def _get_committed_knowledge_updater():
 # Paths
 SRC_DIR = Path(__file__).parent.parent
 PROJECT_DIR = SRC_DIR.parent
-DATA_DIR = PROJECT_DIR / "data"
+
+# USER data directory (must match MCP server's DATA_DIR)
+# MCP writes to ~/.fixonce/projects_v2/, so we must read from there too
+USER_DATA_DIR = Path.home() / ".fixonce"
+DATA_DIR = USER_DATA_DIR
 PROJECTS_V2_DIR = DATA_DIR / "projects_v2"
 GLOBAL_DIR = DATA_DIR / "global"
 ACTIVE_PROJECT_FILE = DATA_DIR / "active_project.json"
+
+# Installation data dir (for templates only)
+INSTALL_DATA_DIR = PROJECT_DIR / "data"
 
 # Thread lock
 _lock = threading.Lock()
