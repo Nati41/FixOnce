@@ -97,8 +97,9 @@ class SystemStatus:
 
 
 def _get_data_dir() -> Path:
-    """Get the data directory path."""
-    return Path(__file__).parent.parent.parent / "data"
+    """Get the user data directory path (~/.fixonce/)."""
+    from config import USER_DATA_DIR
+    return USER_DATA_DIR
 
 
 def _get_project_root() -> Path:

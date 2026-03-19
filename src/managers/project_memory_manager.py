@@ -179,8 +179,8 @@ def auto_update_project_info() -> Dict[str, Any]:
         memory = _load_memory()
         info = memory['project_info']
 
-        # Only auto-update if using defaults
-        if info['name'] == "My Project" and not info['stack']:
+        # Only auto-update if name is empty (new project)
+        if not info['name'] and not info['stack']:
             detected = detect_project_info()
 
             if detected['detected']:
@@ -227,7 +227,7 @@ def set_project_root(root_path: str) -> Dict[str, Any]:
         memory['project_info']['root_path'] = str(path.resolve())
 
         # Also try to detect name and stack if not set
-        if memory['project_info']['name'] == "My Project":
+        if not memory['project_info']['name']:
             detected = detect_project_info(path)
             if detected['detected']:
                 memory['project_info']['name'] = detected['name']
@@ -330,44 +330,41 @@ def save_memory(memory: Dict[str, Any]) -> bool:
 
 def _create_default_memory() -> Dict[str, Any]:
     """Create default memory structure."""
+    # Clean empty state for new users - no mock data, no defaults
     return {
         "project_info": {
-            "name": "My Project",
+            "name": "",  # Empty - will be auto-detected or set by user
             "stack": "",
-            "status": "Active",
+            "status": "",
             "description": "",
-            "root_path": ""  # Full path to project root
+            "root_path": ""
         },
         "active_issues": [],
         "solutions_history": [],
-        "ai_context_snapshot": "Initial setup - no active focus yet",
-        "decisions": [],  # Architectural/design decisions
-        "avoid": [],  # Things NOT to do (failed attempts, bad patterns)
-        "project_rules": [  # AI behavioral rules for this project
-            {"id": "rule_default_1", "text": "Explain the approach before changing code", "enabled": True, "default": True},
-            {"id": "rule_default_2", "text": "Keep backward compatibility", "enabled": True, "default": True},
-            {"id": "rule_default_3", "text": "Make minimal changes", "enabled": True, "default": True}
-        ],
-        "handover": "",  # Last session summary for next AI
+        "ai_context_snapshot": "",  # Empty - no fake "Initial setup" message
+        "decisions": [],
+        "avoid": [],
+        "project_rules": [],  # Empty - no hardcoded default rules
+        "handover": "",
         "stats": {
             "total_errors_captured": 0,
             "total_solutions_applied": 0,
             "last_updated": None
         },
         "roi": {
-            "solutions_reused": 0,           # Times a cached solution was applied
-            "tokens_saved": 0,               # Estimated tokens saved (no codebase scan)
-            "errors_prevented": 0,           # Errors caught by avoid patterns
-            "decisions_referenced": 0,       # Times decisions were used
-            "time_saved_minutes": 0,         # Estimated time saved
-            "sessions_with_context": 0       # Sessions that started with handover
+            "solutions_reused": 0,
+            "tokens_saved": 0,
+            "errors_prevented": 0,
+            "decisions_referenced": 0,
+            "time_saved_minutes": 0,
+            "sessions_with_context": 0
         },
         "safety": {
-            "enabled": True,                 # Safety Switch on/off
-            "auto_backup": True,             # Auto-backup before changes
-            "require_approval": True,        # Require user approval
-            "changes_history": [],           # History of code changes
-            "backups_dir": ".fixonce_backups"  # Backups directory name
+            "enabled": True,
+            "auto_backup": True,
+            "require_approval": True,
+            "changes_history": [],
+            "backups_dir": ".fixonce_backups"
         }
     }
 

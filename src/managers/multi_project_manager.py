@@ -1170,7 +1170,7 @@ def get_project_context() -> Dict[str, Any]:
     project_id = get_active_project_id()  # Dashboard fallback
     if not project_id:
         print("[WARN] get_project_context() called without active project")
-        return init_project_memory("default", "Default Project")
+        return init_project_memory("default", "")
     return load_project_memory(project_id)
 
 

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "name": "My Project",
+    "name": "",
     "stack": "",
-    "status": "Active Development",
+    "status": "",
     "description": ""
   },
   "active_issues": [],
   "solutions_history": [],
-  "ai_context_snapshot": "Ready to start",
+  "ai_context_snapshot": "",
   "stats": {
     "total_errors_captured": 0,
     "total_solutions_applied": 0,
