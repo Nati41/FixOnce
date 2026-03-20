@@ -16,7 +16,7 @@ import subprocess
 import getpass
 
 from . import status_bp, get_project_from_request
-from config import PROJECT_ROOT
+from config import PROJECT_ROOT, VERSION
 from core.system_mode import get_system_mode, set_system_mode, VALID_MODES
 
 # Global state (will be set by main app)
@@ -53,6 +53,21 @@ def set_actual_port(port: int):
     """Set the actual port being used."""
     global ACTUAL_PORT
     ACTUAL_PORT = port
+
+
+@status_bp.route("/version")
+def api_version():
+    """Return current version information.
+
+    Used by dashboard to display version and check for updates.
+    Future: Will check GitHub releases for latest version.
+    """
+    return jsonify({
+        "current": VERSION,
+        "latest": None,  # TODO: Check GitHub releases
+        "update_available": False,
+        "release_url": "https://github.com/anthropics/fixonce/releases"
+    })
 
 
 def _detect_running_editors():

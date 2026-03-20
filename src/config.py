@@ -76,7 +76,7 @@ MAX_PORT_ATTEMPTS = 10
 MAX_ERROR_LOG_SIZE = 50  # Maximum errors to keep in memory
 
 # ---------------------------------------------------------------------------
-# Version
+# Version (imported from version.py - single source of truth)
 # ---------------------------------------------------------------------------
-VERSION = "1.0"
+from version import VERSION
 APP_NAME = "FixOnce"

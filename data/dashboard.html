@@ -887,7 +887,7 @@ body.powered-off .logo .version::after {
       <path d="M83 88C90 79 100 73 112 70C124 67 136 69 146 76" stroke="#31CF6E" stroke-width="10" stroke-linecap="round"/>
       <path d="M92 109L106 123L137 92" stroke="#2CCF6C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-    FixOnce <span class="version">v1.0</span>
+    FixOnce <span class="version" id="appVersion">v...</span>
   </div>
   <div class="power-toggle">
     <label class="switch">
@@ -1657,13 +1657,38 @@ async function initSetup() {
   }
 }
 
+// Fetch and display version
+async function fetchVersion() {
+  try {
+    const res = await fetch('/api/version');
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('appVersion').textContent = 'v' + data.current;
+    }
+  } catch (e) {
+    document.getElementById('appVersion').textContent = 'v?';
+  }
+}
+
 // Init
 initSetup();
 fetchData();
+fetchVersion();
 loadPowerState();
 updateSystemStatus();
 setInterval(fetchData, 5000);
 setInterval(refreshSetupStatus, 10000);
 </script>
+
+<!-- Footer -->
+<div style="position: fixed; bottom: 0; left: 0; right: 0; padding: 8px 15px; background: var(--bg); border-top: 1px solid var(--border); font-size: 11px; color: var(--text-dim); display: flex; justify-content: space-between; align-items: center;">
+  <span>FixOnce - AI Memory Layer</span>
+  <span>
+    <a href="/privacy.html" style="color: var(--text-dim); text-decoration: none; margin-right: 12px;">Privacy</a>
+    <a href="/terms.html" style="color: var(--text-dim); text-decoration: none; margin-right: 12px;">Terms</a>
+    <a href="/security.html" style="color: var(--text-dim); text-decoration: none;">Security</a>
+  </span>
+</div>
+
 </body>
 </html>

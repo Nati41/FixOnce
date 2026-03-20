@@ -196,6 +196,23 @@ def serve_fixonce_logo():
     return "FixOnce logo not found", 404
 
 
+@flask_app.route("/privacy.html")
+def serve_privacy():
+    """Serve the privacy policy page."""
+    return _send_dashboard_file(INSTALL_DATA_DIR / "privacy.html")
+
+
+@flask_app.route("/terms.html")
+def serve_terms():
+    """Serve the terms of use page."""
+    return _send_dashboard_file(INSTALL_DATA_DIR / "terms.html")
+
+
+@flask_app.route("/security.html")
+def serve_security():
+    """Serve the security overview page."""
+    return _send_dashboard_file(INSTALL_DATA_DIR / "security.html")
+
 
 # ---------------------------------------------------------------------------
 # FastMCP Tools (only if MCP available)
