@@ -514,8 +514,8 @@ which claude
 \`\`\`bash
 claude mcp remove fixonce -s user 2>/dev/null
 claude mcp add-json fixonce '{
-  "command": "fastmcp",
-  "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"],
+  "command": "<fixonce_dir>/venv/bin/python",
+  "args": ["-m", "fastmcp", "run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"],
   "env": {
     "PYTHONPATH": "<fixonce_dir>/src",
     "FASTMCP_CHECK_FOR_UPDATES": "off"
@@ -526,7 +526,19 @@ claude mcp add-json fixonce '{
 **If CLI doesn't exist (fallback to file):**
 1. Create backup of ~/.claude.json
 2. Read existing config (may be empty or not exist)
-3. Merge fixonce entry under mcpServers (do NOT overwrite other servers)
+3. Merge this entry under mcpServers (do NOT overwrite other servers):
+\`\`\`json
+{
+  "fixonce": {
+    "command": "<fixonce_dir>/venv/bin/python",
+    "args": ["-m", "fastmcp", "run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"],
+    "env": {
+      "PYTHONPATH": "<fixonce_dir>/src",
+      "FASTMCP_CHECK_FOR_UPDATES": "off"
+    }
+  }
+}
+\`\`\`
 4. Validate JSON syntax before writing
 5. Write updated config
 
@@ -534,7 +546,19 @@ claude mcp add-json fixonce '{
 
 1. Create backup of ~/.cursor/mcp.json if it exists
 2. Read or create config
-3. Merge fixonce entry under mcpServers
+3. Merge this entry under mcpServers:
+\`\`\`json
+{
+  "fixonce": {
+    "command": "<fixonce_dir>/venv/bin/python",
+    "args": ["-m", "fastmcp", "run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"],
+    "env": {
+      "PYTHONPATH": "<fixonce_dir>/src",
+      "FASTMCP_CHECK_FOR_UPDATES": "off"
+    }
+  }
+}
+\`\`\`
 4. Validate JSON
 5. Write config
 
@@ -544,8 +568,8 @@ claude mcp add-json fixonce '{
 2. Add or update TOML section:
 \`\`\`toml
 [mcp_servers.fixonce]
-command = "fastmcp"
-args = ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"]
+command = "<fixonce_dir>/venv/bin/python"
+args = ["-m", "fastmcp", "run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"]
 
 [mcp_servers.fixonce.env]
 PYTHONPATH = "<fixonce_dir>/src"
