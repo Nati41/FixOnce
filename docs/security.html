@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FixOnce - Security Overview</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.7;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #81b29a;
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        .updated {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 40px;
+        }
+        h2 {
+            color: #58a6ff;
+            font-size: 1.3rem;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #21262d;
+        }
+        p, li {
+            margin-bottom: 12px;
+            color: #8b949e;
+        }
+        ul {
+            padding-left: 25px;
+        }
+        .highlight {
+            background: rgba(129, 178, 154, 0.1);
+            border: 1px solid rgba(129, 178, 154, 0.2);
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        .highlight strong {
+            color: #81b29a;
+        }
+        .security-box {
+            background: rgba(35, 134, 54, 0.1);
+            border: 1px solid rgba(35, 134, 54, 0.3);
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin: 15px 0;
+        }
+        .security-box strong {
+            color: #3fb950;
+        }
+        a {
+            color: #58a6ff;
+        }
+        code {
+            background: #161b22;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #c9d1d9;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #21262d;
+        }
+        th {
+            color: #58a6ff;
+        }
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #21262d;
+            font-size: 0.85rem;
+            color: #666;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #58a6ff;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">&larr; Back to FixOnce</a>
+
+        <h1>Security Overview</h1>
+        <p class="updated">Last updated: March 2026</p>
+
+        <div class="highlight">
+            <strong>Summary:</strong> FixOnce runs entirely on your local machine.
+            No external servers, no cloud storage, no network traffic outside localhost.
+        </div>
+
+        <h2>Architecture</h2>
+        <div class="security-box">
+            <strong>Local-Only Design:</strong> FixOnce is designed to run 100% locally.
+            The server binds to localhost (127.0.0.1) and does not accept external connections.
+        </div>
+
+        <table>
+            <tr>
+                <th>Component</th>
+                <th>Communication</th>
+            </tr>
+            <tr>
+                <td>Flask Server</td>
+                <td>localhost:5000-5009 only</td>
+            </tr>
+            <tr>
+                <td>MCP Server</td>
+                <td>stdio (local process)</td>
+            </tr>
+            <tr>
+                <td>Browser Extension</td>
+                <td>localhost only</td>
+            </tr>
+            <tr>
+                <td>Dashboard</td>
+                <td>localhost only</td>
+            </tr>
+        </table>
+
+        <h2>Data Storage</h2>
+        <table>
+            <tr>
+                <th>Location</th>
+                <th>Contents</th>
+                <th>Access</th>
+            </tr>
+            <tr>
+                <td><code>~/.fixonce/</code></td>
+                <td>User data, sessions, config</td>
+                <td>Your user only</td>
+            </tr>
+            <tr>
+                <td><code>.fixonce/</code></td>
+                <td>Project decisions, insights</td>
+                <td>Project folder permissions</td>
+            </tr>
+        </table>
+
+        <h2>No External Communication</h2>
+        <p>FixOnce does NOT make any external network calls:</p>
+        <ul>
+            <li>No analytics services</li>
+            <li>No telemetry endpoints</li>
+            <li>No update servers (updates are manual)</li>
+            <li>No cloud sync</li>
+            <li>No license validation</li>
+        </ul>
+
+        <h2>Browser Extension Security</h2>
+        <p>If you install the optional browser extension:</p>
+
+        <div class="security-box">
+            <strong>Automatic Sanitization:</strong> The extension automatically redacts
+            sensitive data before sending to your local server.
+        </div>
+
+        <table>
+            <tr>
+                <th>Data Type</th>
+                <th>Action</th>
+            </tr>
+            <tr>
+                <td>Email addresses</td>
+                <td>Replaced with <code>[EMAIL]</code></td>
+            </tr>
+            <tr>
+                <td>Bearer tokens</td>
+                <td>Replaced with <code>[TOKEN]</code></td>
+            </tr>
+            <tr>
+                <td>Passwords</td>
+                <td>Replaced with <code>[REDACTED]</code></td>
+            </tr>
+            <tr>
+                <td>API keys (32+ chars)</td>
+                <td>Replaced with <code>[API_KEY]</code></td>
+            </tr>
+            <tr>
+                <td>JWT tokens</td>
+                <td>Replaced with <code>[JWT]</code></td>
+            </tr>
+            <tr>
+                <td>Credit card numbers</td>
+                <td>Replaced with <code>[CARD]</code></td>
+            </tr>
+        </table>
+
+        <h2>Code Changes</h2>
+        <div class="security-box">
+            <strong>FixOnce NEVER modifies your code directly.</strong>
+        </div>
+        <p>All code changes happen through your AI assistant (Claude, Cursor, Codex),
+        which requires your explicit approval before making changes.</p>
+        <ul>
+            <li>FixOnce provides context and memory to AI</li>
+            <li>AI proposes changes</li>
+            <li>You review and approve</li>
+            <li>AI makes changes (not FixOnce)</li>
+        </ul>
+
+        <h2>Multi-User Isolation</h2>
+        <p>On shared machines, FixOnce isolates users:</p>
+        <ul>
+            <li>Each user has separate <code>~/.fixonce/</code> directory</li>
+            <li>Port detection validates ownership</li>
+            <li>Server refuses connections from other users' installations</li>
+        </ul>
+
+        <h2>Source Code</h2>
+        <p>FixOnce is open source. You can audit the code:</p>
+        <p><a href="https://github.com/anthropics/fixonce">github.com/anthropics/fixonce</a></p>
+
+        <h2>Reporting Security Issues</h2>
+        <p>Found a security issue? Please report responsibly:</p>
+        <ul>
+            <li>Open a private security advisory on GitHub</li>
+            <li>Or email the maintainers directly</li>
+        </ul>
+
+        <div class="footer">
+            <p>FixOnce - Never debug the same bug twice.</p>
+            <p><a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms of Use</a></p>
+        </div>
+    </div>
+</body>
+</html>

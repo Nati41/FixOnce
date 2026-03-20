@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Install FixOnce</title>
+<style>
+:root {
+  --bg: #0a0c10;
+  --surface: #12151a;
+  --border: #1e2430;
+  --green: #00e676;
+  --amber: #ffb300;
+  --blue: #448aff;
+  --text: #e0e6ed;
+  --text-dim: #6b7785;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.logo {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 16px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.tagline {
+  color: var(--text-dim);
+  font-size: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 24px;
+}
+
+.section.primary {
+  border-color: var(--green);
+  border-width: 2px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.badge {
+  background: var(--green);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.badge.secondary {
+  background: var(--border);
+  color: var(--text-dim);
+}
+
+.badge.placeholder {
+  background: var(--amber);
+  color: var(--bg);
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.section p {
+  color: var(--text-dim);
+  margin-bottom: 24px;
+}
+
+.buttons {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 24px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: var(--green);
+  color: var(--bg);
+}
+
+.btn-secondary {
+  background: var(--border);
+  color: var(--text);
+}
+
+.btn-placeholder {
+  background: var(--amber);
+  color: var(--bg);
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.how-it-works {
+  background: rgba(0,230,118,0.05);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.how-it-works h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--green);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.step-num {
+  width: 24px;
+  height: 24px;
+  background: var(--green);
+  color: var(--bg);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.step-text {
+  font-size: 14px;
+  color: var(--text);
+  padding-top: 2px;
+}
+
+.code-block {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 13px;
+  overflow-x: auto;
+  position: relative;
+}
+
+.code-block pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.code-block .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--border);
+  border: none;
+  color: var(--text-dim);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.code-block .copy-btn:hover {
+  background: var(--blue);
+  color: white;
+}
+
+.warning {
+  background: rgba(255,179,0,0.1);
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  color: var(--amber);
+}
+
+.requirement {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+}
+
+.requirement strong {
+  color: var(--text);
+}
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--green);
+  color: var(--bg);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+@media (max-width: 600px) {
+  .buttons {
+    flex-direction: column;
+  }
+
+  .btn {
+    justify-content: center;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <svg class="logo" viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="eyeTop" x1="16" y1="110" x2="204" y2="98" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#1F67C4"/><stop offset="0.55" stop-color="#2FA6E8"/><stop offset="1" stop-color="#39D86F"/>
+        </linearGradient>
+        <linearGradient id="eyeBottom" x1="16" y1="114" x2="204" y2="126" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#1A5CB5"/><stop offset="0.55" stop-color="#2498DE"/><stop offset="1" stop-color="#32CD69"/>
+        </linearGradient>
+      </defs>
+      <path d="M16 110C16 110 51 54 110 54C158 54 187 88 204 103" stroke="url(#eyeTop)" stroke-width="12" stroke-linecap="round"/>
+      <path d="M16 110C16 110 51 166 110 166C158 166 187 132 204 117" stroke="url(#eyeBottom)" stroke-width="12" stroke-linecap="round"/>
+      <circle cx="110" cy="110" r="41" stroke="#2BA4E2" stroke-width="11"/>
+      <path d="M83 88C90 79 100 73 112 70C124 67 136 69 146 76" stroke="#31CF6E" stroke-width="10" stroke-linecap="round"/>
+      <path d="M92 109L106 123L137 92" stroke="#2CCF6C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <h1>Install FixOnce</h1>
+    <p class="tagline">FixOnce helps AI assistants remember project context, decisions, and past issues so you can work faster and more consistently.</p>
+  </header>
+
+  <!-- AI Install Section (Primary) -->
+  <section class="section primary">
+    <div class="section-header">
+      <h2>Install with AI</h2>
+      <span class="badge">Recommended</span>
+    </div>
+    <p>Let your AI assistant install and configure FixOnce for you.</p>
+
+    <div class="warning">
+      <strong>Download not yet available.</strong> Release hosting is being set up. For now, clone the repository or download manually from the source.
+    </div>
+
+    <div class="buttons">
+      <button class="btn btn-secondary" onclick="copyAIPrompt()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
+        Copy AI Setup Instructions
+      </button>
+    </div>
+
+    <div class="how-it-works">
+      <h3>How it works</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-text">Download or clone FixOnce to your Desktop or Downloads folder</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-text">Copy the setup prompt above</div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-text">Paste the prompt into Claude Code, Cursor, or Codex</div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-text">Let the AI install and configure everything</div>
+        </div>
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-text">Open a new AI session to activate the MCP connection</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Terminal Install Section (Secondary) -->
+  <section class="section">
+    <div class="section-header">
+      <h2>Install via Terminal</h2>
+      <span class="badge secondary">For developers</span>
+    </div>
+    <p>Quick setup if you prefer the command line. Requires manual MCP configuration afterward.</p>
+
+    <div class="code-block">
+      <button class="copy-btn" onclick="copyTerminalCommands()">Copy</button>
+      <pre id="terminal-commands"># macOS / Linux
+# Requires: Python 3.10 or newer
+
+# 1. Navigate to FixOnce directory
+cd ~/Desktop/FixOnce    # or wherever you extracted it
+
+# 2. Verify Python version (must be 3.10+)
+python3 --version
+
+# 3. Check requirements.txt exists
+ls requirements.txt || echo "ERROR: requirements.txt not found!"
+
+# 4. Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# 5. Install dependencies
+pip install -r requirements.txt
+
+# 6. Start server (will auto-select port 5000-5009)
+python src/server.py --flask-only
+
+# Server will print the actual port it's running on.
+# Dashboard: http://localhost:PORT
+#
+# After server is running, configure MCP manually
+# or paste the AI Setup prompt into your AI assistant.</pre>
+    </div>
+
+    <div class="requirement">
+      <strong>Requirements:</strong>
+      <ul style="margin-top: 8px; padding-left: 20px;">
+        <li>Python 3.10 or newer (<a href="https://python.org/downloads" style="color: var(--blue);">python.org/downloads</a>)</li>
+        <li>pip (usually included with Python)</li>
+        <li>One of: Claude Code, Cursor, or Codex (for MCP connection)</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast">Copied to clipboard!</div>
+
+<script>
+const AI_PROMPT = `# FixOnce AI Installation
+
+Install FixOnce on this machine. Follow these steps exactly. Do NOT skip any step. Do NOT silently ignore failures.
+
+## Step 1: Detect Environment
+
+1. Detect OS (macOS, Linux, or Windows)
+2. Find Python executable:
+   \`\`\`bash
+   python3 --version
+   \`\`\`
+3. Verify version is >= 3.10
+
+**STOP RULE:** If Python version < 3.10 or Python not found:
+- Tell user: "Python 3.10 or newer is required. Install from https://python.org/downloads"
+- Do NOT proceed further
+
+## Step 2: Locate FixOnce
+
+Find the FixOnce directory. Check these locations:
+- ~/Downloads/FixOnce
+- ~/Desktop/FixOnce
+- Current working directory
+
+If not found, ask user: "Where did you extract FixOnce?"
+
+**STOP RULE:** Verify requirements.txt exists:
+\`\`\`bash
+ls <fixonce_directory>/requirements.txt
+\`\`\`
+If missing, tell user: "requirements.txt not found. FixOnce may be incomplete or corrupted."
+
+Also verify these files exist:
+- src/server.py
+- src/mcp_server/mcp_memory_server_v2.py
+
+## Step 3: Create Virtual Environment
+
+\`\`\`bash
+cd <fixonce_directory>
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\\Scripts\\activate
+\`\`\`
+
+## Step 4: Install Dependencies
+
+\`\`\`bash
+pip install -r requirements.txt
+\`\`\`
+
+**Import Validation:** After install, verify these imports work:
+\`\`\`python
+python3 -c "import flask; import flask_cors; import requests; import fastmcp; print('All imports OK')"
+\`\`\`
+
+If any import fails:
+- Report which package failed
+- Suggest: \`pip install <package_name>\`
+- Do NOT proceed until all imports succeed
+
+## Step 5: Start Server
+
+\`\`\`bash
+cd <fixonce_directory>/src
+python server.py --flask-only &
+\`\`\`
+
+Wait 3 seconds, then verify server is running:
+\`\`\`bash
+curl -s http://localhost:5000/api/health || curl -s http://localhost:5001/api/health
+\`\`\`
+
+**Port Handling:**
+- Default port is 5000
+- If port 5000 is busy, server will try 5001, 5002, ... up to 5009
+- Check actual port from server output or:
+  \`\`\`bash
+  cat <fixonce_directory>/data/current_port.txt
+  \`\`\`
+- Remember the actual port for the dashboard URL
+
+## Step 6: Configure MCP (CRITICAL - Follow Exactly)
+
+### MCP CONFIG SAFETY RULES:
+- NEVER write \`FASTMCP_CHECK_FOR_UPDATES: "false"\` - this value is INVALID and breaks MCP
+- Allowed values: \`"stable"\`, \`"prerelease"\`, \`"off"\`
+- ALWAYS use \`"off"\` as the default
+- ALWAYS create timestamped backup before modifying any config file
+- NEVER overwrite unrelated config entries
+- If existing JSON/TOML is invalid, STOP and tell user - do not corrupt further
+
+### Backup Command:
+\`\`\`bash
+cp <config_file> <config_file>.backup_$(date +%Y%m%d_%H%M%S)
+\`\`\`
+
+### For Claude Code:
+
+Check if CLI exists:
+\`\`\`bash
+which claude
+\`\`\`
+
+**If CLI exists (preferred):**
+\`\`\`bash
+claude mcp remove fixonce -s user 2>/dev/null
+claude mcp add-json fixonce '{
+  "command": "fastmcp",
+  "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"],
+  "env": {
+    "PYTHONPATH": "<fixonce_dir>/src",
+    "FASTMCP_CHECK_FOR_UPDATES": "off"
+  }
+}' -s user
+\`\`\`
+
+**If CLI doesn't exist (fallback to file):**
+1. Create backup of ~/.claude.json
+2. Read existing config (may be empty or not exist)
+3. Merge fixonce entry under mcpServers (do NOT overwrite other servers)
+4. Validate JSON syntax before writing
+5. Write updated config
+
+### For Cursor:
+
+1. Create backup of ~/.cursor/mcp.json if it exists
+2. Read or create config
+3. Merge fixonce entry under mcpServers
+4. Validate JSON
+5. Write config
+
+### For Codex:
+
+1. Create backup of ~/.codex/config.toml if it exists
+2. Add or update TOML section:
+\`\`\`toml
+[mcp_servers.fixonce]
+command = "fastmcp"
+args = ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"]
+
+[mcp_servers.fixonce.env]
+PYTHONPATH = "<fixonce_dir>/src"
+FASTMCP_CHECK_FOR_UPDATES = "off"
+\`\`\`
+
+## Step 7: Verify Installation
+
+\`\`\`bash
+curl -s http://localhost:<actual_port>/api/health
+\`\`\`
+
+Should return JSON containing \`"status": "ok"\` or similar success indicator.
+
+## Step 8: Report Final Status
+
+Tell user:
+
+\`\`\`
+FixOnce Installation Complete
+
+Server: http://localhost:<actual_port>
+Dashboard: http://localhost:<actual_port>
+
+MCP configured for: [list which editors were configured]
+Backups created: [list backup files created]
+
+IMPORTANT - Connection Status:
+- MCP connection will NOT be active in this current session
+- You MUST open a NEW chat/session in your AI tool
+- In the new session, say "hi" and FixOnce will confirm connection
+
+Next Steps:
+1. Open a new Claude Code / Cursor / Codex session
+2. Navigate to any project directory
+3. Start chatting - FixOnce will remember everything
+\`\`\`
+
+## Error Handling Rules
+
+- If ANY step fails, report the exact error message
+- Do NOT silently skip failures
+- Do NOT modify FixOnce source code
+- If JSON/TOML config is already corrupted, tell user and stop
+- Always report what was changed and where backups are located
+- If port detection fails, tell user to check server output manually`;
+
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+function copyAIPrompt() {
+  navigator.clipboard.writeText(AI_PROMPT).then(() => {
+    showToast('AI setup instructions copied!');
+  });
+}
+
+function copyTerminalCommands() {
+  const commands = document.getElementById('terminal-commands').textContent;
+  navigator.clipboard.writeText(commands).then(() => {
+    showToast('Terminal commands copied!');
+  });
+}
+</script>
+
+</body>
+</html>

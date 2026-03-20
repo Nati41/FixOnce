@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FixOnce - Privacy Policy</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.7;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #81b29a;
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        .updated {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 40px;
+        }
+        h2 {
+            color: #58a6ff;
+            font-size: 1.3rem;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #21262d;
+        }
+        p, li {
+            margin-bottom: 12px;
+            color: #8b949e;
+        }
+        ul {
+            padding-left: 25px;
+        }
+        .highlight {
+            background: rgba(129, 178, 154, 0.1);
+            border: 1px solid rgba(129, 178, 154, 0.2);
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+        .highlight strong {
+            color: #81b29a;
+        }
+        .warning {
+            background: rgba(88, 166, 255, 0.1);
+            border: 1px solid rgba(88, 166, 255, 0.2);
+        }
+        .warning strong {
+            color: #58a6ff;
+        }
+        a {
+            color: #58a6ff;
+        }
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #21262d;
+            font-size: 0.85rem;
+            color: #666;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #58a6ff;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">&larr; Back to FixOnce</a>
+
+        <h1>Privacy Policy</h1>
+        <p class="updated">Last updated: March 2026</p>
+
+        <div class="highlight">
+            <strong>Summary:</strong> FixOnce stores all data locally on your machine.
+            We do not collect, transmit, or store any data on external servers.
+            You have complete control over your data.
+        </div>
+
+        <h2>What FixOnce Stores</h2>
+        <p>FixOnce stores the following data locally on your machine:</p>
+        <ul>
+            <li><strong>Project decisions</strong> - Architectural choices and their reasons</li>
+            <li><strong>Insights</strong> - What was learned during development</li>
+            <li><strong>Solutions</strong> - How errors were fixed</li>
+            <li><strong>Session context</strong> - Current goals and work area</li>
+        </ul>
+
+        <h2>Where Data Is Stored</h2>
+        <ul>
+            <li><strong>~/.fixonce/</strong> - User-specific data (your machine only)</li>
+            <li><strong>.fixonce/</strong> - Project-specific data (travels with your project)</li>
+        </ul>
+        <div class="highlight">
+            <strong>Important:</strong> All data stays on YOUR machine.
+            FixOnce does NOT send any data to external servers.
+        </div>
+
+        <h2>Browser Extension (Optional)</h2>
+        <p>If you install the optional browser extension:</p>
+        <ul>
+            <li>It captures JavaScript errors from websites you choose to monitor</li>
+            <li>Errors are sent to your local FixOnce server (localhost only)</li>
+            <li>Sensitive data is automatically sanitized (emails, tokens, API keys)</li>
+            <li>You control which sites are monitored via whitelist</li>
+        </ul>
+
+        <h2>AI Integration</h2>
+        <div class="warning">
+            <strong>Note:</strong> FixOnce shares your project context with AI assistants
+            (Claude, Cursor, Codex) that you use. This is the core feature -
+            enabling AI to remember your decisions and context.
+        </div>
+        <p>The AI assistant sees:</p>
+        <ul>
+            <li>Project decisions and insights you've saved</li>
+            <li>Current goals and work context</li>
+            <li>Error history (if extension is installed)</li>
+        </ul>
+        <p>This data flows from your local FixOnce server to the AI tool running on your machine.</p>
+
+        <h2>What We Do NOT Collect</h2>
+        <ul>
+            <li>No analytics or usage tracking</li>
+            <li>No telemetry</li>
+            <li>No personal information</li>
+            <li>No data sent to FixOnce servers (we don't have any)</li>
+            <li>No third-party services receive your data</li>
+        </ul>
+
+        <h2>Data Control</h2>
+        <p>You have full control:</p>
+        <ul>
+            <li><strong>View all data</strong> - Check ~/.fixonce/ and .fixonce/ folders</li>
+            <li><strong>Delete anytime</strong> - Remove ~/.fixonce/ to clear all user data</li>
+            <li><strong>Export</strong> - Your data is in JSON format, fully portable</li>
+            <li><strong>No account required</strong> - FixOnce works entirely offline</li>
+        </ul>
+
+        <h2>Updates</h2>
+        <p>FixOnce does not auto-update. You control when to update via:</p>
+        <ul>
+            <li>Manual git pull</li>
+            <li>AI-assisted update (copy prompt)</li>
+        </ul>
+
+        <h2>Contact</h2>
+        <p>Questions about privacy? Open an issue:</p>
+        <p><a href="https://github.com/anthropics/fixonce">github.com/anthropics/fixonce</a></p>
+
+        <div class="footer">
+            <p>FixOnce - Never debug the same bug twice.</p>
+            <p><a href="/terms.html">Terms of Use</a> | <a href="/security.html">Security</a></p>
+        </div>
+    </div>
+</body>
+</html>

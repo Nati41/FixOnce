@@ -1,0 +1,10 @@
+# GitHub Pages configuration
+title: FixOnce
+description: AI Memory Layer - Never debug the same bug twice
+url: https://anthropics.github.io
+baseurl: /fixonce
+
+# Disable Jekyll processing (we use static HTML)
+exclude:
+  - CLEAN_USER_TEST_PLAN.md
+  - global-cursor-rule.md
