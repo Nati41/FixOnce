@@ -518,11 +518,12 @@ which claude
 \`\`\`bash
 claude mcp remove fixonce -s user 2>/dev/null
 claude mcp add-json fixonce '{
-  "command": "<fixonce_dir>/venv/bin/python",
-  "args": ["-m", "fastmcp", "run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"],
+  "command": "<fixonce_dir>/venv/bin/fastmcp",
+  "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"],
   "env": {
     "PYTHONPATH": "<fixonce_dir>/src",
-    "FASTMCP_CHECK_FOR_UPDATES": "off"
+    "FASTMCP_CHECK_FOR_UPDATES": "off",
+    "FASTMCP_SHOW_CLI_BANNER": "false"
   }
 }' -s user
 \`\`\`
@@ -534,11 +535,12 @@ claude mcp add-json fixonce '{
 \`\`\`json
 {
   "fixonce": {
-    "command": "<fixonce_dir>/venv/bin/python",
-    "args": ["-m", "fastmcp", "run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"],
+    "command": "<fixonce_dir>/venv/bin/fastmcp",
+    "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"],
     "env": {
       "PYTHONPATH": "<fixonce_dir>/src",
-      "FASTMCP_CHECK_FOR_UPDATES": "off"
+      "FASTMCP_CHECK_FOR_UPDATES": "off",
+      "FASTMCP_SHOW_CLI_BANNER": "false"
     }
   }
 }
@@ -554,11 +556,12 @@ claude mcp add-json fixonce '{
 \`\`\`json
 {
   "fixonce": {
-    "command": "<fixonce_dir>/venv/bin/python",
-    "args": ["-m", "fastmcp", "run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"],
+    "command": "<fixonce_dir>/venv/bin/fastmcp",
+    "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"],
     "env": {
       "PYTHONPATH": "<fixonce_dir>/src",
-      "FASTMCP_CHECK_FOR_UPDATES": "off"
+      "FASTMCP_CHECK_FOR_UPDATES": "off",
+      "FASTMCP_SHOW_CLI_BANNER": "false"
     }
   }
 }
@@ -572,12 +575,13 @@ claude mcp add-json fixonce '{
 2. Add or update TOML section:
 \`\`\`toml
 [mcp_servers.fixonce]
-command = "<fixonce_dir>/venv/bin/python"
-args = ["-m", "fastmcp", "run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"]
+command = "<fixonce_dir>/venv/bin/fastmcp"
+args = ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"]
 
 [mcp_servers.fixonce.env]
 PYTHONPATH = "<fixonce_dir>/src"
 FASTMCP_CHECK_FOR_UPDATES = "off"
+FASTMCP_SHOW_CLI_BANNER = "false"
 \`\`\`
 
 ## Step 7: Install Global AI Rules (CRITICAL)

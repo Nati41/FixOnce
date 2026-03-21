@@ -495,9 +495,13 @@ configure_mcp() {
         MCP_ENTRY='{
   "mcpServers": {
     "fixonce": {
-      "command": "'"$INSTALL_DIR"'/venv/bin/python",
-      "args": ["-m", "mcp_server.mcp_memory_server_v2"],
-      "cwd": "'"$INSTALL_DIR"'/src"
+      "command": "'"$INSTALL_DIR"'/venv/bin/fastmcp",
+      "args": ["run", "'"$INSTALL_DIR"'/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"],
+      "env": {
+        "PYTHONPATH": "'"$INSTALL_DIR"'/src",
+        "FASTMCP_CHECK_FOR_UPDATES": "off",
+        "FASTMCP_SHOW_CLI_BANNER": "false"
+      }
     }
   }
 }'
