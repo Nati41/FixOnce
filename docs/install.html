@@ -576,7 +576,26 @@ PYTHONPATH = "<fixonce_dir>/src"
 FASTMCP_CHECK_FOR_UPDATES = "off"
 \`\`\`
 
-## Step 7: Verify Installation
+## Step 7: Install Global AI Rules (CRITICAL)
+
+This step makes FixOnce MANDATORY for all sessions.
+
+1. Create directory if needed:
+\`\`\`bash
+mkdir -p ~/.claude
+\`\`\`
+
+2. Copy or append FixOnce rules to global CLAUDE.md:
+\`\`\`bash
+cat <fixonce_dir>/data/global-claude-md.md >> ~/.claude/CLAUDE.md
+\`\`\`
+
+**Why this matters:**
+- Without this, AI treats FixOnce as "optional"
+- With this, AI MUST call auto_init_session at every session start
+- Dashboard will auto-update because AI is now "obligated" to sync
+
+## Step 8: Verify Installation
 
 \`\`\`bash
 curl -s http://localhost:<actual_port>/api/health
@@ -584,7 +603,7 @@ curl -s http://localhost:<actual_port>/api/health
 
 Should return JSON containing \`"status": "ok"\` or similar success indicator.
 
-## Step 8: Report Final Status
+## Step 9: Report Final Status
 
 Tell user:
 
