@@ -657,13 +657,62 @@ Verification:
 ✓ MCP configured for: [list which editors]
 ✓ Global AI rules installed (~/.claude/CLAUDE.md)
 
-IMPORTANT - To Activate:
-1. CLOSE this Claude Code session completely
-2. Open a NEW session
-3. Just say "hi" - FixOnce will auto-initialize
+NEXT: Proceed to Step 11 to authorize the MCP tool.
+\`\`\`
 
-If "hi" doesn't trigger auto_init_session, check:
-- ~/.claude/CLAUDE.md exists and contains FixOnce rules
+## Step 11: Authorize MCP Tool (CRITICAL - Enables Auto-Start)
+
+**Why this step matters:**
+Claude Code blocks new MCP tools until the user explicitly approves them.
+Without this approval, FixOnce will NEVER auto-initialize on "hi".
+
+**Action:**
+Tell user:
+\`\`\`
+⚡ FINAL STEP - Authorize FixOnce
+
+I need to test the FixOnce connection. When I call the tool:
+→ You will see a permission prompt
+→ Select: "Yes, and don't ask again" (or "Always allow")
+
+This is a ONE-TIME approval. After this, FixOnce will auto-start on every session.
+
+Calling FixOnce now...
+\`\`\`
+
+**Then immediately call:**
+\`\`\`
+auto_init_session(cwd="<current_directory>")
+\`\`\`
+
+**Expected behavior:**
+1. Claude Code shows permission dialog
+2. User selects "Yes, and don't ask again"
+3. Tool executes and returns session info
+4. Tell user: "✓ FixOnce authorized! From now on, just say 'hi' in any new session."
+
+**If user sees the tool response WITHOUT a permission dialog:**
+That means it was already authorized. Proceed to completion.
+
+## Step 12: Installation Complete
+
+Tell user:
+\`\`\`
+🎉 FixOnce Installation Complete!
+
+Everything is set up:
+✓ Server running at http://localhost:<port>
+✓ MCP configured
+✓ Global AI rules installed
+✓ MCP tool authorized
+
+TO TEST:
+1. Close this Claude Code session
+2. Open a new session in any project folder
+3. Just say "hi"
+4. You should see auto_init_session called automatically
+
+Enjoy never debugging the same bug twice! 🧠
 \`\`\`
 
 ## Error Handling Rules
