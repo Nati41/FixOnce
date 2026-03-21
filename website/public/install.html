@@ -316,11 +316,11 @@ h2 {
     </div>
     <p>Let your AI assistant install and configure FixOnce for you.</p>
 
-    <div class="warning">
-      <strong>Download not yet available.</strong> Release hosting is being set up. For now, clone the repository or download manually from the source.
-    </div>
-
     <div class="buttons">
+      <a href="https://github.com/Nati41/FixOnce/archive/refs/heads/main.zip" class="btn btn-primary">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
+        Download FixOnce.zip
+      </a>
       <button class="btn btn-secondary" onclick="copyAIPrompt()">
         <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
         Copy AI Setup Instructions
@@ -426,10 +426,14 @@ Install FixOnce on this machine. Follow these steps exactly. Do NOT skip any ste
 
 ## Step 2: Locate FixOnce
 
-Find the FixOnce directory. Check these locations:
+Find the FixOnce directory. Check these locations IN ORDER:
+- ~/Downloads/FixOnce-main (GitHub ZIP default name)
 - ~/Downloads/FixOnce
+- ~/Desktop/FixOnce-main
 - ~/Desktop/FixOnce
 - Current working directory
+
+Use the FIRST directory found that contains requirements.txt.
 
 If not found, ask user: "Where did you extract FixOnce?"
 
@@ -484,7 +488,7 @@ curl -s http://localhost:5000/api/health || curl -s http://localhost:5001/api/he
 - If port 5000 is busy, server will try 5001, 5002, ... up to 5009
 - Check actual port from server output or:
   \`\`\`bash
-  cat <fixonce_directory>/data/current_port.txt
+  cat ~/.fixonce/current_port.txt
   \`\`\`
 - Remember the actual port for the dashboard URL
 
@@ -514,11 +518,12 @@ which claude
 \`\`\`bash
 claude mcp remove fixonce -s user 2>/dev/null
 claude mcp add-json fixonce '{
-  "command": "fastmcp",
-  "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"],
+  "command": "<fixonce_dir>/venv/bin/fastmcp",
+  "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"],
   "env": {
     "PYTHONPATH": "<fixonce_dir>/src",
-    "FASTMCP_CHECK_FOR_UPDATES": "off"
+    "FASTMCP_CHECK_FOR_UPDATES": "off",
+    "FASTMCP_SHOW_CLI_BANNER": "false"
   }
 }' -s user
 \`\`\`
@@ -526,7 +531,20 @@ claude mcp add-json fixonce '{
 **If CLI doesn't exist (fallback to file):**
 1. Create backup of ~/.claude.json
 2. Read existing config (may be empty or not exist)
-3. Merge fixonce entry under mcpServers (do NOT overwrite other servers)
+3. Merge this entry under mcpServers (do NOT overwrite other servers):
+\`\`\`json
+{
+  "fixonce": {
+    "command": "<fixonce_dir>/venv/bin/fastmcp",
+    "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"],
+    "env": {
+      "PYTHONPATH": "<fixonce_dir>/src",
+      "FASTMCP_CHECK_FOR_UPDATES": "off",
+      "FASTMCP_SHOW_CLI_BANNER": "false"
+    }
+  }
+}
+\`\`\`
 4. Validate JSON syntax before writing
 5. Write updated config
 
@@ -534,7 +552,20 @@ claude mcp add-json fixonce '{
 
 1. Create backup of ~/.cursor/mcp.json if it exists
 2. Read or create config
-3. Merge fixonce entry under mcpServers
+3. Merge this entry under mcpServers:
+\`\`\`json
+{
+  "fixonce": {
+    "command": "<fixonce_dir>/venv/bin/fastmcp",
+    "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"],
+    "env": {
+      "PYTHONPATH": "<fixonce_dir>/src",
+      "FASTMCP_CHECK_FOR_UPDATES": "off",
+      "FASTMCP_SHOW_CLI_BANNER": "false"
+    }
+  }
+}
+\`\`\`
 4. Validate JSON
 5. Write config
 
@@ -544,15 +575,49 @@ claude mcp add-json fixonce '{
 2. Add or update TOML section:
 \`\`\`toml
 [mcp_servers.fixonce]
-command = "fastmcp"
-args = ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio", "--no-banner"]
+command = "<fixonce_dir>/venv/bin/fastmcp"
+args = ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"]
 
 [mcp_servers.fixonce.env]
 PYTHONPATH = "<fixonce_dir>/src"
 FASTMCP_CHECK_FOR_UPDATES = "off"
+FASTMCP_SHOW_CLI_BANNER = "false"
 \`\`\`
 
-## Step 7: Verify Installation
+## Step 7: Install Global AI Rules (CRITICAL - DO NOT SKIP!)
+
+**⚠️ THIS STEP IS MANDATORY. WITHOUT IT, FIXONCE WILL NOT AUTO-INITIALIZE.**
+
+This step makes FixOnce MANDATORY for all future sessions.
+
+1. Create directory if needed:
+\`\`\`bash
+mkdir -p ~/.claude
+\`\`\`
+
+2. Copy FixOnce rules to global CLAUDE.md:
+\`\`\`bash
+cat <fixonce_dir>/data/global-claude-md.md >> ~/.claude/CLAUDE.md
+\`\`\`
+
+3. **VERIFY the file was created** (DO NOT SKIP THIS CHECK):
+\`\`\`bash
+cat ~/.claude/CLAUDE.md | head -5
+\`\`\`
+
+Expected output should start with:
+\`\`\`
+# FixOnce Memory System
+\`\`\`
+
+**If the file is empty or doesn't exist, the installation FAILED. Re-run step 2.**
+
+**Why this matters:**
+- Without this file, AI treats FixOnce as "optional" and won't auto-initialize
+- With this file, AI MUST call auto_init_session at every session start
+- This is the difference between "working" and "not working"
+
+## Step 8: Verify Installation
 
 \`\`\`bash
 curl -s http://localhost:<actual_port>/api/health
@@ -560,7 +625,24 @@ curl -s http://localhost:<actual_port>/api/health
 
 Should return JSON containing \`"status": "ok"\` or similar success indicator.
 
-## Step 8: Report Final Status
+## Step 9: Final Verification Checklist
+
+Before reporting success, verify ALL of these:
+
+\`\`\`bash
+# 1. Server running?
+curl -s http://localhost:<actual_port>/api/health | grep -q "ok" && echo "✓ Server OK" || echo "✗ Server FAILED"
+
+# 2. MCP configured?
+grep -q "fixonce" ~/.claude.json && echo "✓ MCP OK" || echo "✗ MCP FAILED"
+
+# 3. Global rules installed? (CRITICAL!)
+head -1 ~/.claude/CLAUDE.md 2>/dev/null | grep -q "FixOnce Memory System" && echo "✓ Rules OK" || echo "✗ Rules FAILED - MUST FIX!"
+\`\`\`
+
+**If any check shows FAILED, go back and fix it before proceeding.**
+
+## Step 10: Report Final Status
 
 Tell user:
 
@@ -570,18 +652,67 @@ FixOnce Installation Complete
 Server: http://localhost:<actual_port>
 Dashboard: http://localhost:<actual_port>
 
-MCP configured for: [list which editors were configured]
-Backups created: [list backup files created]
+Verification:
+✓ Server running
+✓ MCP configured for: [list which editors]
+✓ Global AI rules installed (~/.claude/CLAUDE.md)
 
-IMPORTANT - Connection Status:
-- MCP connection will NOT be active in this current session
-- You MUST open a NEW chat/session in your AI tool
-- In the new session, say "hi" and FixOnce will confirm connection
+NEXT: Proceed to Step 11 to authorize the MCP tool.
+\`\`\`
 
-Next Steps:
-1. Open a new Claude Code / Cursor / Codex session
-2. Navigate to any project directory
-3. Start chatting - FixOnce will remember everything
+## Step 11: Authorize MCP Tool (CRITICAL - Enables Auto-Start)
+
+**Why this step matters:**
+Claude Code blocks new MCP tools until the user explicitly approves them.
+Without this approval, FixOnce will NEVER auto-initialize on "hi".
+
+**Action:**
+Tell user:
+\`\`\`
+⚡ FINAL STEP - Authorize FixOnce
+
+I need to test the FixOnce connection. When I call the tool:
+→ You will see a permission prompt
+→ Select: "Yes, and don't ask again" (or "Always allow")
+
+This is a ONE-TIME approval. After this, FixOnce will auto-start on every session.
+
+Calling FixOnce now...
+\`\`\`
+
+**Then immediately call:**
+\`\`\`
+auto_init_session(cwd="<current_directory>")
+\`\`\`
+
+**Expected behavior:**
+1. Claude Code shows permission dialog
+2. User selects "Yes, and don't ask again"
+3. Tool executes and returns session info
+4. Tell user: "✓ FixOnce authorized! From now on, just say 'hi' in any new session."
+
+**If user sees the tool response WITHOUT a permission dialog:**
+That means it was already authorized. Proceed to completion.
+
+## Step 12: Installation Complete
+
+Tell user:
+\`\`\`
+🎉 FixOnce Installation Complete!
+
+Everything is set up:
+✓ Server running at http://localhost:<port>
+✓ MCP configured
+✓ Global AI rules installed
+✓ MCP tool authorized
+
+TO TEST:
+1. Close this Claude Code session
+2. Open a new session in any project folder
+3. Just say "hi"
+4. You should see auto_init_session called automatically
+
+Enjoy never debugging the same bug twice! 🧠
 \`\`\`
 
 ## Error Handling Rules

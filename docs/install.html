@@ -488,7 +488,7 @@ curl -s http://localhost:5000/api/health || curl -s http://localhost:5001/api/he
 - If port 5000 is busy, server will try 5001, 5002, ... up to 5009
 - Check actual port from server output or:
   \`\`\`bash
-  cat <fixonce_directory>/data/current_port.txt
+  cat ~/.fixonce/current_port.txt
   \`\`\`
 - Remember the actual port for the dashboard URL
 
@@ -607,7 +607,7 @@ cat ~/.claude/CLAUDE.md | head -5
 
 Expected output should start with:
 \`\`\`
-# FixOnce Operating Mode (MANDATORY)
+# FixOnce Memory System
 \`\`\`
 
 **If the file is empty or doesn't exist, the installation FAILED. Re-run step 2.**
@@ -637,7 +637,7 @@ curl -s http://localhost:<actual_port>/api/health | grep -q "ok" && echo "✓ Se
 grep -q "fixonce" ~/.claude.json && echo "✓ MCP OK" || echo "✗ MCP FAILED"
 
 # 3. Global rules installed? (CRITICAL!)
-head -1 ~/.claude/CLAUDE.md 2>/dev/null | grep -q "FixOnce" && echo "✓ Rules OK" || echo "✗ Rules FAILED - MUST FIX!"
+head -1 ~/.claude/CLAUDE.md 2>/dev/null | grep -q "FixOnce Memory System" && echo "✓ Rules OK" || echo "✗ Rules FAILED - MUST FIX!"
 \`\`\`
 
 **If any check shows FAILED, go back and fix it before proceeding.**

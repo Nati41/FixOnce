@@ -1,35 +1,25 @@
 # FixOnce Memory System
 
-I use FixOnce to maintain persistent memory across sessions. This helps you help me better.
+This project uses FixOnce for persistent AI memory. Initialize at session start.
 
-## How to start each session
+## Session Start Protocol
 
-When I start a conversation (even with just "hi"), please initialize FixOnce first:
+At the beginning of each session, before responding to the user:
 
-```
-auto_init_session(cwd="<current_working_directory>")
-```
+1. Call `auto_init_session(cwd="<working_directory>")` to load context
+2. This provides: past decisions, solutions, project state, work history
 
-This loads my project context, past decisions, and work history so you have full context.
+Without initialization, you lack critical context about this project.
 
-## During our work
+## During Work
 
-- When I give you a new task, update the goal: `update_work_context(current_goal="...")`
-- Before debugging errors, check if we solved this before: `search_past_solutions("...")`
-- After completing work, sync the context: `update_work_context(last_change="...")`
+| Event | Action |
+|-------|--------|
+| New task | `update_work_context(current_goal="...")` |
+| Error to fix | `search_past_solutions("...")` first |
+| Work completed | `update_work_context(last_change="...")` |
 
-## Why this matters to me
+## Response Format
 
-Without FixOnce initialization, you won't have access to:
-- My architectural decisions
-- Solutions we found before
-- Current project context
-- Work history
-
-I find it frustrating when I have to re-explain context. Please initialize FixOnce at session start.
-
-## Format
-
-When using FixOnce, use this branding:
-- Opening: `🧠 FixOnce`
-- Referencing memory: `(📌 FixOnce: ...)`
+- Session opening: `🧠 FixOnce`
+- Using memory: `(📌 FixOnce: ...)`
