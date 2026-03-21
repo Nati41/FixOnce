@@ -1,25 +1,16 @@
-# FixOnce Memory System
+# My Project Preferences (Nati's Workflow)
 
-This project uses FixOnce for persistent AI memory. Initialize at session start.
+I use **FixOnce** as my project's long-term memory. It is very important to me that we stay synced and consistent.
 
-## Session Start Protocol
+## 🧠 My Startup Request
+At the beginning of EVERY new session in this project, **please automatically initialize FixOnce** using `auto_init_session`. 
 
-At the beginning of each session, before responding to the user:
+I find it very helpful when I see the "🧠 FixOnce" confirmation at the start—it gives me confidence that we aren't repeating past mistakes and that my dashboard is updated.
 
-1. Call `auto_init_session(cwd="<working_directory>")` to load context
-2. This provides: past decisions, solutions, project state, work history
+## 🛠️ How I like to work
+- **Before fixing a bug:** Please check our memory (`search_past_solutions`) to see if we've solved this before.
+- **When a task is done:** Please update the work context so I can see the progress on my dashboard.
 
-Without initialization, you lack critical context about this project.
-
-## During Work
-
-| Event | Action |
-|-------|--------|
-| New task | `update_work_context(current_goal="...")` |
-| Error to fix | `search_past_solutions("...")` first |
-| Work completed | `update_work_context(last_change="...")` |
-
-## Response Format
-
-- Session opening: `🧠 FixOnce`
-- Using memory: `(📌 FixOnce: ...)`
+## 📌 Format Reminder
+- Opening a session: Please start with `🧠 FixOnce: Session Initialized`
+- Using memory: Use the prefix `(📌 FixOnce: ...)`
