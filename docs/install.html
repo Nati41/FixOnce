@@ -584,24 +584,38 @@ FASTMCP_CHECK_FOR_UPDATES = "off"
 FASTMCP_SHOW_CLI_BANNER = "false"
 \`\`\`
 
-## Step 7: Install Global AI Rules (CRITICAL)
+## Step 7: Install Global AI Rules (CRITICAL - DO NOT SKIP!)
 
-This step makes FixOnce MANDATORY for all sessions.
+**⚠️ THIS STEP IS MANDATORY. WITHOUT IT, FIXONCE WILL NOT AUTO-INITIALIZE.**
+
+This step makes FixOnce MANDATORY for all future sessions.
 
 1. Create directory if needed:
 \`\`\`bash
 mkdir -p ~/.claude
 \`\`\`
 
-2. Copy or append FixOnce rules to global CLAUDE.md:
+2. Copy FixOnce rules to global CLAUDE.md:
 \`\`\`bash
 cat <fixonce_dir>/data/global-claude-md.md >> ~/.claude/CLAUDE.md
 \`\`\`
 
+3. **VERIFY the file was created** (DO NOT SKIP THIS CHECK):
+\`\`\`bash
+cat ~/.claude/CLAUDE.md | head -5
+\`\`\`
+
+Expected output should start with:
+\`\`\`
+# FixOnce Operating Mode (MANDATORY)
+\`\`\`
+
+**If the file is empty or doesn't exist, the installation FAILED. Re-run step 2.**
+
 **Why this matters:**
-- Without this, AI treats FixOnce as "optional"
-- With this, AI MUST call auto_init_session at every session start
-- Dashboard will auto-update because AI is now "obligated" to sync
+- Without this file, AI treats FixOnce as "optional" and won't auto-initialize
+- With this file, AI MUST call auto_init_session at every session start
+- This is the difference between "working" and "not working"
 
 ## Step 8: Verify Installation
 
@@ -611,7 +625,24 @@ curl -s http://localhost:<actual_port>/api/health
 
 Should return JSON containing \`"status": "ok"\` or similar success indicator.
 
-## Step 9: Report Final Status
+## Step 9: Final Verification Checklist
+
+Before reporting success, verify ALL of these:
+
+\`\`\`bash
+# 1. Server running?
+curl -s http://localhost:<actual_port>/api/health | grep -q "ok" && echo "✓ Server OK" || echo "✗ Server FAILED"
+
+# 2. MCP configured?
+grep -q "fixonce" ~/.claude.json && echo "✓ MCP OK" || echo "✗ MCP FAILED"
+
+# 3. Global rules installed? (CRITICAL!)
+head -1 ~/.claude/CLAUDE.md 2>/dev/null | grep -q "FixOnce" && echo "✓ Rules OK" || echo "✗ Rules FAILED - MUST FIX!"
+\`\`\`
+
+**If any check shows FAILED, go back and fix it before proceeding.**
+
+## Step 10: Report Final Status
 
 Tell user:
 
@@ -621,18 +652,18 @@ FixOnce Installation Complete
 Server: http://localhost:<actual_port>
 Dashboard: http://localhost:<actual_port>
 
-MCP configured for: [list which editors were configured]
-Backups created: [list backup files created]
+Verification:
+✓ Server running
+✓ MCP configured for: [list which editors]
+✓ Global AI rules installed (~/.claude/CLAUDE.md)
 
-IMPORTANT - Connection Status:
-- MCP connection will NOT be active in this current session
-- You MUST open a NEW chat/session in your AI tool
-- In the new session, say "hi" and FixOnce will confirm connection
+IMPORTANT - To Activate:
+1. CLOSE this Claude Code session completely
+2. Open a NEW session
+3. Just say "hi" - FixOnce will auto-initialize
 
-Next Steps:
-1. Open a new Claude Code / Cursor / Codex session
-2. Navigate to any project directory
-3. Start chatting - FixOnce will remember everything
+If "hi" doesn't trigger auto_init_session, check:
+- ~/.claude/CLAUDE.md exists and contains FixOnce rules
 \`\`\`
 
 ## Error Handling Rules
