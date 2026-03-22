@@ -1189,7 +1189,7 @@ $Shortcut.Save()
 
 def configure_auto_start() -> bool:
     """Configure FixOnce to start automatically on login"""
-    print(f"\n{Colors.BLUE}[6/7]{Colors.END} Configuring auto-start...")
+    print(f"\n{Colors.BLUE}[6/8]{Colors.END} Configuring auto-start...")
 
     fixonce_dir = get_fixonce_dir()
     current_platform = get_platform()
@@ -1300,11 +1300,45 @@ def configure_auto_start() -> bool:
         return True
 
 
-# ============ Step 7: Chrome Extension ============
+# ============ Step 7: Mark Installation Complete ============
+
+def mark_installation_complete() -> bool:
+    """Mark FixOnce as installed by creating install_state.json.
+
+    CRITICAL: Without this file, the server redirects to /install forever.
+    This must be called by CLI installer since web installer may not complete.
+    """
+    print(f"\n{Colors.BLUE}[7/8]{Colors.END} Marking installation complete...")
+
+    from datetime import datetime
+
+    # Create ~/.fixonce/install_state.json
+    user_data_dir = Path.home() / ".fixonce"
+    user_data_dir.mkdir(parents=True, exist_ok=True)
+
+    install_state = user_data_dir / "install_state.json"
+    state = {
+        "installed": True,
+        "installed_at": datetime.now().isoformat(),
+        "version": "1.0.11",
+        "installer": "cli"
+    }
+
+    try:
+        with open(install_state, 'w') as f:
+            json.dump(state, f, indent=2)
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Installation state saved to {install_state}")
+        return True
+    except Exception as e:
+        print(f"  {Colors.RED}[ERROR]{Colors.END} Could not save installation state: {e}")
+        return False
+
+
+# ============ Step 8: Chrome Extension ============
 
 def show_chrome_extension_instructions():
     """Show instructions for installing Chrome extension and try to open Chrome"""
-    print(f"\n{Colors.BLUE}[7/7]{Colors.END} Chrome Extension (for browser error capture)...")
+    print(f"\n{Colors.BLUE}[8/8]{Colors.END} Chrome Extension (for browser error capture)...")
 
     fixonce_dir = get_fixonce_dir()
     extension_dir = fixonce_dir / "extension"
@@ -1561,7 +1595,10 @@ def main():
     # Step 6: Configure auto-start
     configure_auto_start()
 
-    # Step 7: Open web installer
+    # Step 7: Mark installation as complete
+    mark_installation_complete()
+
+    # Step 8: Open web installer
     open_web_installer()
 
     print(f"""
