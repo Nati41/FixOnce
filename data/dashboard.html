@@ -1004,6 +1004,27 @@ body.powered-off .logo .version::after {
 // Auto-detect server URL (works on any port)
 const API = window.location.origin;
 
+// Check if we're on the canonical port and redirect if not
+async function checkCanonicalPort() {
+  try {
+    const res = await fetch(`${API}/api/canonical-runtime`);
+    if (!res.ok) return; // Server might not support this yet
+
+    const data = await res.json();
+    if (data.status === 'ok' && !data.is_canonical) {
+      // We're on the wrong port - redirect to canonical
+      const canonicalUrl = `http://localhost:${data.port}${window.location.pathname}`;
+      console.log(`[FixOnce] Redirecting to canonical port: ${data.port}`);
+      window.location.href = canonicalUrl;
+    }
+  } catch (e) {
+    // Silently ignore - server might not support this endpoint
+  }
+}
+
+// Run canonical check immediately
+checkCanonicalPort();
+
 async function fetchWithTimeout(url, options = {}, timeout = 5000) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -1052,6 +1073,40 @@ async function fetchData() {
 }
 
 function renderSnapshot(snap) {
+  // Check MCP Health FIRST - this is critical for accurate status
+  const mcpHealth = snap.mcp_health || {};
+  const mcpState = mcpHealth.state || 'unknown';
+  const mcpActive = mcpHealth.is_active === true;
+  const mcpUsable = mcpHealth.is_usable === true;
+
+  // Show MCP warning banner if not active
+  let mcpBanner = document.getElementById('mcpWarningBanner');
+  if (!mcpBanner) {
+    // Create banner if it doesn't exist
+    mcpBanner = document.createElement('div');
+    mcpBanner.id = 'mcpWarningBanner';
+    mcpBanner.style.cssText = 'padding: 8px 16px; font-size: 12px; text-align: center; display: none;';
+    const statusSection = document.querySelector('.status-section');
+    if (statusSection) statusSection.parentNode.insertBefore(mcpBanner, statusSection);
+  }
+
+  if (!mcpActive && mcpState !== 'unknown') {
+    mcpBanner.style.display = 'block';
+    if (mcpState === 'misconfigured' || mcpState === 'inactive') {
+      mcpBanner.style.background = 'rgba(232, 70, 107, 0.15)';
+      mcpBanner.style.color = 'var(--red)';
+      mcpBanner.innerHTML = 'MCP Not Active: ' + (mcpHealth.reason || 'Configuration issue') +
+        ' <a href="#" onclick="showSetupWizard();return false;" style="color:inherit;text-decoration:underline;">Fix</a>';
+    } else if (mcpState === 'stale' || mcpState === 'configured') {
+      mcpBanner.style.background = 'rgba(255, 179, 71, 0.15)';
+      mcpBanner.style.color = 'var(--amber)';
+      const lastCall = mcpHealth.last_tool_call ? new Date(mcpHealth.last_tool_call).toLocaleString() : 'unknown';
+      mcpBanner.innerHTML = 'MCP Inactive (last: ' + lastCall + '). Restart Claude Code to reconnect.';
+    }
+  } else {
+    mcpBanner.style.display = 'none';
+  }
+
   // Active AI - only show if recent activity (not just process detection)
   const ais = snap.active_ais || [];
   const now = Date.now();
@@ -1070,7 +1125,12 @@ function renderSnapshot(snap) {
   const primary = activeAIs.find(a => a.is_primary) || activeAIs[0];
   const aiDot = document.querySelector('.ai-dot');
 
-  if (primary && primary.last_activity) {
+  // AI status depends on MCP health
+  if (!mcpActive) {
+    // MCP not active - show warning state
+    document.getElementById('activeAI').textContent = 'MCP Inactive';
+    aiDot.style.background = 'var(--amber)';
+  } else if (primary && primary.last_activity) {
     document.getElementById('activeAI').textContent = capitalize(primary.editor);
     aiDot.style.background = 'var(--green)';
   } else {
@@ -1078,15 +1138,32 @@ function renderSnapshot(snap) {
     aiDot.style.background = 'var(--text-dim)';
   }
 
-  // Status + ROI
+  // Status + ROI - Factor in MCP health
   const orb = snap.orb || {};
-  const status = orb.status || 'green';
+  let status = orb.status || 'green';
+
+  // Override status based on MCP health
+  // If MCP is not active, we cannot claim "PROTECTED"
+  if (!mcpActive && mcpState !== 'unknown') {
+    if (mcpState === 'misconfigured' || mcpState === 'inactive') {
+      status = 'red';
+    } else if (mcpState === 'stale' || mcpState === 'configured') {
+      status = status === 'green' ? 'amber' : status;
+    }
+  }
+
   const statusEl = document.getElementById('statusLabel');
 
   statusEl.className = 'status-label ' + status;
-  if (status === 'green') statusEl.textContent = 'PROTECTED';
-  else if (status === 'amber') statusEl.textContent = 'WARNING';
-  else statusEl.textContent = 'BROKEN';
+  if (!mcpActive && mcpState !== 'unknown') {
+    statusEl.textContent = 'MCP INACTIVE';
+  } else if (status === 'green') {
+    statusEl.textContent = 'PROTECTED';
+  } else if (status === 'amber') {
+    statusEl.textContent = 'WARNING';
+  } else {
+    statusEl.textContent = 'BROKEN';
+  }
 
   // ROI
   const identity = snap.identity || {};
@@ -1564,12 +1641,23 @@ async function refreshSetupStatus() {
     updateSetupStep('setupEngine', 'engineDot', 'engineStatus', 'red', 'Not Running');
   }
 
-  // MCP
-  if (status.mcp.configured) {
+  // MCP - Use TRUE health check, not just config existence
+  // Fetch real MCP health if not in status already
+  const mcpHealth = status.mcp_health || {};
+  const mcpState = mcpHealth.state || 'unknown';
+
+  if (mcpState === 'active') {
+    updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'green', 'Active', false, 'mcpAction');
+  } else if (mcpState === 'stale') {
+    updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'yellow', 'Stale - Restart AI', false, 'mcpAction');
+  } else if (mcpState === 'configured') {
+    updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'yellow', 'Configured but inactive', false, 'mcpAction');
+  } else if (mcpState === 'misconfigured') {
+    updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'red', 'Misconfigured', true, 'mcpAction');
+  } else if (status.mcp.configured) {
+    // Fallback to old logic if mcp_health not available
     const configuredCount = Object.values(status.mcp.clients || {}).filter(client => client.configured).length;
-    const liveCount = Object.values(status.mcp.clients || {}).filter(client => client.connected).length;
-    const summary = liveCount > 0 ? `${configuredCount} configured, ${liveCount} live` : `${configuredCount} configured`;
-    updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'green', summary, false, 'mcpAction');
+    updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'yellow', `${configuredCount} configured (status unknown)`, false, 'mcpAction');
   } else {
     updateSetupStep('setupMCP', 'mcpDot', 'mcpStatus', 'red', 'Not Configured', true, 'mcpAction');
   }

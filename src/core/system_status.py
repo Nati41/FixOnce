@@ -514,13 +514,21 @@ def get_status_for_dashboard() -> Dict[str, Any]:
         )
     })
 
+    # Get TRUE MCP health (not just config existence)
+    try:
+        from core.mcp_health import get_mcp_health_for_dashboard
+        mcp_health = get_mcp_health_for_dashboard()
+    except Exception as e:
+        mcp_health = {"state": "unknown", "is_active": False, "error": str(e)}
+
     return {
         "status": status.to_dict(),
         "checks": checks,
         "overall": status.overall,
         "all_ok": status.overall == "ready",
         "critical_ok": status.engine.running,
-        "timestamp": status.timestamp
+        "timestamp": status.timestamp,
+        "mcp_health": mcp_health  # TRUE MCP state
     }
 
 

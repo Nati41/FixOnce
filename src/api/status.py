@@ -254,6 +254,34 @@ def api_system_status():
     return jsonify(get_status_for_dashboard())
 
 
+@status_bp.route("/mcp/health", methods=["GET"])
+def api_mcp_health():
+    """
+    TRUE MCP health check - not just config existence.
+
+    Returns real state:
+    - active: MCP tools are callable and recently used
+    - stale: Config exists, had recent activity, may need restart
+    - configured: Config exists but not active
+    - misconfigured: Config has errors
+    - inactive: No config
+
+    This endpoint should be used instead of checking "configured" status.
+    """
+    try:
+        from core.mcp_health import get_mcp_health_for_dashboard
+        return jsonify(get_mcp_health_for_dashboard())
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "state": "unknown",
+            "message": f"Health check failed: {e}",
+            "is_active": False,
+            "is_usable": False,
+            "needs_fix": True
+        }), 500
+
+
 @status_bp.route("/system/mode", methods=["GET"])
 def api_get_system_mode():
     """Get global FixOnce operating mode."""
@@ -842,6 +870,20 @@ def api_dashboard_snapshot():
                         snapshot["protocol_watchdog"]["reason"] = "working_dir_mismatch"
         except Exception:
             pass
+
+        # === MCP Health (TRUE state, not just config) ===
+        try:
+            from core.mcp_health import get_mcp_health_for_dashboard
+            snapshot["mcp_health"] = get_mcp_health_for_dashboard()
+        except Exception as e:
+            snapshot["mcp_health"] = {
+                "status": "error",
+                "state": "unknown",
+                "message": f"Health check failed: {e}",
+                "is_active": False,
+                "is_usable": False,
+                "needs_fix": True
+            }
 
         # === Unified Orb Health ===
         try:

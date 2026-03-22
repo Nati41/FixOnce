@@ -2,6 +2,7 @@
 # FixOnce Hook: PostToolUse
 # Logs file changes to FixOnce activity feed
 # Also checks for browser errors related to the current project
+# REMINDER: Outputs reminder to AI to update FixOnce after code changes
 
 # Read hook input from stdin
 INPUT=$(cat)
@@ -11,13 +12,27 @@ TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
 TOOL_INPUT=$(echo "$INPUT" | jq -r '.tool_input // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 
+# Get canonical port from runtime.json (SINGLE SOURCE OF TRUTH)
+FIXONCE_PORT=5000
+RUNTIME_FILE="$HOME/.fixonce/runtime.json"
+if [ -f "$RUNTIME_FILE" ]; then
+  RUNTIME_PORT=$(jq -r '.port // empty' "$RUNTIME_FILE" 2>/dev/null)
+  if [ -n "$RUNTIME_PORT" ]; then
+    FIXONCE_PORT="$RUNTIME_PORT"
+  fi
+fi
+
+# Track if this is a code change (for reminder)
+IS_CODE_CHANGE=false
+
 # Only process file operations
 case "$TOOL_NAME" in
   Edit|Write|NotebookEdit)
     FILE_PATH=$(echo "$TOOL_INPUT" | jq -r '.file_path // empty')
     if [ -n "$FILE_PATH" ]; then
+      IS_CODE_CHANGE=true
       # Log to FixOnce (silent)
-      curl -s -X POST "http://localhost:5000/api/activity/log" \
+      curl -s -X POST "http://localhost:$FIXONCE_PORT/api/activity/log" \
         -H "Content-Type: application/json" \
         -d "{
           \"type\": \"file_change\",
@@ -32,7 +47,7 @@ case "$TOOL_NAME" in
     COMMAND=$(echo "$TOOL_INPUT" | jq -r '.command // empty')
     # Log significant commands (silent)
     if echo "$COMMAND" | grep -qE "^(npm|yarn|pip|python|node|git)"; then
-      curl -s -X POST "http://localhost:5000/api/activity/log" \
+      curl -s -X POST "http://localhost:$FIXONCE_PORT/api/activity/log" \
         -H "Content-Type: application/json" \
         -d "{
           \"type\": \"command\",
@@ -76,7 +91,7 @@ fi
 if [ -n "$PROJECT_PORT" ] || [ -n "$PROJECT_DIR" ]; then
 
   # Get recent browser errors (last 30 seconds)
-  RESPONSE=$(curl -s "http://localhost:5000/api/live-errors?since=30" 2>/dev/null || echo '{"errors":[]}')
+  RESPONSE=$(curl -s "http://localhost:$FIXONCE_PORT/api/live-errors?since=30" 2>/dev/null || echo '{"errors":[]}')
   ERROR_COUNT=$(echo "$RESPONSE" | jq '.count // 0')
 
   if [ "$ERROR_COUNT" -gt 0 ]; then
@@ -129,6 +144,16 @@ if [ -n "$PROJECT_PORT" ] || [ -n "$PROJECT_DIR" ]; then
       echo "📌 Use get_browser_errors() for full details."
     fi
   fi
+fi
+
+# ============================================
+# REMINDER: Update FixOnce after code changes
+# ============================================
+if [ "$IS_CODE_CHANGE" = true ]; then
+  echo ""
+  echo "📌 FixOnce: קוד השתנה. זכור לעדכן:"
+  echo "   update_work_context(last_change=\"...\", last_file=\"$FILE_PATH\")"
+  echo ""
 fi
 
 # Always allow (exit 0)

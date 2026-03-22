@@ -377,6 +377,26 @@
     <script>
         let snapshot = null;
 
+        // Check if we're on the canonical port and redirect if not
+        async function checkCanonicalPort() {
+            try {
+                const res = await fetch('/api/canonical-runtime');
+                if (!res.ok) return;
+
+                const data = await res.json();
+                if (data.status === 'ok' && !data.is_canonical) {
+                    const canonicalUrl = `http://localhost:${data.port}${window.location.pathname}`;
+                    console.log(`[FixOnce] Redirecting to canonical port: ${data.port}`);
+                    window.location.href = canonicalUrl;
+                }
+            } catch (e) {
+                // Silently ignore
+            }
+        }
+
+        // Run canonical check immediately
+        checkCanonicalPort();
+
         async function fetchData() {
             try {
                 const res = await fetch('/api/dashboard_snapshot');

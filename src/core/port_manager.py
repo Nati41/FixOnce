@@ -3,6 +3,11 @@ FixOnce Port Manager
 
 Handles dynamic port allocation for multi-user environments.
 Each user gets their own port persisted in ~/.fixonce/config.json
+
+SINGLE SOURCE OF TRUTH:
+- ~/.fixonce/runtime.json contains the canonical {port, pid, started_at}
+- All components (server, dashboard, MCP) must read from this file
+- Server writes on startup, validates with lock
 """
 
 import json
@@ -12,11 +17,16 @@ import getpass
 import urllib.request
 import urllib.error
 from pathlib import Path
+from datetime import datetime
 from typing import Optional, Tuple, Dict, Any
 
 DEFAULT_PORT = 5000
 MAX_PORT = 5009
 PORT_RANGE = range(DEFAULT_PORT, MAX_PORT + 1)
+
+# Runtime file - SINGLE SOURCE OF TRUTH for port/pid
+RUNTIME_FILE = Path.home() / ".fixonce" / "runtime.json"
+LOCK_FILE = Path.home() / ".fixonce" / "server.lock"
 
 
 def get_user_config_dir() -> Path:
@@ -244,3 +254,132 @@ def format_port_report() -> str:
         lines.append(f"\nAvailable ports: {available}")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Runtime State Management (SINGLE SOURCE OF TRUTH)
+# ---------------------------------------------------------------------------
+
+def is_pid_running(pid: int) -> bool:
+    """Check if a process with given PID is running."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, ProcessLookupError):
+        return False
+
+
+def get_runtime_state() -> Optional[Dict[str, Any]]:
+    """
+    Read the canonical runtime state.
+
+    Returns:
+        Dict with {port, pid, started_at} or None if no valid state
+    """
+    if not RUNTIME_FILE.exists():
+        return None
+
+    try:
+        with open(RUNTIME_FILE, 'r') as f:
+            state = json.load(f)
+
+        # Validate PID is still running
+        pid = state.get("pid")
+        if pid and is_pid_running(pid):
+            return state
+
+        # Stale state - server not running
+        return None
+    except (json.JSONDecodeError, IOError):
+        return None
+
+
+def set_runtime_state(port: int, pid: int) -> bool:
+    """
+    Write the canonical runtime state.
+
+    Args:
+        port: The port the server is running on
+        pid: The process ID of the server
+
+    Returns:
+        True if successful, False if another server is running
+    """
+    RUNTIME_FILE.parent.mkdir(exist_ok=True)
+
+    # Check if another server is already running
+    existing = get_runtime_state()
+    if existing and existing.get("pid") != pid:
+        existing_pid = existing.get("pid")
+        if is_pid_running(existing_pid):
+            return False  # Another server is running
+
+    state = {
+        "port": port,
+        "pid": pid,
+        "started_at": datetime.now().isoformat(),
+        "user": getpass.getuser()
+    }
+
+    with open(RUNTIME_FILE, 'w') as f:
+        json.dump(state, f, indent=2)
+
+    return True
+
+
+def clear_runtime_state() -> None:
+    """Clear runtime state (called on server shutdown)."""
+    if RUNTIME_FILE.exists():
+        try:
+            RUNTIME_FILE.unlink()
+        except IOError:
+            pass
+
+
+def get_canonical_port() -> Optional[int]:
+    """
+    Get the canonical port from runtime state.
+
+    This is the SINGLE SOURCE OF TRUTH for which port to use.
+    All components (dashboard, MCP, API) should use this.
+
+    Returns:
+        Port number or None if no server is running
+    """
+    state = get_runtime_state()
+    return state.get("port") if state else None
+
+
+def acquire_server_lock(pid: int) -> bool:
+    """
+    Acquire the server lock.
+
+    Returns:
+        True if lock acquired, False if another server holds it
+    """
+    LOCK_FILE.parent.mkdir(exist_ok=True)
+
+    if LOCK_FILE.exists():
+        try:
+            with open(LOCK_FILE, 'r') as f:
+                existing_pid = int(f.read().strip())
+
+            if is_pid_running(existing_pid):
+                return False  # Another server has the lock
+        except (ValueError, IOError):
+            pass  # Stale or invalid lock file
+
+    # Write our PID
+    with open(LOCK_FILE, 'w') as f:
+        f.write(str(pid))
+
+    return True
+
+
+def release_server_lock() -> None:
+    """Release the server lock (called on server shutdown)."""
+    if LOCK_FILE.exists():
+        try:
+            LOCK_FILE.unlink()
+        except IOError:
+            pass

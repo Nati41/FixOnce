@@ -242,10 +242,60 @@ def get_error_health(browser_errors: List[Dict], threshold: int = ERROR_THRESHOL
     }
 
 
+def get_mcp_health_status() -> Dict[str, Any]:
+    """
+    Get MCP health as a signal for unified health.
+
+    Returns:
+        {
+            "status": "red" | "yellow" | "green",
+            "reasons": ["..."],
+            "mcp_state": "active" | "stale" | "configured" | "misconfigured" | "inactive"
+        }
+    """
+    try:
+        from core.mcp_health import check_mcp_health
+        result = check_mcp_health()
+
+        if result.state == "active":
+            return {"status": "green", "reasons": [], "mcp_state": "active"}
+        elif result.state == "stale":
+            return {
+                "status": "yellow",
+                "reasons": [f"MCP stale: {result.reason}"],
+                "mcp_state": "stale"
+            }
+        elif result.state == "configured":
+            return {
+                "status": "yellow",
+                "reasons": [f"MCP inactive: {result.reason}"],
+                "mcp_state": "configured"
+            }
+        elif result.state == "misconfigured":
+            return {
+                "status": "red",
+                "reasons": [f"MCP misconfigured: {result.reason}"],
+                "mcp_state": "misconfigured"
+            }
+        else:  # inactive
+            return {
+                "status": "red",
+                "reasons": ["MCP not configured"],
+                "mcp_state": "inactive"
+            }
+    except Exception as e:
+        return {
+            "status": "yellow",
+            "reasons": [f"MCP health check failed: {e}"],
+            "mcp_state": "unknown"
+        }
+
+
 def get_unified_health(
     ai_queue: List[Dict] = None,
     components: List[Dict] = None,
-    browser_errors: List[Dict] = None
+    browser_errors: List[Dict] = None,
+    include_mcp: bool = True
 ) -> Dict[str, Any]:
     """
     Calculate unified health status from all signals.
@@ -263,7 +313,8 @@ def get_unified_health(
             "signals": {
                 "commands": {...},
                 "stability": {...},
-                "errors": {...}
+                "errors": {...},
+                "mcp": {...}  # NEW - MCP health
             }
         }
     """
@@ -275,6 +326,7 @@ def get_unified_health(
     cmd_health = get_command_health(ai_queue)
     stability_health = get_stability_health(components)
     error_health = get_error_health(browser_errors)
+    mcp_health = get_mcp_health_status() if include_mcp else {"status": "green", "reasons": []}
 
     # Combine reasons
     all_reasons = []
@@ -285,7 +337,8 @@ def get_unified_health(
     signals = [
         ("commands", cmd_health),
         ("stability", stability_health),
-        ("errors", error_health)
+        ("errors", error_health),
+        ("mcp", mcp_health)
     ]
 
     # Sort by status severity
@@ -308,6 +361,7 @@ def get_unified_health(
         "signals": {
             "commands": cmd_health,
             "stability": stability_health,
-            "errors": error_health
+            "errors": error_health,
+            "mcp": mcp_health
         }
     }

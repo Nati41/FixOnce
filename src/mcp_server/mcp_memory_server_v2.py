@@ -25,6 +25,45 @@ def _log(*args, **kwargs):
     print(*args, file=sys.stderr, flush=True, **kwargs)
 
 
+# ---------------------------------------------------------------------------
+# Port Synchronization - Use canonical port from runtime.json
+# ---------------------------------------------------------------------------
+_cached_api_url = None
+_api_url_cache_time = 0
+
+def _get_api_url() -> str:
+    """
+    Get the canonical API URL from runtime.json.
+
+    SINGLE SOURCE OF TRUTH: ~/.fixonce/runtime.json
+    Falls back to 5000 if runtime file doesn't exist.
+    Caches for 5 seconds to avoid excessive file reads.
+    """
+    global _cached_api_url, _api_url_cache_time
+    import time
+
+    now = time.time()
+    if _cached_api_url and (now - _api_url_cache_time) < 5:
+        return _cached_api_url
+
+    try:
+        runtime_file = Path.home() / ".fixonce" / "runtime.json"
+        if runtime_file.exists():
+            with open(runtime_file, 'r') as f:
+                state = json.load(f)
+            port = state.get("port", 5000)
+            _cached_api_url = f"http://localhost:{port}"
+            _api_url_cache_time = now
+            return _cached_api_url
+    except Exception:
+        pass
+
+    # Fallback to default port
+    _cached_api_url = "http://localhost:5000"
+    _api_url_cache_time = now
+    return _cached_api_url
+
+
 def _debug_log(message: str):
     """
     Write debug message to user-specific log file.
@@ -583,7 +622,7 @@ def _recover_session() -> Optional[tuple]:
 def _get_active_project_from_api() -> Optional[dict]:
     """Get active project info from Flask API."""
     try:
-        res = requests.get('http://localhost:5000/api/projects/active', timeout=2)
+        res = requests.get(f'{_get_api_url()}/api/projects/active', timeout=2)
         if res.status_code == 200:
             return res.json()
         return None
@@ -625,7 +664,7 @@ def _auto_create_session() -> bool:
 def _get_live_errors() -> list:
     """Get unacknowledged browser errors."""
     try:
-        res = requests.get('http://localhost:5000/api/live-errors?since=600', timeout=2)
+        res = requests.get(f'{_get_api_url()}/api/live-errors?since=600', timeout=2)
         if res.status_code == 200:
             data = res.json()
             return data.get('errors', [])[:5]  # Max 5
@@ -637,7 +676,7 @@ def _get_live_errors() -> list:
 def _get_pending_commands_for_injection() -> list:
     """Get pending commands from dashboard (without marking as delivered)."""
     try:
-        res = requests.get('http://localhost:5000/api/memory/ai-queue', timeout=2)
+        res = requests.get(f'{_get_api_url()}/api/memory/ai-queue', timeout=2)
         if res.status_code == 200:
             data = res.json()
             return data.get('commands', [])[:3]  # Max 3
@@ -649,7 +688,7 @@ def _get_pending_commands_for_injection() -> list:
 def _get_new_rules() -> list:
     """Get custom rules that might be new."""
     try:
-        res = requests.get('http://localhost:5000/api/memory/rules', timeout=2)
+        res = requests.get(f'{_get_api_url()}/api/memory/rules', timeout=2)
         if res.status_code == 200:
             data = res.json()
             # Return only custom (non-default) rules
@@ -663,7 +702,7 @@ def _get_new_rules() -> list:
 def _get_recent_activities_for_handoff(editor: str, limit: int = 3) -> list:
     """Get recent activities for handoff summary between AIs."""
     try:
-        res = requests.get(f'http://localhost:5000/api/activity/feed?limit=20', timeout=2)
+        res = requests.get(f'{_get_api_url()}/api/activity/feed?limit=20', timeout=2)
         if res.status_code != 200:
             return []
 
@@ -678,7 +717,7 @@ def _get_recent_activities_for_handoff(editor: str, limit: int = 3) -> list:
             file_name = a.get('file', '').split('/')[-1] if a.get('file') else ''
 
             if tool == 'Edit' and file_name:
-                diff = a.get('diff', {})
+                diff = a.get('dif', {})
                 added = diff.get('added', 0)
                 if added > 0:
                     summaries.append(f"Edited {file_name} (+{added} lines)")
@@ -1034,7 +1073,7 @@ def _require_project() -> str:
 def _get_browser_errors_reminder() -> str:
     """Get reminder about browser errors if there are any recent ones."""
     try:
-        res = requests.get('http://localhost:5000/api/live-errors?since=300', timeout=2)
+        res = requests.get(f'{_get_api_url()}/api/live-errors?since=300', timeout=2)
         if res.status_code == 200:
             data = res.json()
             count = data.get('count', 0)
@@ -1075,7 +1114,7 @@ def _get_ai_context_injection() -> Optional[str]:
 
     try:
         # Check if AI Context mode is active
-        mode_res = requests.get('http://localhost:5000/api/ai-context-mode', timeout=1)
+        mode_res = requests.get(f'{_get_api_url()}/api/ai-context-mode', timeout=1)
         if mode_res.status_code != 200:
             return None
 
@@ -1084,7 +1123,7 @@ def _get_ai_context_injection() -> Optional[str]:
             return None
 
         # Get selected elements
-        context_res = requests.get('http://localhost:5000/api/browser-context', timeout=2)
+        context_res = requests.get(f'{_get_api_url()}/api/browser-context', timeout=2)
         if context_res.status_code != 200:
             return None
 
@@ -1189,7 +1228,7 @@ def _track_roi_event(event_type: str):
     """
     try:
         requests.post(
-            "http://localhost:5000/api/memory/roi/track",
+            f"{_get_api_url()}/api/memory/roi/track",
             json={"event": event_type},
             timeout=2
         )
@@ -1240,7 +1279,7 @@ def _log_mcp_activity(tool_name: str, details: dict = None):
 
         # Send to activity API
         requests.post(
-            "http://localhost:5000/api/activity/log",
+            f"{_get_api_url()}/api/activity/log",
             json=activity,
             timeout=2
         )
@@ -2343,7 +2382,7 @@ def _is_meaningful_snapshot(snapshot: Dict[str, Any]) -> bool:
 def _get_browser_errors_summary(limit: int = 3) -> Optional[str]:
     """Get summary of recent browser errors for init response with auto-injected solutions."""
     try:
-        res = requests.get('http://localhost:5000/api/live-errors', timeout=2)
+        res = requests.get(f'{_get_api_url()}/api/live-errors', timeout=2)
         if res.status_code != 200:
             return None
 
@@ -2486,7 +2525,7 @@ def _log_stable_component_modification(component_name: str, file_path: str, acto
         }
 
         requests.post(
-            "http://localhost:5000/api/activity/log",
+            f"{_get_api_url()}/api/activity/log",
             json=api_activity,
             timeout=2
         )
@@ -5161,7 +5200,7 @@ def get_browser_errors(limit: int = 10) -> str:
 
     try:
         # Try to fetch from the dashboard API
-        res = requests.get('http://localhost:5000/api/live-errors', timeout=3)
+        res = requests.get(f'{_get_api_url()}/api/live-errors', timeout=3)
         if res.status_code != 200:
             return "No browser errors available (dashboard not running or no errors)."
 
@@ -5226,7 +5265,7 @@ def get_browser_errors(limit: int = 10) -> str:
         return '\n'.join(lines)
 
     except requests.exceptions.RequestException:
-        return "Could not connect to dashboard. Make sure FixOnce server is running on port 5000."
+        return "Could not connect to dashboard. Make sure FixOnce server is running."
     except Exception as e:
         return f"Error fetching browser errors: {e}"
 
@@ -5253,7 +5292,7 @@ def get_browser_context() -> str:
         return error
 
     try:
-        res = requests.get('http://localhost:5000/api/browser-context', timeout=3)
+        res = requests.get(f'{_get_api_url()}/api/browser-context', timeout=3)
         if res.status_code != 200:
             return "No browser context available."
 
@@ -5318,7 +5357,7 @@ def get_browser_context() -> str:
                     if selection_key != last_key and is_fresh:
                         try:
                             requests.post(
-                                'http://localhost:5000/api/highlight-element',
+                                f'{_get_api_url()}/api/highlight-element',
                                 json={
                                     "selector": selector,
                                     "message": "Selection received",
@@ -5375,7 +5414,7 @@ def highlight_element(selector: str, message: str = "", mode: str = "ack", durat
 
     try:
         res = requests.post(
-            'http://localhost:5000/api/highlight-element',
+            f'{_get_api_url()}/api/highlight-element',
             json={
                 "selector": selector,
                 "message": message[:100] if message else "",
@@ -5606,7 +5645,7 @@ def get_impact_stats() -> str:
     Use this to report impact to the user.
     """
     try:
-        res = requests.get('http://localhost:5000/api/memory/roi', timeout=3)
+        res = requests.get(f'{_get_api_url()}/api/memory/roi', timeout=3)
         if res.status_code != 200:
             return "Could not fetch impact stats"
 
@@ -5670,7 +5709,7 @@ import time
 def _get_new_errors_since(timestamp: str) -> list:
     """Get errors that occurred after the given timestamp."""
     try:
-        res = requests.get(f'http://localhost:5000/api/live-errors?since=10', timeout=2)
+        res = requests.get(f'{_get_api_url()}/api/live-errors?since=10', timeout=2)
         if res.status_code == 200:
             data = res.json()
             errors = data.get('errors', [])

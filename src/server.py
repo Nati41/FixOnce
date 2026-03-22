@@ -34,7 +34,13 @@ from core.port_manager import (
     find_available_port as pm_find_port,
     set_preferred_port,
     get_preferred_port,
-    is_port_available
+    is_port_available,
+    get_runtime_state,
+    set_runtime_state,
+    clear_runtime_state,
+    acquire_server_lock,
+    release_server_lock,
+    get_canonical_port
 )
 
 # ---------------------------------------------------------------------------
@@ -212,6 +218,46 @@ def serve_terms():
 def serve_security():
     """Serve the security overview page."""
     return _send_dashboard_file(INSTALL_DATA_DIR / "security.html")
+
+
+@flask_app.route("/api/canonical-runtime")
+def canonical_runtime():
+    """
+    Return the canonical runtime state.
+
+    This endpoint allows dashboards to verify they're on the correct port.
+    If the dashboard port doesn't match the canonical port, it should redirect.
+
+    Returns:
+        JSON with {port, pid, started_at, is_canonical}
+    """
+    import os
+    state = get_runtime_state()
+
+    if not state:
+        return jsonify({
+            "status": "error",
+            "message": "No canonical server running"
+        }), 503
+
+    # Check if the requester is on the canonical port
+    request_port = request.host.split(':')[-1] if ':' in request.host else '80'
+    try:
+        request_port = int(request_port)
+    except ValueError:
+        request_port = 80
+
+    canonical_port = state.get("port")
+
+    return jsonify({
+        "status": "ok",
+        "port": canonical_port,
+        "pid": state.get("pid"),
+        "started_at": state.get("started_at"),
+        "user": state.get("user"),
+        "is_canonical": request_port == canonical_port,
+        "request_port": request_port
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -410,12 +456,25 @@ def check_mission_log() -> dict:
 # ---------------------------------------------------------------------------
 def _run_flask():
     global ACTUAL_PORT
+    import os
+    import atexit
+
+    current_pid = os.getpid()
+
+    # Try to acquire server lock
+    if not acquire_server_lock(current_pid):
+        print()
+        print("\033[1;31m❌ Another FixOnce server is already running.\033[0m")
+        print("   Use 'kill <pid>' to stop it, or check ~/.fixonce/runtime.json")
+        print()
+        return
 
     try:
         requested_port = find_available_port(DEFAULT_PORT)
     except RuntimeError as e:
         print(f"[WARNING] {e}")
         print("   Kill other processes or free up a port.")
+        release_server_lock()
         return
 
     server = make_server("0.0.0.0", requested_port, flask_app)
@@ -429,12 +488,27 @@ def _run_flask():
     # Update the discovered port after the server socket is actually bound.
     set_actual_port(ACTUAL_PORT)
 
+    # Write canonical runtime state (SINGLE SOURCE OF TRUTH)
+    if not set_runtime_state(ACTUAL_PORT, current_pid):
+        print()
+        print("\033[1;31m❌ Failed to set runtime state - another server may be running.\033[0m")
+        print()
+        release_server_lock()
+        return
+
     # Save port to multiple locations for different consumers:
     # 1. User-specific config (~/.fixonce/config.json) - for multi-user isolation
     set_preferred_port(ACTUAL_PORT)
     # 2. Project data dir (for legacy/backup)
     port_file = DATA_DIR / "current_port.txt"
     port_file.write_text(str(ACTUAL_PORT))
+
+    # Cleanup on exit
+    def cleanup():
+        clear_runtime_state()
+        release_server_lock()
+
+    atexit.register(cleanup)
 
     server.serve_forever()
 
