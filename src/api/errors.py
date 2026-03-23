@@ -116,6 +116,33 @@ def api_log_error():
                         "solution": solution["solution_text"],
                         "success_count": solution.get("success_count", 0)
                     }
+
+                    # 🔥 AUTO-APPLY: Add to pending fixes queue
+                    try:
+                        from core.pending_fixes import add_pending_fix
+                        # High similarity = high confidence (AUTO-FIX behavior)
+                        # score >= 0.85 → AUTO (90+)
+                        # score >= 0.70 → SUGGEST (70-89)
+                        base_confidence = int(score * 100)  # 0.9 → 90
+                        success_bonus = solution.get("success_count", 0) * 3
+                        confidence = min(95, base_confidence + success_bonus)
+                        similarity = int(score * 100)
+
+                        result = add_pending_fix(
+                            error_message=entry["message"],
+                            solution_text=solution["solution_text"],
+                            confidence=confidence,
+                            similarity=similarity,
+                            source="semantic",
+                            error_id=f"err_{datetime.now().timestamp()}"
+                        )
+
+                        if result["action"] == "auto":
+                            print(f"[AUTO-APPLY] 🔧 Ready to auto-fix: {entry['message'][:50]}...")
+                        elif result["action"] == "suggest":
+                            print(f"[SUGGEST] 💡 Solution found: {entry['message'][:50]}...")
+                    except Exception as pf_err:
+                        print(f"[PendingFix] Error: {pf_err}")
     except Exception as e:
         print(f"[V3.1] Match error: {e}")
 
@@ -150,6 +177,24 @@ def api_log_error():
                             "source": "repo"
                         }
                         print(f"[CommittedSolution] Found match: {sol.get('problem', '')[:50]}")
+
+                        # 🔥 AUTO-APPLY: Committed solutions have high confidence
+                        try:
+                            from core.pending_fixes import add_pending_fix
+                            result = add_pending_fix(
+                                error_message=entry["message"],
+                                solution_text=sol.get("solution", ""),
+                                confidence=92,  # Committed solutions are trusted
+                                similarity=75,
+                                source="committed",
+                                files=sol.get("files_changed", []),
+                                error_id=f"committed_{datetime.now().timestamp()}"
+                            )
+                            if result["action"] == "auto":
+                                print(f"[AUTO-APPLY] 🔧 Committed fix ready: {entry['message'][:50]}...")
+                        except Exception as pf_err:
+                            print(f"[PendingFix] Error: {pf_err}")
+
                         break
         except Exception as e:
             print(f"[CommittedSolution] Error: {e}")
@@ -318,6 +363,17 @@ def api_clear_logs():
     with log_lock:
         error_log.clear()
     return jsonify({"status": "ok", "message": "Logs cleared"})
+
+
+@errors_bp.route("/api/clear_errors", methods=["POST"])
+def api_clear_errors():
+    """Clear all stored browser errors.
+
+    Used by fo_errors to clear test/noise errors automatically.
+    Uses the unified error_store for consistency with fo_errors.
+    """
+    count = clear_errors()
+    return jsonify({"status": "cleared", "count": count})
 
 
 @errors_bp.route("/api/page-load-success", methods=["POST"])

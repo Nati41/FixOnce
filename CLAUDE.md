@@ -1,82 +1,86 @@
 # FixOnce — AI Memory Layer
 
-> FixOnce is mandatory for tracked work in this project.
-> **DOGFOODING RULE**: This IS the FixOnce project. AI MUST demonstrate proper usage.
+> **DOGFOODING**: This IS the FixOnce project. AI MUST use FixOnce correctly.
 
 ## Disable
 
-If the user says "work without FixOnce" or "no fixonce" — stop calling all MCP tools. Work normally.
-
-## 🚨 CRITICAL: Session Start (FIRST THING!)
-
-**BEFORE ANY OTHER RESPONSE**, call:
-```
-auto_init_session(cwd="/Users/haimdayan/Desktop/FixOnce")
-```
-
-This is NOT optional. Do NOT skip this step. Do NOT respond to the user before calling this.
-
-If initialization fails, fix it before doing anything else.
+Say "no fixonce" to disable. Otherwise, FixOnce is mandatory.
 
 ---
 
-## 🎯 Goal Update (MANDATORY)
+## Error Handling Protocol
 
-**EVERY TIME the user gives a new task**, IMMEDIATELY call:
+### KNOWN ERROR (AUTO-FIX READY)
+
+When `fo_errors()` returns **"AUTO-FIX READY"**:
+
 ```
-update_work_context(current_goal="...", work_area="...")
+fo_errors()  → sees AUTO-FIX READY
+fo_apply()   → MANDATORY - get fix instructions
+[apply fix]  → edit the code
+fo_solved()  → record it
+fo_sync()    → update context
 ```
 
-The Dashboard shows the Goal in real-time. A stale Goal = protocol violation.
+**DO NOT** use fo_search or manual investigation when AUTO-FIX READY exists.
 
-Examples:
-- User asks to fix installer → `update_work_context(current_goal="Fix installer port detection")`
-- User asks about tests → `update_work_context(current_goal="Review test results")`
-- User asks to add feature → `update_work_context(current_goal="Add [feature name]")`
+### UNKNOWN ERROR
+
+When no AUTO-FIX:
+
+```
+fo_errors()  → sees error, no auto-fix
+fo_search()  → check if solved before
+[investigate & fix]
+fo_solved()  → record it
+fo_sync()    → update context
+```
 
 ---
-
-## When Active
-
-- **Smart sync**: Check `get_live_record()` at key moments
-- **Respect decisions** returned from init. Ask before contradicting.
-- **Update goal** before work: `update_work_context(current_goal=...)`
-- **Log insights**: `update_live_record("lessons", ...)`
-- **Log decisions**: `log_decision("...", "...")`
-- **Search first**: `search_past_solutions("...")`
-- **After changes**: `update_work_context(last_change="...", last_file="...")`
-
-## New Project (status: NEW)
-
-Ask "Want me to scan?" → `scan_project()` → save with `update_live_record`
-
-## Enforcement
-
-- FixOnce is in mandatory enforcement mode for MCP usage.
-- Non-init FixOnce tools are blocked until explicit session initialization occurs.
-- Do not bypass FixOnce by starting tracked work without an active session.
 
 ## Tools
 
-| Tool | Purpose |
-|------|---------|
-| `auto_init_session` / `init_session` | Start session |
-| `scan_project` | Scan new project |
-| `update_live_record` | Save goal / lessons / architecture |
-| `log_decision` | Record a decision |
-| `log_avoid` | Record an anti-pattern |
-| `search_past_solutions` | Search memory |
-| `get_live_record` | Read memory |
+| Tool | When |
+|------|------|
+| `fo_init(cwd)` | Start of conversation |
+| `fo_errors()` | Check browser errors |
+| `fo_apply()` | **When AUTO-FIX READY** (mandatory) |
+| `fo_search(query)` | Before fixing unknown errors |
+| `fo_solved(error, solution)` | After fixing any error |
+| `fo_sync(last_change)` | After edits |
+| `fo_decide(text, reason)` | Record decision |
+| `fo_component(action, name)` | Track components |
 
-## 🔒 Active Decisions
+---
+
+## Rules
+
+1. **Init first** — `fo_init()` before anything
+2. **Auto-fix first** — if AUTO-FIX READY, use `fo_apply()` immediately
+3. **Save fixes** — `fo_solved()` after every fix
+4. **Sync context** — `fo_sync()` after edits
+
+---
+
+## Voice & Behavior
+
+**NEVER say:**
+- "Let's test...", "Checking tools...", "The format works"
+- "Do you want me to...?" (for obvious actions)
+
+**ALWAYS:**
+- Act immediately on known fixes
+- Speak like a working assistant, not a validator
+- Execute API calls silently, show only results
+
+**When fo_apply returns a fix:**
+1. Apply it to code immediately
+2. Respond: "🔧 Fixed [brief description]"
+
+---
+
+## Active Decisions
 
 | Decision | Reason |
 |----------|--------|
-| **Dashboard/UI = English only** | User requested |
-
-## 🎯 AI Context Mode
-
-When user says "this", "that", "זה", "את זה" referring to a UI element:
-1. Call `get_browser_context()`
-2. The selected element is what they mean
-3. Don't mention the mode - just use it naturally
+| **Dashboard UI = English** | User preference |
