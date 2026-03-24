@@ -1,0 +1,39 @@
+{
+  "fixonce_version": "1.0",
+  "project_id": "FixOnce_34592c5b",
+  "updated_at": "2026-03-24T21:41:12.386423",
+  "count": 5,
+  "filter_criteria": "importance=high OR use_count>=3",
+  "insights": [
+    {
+      "text": "Project structure: src/server.py (Flask main), src/mcp_server/mcp_memory_server_v2.py (MCP tools), src/core/ (business logic), src/api/ (REST endpoints), data/dashboard_v3.html (main UI)",
+      "timestamp": "2026-03-23T12:56:04.853752",
+      "importance": "medium",
+      "use_count": 3
+    },
+    {
+      "text": "Chrome extension (extension/) captures browser errors and sends to Flask server for proactive error detection",
+      "timestamp": "2026-03-23T12:56:04.851337",
+      "importance": "medium",
+      "use_count": 3
+    },
+    {
+      "text": "Project data stored in data/projects_v2/{project_id}.json with embeddings in {project_id}.embeddings/ folder",
+      "timestamp": "2026-03-23T12:56:04.843808",
+      "importance": "medium",
+      "use_count": 3
+    },
+    {
+      "text": "Translation layer added to dashboard_vnext.html: LANG detected from navigator.language, TRANSLATIONS object with he/en pairs, t() function for lookups. Applied to: Protocol Compliance rules, ROI labels, System Tree empty state, handoffs label.",
+      "timestamp": "2026-03-23T12:56:04.849249",
+      "importance": "medium",
+      "use_count": 3
+    },
+    {
+      "text": "Browser Context v5 polished: dedupe with unique IDs, cleanup on navigation, FAB 3 states (idle/selecting/active), dashboard shows clean status (element count + last highlight)",
+      "timestamp": "2026-02-25T19:34:02.446075",
+      "importance": "medium",
+      "use_count": 3
+    }
+  ]
+}
