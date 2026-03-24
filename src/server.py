@@ -151,6 +151,15 @@ def install_wizard():
     return "Installer not found", 404
 
 
+@flask_app.route("/setup-debug")
+def setup_debug():
+    """Debug route to manually access setup wizard (for troubleshooting)."""
+    installer_path = INSTALL_DATA_DIR / "installer.html"
+    if installer_path.exists():
+        return _send_dashboard_file(installer_path)
+    return "Installer not found", 404
+
+
 @flask_app.route("/next")
 @flask_app.route("/vnext")
 @flask_app.route("/lite")

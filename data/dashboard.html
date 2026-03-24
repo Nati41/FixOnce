@@ -1727,23 +1727,25 @@ function showSetup() {
 }
 
 async function initSetup() {
-  // Check if we should show setup
-  const dismissed = localStorage.getItem('fixonce_setup_dismissed');
-  const status = await checkSetupStatus();
-
-  // Show setup if:
-  // 1. Never dismissed AND (MCP not configured OR first launch)
-  // 2. Engine not running (critical error)
-
-  if (!status || !status.engine.running) {
-    // Engine not running - show setup
-    showSetup();
+  // Check if installation is complete - if yes, NEVER show setup
+  try {
+    const installRes = await fetch('/api/installer/status');
+    if (installRes.ok) {
+      const installStatus = await installRes.json();
+      if (installStatus.installed) {
+        // Installation complete - never show setup overlay
+        return;
+      }
+    }
+  } catch (e) {
+    // If check fails, assume installed and skip setup
     return;
   }
 
-  if (!dismissed && (!status.mcp.configured || status.overall !== 'ready')) {
+  // Only show setup for fresh/incomplete installs
+  const status = await checkSetupStatus();
+  if (!status || !status.engine.running) {
     showSetup();
-    return;
   }
 }
 

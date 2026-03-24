@@ -1082,21 +1082,13 @@ def start_server_and_open_dashboard() -> bool:
             print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to start: {e}")
             return False
 
-    # Open dashboard
-    try:
-        if current_platform == 'mac':
-            subprocess.run(['open', dashboard_url], capture_output=True)
-        elif current_platform == 'windows':
-            subprocess.run(f'start "" "{dashboard_url}"', shell=True, capture_output=True)
-        else:
-            subprocess.run(['xdg-open', dashboard_url], capture_output=True)
-
-        print(f"  {Colors.GREEN}[OK]{Colors.END} Dashboard opened: {dashboard_url}")
-        return True
-    except Exception as e:
-        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not open dashboard: {e}")
-        print(f"       Open manually: {dashboard_url}")
-        return True
+    # Don't auto-open dashboard - let user/AI decide
+    print(f"  {Colors.GREEN}[OK]{Colors.END} Server running: {dashboard_url}")
+    print()
+    print(f"  {Colors.GREEN}🎉 FixOnce installed successfully!{Colors.END}")
+    print(f"  Dashboard: {dashboard_url}")
+    print()
+    return True
 
 # ============ Create Launcher Scripts ============
 
