@@ -2300,7 +2300,7 @@ def _do_init_session(working_dir: str) -> str:
                 data["ai_handoffs"] = data["ai_handoffs"][-10:]
 
             _save_project(project_id, data)
-        return _format_from_snapshot(cached, working_dir)
+        return _format_minimal_init(working_dir)
 
     # Load or create project (with legacy migration)
     data = _load_project(project_id)
@@ -2362,11 +2362,8 @@ def _do_init_session(working_dir: str) -> str:
     # Update index
     _update_snapshot(project_id, working_dir, data)
 
-    # Build response
-    response = _format_init_response(data, status, working_dir)
-    if migrated:
-        response += "\n\n🔄 **Memory migrated** — project ID changed (git remote/hash strategy). All decisions, insights, and history preserved."
-    return response
+    # Return minimal response
+    return _format_minimal_init(working_dir)
 
 
 def _is_meaningful_snapshot(snapshot: Dict[str, Any]) -> bool:
@@ -3573,7 +3570,7 @@ def update_work_context(
         update_data['next_step'] = next_step
 
     if not update_data:
-        return context + "Error: No fields provided to update"
+        return "Error: No fields provided to update"
 
     # Update the intent section
     project_id = session.project_id
@@ -3598,9 +3595,8 @@ def update_work_context(
     # Log activity
     _log_mcp_activity("update_work_context", update_data)
 
-    # Format response
-    updated_fields = list(update_data.keys())
-    return context + f"Updated work context: {', '.join(updated_fields)}"
+    # Minimal response (no context header noise)
+    return "Context updated."
 
 
 @mcp.tool()
@@ -4748,22 +4744,27 @@ def solution_applied(
             existing['solution'] = solution  # Update with latest solution
             existing['files_changed'] = files_list or existing.get('files_changed', [])
             _save_project(session.project_id, memory)
-            return context + f"✅ Updated existing solution (reused {existing['reuse_count']} times)"
+            # Minimal response
+            return "Solution updated."
 
     memory['debug_sessions'].append(solution_record)
     _save_project(session.project_id, memory)
 
+    # Also save to semantic engine for auto-apply matching
+    try:
+        from core.semantic_engine import get_engine
+        from config import PERSONAL_DB_PATH
+        engine = get_engine(PERSONAL_DB_PATH)
+        engine.save_solution(error_message, solution)
+        print(f"[fo_solved] Saved to semantic engine: {error_message[:50]}...")
+    except Exception as e:
+        print(f"[fo_solved] Semantic engine save failed: {e}")
+
     # Track ROI
     _track_roi_event("solution_saved")
 
-    return context + f"""✅ Solution recorded!
-
-🐛 **Error:** {error_message[:80]}{'...' if len(error_message) > 80 else ''}
-✅ **Fix:** {solution}
-📁 **Files:** {', '.join(files_list) if files_list else 'None specified'}
-
-This solution will be suggested next time a similar error appears.
-Run `Commit Knowledge` to save it to Git."""
+    # Minimal response (no context header noise)
+    return "Solution saved."
 
 
 def _calculate_similarity(query: str, text: str) -> int:
@@ -5039,38 +5040,17 @@ def search_past_solutions(query: str) -> str:
     if matched_insights:
         _track_roi_event("solution_reused")
 
-        # Build Smart Override Header
-        lines = [context]
-        lines.append("## 🎯 EXISTING SOLUTION FOUND\n")
-
-        search_method = "🔍 Semantic" if semantic_results else "📝 Keyword"
-        lines.append(f"_Search method: {search_method}_\n")
-
-        for i, m in enumerate(matched_insights[:3]):  # Top 3
-            lines.append(f"### Match #{i+1}")
-            lines.append(f"**Confidence:** {m['confidence']}%")
-            lines.append(f"**Similarity:** {m['similarity']}%")
-            lines.append(f"**Date:** {m['date']}")
-            lines.append(f"**Used:** {m.get('use_count', 0)} times")
-            if m.get('type') and m['type'] != 'insight':
-                lines.append(f"**Type:** {m['type']}")
-            lines.append(f"\n> {m['text']}\n")
-
-        lines.append("---")
-        lines.append("**📌 Recommended:** Apply existing solution.")
-        lines.append("**💡 Override:** Only investigate if this doesn't match your case.")
-
-        if matches:
-            lines.append("\n### Also found (failed attempts):")
-            lines.extend(matches)
-
+        # Minimal output - just the solution
+        best = matched_insights[0]
+        lines = [f"Found {len(matched_insights)} match(es). Best ({best['similarity']}%):"]
+        lines.append(f"> {best['text'][:200]}")
         return '\n'.join(lines)
 
     elif matches:
-        return context + "## Found (failed attempts only):\n" + '\n'.join(matches)
+        return "Found failed attempts only. Investigate manually."
 
     else:
-        return context + "No matching solutions found. You may investigate."
+        return "No matches. Investigate manually."
 
 
 @mcp.tool()
@@ -5213,56 +5193,60 @@ def get_browser_errors(limit: int = 10) -> str:
         # Track ROI: errors caught in real-time
         _track_roi_event("error_caught_live")
 
-        lines = ["## Browser Errors (from Chrome Extension)\n"]
-        lines.append("These errors were captured from the user's browser:\n")
+        # Classify errors: real vs test/noise
+        def is_test_error(err):
+            url = err.get('url', '')
+            file = err.get('file', '')
+            # Test markers: empty URL, test.local, empty file with no URL
+            if not url and not file:
+                return True
+            if 'test.local' in url or 'localhost:0' in url:
+                return True
+            if url == 'http://test.local' or url == 'https://test.local':
+                return True
+            return False
 
-        solutions_found = 0
-        injected_solutions = set()  # Quality gate #2: prevent duplicate injections
+        real_errors = [e for e in errors if not is_test_error(e)]
+        test_errors = [e for e in errors if is_test_error(e)]
 
-        for err in errors[:limit]:
-            msg = err.get('message', err.get('error', 'Unknown error'))
-            source = err.get('source', err.get('url', 'Unknown source'))
-            timestamp = err.get('timestamp', '')[:16].replace('T', ' ')
-            line_no = err.get('lineno', err.get('line', ''))
-            col_no = err.get('colno', err.get('column', ''))
+        # Auto-populate pending_fixes from previous_solution
+        try:
+            from core.pending_fixes import add_pending_fix
+            for err in real_errors:
+                prev = err.get('previous_solution') or err.get('matched_solution')
+                if prev and prev.get('solution'):
+                    score = prev.get('similarity_score', prev.get('score', 0))
+                    confidence = int(score * 100) if score <= 1 else int(score)
+                    add_pending_fix(
+                        error_message=err.get('message', '')[:500],
+                        solution_text=prev['solution'],
+                        confidence=confidence,
+                        similarity=confidence,
+                        source=prev.get('source', 'semantic'),
+                        error_id=f"err_{hash(err.get('message', ''))}"
+                    )
+        except Exception as e:
+            _log(f"[get_browser_errors] pending_fixes error: {e}")
 
-            # Format source
-            source_short = source.split('/')[-1] if '/' in source else source
-            if source_short and len(source_short) > 40:
-                source_short = source_short[:40] + '...'
+        lines = []
 
-            location = f":{line_no}" if line_no else ""
-            if col_no:
-                location += f":{col_no}"
+        # Real errors first
+        if real_errors:
+            for err in real_errors[:limit]:
+                msg = err.get('message', err.get('error', 'Unknown error'))[:80]
+                lines.append(f"• {msg}")
 
-            lines.append(f"### Error in {source_short}{location}")
-            lines.append(f"**Message:** {msg}")
-            if timestamp:
-                lines.append(f"**Time:** {timestamp}")
+        # Test errors - brief note only
+        if test_errors and not real_errors:
+            return f"{len(test_errors)} test/noise error(s) only. Safe to ignore or clear."
 
-            # 🔥 FIX #1: Auto-Inject Solutions (with quality controls)
-            solution = _find_solution_for_error(msg)
-            if solution:
-                solution_key = solution['text'][:50]  # Use first 50 chars as key
+        if test_errors and real_errors:
+            lines.append(f"(+ {len(test_errors)} test errors)")
 
-                # Quality gate #2: Don't inject same solution twice
-                if solution_key not in injected_solutions:
-                    solutions_found += 1
-                    injected_solutions.add(solution_key)
-                    _track_roi_event("solution_reused")
-                    lines.append(f"\n**💡 This was solved before ({solution['similarity']}% match):**")
-                    lines.append(f"> {solution['text'][:200]}{'...' if len(solution['text']) > 200 else ''}")
-                    lines.append(f"_Applied {solution['use_count']} times_")
-                else:
-                    lines.append(f"\n_💡 Same solution as above_")
-            lines.append("")
+        if not lines:
+            return "No browser errors captured."
 
-        if solutions_found > 0:
-            lines.append(f"\n✅ **{solutions_found} known fix(es) found.** Apply them.")
-        else:
-            lines.append("\n_No existing solutions. Fix and save with `update_live_record()`._")
-
-        return '\n'.join(lines)
+        return f"{len(real_errors)} error(s):\n" + "\n".join(lines)
 
     except requests.exceptions.RequestException:
         return "Could not connect to dashboard. Make sure FixOnce server is running."
@@ -6250,6 +6234,368 @@ def clear_resume_state() -> str:
         return "✅ Resume state cleared. No pending work state."
     else:
         return "No resume state to clear."
+
+
+# ============================================================
+# SIMPLIFIED API - 8 Core Tools (v2.0)
+# ============================================================
+# These 8 tools replace the 45+ tools for a cleaner AI experience.
+# Old tools still work but are not documented in CLAUDE.md.
+
+def _format_minimal_init(working_dir: str) -> str:
+    """
+    Format natural, human init response - 2-3 lines max.
+    Should feel like resuming a conversation, not reading a task manager.
+    """
+    from pathlib import Path
+
+    project_name = Path(working_dir).name
+    project_id = _get_project_id(working_dir)
+    data = _load_project(project_id)
+
+    # Check for auto-fixes first (top priority)
+    has_auto_fixes = False
+    try:
+        from core.pending_fixes import get_auto_fixes
+        auto_fixes = get_auto_fixes()
+        if auto_fixes:
+            has_auto_fixes = True
+    except:
+        pass
+
+    if has_auto_fixes:
+        return f"Back to **{project_name}**. I have a fix ready — running `fo_apply()`."
+
+    # Check for live errors - don't report count, fo_errors is source of truth
+    live_errors = _get_live_errors()
+    if live_errors:
+        return f"Back to **{project_name}**. Next: check browser errors with `fo_errors()`."
+
+    # Get resume context
+    resume_state = None
+    if _resume_state_available:
+        try:
+            resume_state = _get_resume_state(project_id)
+        except:
+            pass
+
+    # Natural resume message
+    last_thing = None
+    if resume_state and resume_state.get("last_completed_step"):
+        last_thing = resume_state['last_completed_step']
+    elif data and data.get("work_context", {}).get("last_change"):
+        last_thing = data['work_context']['last_change']
+
+    next_thing = None
+    if resume_state and resume_state.get("next_recommended_action"):
+        next_thing = resume_state['next_recommended_action']
+    elif resume_state and resume_state.get("active_task"):
+        next_thing = resume_state['active_task']
+
+    if last_thing and next_thing:
+        return f"Back to **{project_name}**. We finished {last_thing}. Next up: {next_thing}"
+    elif last_thing:
+        return f"Back to **{project_name}**. Last time we {last_thing}."
+    elif next_thing:
+        return f"Back to **{project_name}**. Picking up: {next_thing}"
+    else:
+        return f"Back to **{project_name}**. Ready when you are."
+
+
+@mcp.tool()
+def fo_init(cwd: str = "") -> str:
+    """
+    Initialize FixOnce session. MUST be called first.
+
+    Returns minimal context: project, last action, next step.
+
+    Args:
+        cwd: Current working directory (usually provided by Claude Code)
+    """
+    mode = _get_fixonce_mode()
+    if mode == MODE_OFF:
+        return "FixOnce is off."
+    if mode == MODE_PASSIVE:
+        return "FixOnce is in PASSIVE mode."
+
+    # Use boundary detection to find project root
+    working_dir = None
+    if BOUNDARY_DETECTION_ENABLED and cwd and os.path.isdir(cwd):
+        project_root, marker, confidence = find_project_root(cwd)
+        if project_root and confidence in ("high", "medium"):
+            working_dir = project_root
+        elif _is_valid_project_dir(cwd):
+            working_dir = cwd
+
+    if not working_dir and cwd and os.path.isdir(cwd) and _is_valid_project_dir(cwd):
+        working_dir = cwd
+
+    if not working_dir:
+        return "Open Claude Code from a project folder."
+
+    # Initialize session (all the background work)
+    project_id = _get_project_id(working_dir)
+    _set_session(project_id, working_dir)
+    _persist_session(project_id, working_dir)
+    session = _get_session()
+    session.mark_initialized()
+    session.log_tool_call("fo_init")
+    _mark_session_initialized()
+
+    # Update active project for dashboard
+    try:
+        from managers.multi_project_manager import set_active_project
+        set_active_project(
+            project_id=project_id,
+            detected_from="fo_init",
+            display_name=Path(working_dir).name,
+            working_dir=working_dir
+        )
+    except:
+        pass
+
+    # Return minimal formatted output
+    return _format_minimal_init(working_dir)
+
+
+@mcp.tool()
+def fo_sync(
+    goal: str = "",
+    work_area: str = "",
+    last_change: str = "",
+    last_file: str = "",
+    why: str = ""
+) -> str:
+    """
+    Sync work context with FixOnce. Call after changes or when starting new work.
+
+    Args:
+        goal: Current goal (e.g., "Fix login bug")
+        work_area: Feature/module area (e.g., "authentication")
+        last_change: What was just done (e.g., "Added validation")
+        last_file: Last file modified
+        why: Why this work matters
+    """
+    return update_work_context(
+        current_goal=goal,
+        work_area=work_area,
+        last_change=last_change,
+        last_file=last_file,
+        why=why
+    )
+
+
+@mcp.tool()
+def fo_decide(text: str, reason: str, action: str = "add") -> str:
+    """
+    Record a decision, avoid pattern, or supersede existing decision.
+
+    Args:
+        text: The decision or avoid text
+        reason: Why this decision was made
+        action: "add" (default), "avoid", or "supersede:OLD_TEXT"
+
+    Examples:
+        fo_decide("Use PostgreSQL", "Better for our scale")
+        fo_decide("Never use eval()", "Security risk", action="avoid")
+        fo_decide("Use MySQL", "Changed requirements", action="supersede:Use PostgreSQL")
+    """
+    if action == "avoid":
+        return log_avoid(text, reason)
+    elif action.startswith("supersede:"):
+        old_text = action[10:]  # Remove "supersede:" prefix
+        return supersede_decision(old_decision_text=old_text, new_decision=text, reason=reason)
+    else:
+        return log_decision(text, reason)
+
+
+@mcp.tool()
+def fo_search(query: str) -> str:
+    """
+    Search FixOnce memory for past solutions, decisions, and insights.
+
+    IMPORTANT: Call this BEFORE trying to fix any error!
+
+    Args:
+        query: Search query (error message, topic, or keywords)
+    """
+    return search_past_solutions(query)
+
+
+@mcp.tool()
+def fo_solved(error: str, solution: str, files: str = "") -> str:
+    """
+    Record that you fixed an error. Saves solution for future use.
+
+    Call this AFTER successfully fixing a bug.
+
+    Args:
+        error: The error message that was fixed
+        solution: What you did to fix it (1-2 sentences)
+        files: Comma-separated list of files changed
+    """
+    return solution_applied(error_message=error, solution=solution, files_changed=files)
+
+
+@mcp.tool()
+def fo_errors(limit: int = 5) -> str:
+    """
+    Get browser errors captured by FixOnce extension.
+
+    Call this proactively when working on web projects.
+    Returns errors AND any auto-fixes ready to apply.
+
+    Args:
+        limit: Max errors to return (default 5)
+    """
+    lines = []
+
+    # Check for auto-fixes first
+    try:
+        from core.pending_fixes import get_auto_fixes, get_suggested_fixes
+
+        auto_fixes = get_auto_fixes()
+        suggested_fixes = get_suggested_fixes()
+
+        if auto_fixes:
+            lines.append(f"**AUTO-FIX READY** — call `fo_apply()` now (mandatory)")
+            for fix in auto_fixes[:3]:
+                lines.append(f"• {fix['error_message'][:50]}...")
+            lines.append("")
+
+        if suggested_fixes:
+            lines.append(f"**{len(suggested_fixes)} suggested fix(es):**")
+            for fix in suggested_fixes[:3]:
+                lines.append(f"• {fix['error_message'][:60]} ({fix['confidence']}%)")
+            lines.append("")
+
+    except Exception as e:
+        _log(f"[fo_errors] pending_fixes error: {e}")
+
+    # Get browser errors
+    errors_output = get_browser_errors(limit=limit)
+
+    if lines:
+        return "\n".join(lines) + errors_output
+    return errors_output
+
+
+@mcp.tool()
+def fo_apply(fix_id: str = "") -> str:
+    """
+    Apply pending auto-fixes.
+
+    Call this after fo_errors() shows auto-fixes ready.
+    Without fix_id, applies ALL auto-fixes (confidence ≥90%).
+
+    Args:
+        fix_id: Specific fix ID to apply, or empty for all auto-fixes
+
+    Returns:
+        Instructions for what to fix
+    """
+    error, _ = _universal_gate("fo_apply")
+    if error:
+        return error
+
+    try:
+        from core.pending_fixes import get_auto_fixes, mark_fix_applied
+
+        auto_fixes = get_auto_fixes()
+
+        if not auto_fixes:
+            return "No auto-fixes pending. Run `fo_errors()` first."
+
+        # Filter by fix_id if provided
+        if fix_id:
+            auto_fixes = [f for f in auto_fixes if f["id"] == fix_id]
+            if not auto_fixes:
+                return f"Fix '{fix_id}' not found or not auto-applicable."
+
+        lines = []
+
+        for fix in auto_fixes:
+            # Concise fix format
+            lines.append(f"**Fix:** {fix['solution_text'][:100]}")
+            if fix.get("files"):
+                files_str = ", ".join(fix["files"]) if isinstance(fix["files"], list) else fix["files"]
+                lines.append(f"**File:** {files_str}")
+            lines.append("")
+
+            # Mark as applied
+            mark_fix_applied(fix["id"], success=True)
+
+        lines.append("Run `fo_solved(error, solution)` when done.")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Error applying fixes: {e}"
+
+
+@mcp.tool()
+def fo_component(
+    action: str,
+    name: str = "",
+    status: str = "",
+    files: str = "",
+    desc: str = ""
+) -> str:
+    """
+    Manage component stability tracking.
+
+    Args:
+        action: One of: "status", "stable", "check", "add_files", "report", "discover", "rollback"
+        name: Component name (required for most actions)
+        status: New status for "status" action: "done", "in_progress", "blocked", "not_started"
+        files: Comma-separated file list for "stable" or "add_files"
+        desc: Description for "status" action
+
+    Examples:
+        fo_component("status", "Auth", status="done", desc="Login working")
+        fo_component("stable", "Auth", files="src/auth.py,src/login.py")
+        fo_component("check", "Auth")
+        fo_component("report")
+        fo_component("discover")
+    """
+    if action == "status":
+        return update_component_status(name=name, status=status, desc=desc)
+    elif action == "stable":
+        return mark_component_stable(name=name, files=files)
+    elif action == "check":
+        return check_component_changes(name=name)
+    elif action == "add_files":
+        return add_component_files(name=name, files=files)
+    elif action == "report":
+        return get_stability_report()
+    elif action == "discover":
+        return auto_discover_components(apply=True)
+    elif action == "rollback":
+        return rollback_component(name=name)
+    else:
+        return f"Unknown action: {action}. Use: status, stable, check, add_files, report, discover, rollback"
+
+
+@mcp.tool()
+def fo_browser(action: str = "context", selector: str = "", message: str = "") -> str:
+    """
+    Browser context for AI Context mode.
+
+    Args:
+        action: "context" (get selected elements) or "highlight" (highlight element)
+        selector: CSS selector for highlight action
+        message: Message to show on highlight
+
+    Examples:
+        fo_browser("context")  # Get element user selected
+        fo_browser("highlight", selector=".btn-submit", message="This button")
+    """
+    if action == "context":
+        return get_browser_context()
+    elif action == "highlight":
+        return highlight_element(selector=selector, message=message)
+    else:
+        return f"Unknown action: {action}. Use: context, highlight"
 
 
 # ============================================================

@@ -84,3 +84,76 @@ fo_sync()    → update context
 | Decision | Reason |
 |----------|--------|
 | **Dashboard UI = English** | User preference |
+
+---
+
+## Fresh Install QA (run on new user)
+
+If user says **"run fresh install QA"** or **"בדיקת התקנה"**, execute ALL steps below and report results.
+
+### Step 1: Pre-install state (should be clean)
+```bash
+ls -la ~/.fixonce 2>/dev/null && echo "⚠️ EXISTS" || echo "✓ Clean"
+ls ~/Library/LaunchAgents/*fixonce* 2>/dev/null && echo "⚠️ EXISTS" || echo "✓ Clean"
+pgrep -fl "server.py" && echo "⚠️ RUNNING" || echo "✓ No process"
+```
+
+### Step 2: Run install
+```bash
+cd [project-path]
+./install.sh
+```
+
+### Step 3: Verify server
+```bash
+# Wait for server to start
+sleep 3
+curl -s http://localhost:5001/api/ping
+curl -s http://localhost:5001/api/status | head -20
+```
+
+### Step 4: Verify LaunchAgent
+```bash
+cat ~/Library/LaunchAgents/com.fixonce.server.plist
+launchctl list | grep fixonce
+```
+
+### Step 5: Test fo_init + fo_errors
+```
+fo_init(cwd="[project-path]")
+fo_errors()
+```
+
+### Step 6: Test error flow
+```bash
+# Send test error
+curl -s -X POST http://localhost:5001/api/log_error \
+  -H "Content-Type: application/json" \
+  -d '{"type":"error","data":{"message":"QA test error"}}'
+```
+Then run `fo_errors()` and verify it appears.
+
+### Step 7: Test clear flow
+```bash
+curl -s -X POST http://localhost:5001/api/clear_errors
+```
+Then run `fo_errors()` and verify "No browser errors".
+
+### Step 8: Report results
+```
+### Fresh Install QA Results
+
+| Check | Result |
+|-------|--------|
+| Pre-install clean | ✓/✗ |
+| Install completed | ✓/✗ |
+| Server responds | ✓/✗ |
+| LaunchAgent exists | ✓/✗ |
+| fo_init works | ✓/✗ |
+| fo_errors works | ✓/✗ |
+| Error capture works | ✓/✗ |
+| Clear works | ✓/✗ |
+
+**Verdict:** Ready / Not Ready
+**Issues found:** [list any]
+```

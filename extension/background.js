@@ -64,7 +64,7 @@ const AUTO_ALLOWED_PATTERNS = [
 ];
 
 // Common dev ports
-const DEV_PORTS = ['3000', '3001', '4200', '5000', '5173', '5174', '8000', '8080', '8888'];
+const DEV_PORTS = ['3000', '3001', '4200', '5000', '5001', '5002', '5003', '5004', '5005', '5173', '5174', '8000', '8080', '8888'];
 
 // Check if domain is auto-allowed
 function isAutoAllowed(domain) {
@@ -130,13 +130,16 @@ function updateErrorBadge(tabId, count) {
 
 async function sendHandshake() {
   try {
+    // Discover server first to get correct port
+    await discoverServer();
+
     const response = await fetch(HANDSHAKE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ version: '1.1', timestamp: new Date().toISOString() })
     });
     if (response.ok) {
-      console.log('[FixOnce] Handshake successful');
+      console.log('[FixOnce] Handshake successful on port ' + ACTIVE_PORT);
       isServerAvailable = true;
     }
   } catch {
@@ -167,7 +170,8 @@ async function checkServer() {
       await discoverServer();
     }
 
-    const response = await fetch(`http://localhost:${ACTIVE_PORT}/api/config`, { method: 'GET' });
+    // Use /api/ping instead of /api/config (which doesn't exist)
+    const response = await fetch(`http://localhost:${ACTIVE_PORT}/api/ping`, { method: 'GET' });
     isServerAvailable = response.ok;
     if (isServerAvailable) {
       sendHandshake();

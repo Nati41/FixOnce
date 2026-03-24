@@ -1207,6 +1207,7 @@ function renderSnapshot(snap) {
 }
 
 function renderHealth(errors) {
+  errors = errors || [];
   const okEl = document.getElementById('healthOk');
   const errEl = document.getElementById('healthError');
   const listEl = document.getElementById('errorList');
@@ -1225,7 +1226,7 @@ function renderHealth(errors) {
 
 function renderRules(rules) {
   const container = document.getElementById('rulesList');
-  container.innerHTML = rules.map(r => `
+  container.innerHTML = (rules || []).map(r => `
     <div class="rule">
       <input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="toggleRule('${r.id}', this.checked)">
       <span>${escapeHtml(r.text)}</span>
@@ -1235,6 +1236,7 @@ function renderRules(rules) {
 }
 
 function renderActivity(activities) {
+  activities = activities || [];
   const container = document.getElementById('activityContent');
 
   if (activities.length === 0) {
