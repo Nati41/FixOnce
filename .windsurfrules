@@ -2,56 +2,26 @@
 
 # FixOnce Project Memory
 
-Command: `/fixonce` - loads context (no file searches)
+## On Session Start
 
-## Project: FixOnce
-## Stack: Express, Node.js, Python
-## Updated: 2026-02-08 12:08:42
+Call `fo_init(cwd="project-path")` first.
 
-## 📍 Where We Left Off
-
-## Done: Nati cleanup + server.py modular split
-- Cleaned all "Nati Debugger" references → "FixOnce"
-- Split 1,982-line monolithic server.py into modular structure
-- Created: config.py, db_solutions.py, notifications.py, routes/ package (6 blueprints)
-- All 77 routes tested and working
-
-## Insight: Flask Blueprints work well for this codebase. Semantic Engine loads correctly.
-
-## Next: Test the server end-to-end (python3 server.py) and consider the broader restructuring plan from the diagnosis report (src/core, src/mcp, packaging)
-
-_Last session: 2026-02-08T09:32:01.031832_
-
----
-
-## WHEN USER TYPES: /fixonce
-
-Respond EXACTLY like this:
-
-```
-היי! מחובר ל-FixOnce.
-
-🎯 איפה עצרנו: ## Done: Nati cleanup + server.py modular split
-
-מה עושים?
-```
-
-NO searches. NO commands. Just this response.
-
----
-
-## MCP Tools (If Available)
+## Tools (fo_* workflow)
 
 | Tool | Purpose |
 |------|---------|
-| `auto_init_session` | Start session |
-| `update_component_status` | **REQUIRED** Update System Tree after tasks |
-| `log_decision` | Record a decision |
-| `search_past_solutions` | Search memory |
+| `fo_init` | Start session |
+| `fo_errors` | Check browser errors |
+| `fo_apply` | Apply known fix (when AUTO-FIX READY) |
+| `fo_sync` | Update context after changes |
+| `fo_search` | Search past solutions |
+| `fo_solved` | Record a fix |
+| `fo_decide` | Record a decision |
 
-### MANDATORY: After completing tasks, update component status:
-```
-update_component_status("Component Name", "done|in_progress|not_started|blocked")
-```
+## Rules
+
+1. `fo_init()` before anything
+2. If AUTO-FIX READY → `fo_apply()` immediately
+3. `fo_sync()` after code changes
 
 <!-- FIXONCE-END -->

@@ -29,6 +29,6 @@ curl -s -X POST "http://localhost:$FIXONCE_PORT/api/activity/session" \
   }" 2>/dev/null || true
 
 # OUTPUT A REMINDER TO CLAUDE - This message appears in Claude's context
-echo "🧠 FixOnce: BEFORE responding to user, you MUST call auto_init_session(cwd=\"$CWD\") to connect. This is mandatory - do not skip this step."
+echo "🧠 FixOnce: BEFORE responding to user, you MUST call fo_init(cwd=\"$CWD\") to connect. This is mandatory - do not skip this step."
 
 exit 0

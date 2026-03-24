@@ -31,11 +31,11 @@ Run before any release. Check each box when verified.
 ## 4. Errors
 - [ ] Create browser error (console.error)
 - [ ] Error appears in dashboard
-- [ ] AI sees error via `get_browser_errors()`
-- [ ] Fix error + call `solution_applied()`
-- [ ] Clear logs (POST /api/clear-logs)
+- [ ] AI sees error via `fo_errors()`
+- [ ] Fix error + call `fo_solved()`
+- [ ] Clear logs (POST /api/clear_errors)
 - [ ] Orb turns green
-- [ ] New session - `search_past_solutions()` finds fix
+- [ ] New session - `fo_search()` finds fix
 - [ ] Similar (not identical) error - correct solution returned
 
 ## 5. Isolation

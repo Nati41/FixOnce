@@ -268,7 +268,7 @@ Calling FixOnce now...
 
 **Then immediately call:**
 ```
-auto_init_session(cwd="<current_directory>")
+fo_init(cwd="<current_directory>")
 ```
 
 **Expected behavior:**
@@ -296,7 +296,7 @@ TO TEST:
 1. Close this Claude Code session
 2. Open a new session in any project folder
 3. Just say "hi"
-4. You should see auto_init_session called automatically
+4. You should see fo_init called automatically
 
 Enjoy never debugging the same bug twice! 🧠
 ```

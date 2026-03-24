@@ -5,8 +5,20 @@ This IS the FixOnce project itself - a persistent memory layer for AI coding ass
 ## On Session Start
 
 ```
-auto_init_session()  # Mandatory before other FixOnce work
+fo_init(cwd="project-path")  # Mandatory before other FixOnce work
 ```
+
+## Tools (fo_* workflow)
+
+| Tool | Purpose |
+|------|---------|
+| `fo_init` | Start session |
+| `fo_errors` | Check browser errors |
+| `fo_apply` | Apply known fix (when AUTO-FIX READY) |
+| `fo_sync` | Update context after changes |
+| `fo_search` | Search past solutions |
+| `fo_solved` | Record a fix |
+| `fo_decide` | Record a decision |
 
 ## Project Structure
 
@@ -14,20 +26,16 @@ auto_init_session()  # Mandatory before other FixOnce work
 - `src/mcp_server/mcp_memory_server_v2.py` - MCP tools
 - `src/core/` - Business logic
 - `src/api/` - REST endpoints
-- `data/dashboard_lite.html` - Dashboard UI
+- `data/dashboard.html` - Dashboard UI
 
-## Active Decisions
+## Rules
 
-Check `auto_init_session` response for current decisions. Key ones:
-- Per-project semantic index with provider abstraction
-- Atomic file writes with FileLock
-- Store data in English, display in user's language
+1. `fo_init()` before anything
+2. If AUTO-FIX READY → `fo_apply()` immediately
+3. `fo_sync()` after code changes
 
 ## Testing
 
-Run stress tests:
 ```bash
 python3 tests/stress_test.py --quick
 ```
-
-Tests use isolated `/tmp` project - won't affect real data.

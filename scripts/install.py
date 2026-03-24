@@ -769,31 +769,39 @@ def _configure_mcp_file(path: Path, server_config: dict):
 
 # ============ Step 4: Configure Editor Rules ============
 
-FIXONCE_RULES = """# FixOnce - AI Memory Layer
+FIXONCE_RULES = """# FixOnce Protocol
 
-## CRITICAL: Auto-Connect on EVERY Conversation
+You have **persistent memory** via FixOnce.
 
-On EVERY conversation start (ANY greeting like hi, hey, hello, היי, שלום, מה קורה):
+## Start: `fo_init()`
 
-1. **IMMEDIATELY call** `auto_init_session` with the current working directory
-2. If successful, show the project context
-3. If it fails (wrong directory), tell user to open from a project folder
-
-Example flow:
+**FIRST THING in every conversation:**
 ```
-User: hi
-AI: [calls auto_init_session(cwd="current/path")]
-AI: 🧠 FixOnce | Connected to [project]
-    ...shows context...
+fo_init(cwd="/path/to/project")
 ```
 
-## During Work
-- Before fixing errors: call `search_past_solutions()` first
-- After fixing: call `solution_applied()` to save the fix
-- Important decisions: call `log_decision()`
+## Error Handling
 
-## Session End
-On exit (bye, done, סיימתי): summarize what was done.
+When `fo_errors()` returns **AUTO-FIX READY**:
+```
+fo_errors()  → sees AUTO-FIX READY
+fo_apply()   → get fix (MANDATORY)
+[apply fix]  → edit code
+fo_solved()  → record it
+fo_sync()    → update context
+```
+
+## Tools
+
+| Tool | When |
+|------|------|
+| `fo_init(cwd)` | Start of conversation |
+| `fo_errors()` | Check browser errors |
+| `fo_apply()` | When AUTO-FIX READY |
+| `fo_search(query)` | Search past solutions |
+| `fo_solved(error, solution)` | After fixing |
+| `fo_sync(last_change)` | After edits |
+| `fo_decide(text, reason)` | Record decision |
 
 Core principle: Never debug the same bug twice."""
 
@@ -876,7 +884,7 @@ def sync_rules() -> bool:
 def configure_claude_hooks(fixonce_dir: Path) -> bool:
     """Configure Claude Code hooks for auto-connect.
 
-    This is CRITICAL - hooks ensure Claude calls auto_init_session
+    This is CRITICAL - hooks ensure Claude calls fo_init()
     on every conversation start.
     """
     settings_path = Path.home() / ".claude" / "settings.json"

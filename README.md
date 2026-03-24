@@ -92,7 +92,7 @@ Cursor: Cmd+Shift+P → Reload Window
 You open a project → AI starts a conversation
                           │
                           ▼
-              AI calls auto_init_session()
+              AI calls fo_init()
                           │
               ┌───────────┴───────────┐
               │                       │
@@ -144,17 +144,17 @@ Three layers:
 
 ---
 
-## MCP Tools
+## MCP Tools (fo_* workflow)
 
 | Tool | Purpose |
 |------|---------|
-| `auto_init_session` | Initialize session (auto-detect project) |
-| `scan_project` | Scan new project structure |
-| `update_live_record` | Update memory (goal, lessons, architecture) |
-| `log_decision` | Log a decision with reason |
-| `log_avoid` | Log an anti-pattern |
-| `search_past_solutions` | Search past insights and solutions |
-| `get_live_record` | Read current project memory |
+| `fo_init` | Start session |
+| `fo_errors` | Check browser errors |
+| `fo_apply` | Apply known fix (when AUTO-FIX READY) |
+| `fo_sync` | Update context after changes |
+| `fo_search` | Search past solutions |
+| `fo_solved` | Record a fix |
+| `fo_decide` | Record a decision |
 
 ---
 

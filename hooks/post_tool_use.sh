@@ -141,7 +141,7 @@ if [ -n "$PROJECT_PORT" ] || [ -n "$PROJECT_DIR" ]; then
       echo "⚠️ FixOnce: $RELEVANT_COUNT שגיאות דפדפן חדשות$PORT_INFO"
       echo "$RELEVANT_ERRORS"
       echo ""
-      echo "📌 Use get_browser_errors() for full details."
+      echo "📌 Use fo_errors() for full details."
     fi
   fi
 fi
@@ -152,7 +152,7 @@ fi
 if [ "$IS_CODE_CHANGE" = true ]; then
   echo ""
   echo "📌 FixOnce: קוד השתנה. זכור לעדכן:"
-  echo "   update_work_context(last_change=\"...\", last_file=\"$FILE_PATH\")"
+  echo "   fo_sync(last_change=\"...\", last_file=\"$FILE_PATH\")"
   echo ""
 fi
 

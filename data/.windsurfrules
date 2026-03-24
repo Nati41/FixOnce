@@ -4,36 +4,29 @@
 
 ## Session Start
 
-Try to initialize: `auto_init_session(cwd="<workspace_root_path>")`
+Call `fo_init(cwd="<workspace_root_path>")` first.
 
 **If it works** — show context and follow rules below.
 **If it fails** — proceed normally.
 
 ---
 
-## When Active
-
-- **Respect decisions** — ask before contradicting logged decisions.
-- **Update goal** — call `update_live_record("intent", ...)` before starting work.
-- **Log insights** — call `update_live_record("lessons", ...)` when you learn something.
-- **Search first** — call `search_past_solutions(...)` before researching from scratch.
-- **Update components** — call `update_component_status(name, status)` after completing tasks.
-
-## Tools
+## Tools (fo_* workflow)
 
 | Tool | Purpose |
 |------|---------|
-| `auto_init_session` | Start session |
-| `update_component_status` | **REQUIRED** Update System Tree after tasks |
-| `log_decision` | Record a decision |
-| `search_past_solutions` | Search memory |
+| `fo_init` | Start session |
+| `fo_errors` | Check browser errors |
+| `fo_apply` | Apply known fix (when AUTO-FIX READY) |
+| `fo_sync` | Update context after changes |
+| `fo_search` | Search past solutions |
+| `fo_solved` | Record a fix |
+| `fo_decide` | Record a decision |
 
-## Component Status (MANDATORY)
+## Rules
 
-After completing ANY task:
-
-```
-update_component_status("Component Name", "done|in_progress|not_started|blocked")
-```
+1. `fo_init()` before anything
+2. If AUTO-FIX READY → `fo_apply()` immediately
+3. `fo_sync()` after code changes
 
 **Style:** Hebrew preferred, short responses.

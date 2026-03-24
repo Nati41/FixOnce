@@ -64,7 +64,7 @@ claude mcp remove fixonce -s user 2>/dev/null
 1. Open a NEW chat session in the AI tool
 2. Say "hi"
 3. FixOnce should respond with session initialization
-4. Verify tools like `auto_init_session` work
+4. Verify tools like `fo_init` work
 
 ## Step 3: Test Terminal Install Flow
 
