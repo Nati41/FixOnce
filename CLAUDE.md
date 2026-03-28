@@ -8,6 +8,25 @@ Say "no fixonce" to disable. Otherwise, FixOnce is mandatory.
 
 ---
 
+## Opening
+
+**Use fo_init data to ground your opening:**
+- Mention the goal, what was done, what's next
+- Sound like a working partner, not a tool output
+- 2-3 lines, natural, action-oriented
+- No generic: "Ready", "How can I help"
+
+**ACTION_REQUIRED directive:**
+
+If fo_init contains `ACTION_REQUIRED: <tool>`:
+- `ACTION_REQUIRED: fo_errors` → call `fo_errors()` immediately
+- `ACTION_REQUIRED: fo_apply` → call `fo_apply()` immediately
+
+**After executing:** Be proactive — suggest the fix or offer to apply it.
+Don't ask "מה צריך שאעשה?" — lead the process.
+
+---
+
 ## Error Handling Protocol
 
 ### KNOWN ERROR (AUTO-FIX READY)
@@ -47,7 +66,7 @@ fo_sync()    → update context
 | `fo_apply()` | **When AUTO-FIX READY** (mandatory) |
 | `fo_search(query)` | Before fixing unknown errors |
 | `fo_solved(error, solution)` | After fixing any error |
-| `fo_sync(last_change)` | After edits |
+| `fo_sync(last_change, next_step)` | After meaningful progress |
 | `fo_decide(text, reason)` | Record decision |
 | `fo_component(action, name)` | Track components |
 
@@ -58,7 +77,16 @@ fo_sync()    → update context
 1. **Init first** — `fo_init()` before anything
 2. **Auto-fix first** — if AUTO-FIX READY, use `fo_apply()` immediately
 3. **Save fixes** — `fo_solved()` after every fix
-4. **Sync context** — `fo_sync()` after edits
+4. **Sync on progress** — `fo_sync()` after any meaningful work:
+   - Code changes
+   - Decisions made
+   - Direction changes
+   - Completing a step
+   - Reaching a clear next action
+5. **Specific next_step** — must be actionable:
+   - Good: "Fix validation in api/endpoints.py:203"
+   - Bad: "Continue work"
+6. **Sync at stopping points** — call `fo_sync(last_change, next_step)` when reaching natural pauses, don't rely on session end
 
 ---
 

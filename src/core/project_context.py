@@ -4,15 +4,17 @@ ProjectContext - Central project resolution and validation.
 This is the SINGLE SOURCE OF TRUTH for project identification.
 ALL project resolution goes through here.
 
-HYBRID ID STRATEGY (v2):
-1. Git remote exists → hash(remote_url) - Team-ready, same ID across machines
-2. Git local (no remote) → hash(repo_root_path) - Stable within machine
-3. No git → UUID stored in .fixonce/project.json - Explicit persistence
+HYBRID ID STRATEGY (v3 - STABLE):
+0. .fixonce/metadata.json EXISTS → use stored project_id (CANONICAL)
+1. Git remote exists → hash(remote_url) → PERSIST to .fixonce/metadata.json
+2. Git local (no remote) → hash(repo_root_path) → PERSIST to .fixonce/metadata.json
+3. No git → create new UUID → PERSIST to .fixonce/metadata.json
 
 Key principles:
+- ONCE a project_id is determined, it's persisted to .fixonce/metadata.json
+- Future lookups always use .fixonce/metadata.json first
+- This prevents fragmentation (multiple IDs for same folder)
 - Same repository = Same memory (across machines, CI/CD, team)
-- No global active_project.json for routing (only dashboard display)
-- Explicit validation: cwd must be within project_root
 """
 
 from pathlib import Path
@@ -199,6 +201,51 @@ class ProjectContext:
         return project_uuid
 
     @classmethod
+    def _persist_metadata(cls, project_root: str, project_id: str, name: str, strategy: str):
+        """
+        Persist project_id to .fixonce/metadata.json.
+
+        This ensures that once a project_id is determined (from git or otherwise),
+        it becomes the CANONICAL source for future lookups.
+
+        IMPORTANT: Only creates if metadata.json doesn't exist.
+        Never overwrites existing metadata to prevent fragmentation.
+        """
+        try:
+            from core.committed_knowledge import get_project_metadata
+
+            # GUARD: Never overwrite existing metadata
+            existing = get_project_metadata(project_root)
+            if existing and existing.get("project_id"):
+                _log_context(f"Metadata exists, not overwriting", existing["project_id"], "persist_skip")
+                return
+
+            # Create metadata
+            root_path = Path(project_root).resolve()
+            fixonce_dir = root_path / ".fixonce"
+            metadata_path = fixonce_dir / "metadata.json"
+
+            fixonce_dir.mkdir(parents=True, exist_ok=True)
+
+            import datetime
+            metadata = {
+                "fixonce_version": "1.0",
+                "project_id": project_id,
+                "name": name,
+                "created_at": datetime.datetime.now().isoformat(),
+                "working_dir_original": str(root_path),
+                "id_source": strategy  # Track how the ID was originally determined
+            }
+
+            with open(metadata_path, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, ensure_ascii=False, indent=2)
+
+            _log_context(f"Persisted metadata", project_id, f"persist/{strategy}")
+
+        except Exception as e:
+            _log_context(f"Failed to persist metadata: {e}", project_id, "persist_error")
+
+    @classmethod
     def resolve(cls, project_root: str) -> ProjectIdentity:
         """
         Resolve full project identity using hybrid strategy.
@@ -267,6 +314,9 @@ class ProjectContext:
             )
             _log_context("Resolved", project_id, f"git_remote:{remote_url[:40]}")
 
+            # PERSIST to .fixonce/metadata.json for future stability
+            cls._persist_metadata(str(root_path), project_id, repo_name, "git_remote")
+
         elif repo_root:
             # Git local (no remote) - stable within machine
             path_hash = hashlib.md5(repo_root.encode()).hexdigest()[:12]
@@ -279,6 +329,9 @@ class ProjectContext:
                 project_name=project_name
             )
             _log_context("Resolved", project_id, "git_local")
+
+            # PERSIST to .fixonce/metadata.json for future stability
+            cls._persist_metadata(str(root_path), project_id, project_name, "git_local")
 
         else:
             # No git - create .fixonce/metadata.json for portability

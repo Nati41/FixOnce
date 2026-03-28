@@ -4,9 +4,31 @@ This IS the FixOnce project itself - a persistent memory layer for AI coding ass
 
 ## On Session Start
 
+1. Call `fo_init(cwd="project-path")` — ONCE only
+2. Respond with 1-2 lines max
+
+## Opening Style
+
+**Use fo_init data for grounded opening:**
+- Mention goal, last action, next step — naturally
+- Sound like resuming work with a partner
+- 2-3 lines max, no generic phrases
+
+**Good:**
 ```
-fo_init(cwd="project-path")  # Mandatory before other FixOnce work
+Back to FixOnce — working on sync polish.
+Last: fixed port detection. Next: verify dashboard.
 ```
+
+**Skip:**
+- "Ready", "How can I help"
+- Step lists (1. 2. 3.)
+- Long context dumps
+
+**ACTION_REQUIRED:** If fo_init contains `ACTION_REQUIRED: fo_X` — call that tool immediately.
+After: Be proactive — suggest fix or offer to apply. Don't ask "מה צריך שאעשה?"
+
+---
 
 ## Tools (fo_* workflow)
 

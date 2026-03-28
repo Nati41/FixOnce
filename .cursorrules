@@ -8,10 +8,29 @@ If user says "no fixonce" — skip all FixOnce tools.
 
 ## Session Start
 
-Call `fo_init(cwd="<workspace_root_path>")` first.
+1. Call `fo_init(cwd="<workspace_root_path>")` — ONCE only
+2. Respond with 1-2 lines max
 
-**If it works** — show context, follow rules below.
-**If it fails** — proceed normally.
+## Opening Style
+
+**Use fo_init data for grounded opening:**
+- Mention goal, last action, next step — naturally
+- Sound like resuming work with a partner
+- 2-3 lines max, no generic phrases
+
+**Good:**
+```
+Back to FixOnce — working on sync polish.
+Last: fixed port detection. Next: verify dashboard.
+```
+
+**Skip:**
+- "Ready", "How can I help"
+- Step lists (1. 2. 3.)
+- Long context dumps
+
+**ACTION_REQUIRED:** If fo_init contains `ACTION_REQUIRED: fo_X` — call that tool immediately.
+After: Be proactive — suggest fix or offer to apply. Don't ask "מה צריך שאעשה?"
 
 ---
 

@@ -137,7 +137,7 @@ def _get_init_reminder() -> str:
     return """
 ⚠️ **FixOnce Not Connected!**
 
-You MUST call `auto_init_session(cwd="/path/to/project")` FIRST before using other tools.
+You MUST call `fo_init(cwd="/path/to/project")` FIRST before using other tools.
 
 This connects FixOnce to your project and loads context, decisions, and insights.
 Without this, you're working without memory.
@@ -149,8 +149,7 @@ def _get_init_enforcement_error() -> str:
     """Get hard-blocking error for tools used before explicit session init."""
     return """Error: FixOnce session not initialized.
 
-Action denied. You must call `auto_init_session(cwd="/path/to/project")` or
-`init_session(working_dir="/path/to/project")` before using any other FixOnce tool.
+Action denied. You must call `fo_init(cwd="/path/to/project")` before using any other FixOnce tool.
 
 This is mandatory enforcement mode. FixOnce will not allow work to proceed without
 an explicit project connection for the current session."""
@@ -857,7 +856,7 @@ def _universal_gate(tool_name: str) -> tuple:
             "",
         )
 
-    init_tools = {"auto_init_session", "init_session", "sync_to_active_project"}
+    init_tools = {"fo_init", "auto_init_session", "init_session", "sync_to_active_project"}
     if tool_name not in init_tools and not _is_session_initialized():
         return (_get_init_enforcement_error(), "")
 
@@ -2003,10 +2002,12 @@ def _get_active_port_from_dashboard() -> Optional[int]:
         return None
 
 
-@mcp.tool()
+# NOTE: auto_init_session is now INTERNAL ONLY (not exposed as MCP tool).
+# Use fo_init() as the public init tool.
 def auto_init_session(cwd: str = "", sync_to_active: bool = False) -> str:
     """
-    Automatically initialize session for the current project.
+    INTERNAL: Initialize session for the current project.
+    For external use, call fo_init() instead.
 
     Phase 1: Uses boundary detection as single source of truth.
     - Detects actual project root from cwd (not just uses cwd directly)
@@ -3522,6 +3523,52 @@ def update_live_record(section: str, data: str) -> str:
     return context + f"Updated {section}{pre_action_warning}{reminder}"
 
 
+def _normalize_next_step(next_step: str) -> str:
+    """
+    Normalize next_step to be a short, single continuation prompt.
+
+    Rules:
+    - One short actionable continuation only
+    - No numbered lists
+    - No multi-step instructions
+    - Max ~80 chars
+    """
+    import re
+
+    if not next_step:
+        return ""
+
+    text = next_step.strip()
+
+    # If it's a numbered list, extract just the first item's action
+    # Pattern: "1) Action 2) Action" or "1. Action 2. Action"
+    numbered_pattern = r'^[1-9][).]\s*'
+    if re.match(numbered_pattern, text):
+        # Split on numbered items and take just the first action
+        parts = re.split(r'\s+[2-9][).]\s*', text, maxsplit=1)
+        text = re.sub(numbered_pattern, '', parts[0]).strip()
+
+    # Remove common verbose prefixes
+    verbose_prefixes = [
+        'Continue with:', 'Continue to:', 'Next:', 'Then:',
+        'You should:', 'Please:', 'Now:', 'First:'
+    ]
+    for prefix in verbose_prefixes:
+        if text.lower().startswith(prefix.lower()):
+            text = text[len(prefix):].strip()
+
+    # Truncate to reasonable length (aim for ~80 chars)
+    if len(text) > 100:
+        # Try to cut at a natural break point
+        cut_point = text.rfind(' ', 0, 80)
+        if cut_point > 40:
+            text = text[:cut_point].rstrip('.,;:')
+        else:
+            text = text[:80].rstrip('.,;:')
+
+    return text
+
+
 @mcp.tool()
 def update_work_context(
     current_goal: str = "",
@@ -3543,7 +3590,8 @@ def update_work_context(
         why: Why this work matters (e.g., "Users should feel the AI remembers them")
         last_change: What was just done (e.g., "Added work_area field to opening message")
         last_file: Last file worked on (e.g., "CLAUDE.md")
-        next_step: What should be done next (e.g., "Test with real session")
+        next_step: Short continuation prompt (e.g., "Test the fix", "Verify dashboard opens")
+                   NOT numbered lists or multi-step instructions
 
     At minimum, update current_goal when starting new work.
     Update last_change and last_file after completing changes.
@@ -3566,11 +3614,12 @@ def update_work_context(
         update_data['last_change'] = last_change
     if last_file:
         update_data['last_file'] = last_file
-    if next_step:
-        update_data['next_step'] = next_step
 
-    if not update_data:
+    if not update_data and not next_step:
         return "Error: No fields provided to update"
+
+    # Always refresh next_step (clear stale values)
+    update_data['next_step'] = _normalize_next_step(next_step) if next_step else ""
 
     # Update the intent section
     project_id = session.project_id
@@ -4985,13 +5034,21 @@ def search_past_solutions(query: str) -> str:
                 _mark_insight_used(normalized)
                 insights[i] = normalized
 
-    # Search failed attempts (always string match)
+    # Search failed attempts (always string match) - add to matched_insights for visibility
     for attempt in failed:
         normalized = _normalize_insight(attempt)
         attempt_text = normalized.get('text', '')
 
         if query_lower in attempt_text.lower():
-            matches.append(f"❌ Failed attempt: {attempt_text}")
+            # Exact substring match = high similarity (beats semantic guesses)
+            matched_insights.append({
+                'text': f"❌ **Failed attempt:** {attempt_text}",
+                'confidence': 90,
+                'similarity': 85,  # Exact match beats semantic
+                'date': normalized.get('timestamp', '')[:10] if normalized.get('timestamp') else 'unknown',
+                'use_count': normalized.get('use_count', 0),
+                'type': 'failed_attempt'
+            })
 
     # === CRITICAL: Search debug_sessions (solutions from solution_applied) ===
     debug_sessions = memory.get('debug_sessions', [])
@@ -5027,6 +5084,44 @@ def search_past_solutions(query: str) -> str:
             # Update reuse count
             ds['reuse_count'] = ds.get('reuse_count', 0) + 1
 
+    # === Search DECISIONS ===
+    decisions = memory.get('decisions', [])
+    for dec in decisions:
+        if dec.get('superseded'):
+            continue  # Skip superseded decisions
+
+        dec_text = dec.get('decision', '').lower()
+        dec_reason = dec.get('reason', '').lower()
+
+        # Check for keyword matches in decision or reason
+        if query_lower in dec_text or query_lower in dec_reason:
+            # Exact substring match = high similarity (beats semantic guesses)
+            matched_insights.append({
+                'text': f"🔒 **Decision:** {dec.get('decision', '')}\n📝 **Reason:** {dec.get('reason', '')}",
+                'confidence': 95,
+                'similarity': 90,  # Exact match beats semantic
+                'date': dec.get('timestamp', '')[:10] if dec.get('timestamp') else 'permanent',
+                'use_count': 0,
+                'type': 'decision'
+            })
+
+    # === Search AVOID patterns ===
+    avoids = memory.get('avoid', [])
+    for av in avoids:
+        av_text = av.get('what', '').lower()
+        av_reason = av.get('reason', '').lower()
+
+        if query_lower in av_text or query_lower in av_reason:
+            # Exact substring match = high similarity (beats semantic guesses)
+            matched_insights.append({
+                'text': f"⛔ **Avoid:** {av.get('what', '')}\n📝 **Reason:** {av.get('reason', '')}",
+                'confidence': 95,
+                'similarity': 90,  # Exact match beats semantic
+                'date': av.get('timestamp', '')[:10] if av.get('timestamp') else 'permanent',
+                'use_count': 0,
+                'type': 'avoid'
+            })
+
     # Save updated use counts
     if matched_indices:
         _save_project(session.project_id, memory)
@@ -5040,14 +5135,11 @@ def search_past_solutions(query: str) -> str:
     if matched_insights:
         _track_roi_event("solution_reused")
 
-        # Minimal output - just the solution
+        # Minimal output - just the best match
         best = matched_insights[0]
         lines = [f"Found {len(matched_insights)} match(es). Best ({best['similarity']}%):"]
         lines.append(f"> {best['text'][:200]}")
         return '\n'.join(lines)
-
-    elif matches:
-        return "Found failed attempts only. Investigate manually."
 
     else:
         return "No matches. Investigate manually."
@@ -5160,10 +5252,12 @@ Index is now ready for semantic search."""
         return context + f"❌ Error rebuilding index: {e}"
 
 
-@mcp.tool()
+# NOTE: get_browser_errors is INTERNAL (called by fo_errors).
+# Not exposed as MCP tool to avoid FunctionTool collision.
 def get_browser_errors(limit: int = 10) -> str:
     """
-    Get recent browser errors captured by the FixOnce Chrome extension.
+    INTERNAL: Get recent browser errors captured by the FixOnce Chrome extension.
+    For external use, call fo_errors() instead.
 
     These are JavaScript errors, network errors, and console errors from
     the user's browser. Use this to proactively help fix frontend issues.
@@ -6246,8 +6340,12 @@ def _format_minimal_init(working_dir: str) -> str:
     """
     Format natural, human init response - 2-3 lines max.
     Should feel like resuming a conversation, not reading a task manager.
+
+    Priority: auto-fixes > errors > continuation context
+    Data source: Uses FRESHER of intent vs resume_state (by timestamp)
     """
     from pathlib import Path
+    from datetime import datetime
 
     project_name = Path(working_dir).name
     project_id = _get_project_id(working_dir)
@@ -6264,14 +6362,14 @@ def _format_minimal_init(working_dir: str) -> str:
         pass
 
     if has_auto_fixes:
-        return f"Back to **{project_name}**. I have a fix ready — running `fo_apply()`."
+        return f"Back to **{project_name}**.\n\nACTION_REQUIRED: fo_apply"
 
     # Check for live errors - don't report count, fo_errors is source of truth
     live_errors = _get_live_errors()
     if live_errors:
-        return f"Back to **{project_name}**. Next: check browser errors with `fo_errors()`."
+        return f"Back to **{project_name}**.\n\nACTION_REQUIRED: fo_errors"
 
-    # Get resume context
+    # Get both data sources
     resume_state = None
     if _resume_state_available:
         try:
@@ -6279,27 +6377,60 @@ def _format_minimal_init(working_dir: str) -> str:
         except:
             pass
 
-    # Natural resume message
-    last_thing = None
-    if resume_state and resume_state.get("last_completed_step"):
-        last_thing = resume_state['last_completed_step']
-    elif data and data.get("work_context", {}).get("last_change"):
-        last_thing = data['work_context']['last_change']
+    intent = data.get("live_record", {}).get("intent", {}) if data else {}
 
-    next_thing = None
-    if resume_state and resume_state.get("next_recommended_action"):
-        next_thing = resume_state['next_recommended_action']
-    elif resume_state and resume_state.get("active_task"):
+    # Determine which source is fresher (intent from fo_sync, resume_state from save_resume_state)
+    def parse_timestamp(ts):
+        if not ts:
+            return None
+        try:
+            return datetime.fromisoformat(ts.replace('Z', '+00:00'))
+        except:
+            return None
+
+    intent_time = parse_timestamp(intent.get("updated_at"))
+    resume_time = parse_timestamp(resume_state.get("updated_at") if resume_state else None)
+
+    # Use fresher source, default to intent (more commonly updated via fo_sync)
+    use_intent_first = True
+    if resume_time and intent_time:
+        use_intent_first = intent_time >= resume_time
+    elif resume_time and not intent_time:
+        use_intent_first = False
+
+    # Extract continuation data based on freshness
+    if use_intent_first:
+        last_thing = intent.get("last_change") or (resume_state.get("last_completed_step") if resume_state else None)
+        next_thing = intent.get("next_step") or (resume_state.get("next_recommended_action") if resume_state else None)
+    else:
+        last_thing = (resume_state.get("last_completed_step") if resume_state else None) or intent.get("last_change")
+        next_thing = (resume_state.get("next_recommended_action") if resume_state else None) or intent.get("next_step")
+
+    # Fallback for next_thing
+    if not next_thing and resume_state and resume_state.get("active_task"):
         next_thing = resume_state['active_task']
 
-    if last_thing and next_thing:
-        return f"Back to **{project_name}**. We finished {last_thing}. Next up: {next_thing}"
+    # Get current goal for context (makes opening feel like real continuation)
+    current_goal = intent.get("current_goal", "")
+
+    # Build natural continuation message
+    # Format: "Back to **Project** — {goal}. Last: X. Next: Y."
+    if current_goal and last_thing and next_thing:
+        return f"Back to **{project_name}** — {current_goal}.\nLast: {last_thing}. Next: {next_thing}."
+    elif current_goal and next_thing:
+        return f"Back to **{project_name}** — {current_goal}.\nNext: {next_thing}."
+    elif current_goal and last_thing:
+        return f"Back to **{project_name}** — {current_goal}.\nLast: {last_thing}. What's next?"
+    elif current_goal:
+        return f"Back to **{project_name}** — {current_goal}.\nReady to continue."
+    elif last_thing and next_thing:
+        return f"Back to **{project_name}**.\nLast: {last_thing}. Next: {next_thing}."
     elif last_thing:
-        return f"Back to **{project_name}**. Last time we {last_thing}."
+        return f"Back to **{project_name}**.\nLast: {last_thing}. What's next?"
     elif next_thing:
-        return f"Back to **{project_name}**. Picking up: {next_thing}"
+        return f"Back to **{project_name}**.\nNext: {next_thing}."
     else:
-        return f"Back to **{project_name}**. Ready when you are."
+        return f"Back to **{project_name}**. Ready."
 
 
 @mcp.tool()
@@ -6364,7 +6495,8 @@ def fo_sync(
     work_area: str = "",
     last_change: str = "",
     last_file: str = "",
-    why: str = ""
+    why: str = "",
+    next_step: str = ""
 ) -> str:
     """
     Sync work context with FixOnce. Call after changes or when starting new work.
@@ -6375,13 +6507,16 @@ def fo_sync(
         last_change: What was just done (e.g., "Added validation")
         last_file: Last file modified
         why: Why this work matters
+        next_step: Short continuation prompt (e.g., "Test the fix", "Check error flow")
+                   NOT numbered lists - just one actionable next step
     """
     return update_work_context(
         current_goal=goal,
         work_area=work_area,
         last_change=last_change,
         last_file=last_file,
-        why=why
+        why=why,
+        next_step=next_step
     )
 
 

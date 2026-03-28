@@ -1545,22 +1545,34 @@ def open_web_installer():
         else:
             print(f"  {Colors.YELLOW}[WARN]{Colors.END} Server may still be starting...")
 
-    # Open installer in browser
-    installer_url = f"http://localhost:{port}/install"
-    try:
-        if current_platform == 'mac':
-            subprocess.run(['open', installer_url], capture_output=True)
-        elif current_platform == 'windows':
-            subprocess.run(f'start "" "{installer_url}"', shell=True, capture_output=True)
-        else:
-            subprocess.run(['xdg-open', installer_url], capture_output=True)
+    # Ask user if they want to open dashboard
+    dashboard_url = f"http://localhost:{port}"
+    print()
+    print(f"  {Colors.GREEN}✅ FixOnce installed successfully!{Colors.END}")
+    print(f"  Server is running on {dashboard_url}")
+    print()
 
-        print(f"  {Colors.GREEN}[OK]{Colors.END} Installer opened: {installer_url}")
-        return True
-    except Exception as e:
-        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not open browser: {e}")
-        print(f"  Open manually: {installer_url}")
-        return True
+    try:
+        response = input(f"  Do you want to open the dashboard now? [Y/n] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        response = 'n'
+
+    if response in ('', 'y', 'yes'):
+        try:
+            if current_platform == 'mac':
+                subprocess.run(['open', dashboard_url], capture_output=True)
+            elif current_platform == 'windows':
+                subprocess.run(f'start "" "{dashboard_url}"', shell=True, capture_output=True)
+            else:
+                subprocess.run(['xdg-open', dashboard_url], capture_output=True)
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Dashboard opened")
+        except Exception as e:
+            print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not open browser: {e}")
+            print(f"  Open manually: {dashboard_url}")
+    else:
+        print(f"  OK, you can open it later at: {dashboard_url}")
+
+    return True
 
 
 def main():
@@ -1604,11 +1616,7 @@ def main():
     print(f"""
 {'═' * 60}
 
-  {Colors.GREEN}FixOnce Installer opened in your browser!{Colors.END}
-
-  Complete the setup there and you're ready to go.
-
-  {Colors.BOLD}After installation:{Colors.END}
+  {Colors.BOLD}Next steps:{Colors.END}
     1. Open your terminal IN A PROJECT FOLDER:
        {Colors.YELLOW}cd ~/your-project && claude{Colors.END}
 
