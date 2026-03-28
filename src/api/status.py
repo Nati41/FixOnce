@@ -921,8 +921,46 @@ def api_dashboard_snapshot():
 
                 # Calculate unified health
                 snapshot["orb"] = get_unified_health(ai_queue, components, browser_errors)
+
+                # Add browser_errors for minimal dashboard
+                snapshot["browser_errors"] = browser_errors
+                snapshot["error_count"] = len(browser_errors)
         except Exception:
             snapshot["orb"] = {"status": "green", "reasons": [], "timestamp": None}
+
+        # === Top-level convenience fields for minimal dashboard ===
+        try:
+            # Project name and goal
+            if snapshot.get("identity"):
+                snapshot["project_name"] = snapshot["identity"].get("name")
+                snapshot["current_goal"] = snapshot["identity"].get("current_goal")
+                snapshot["next_step"] = snapshot["identity"].get("next_step")
+
+            # Intent (last_change, next_step) from live_record
+            from managers.multi_project_manager import get_active_project_id, load_project_memory
+            active_id = get_active_project_id()
+            if active_id:
+                memory = load_project_memory(active_id) or {}
+                intent = memory.get("live_record", {}).get("intent", {})
+                snapshot["intent"] = intent
+
+            # Active AI name
+            if snapshot.get("active_ais") and len(snapshot["active_ais"]) > 0:
+                primary = next((ai for ai in snapshot["active_ais"] if ai.get("is_primary")), snapshot["active_ais"][0])
+                snapshot["active_ai"] = primary.get("editor", "Unknown")
+
+            # Auto-fix available
+            try:
+                from core.pending_fixes import get_auto_fixes
+                auto_fixes = get_auto_fixes()
+                snapshot["has_auto_fix"] = bool(auto_fixes)
+                snapshot["auto_fix_count"] = len(auto_fixes) if auto_fixes else 0
+            except:
+                snapshot["has_auto_fix"] = False
+                snapshot["auto_fix_count"] = 0
+
+        except Exception:
+            pass
 
         return jsonify({"status": "ok", "snapshot": snapshot})
 
