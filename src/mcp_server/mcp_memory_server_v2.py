@@ -4812,6 +4812,29 @@ def solution_applied(
     # Track ROI
     _track_roi_event("solution_saved")
 
+    # Log activity for dashboard Recent line
+    try:
+        import requests
+        # Shorten error for display (first meaningful part)
+        short_error = error_message.split('\n')[0][:50].strip()
+        if len(error_message) > 50:
+            short_error += '...'
+
+        requests.post(
+            "http://localhost:5000/api/activity/log",
+            json={
+                "type": "mcp_tool",
+                "tool": "fo_solved",
+                "human_name": f"Fixed: {short_error}",
+                "file_context": "fix",
+                "project_id": session.project_id,
+                "cwd": session.cwd
+            },
+            timeout=2
+        )
+    except Exception:
+        pass  # Don't fail the main operation
+
     # Minimal response (no context header noise)
     return "Solution saved."
 

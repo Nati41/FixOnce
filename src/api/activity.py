@@ -175,6 +175,10 @@ def _save_activity(data):
 
 def _get_human_name(data: dict) -> str:
     """Generate human-readable name for activity."""
+    # If caller provided a custom human_name, use it
+    if data.get("human_name"):
+        return data["human_name"]
+
     file_path = data.get("file", "")
     tool = data.get("tool", "")
     command = data.get("command", "")

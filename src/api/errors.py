@@ -367,12 +367,20 @@ def api_clear_logs():
 
 @errors_bp.route("/api/clear_errors", methods=["POST"])
 def api_clear_errors():
-    """Clear all stored browser errors.
+    """Clear all stored browser errors and pending fixes.
 
     Used by fo_errors to clear test/noise errors automatically.
     Uses the unified error_store for consistency with fo_errors.
     """
     count = clear_errors()
+
+    # Also clear pending fixes (they're linked to errors)
+    try:
+        from core.pending_fixes import clear_pending
+        clear_pending()
+    except Exception:
+        pass
+
     return jsonify({"status": "cleared", "count": count})
 
 

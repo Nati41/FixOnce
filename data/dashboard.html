@@ -48,7 +48,6 @@ body {
 .logo svg {
   width: 24px;
   height: 24px;
-  fill: var(--green);
 }
 
 .logo-text {
@@ -218,11 +217,50 @@ input:checked + .slider:before {
 
 /* Footer */
 .footer {
-  text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding-top: 16px;
   font-size: 11px;
   color: var(--text-dim);
 }
+
+.footer-links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  margin-left: 12px;
+}
+
+.footer-links a:hover {
+  color: var(--text);
+}
+
+/* System Status (compact) */
+.system-status {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 0;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.sys-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sys-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+
+.sys-item.ok .sys-dot { background: var(--green); }
+.sys-item.warn .sys-dot { background: var(--amber); }
+.sys-item.error .sys-dot { background: var(--red); }
 
 /* Powered off state */
 body.powered-off .card {
@@ -260,7 +298,21 @@ body.powered-off .card {
 <!-- Header -->
 <div class="header">
   <div class="logo">
-    <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+    <svg width="24" height="24" viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="eyeTop" x1="16" y1="110" x2="204" y2="98" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#1F67C4"/><stop offset="0.55" stop-color="#2FA6E8"/><stop offset="1" stop-color="#39D86F"/>
+        </linearGradient>
+        <linearGradient id="eyeBottom" x1="16" y1="114" x2="204" y2="126" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#1A5CB5"/><stop offset="0.55" stop-color="#2498DE"/><stop offset="1" stop-color="#32CD69"/>
+        </linearGradient>
+      </defs>
+      <path d="M16 110C16 110 51 54 110 54C158 54 187 88 204 103" stroke="url(#eyeTop)" stroke-width="12" stroke-linecap="round"/>
+      <path d="M16 110C16 110 51 166 110 166C158 166 187 132 204 117" stroke="url(#eyeBottom)" stroke-width="12" stroke-linecap="round"/>
+      <circle cx="110" cy="110" r="41" stroke="#2BA4E2" stroke-width="11"/>
+      <path d="M83 88C90 79 100 73 112 70C124 67 136 69 146 76" stroke="#31CF6E" stroke-width="10" stroke-linecap="round"/>
+      <path d="M92 109L106 123L137 92" stroke="#2CCF6C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
     <span class="logo-text">FixOnce</span>
     <span class="version" id="version">v1.0.12</span>
   </div>
@@ -306,12 +358,36 @@ body.powered-off .card {
       <span class="context-label">Next</span>
       <span class="context-value" id="nextStep">—</span>
     </div>
+    <div class="context-item" id="recentRow" style="display: none;">
+      <span class="context-label">Recent</span>
+      <span class="context-value" id="recentAction">—</span>
+    </div>
   </div>
   <div class="context-time" id="syncTime"></div>
 </div>
 
+<!-- System Status (compact) -->
+<div class="system-status" id="systemStatus">
+  <span class="sys-item" id="sysFixonce" title="FixOnce Server">
+    <span class="sys-dot"></span>Server
+  </span>
+  <span class="sys-item" id="sysExtension" title="Browser Extension">
+    <span class="sys-dot"></span>Extension
+  </span>
+  <span class="sys-item" id="sysMemory" title="Project Memory">
+    <span class="sys-dot"></span>Memory
+  </span>
+</div>
+
 <!-- Footer -->
-<div class="footer">FixOnce — AI Memory Layer</div>
+<div class="footer">
+  <span>FixOnce — AI Memory Layer</span>
+  <span class="footer-links">
+    <a href="/privacy.html">Privacy</a>
+    <a href="/terms.html">Terms</a>
+    <a href="/security.html">Security</a>
+  </span>
+</div>
 
 <script>
 const API = window.location.origin;
@@ -354,8 +430,8 @@ function render(s) {
     rows.push({
       icon: '✅',
       iconClass: 'status-fix',
-      text: 'AUTO-FIX READY',
-      action: 'fo_apply'
+      text: 'Fix ready — continue in AI',
+      action: ''
     });
   }
 
@@ -363,8 +439,8 @@ function render(s) {
     rows.push({
       icon: '⚠️',
       iconClass: 'status-warn',
-      text: `${errorCount} error${errorCount > 1 ? 's' : ''} detected`,
-      action: 'fo_errors'
+      text: `${errorCount} error${errorCount > 1 ? 's' : ''} — check in AI`,
+      action: ''
     });
   }
 
@@ -396,13 +472,52 @@ function render(s) {
     document.getElementById('lastChange').textContent = lastChange || '—';
     document.getElementById('nextStep').textContent = nextStep || '—';
 
-    // Sync time
+    // Sync time - only show if recent (< 10 min)
     const updatedAt = intent.updated_at;
+    const syncTimeEl = document.getElementById('syncTime');
     if (updatedAt) {
-      document.getElementById('syncTime').textContent = 'Synced ' + relativeTime(updatedAt);
+      const syncAge = Date.now() - new Date(updatedAt).getTime();
+      const tenMinutes = 10 * 60 * 1000;
+      if (syncAge < tenMinutes) {
+        syncTimeEl.textContent = 'Synced ' + relativeTime(updatedAt);
+        syncTimeEl.style.display = '';
+      } else {
+        syncTimeEl.style.display = 'none';
+      }
+    } else {
+      syncTimeEl.style.display = 'none';
     }
   } else {
     contextCard.style.display = 'none';
+  }
+
+  // System Status (from real sources)
+  const sys = s.system_status || {};
+
+  // Server status - if we got data, server is up
+  const sysFixonce = document.getElementById('sysFixonce');
+  sysFixonce.className = 'sys-item ok';
+  sysFixonce.title = 'FixOnce Server: Connected';
+
+  // Extension status - from real heartbeat
+  const sysExtension = document.getElementById('sysExtension');
+  if (sys.extension?.connected) {
+    sysExtension.className = 'sys-item ok';
+    sysExtension.title = 'Browser Extension: Connected' +
+      (sys.extension.last_seen ? ' (' + relativeTime(sys.extension.last_seen) + ')' : '');
+  } else {
+    sysExtension.className = 'sys-item warn';
+    sysExtension.title = 'Browser Extension: Not detected';
+  }
+
+  // Memory status - from active project
+  const sysMemory = document.getElementById('sysMemory');
+  if (sys.memory?.loaded) {
+    sysMemory.className = 'sys-item ok';
+    sysMemory.title = 'Project Memory: Loaded (' + (sys.memory.project_id || 'unknown') + ')';
+  } else {
+    sysMemory.className = 'sys-item warn';
+    sysMemory.title = 'Project Memory: Not loaded';
   }
 }
 
@@ -421,6 +536,76 @@ function relativeTime(ts) {
 
 function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+// Smart activity formatting - result, not technical action
+function formatActivity(act) {
+  if (!act) return null;
+
+  const time = relativeTime(act.timestamp);
+  let text = '';
+
+  // MCP tools - semantic descriptions
+  if (act.type === 'mcp_tool') {
+    // Special case: fo_solved with fix description
+    if (act.tool === 'fo_solved' && act.human_name?.startsWith('Fixed:')) {
+      text = act.human_name;
+    } else {
+      const toolMap = {
+        'fo_errors': 'Checked errors',
+        'fo_apply': 'Applied fix',
+        'fo_search': 'Searched memory',
+        'fo_sync': 'Synced context',
+        'fo_solved': 'Recorded solution',
+        'fo_decide': 'Made decision',
+        'update_work_context': 'Synced context',
+        'get_browser_context': 'Checked browser'
+      };
+      text = toolMap[act.tool] || `Used ${act.tool}`;
+    }
+  }
+  // File changes - use human_name, not filename
+  else if (act.type === 'file_change') {
+    const name = act.human_name || 'file';
+    if (act.file_context === 'ui') {
+      text = `Updated ${name}`;
+    } else if (act.file_context === 'config') {
+      text = `Changed ${name}`;
+    } else {
+      text = `Edited ${name}`;
+    }
+  }
+  // Fallback
+  else {
+    text = act.human_name || act.tool || 'Activity';
+  }
+
+  return time ? `${text} (${time})` : text;
+}
+
+async function fetchActivity() {
+  try {
+    const res = await fetch(`${API}/api/activity/feed?limit=1`, {
+      signal: AbortSignal.timeout(3000)
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const latest = data.activities?.[0];
+
+    const recentRow = document.getElementById('recentRow');
+    const recentAction = document.getElementById('recentAction');
+
+    if (latest) {
+      const formatted = formatActivity(latest);
+      if (formatted) {
+        recentAction.textContent = formatted;
+        recentRow.style.display = '';
+      }
+    }
+  } catch (e) {
+    console.error('Activity fetch error:', e);
+  }
 }
 
 async function togglePower() {
@@ -471,7 +656,8 @@ function showToast(msg, isError = false) {
 // Init
 loadPowerState();
 fetchData();
-setInterval(fetchData, 5000);
+fetchActivity();
+setInterval(() => { fetchData(); fetchActivity(); }, 5000);
 </script>
 </body>
 </html>

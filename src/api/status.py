@@ -962,6 +962,60 @@ def api_dashboard_snapshot():
         except Exception:
             pass
 
+        # === System Status (real sources only) ===
+        try:
+            system_status = {
+                "fixonce": {"connected": True, "source": "api_responding"},  # If we got here, server is up
+                "ai": {"name": None, "source": None, "connected": False},
+                "extension": {"connected": False, "last_seen": None, "source": "unknown"},
+                "memory": {"loaded": False, "project_id": None, "source": "unknown"}
+            }
+
+            # AI status from real session data
+            if snapshot.get("active_ais") and len(snapshot["active_ais"]) > 0:
+                primary = next((ai for ai in snapshot["active_ais"] if ai.get("is_primary")), snapshot["active_ais"][0])
+                system_status["ai"] = {
+                    "name": primary.get("editor"),
+                    "source": primary.get("actor_source", "unknown"),
+                    "connected": True,
+                    "last_activity": primary.get("last_activity")
+                }
+
+            # Extension status from real heartbeat
+            if EXTENSION_CONNECTED:
+                system_status["extension"] = {
+                    "connected": True,
+                    "last_seen": EXTENSION_LAST_SEEN,
+                    "source": "heartbeat"
+                }
+            else:
+                system_status["extension"] = {
+                    "connected": False,
+                    "last_seen": None,
+                    "source": "no_heartbeat"
+                }
+
+            # Memory status from active project
+            from managers.multi_project_manager import get_active_project_id
+            active_id = get_active_project_id()
+            if active_id and snapshot.get("identity"):
+                system_status["memory"] = {
+                    "loaded": True,
+                    "project_id": active_id,
+                    "source": "active_project"
+                }
+            else:
+                system_status["memory"] = {
+                    "loaded": False,
+                    "project_id": None,
+                    "source": "no_active_project"
+                }
+
+            snapshot["system_status"] = system_status
+
+        except Exception:
+            pass
+
         return jsonify({"status": "ok", "snapshot": snapshot})
 
     except Exception as e:
