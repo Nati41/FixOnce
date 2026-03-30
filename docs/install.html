@@ -97,6 +97,12 @@ h1 {
   opacity: 0.9;
 }
 
+.install-note {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 16px;
+}
+
 .steps {
   display: flex;
   gap: 24px;
@@ -219,6 +225,7 @@ h1 {
   <div class="install-label">Paste this into your AI:</div>
   <div class="install-prompt" onclick="copyPrompt()">Install FixOnce for me</div>
   <button class="btn" onclick="copyPrompt()">Copy to Clipboard</button>
+  <div class="install-note">Installs server, MCP connection, and Chrome extension for live error detection.</div>
 </div>
 
 <div class="steps">
@@ -242,9 +249,11 @@ h1 {
 function copyPrompt() {
   const prompt = `Install FixOnce for me.
 
-Download from https://github.com/Nati41/FixOnce and run the installer.
-Configure MCP for my editor (Claude Code / Cursor / Codex).
-Start the server and verify it works.`;
+1. Download from https://github.com/Nati41/FixOnce
+2. Run the installer (install.sh or install.py)
+3. Configure MCP for my editor (Claude Code / Cursor / Codex)
+4. Install the Chrome extension from the extension/ folder
+5. Start the server and verify dashboard opens at localhost:5000`;
 
   navigator.clipboard.writeText(prompt).then(() => {
     const toast = document.getElementById('toast');
