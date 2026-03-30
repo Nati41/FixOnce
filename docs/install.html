@@ -103,6 +103,21 @@ h1 {
   margin-top: 16px;
 }
 
+.install-trust {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 8px;
+  opacity: 0.8;
+}
+
+.wow-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .steps {
   display: flex;
   gap: 24px;
@@ -223,9 +238,10 @@ h1 {
 
 <div class="install-box">
   <div class="install-label">Paste this into your AI:</div>
-  <div class="install-prompt" onclick="copyPrompt()">Install FixOnce for me</div>
+  <div class="install-prompt" onclick="copyPrompt()">Install FixOnce and make sure everything works</div>
   <button class="btn" onclick="copyPrompt()">Copy to Clipboard</button>
-  <div class="install-note">Installs server, MCP connection, and Chrome extension for live error detection.</div>
+  <div class="install-note">Includes real-time error detection via Chrome extension.</div>
+  <div class="install-trust">Works with Claude Code, Cursor, and Codex.</div>
 </div>
 
 <div class="steps">
@@ -234,6 +250,7 @@ h1 {
   <div class="step"><span class="step-num">3</span> You start working</div>
 </div>
 
+<div class="wow-label">Example:</div>
 <div class="wow-block">
   <div class="wow-status"><span class="wow-check">✓</span> No errors</div>
   <div class="wow-recent">Recent: <strong>Auto-fixed: .map() null error</strong> (just now)</div>
@@ -247,13 +264,15 @@ h1 {
 
 <script>
 function copyPrompt() {
-  const prompt = `Install FixOnce for me.
+  const prompt = `Install FixOnce, configure MCP, connect the Chrome extension, and make sure everything is working.
 
+Steps:
 1. Download from https://github.com/Nati41/FixOnce
 2. Run the installer (install.sh or install.py)
-3. Configure MCP for my editor (Claude Code / Cursor / Codex)
+3. Configure MCP for my editor
 4. Install the Chrome extension from the extension/ folder
-5. Start the server and verify dashboard opens at localhost:5000`;
+5. Start the server and verify dashboard opens at localhost:5000
+6. Confirm everything is connected`;
 
   navigator.clipboard.writeText(prompt).then(() => {
     const toast = document.getElementById('toast');
