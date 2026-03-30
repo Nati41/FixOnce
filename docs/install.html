@@ -264,15 +264,15 @@ h1 {
 
 <script>
 function copyPrompt() {
-  const prompt = `Install FixOnce, configure MCP, connect the Chrome extension, and make sure everything is working.
+  const prompt = `Install FixOnce from https://github.com/Nati41/FixOnce, configure MCP for my editor (Claude Code / Cursor / Codex), install the Chrome extension, and verify everything is working.
 
 Steps:
-1. Download from https://github.com/Nati41/FixOnce
-2. Run the installer (install.sh or install.py)
-3. Configure MCP for my editor
+1. Download or clone https://github.com/Nati41/FixOnce
+2. Run the installer (install.sh on macOS/Linux or install.py)
+3. Configure MCP for my editor (Claude Code / Cursor / Codex)
 4. Install the Chrome extension from the extension/ folder
-5. Start the server and verify dashboard opens at localhost:5000
-6. Confirm everything is connected`;
+5. Start the server and verify the dashboard opens at http://localhost:5000
+6. Confirm everything is connected and working (MCP, dashboard, error detection)`;
 
   navigator.clipboard.writeText(prompt).then(() => {
     const toast = document.getElementById('toast');
