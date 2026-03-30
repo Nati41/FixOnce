@@ -886,8 +886,13 @@ def configure_claude_hooks(fixonce_dir: Path) -> bool:
 
     This is CRITICAL - hooks ensure Claude calls fo_init()
     on every conversation start.
+
+    Platform-specific:
+    - macOS/Linux: Uses .sh scripts directly
+    - Windows: Uses PowerShell .ps1 scripts via powershell.exe
     """
     settings_path = Path.home() / ".claude" / "settings.json"
+    current_platform = get_platform()
 
     try:
         settings_path.parent.mkdir(parents=True, exist_ok=True)
@@ -898,16 +903,32 @@ def configure_claude_hooks(fixonce_dir: Path) -> bool:
             with open(settings_path, 'r', encoding='utf-8') as f:
                 existing = json.load(f)
 
-        # Prepare hooks config
+        # Prepare hooks config - OS-specific
         hooks_dir = fixonce_dir / "hooks"
-        session_start = str(hooks_dir / "session_start.sh")
-        session_end = str(hooks_dir / "session_end.sh")
-        post_tool = str(hooks_dir / "post_tool_use.sh")
 
-        # Make hooks executable
-        for hook_file in [session_start, session_end, post_tool]:
-            if Path(hook_file).exists():
-                os.chmod(hook_file, 0o755)
+        if current_platform == 'windows':
+            # Windows: Use PowerShell scripts
+            session_start_script = str(hooks_dir / "session_start.ps1")
+            session_end_script = str(hooks_dir / "session_end.ps1")
+            post_tool_script = str(hooks_dir / "post_tool_use.ps1")
+
+            # Windows hook commands: run PowerShell with the script
+            # Using -ExecutionPolicy Bypass to avoid policy issues
+            session_start = f'powershell.exe -ExecutionPolicy Bypass -File "{session_start_script}"'
+            session_end = f'powershell.exe -ExecutionPolicy Bypass -File "{session_end_script}"'
+            post_tool = f'powershell.exe -ExecutionPolicy Bypass -File "{post_tool_script}"'
+
+            print(f"  {Colors.BLUE}[INFO]{Colors.END} Using Windows PowerShell hooks")
+        else:
+            # macOS/Linux: Use bash scripts directly
+            session_start = str(hooks_dir / "session_start.sh")
+            session_end = str(hooks_dir / "session_end.sh")
+            post_tool = str(hooks_dir / "post_tool_use.sh")
+
+            # Make hooks executable (only needed on Unix)
+            for hook_file in [session_start, session_end, post_tool]:
+                if Path(hook_file).exists():
+                    os.chmod(hook_file, 0o755)
 
         # Configure hooks
         existing["hooks"] = {
@@ -956,7 +977,8 @@ def configure_claude_hooks(fixonce_dir: Path) -> bool:
         with open(settings_path, 'w', encoding='utf-8') as f:
             json.dump(existing, f, indent=2)
 
-        print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code hooks configured (auto-connect enabled)")
+        hook_type = "PowerShell" if current_platform == 'windows' else "bash"
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code hooks configured ({hook_type}, auto-connect enabled)")
         return True
 
     except Exception as e:

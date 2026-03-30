@@ -227,6 +227,81 @@ try {
     Write-Warn "Could not create project Codex config: $_"
 }
 
+# ============ Step 5b: Configure Claude Code Hooks ============
+Write-Host ""
+Write-Host "  Configuring Claude Code hooks..." -ForegroundColor Cyan
+
+$claudeSettingsDir = Join-Path $env:USERPROFILE ".claude"
+$claudeSettings = Join-Path $claudeSettingsDir "settings.json"
+$hooksDir = Join-Path $ScriptDir "hooks"
+
+# Hook script paths (PowerShell for Windows)
+$sessionStartScript = Join-Path $hooksDir "session_start.ps1"
+$sessionEndScript = Join-Path $hooksDir "session_end.ps1"
+$postToolScript = Join-Path $hooksDir "post_tool_use.ps1"
+
+# Hook commands: run PowerShell with the script
+$sessionStartCmd = "powershell.exe -ExecutionPolicy Bypass -File `"$sessionStartScript`""
+$sessionEndCmd = "powershell.exe -ExecutionPolicy Bypass -File `"$sessionEndScript`""
+$postToolCmd = "powershell.exe -ExecutionPolicy Bypass -File `"$postToolScript`""
+
+try {
+    if (-not (Test-Path $claudeSettingsDir)) { New-Item -ItemType Directory -Path $claudeSettingsDir -Force | Out-Null }
+
+    $settings = @{}
+    if (Test-Path $claudeSettings) {
+        $settings = Get-Content $claudeSettings -Raw | ConvertFrom-Json -AsHashtable
+    }
+
+    # Configure hooks
+    $settings["hooks"] = @{
+        "SessionStart" = @(
+            @{
+                "matcher" = ""
+                "hooks" = @(
+                    @{
+                        "type" = "command"
+                        "command" = $sessionStartCmd
+                        "timeout" = 5
+                    }
+                )
+            }
+        )
+        "SessionEnd" = @(
+            @{
+                "matcher" = ""
+                "hooks" = @(
+                    @{
+                        "type" = "command"
+                        "command" = $sessionEndCmd
+                        "timeout" = 5
+                    }
+                )
+            }
+        )
+        "PostToolUse" = @(
+            @{
+                "matcher" = "Edit|Write|NotebookEdit|Bash"
+                "hooks" = @(
+                    @{
+                        "type" = "command"
+                        "command" = $postToolCmd
+                        "timeout" = 5
+                    }
+                )
+            }
+        )
+    }
+
+    # Enable MCP for all projects
+    $settings["enableAllProjectMcpServers"] = $true
+
+    $settings | ConvertTo-Json -Depth 10 | Out-File $claudeSettings -Encoding UTF8
+    Write-OK "Claude Code hooks configured (PowerShell, auto-connect enabled)"
+} catch {
+    Write-Warn "Could not configure Claude Code hooks: $_"
+}
+
 # ============ Step 6: Configure Auto-Start ============
 Write-Step "Configuring auto-start..."
 
@@ -278,6 +353,27 @@ Write-Host "  1. Enable 'Developer mode' (top right toggle)" -ForegroundColor Wh
 Write-Host "  2. Click 'Load unpacked'" -ForegroundColor White
 Write-Host "  3. Select folder: $extensionDir" -ForegroundColor Cyan
 Write-Host ""
+
+# ============ Step 7b: Mark Installation Complete ============
+Write-Host ""
+Write-Host "  Marking installation complete..." -ForegroundColor Cyan
+
+$userDataDir = Join-Path $env:USERPROFILE ".fixonce"
+try {
+    if (-not (Test-Path $userDataDir)) { New-Item -ItemType Directory -Path $userDataDir -Force | Out-Null }
+
+    $installState = Join-Path $userDataDir "install_state.json"
+    $state = @{
+        "installed" = $true
+        "installed_at" = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+        "version" = "1.0.12"
+        "installer" = "powershell"
+    }
+    $state | ConvertTo-Json | Out-File $installState -Encoding UTF8
+    Write-OK "Installation state saved"
+} catch {
+    Write-Warn "Could not save installation state: $_"
+}
 
 # ============ Start Server ============
 Write-Host "`n[✓] Starting FixOnce..." -ForegroundColor Cyan
