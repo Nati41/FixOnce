@@ -1,123 +1,39 @@
 # FixOnce
 
-> **Your AI Never Forgets.**
-
-FixOnce gives AI coding assistants (Codex, Claude, Cursor) persistent memory across sessions. Your AI remembers decisions, solutions, and context — picking up exactly where you left off.
+> **Your AI fixes bugs — and remembers everything.**
 
 ---
 
-## Quick Start (60 seconds)
+## Install
 
-```bash
-git clone https://github.com/Nati41/FixOnce.git
-cd FixOnce
-bash setup.sh
-```
+**👉 [Install FixOnce](https://nati41.github.io/FixOnce/install.html)**
 
-That's it. The setup script:
-1. Installs dependencies
-2. Configures MCP for Codex, Cursor, and Claude Code
-3. Starts the server
-
-After setup: **Reload Cursor** (Cmd+Shift+P → Reload Window) and start chatting. FixOnce works automatically.
+Let your AI install it for you. One prompt, done.
 
 ---
 
-## Manual Setup
+## What You Get
 
-If you prefer to set things up yourself:
-
-### 1. Install
-
-```bash
-git clone https://github.com/Nati41/FixOnce.git
-cd FixOnce
-pip3 install flask flask-cors requests fastmcp scikit-learn watchdog
-```
-
-### 2. Configure MCP
-
-**Cursor** — add to `~/.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "fixonce": {
-      "command": "python3",
-      "args": ["/absolute/path/to/FixOnce/src/mcp_server/mcp_memory_server_v2.py"]
-    }
-  }
-}
-```
-
-**Claude Code** — add to `~/.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "fixonce": {
-      "command": "python3",
-      "args": ["/absolute/path/to/FixOnce/src/mcp_server/mcp_memory_server_v2.py"]
-    }
-  }
-}
-```
-
-**Codex** — add to `~/.codex/config.toml` or `.codex/config.toml` in your project:
-
-```toml
-[mcp_servers.fixonce]
-command = "python3"
-args = ["/absolute/path/to/FixOnce/src/mcp_server/mcp_memory_server_v2.py"]
-
-[mcp_servers.fixonce.env]
-PYTHONPATH = "/absolute/path/to/FixOnce/src"
-```
-
-### 3. Start Server
-
-```bash
-python3 src/server.py
-```
-
-### 4. Reload Your Editor
-
-Cursor: Cmd+Shift+P → Reload Window
+| Feature | How It Works |
+|---------|--------------|
+| **Continuation** | AI picks up where you left off — automatically |
+| **Auto-Fix** | AI detects known errors and applies fixes — automatically |
+| **Controlled Memory** | You tell the AI what to remember — it saves and retrieves on request |
 
 ---
 
 ## How It Works
 
 ```
-You open a project → AI starts a conversation
-                          │
-                          ▼
-              AI calls fo_init()
-                          │
-              ┌───────────┴───────────┐
-              │                       │
-         New project            Existing project
-              │                       │
-     "Want me to scan?"     Shows: goal, decisions,
-              │                insights, avoid patterns
-              ▼                       │
-     AI scans & saves          AI continues with
-     architecture               full context
+You: "Fix the bug"
+AI: checks fo_errors() → finds known fix → applies it → done
+
+Dashboard shows:
+✓ No errors
+Recent: Fixed: .map() null error (just now)
 ```
 
-**If FixOnce isn't running** — AI works normally. No errors, no blocking.
-
----
-
-## What Gets Remembered
-
-| Category | Example |
-|----------|---------|
-| **Decisions** | "Use JWT instead of sessions — stateless scaling" |
-| **Insights** | "React Query handles caching better than manual fetch" |
-| **Avoid** | "Don't use moment.js — too heavy, use date-fns" |
-| **Architecture** | Stack, structure, key flows |
-| **Goals** | Current task, next steps, blockers |
+Your AI learns from every fix. Next time the same error appears — it already knows the solution.
 
 ---
 
@@ -127,20 +43,28 @@ You open a project → AI starts a conversation
 http://localhost:5000
 ```
 
-Three layers:
-- **Overview** — active AI sessions, value metrics, projects, recent changes
-- **Project View** — timeline, insights, decisions, avoid patterns
-- **Advanced** — semantic index, debug tools (hidden by default)
+Shows:
+- Current project and goal
+- Errors detected + auto-fixes ready
+- Recent activity (what was just fixed)
+- System status (Server / Extension / Memory)
 
 ---
 
-## Supported Editors
+## Controlled Memory
 
-| Editor | Integration | Setup |
-|--------|-------------|-------|
-| **Codex** | MCP (automatic) | `setup.sh`, `scripts/install.py`, or manual `config.toml` |
-| **Cursor** | MCP (automatic) | `setup.sh` or manual `mcp.json` |
-| **Claude Code** | MCP (automatic) | `setup.sh` or manual `settings.json` |
+FixOnce doesn't auto-save everything. You control what gets remembered:
+
+```
+You: "Remember: we're using date-fns instead of moment.js"
+AI: saves decision
+
+Later:
+You: "What date library are we using?"
+AI: retrieves → "date-fns"
+```
+
+The AI saves what you tell it, and retrieves when you ask.
 
 ---
 
@@ -150,7 +74,7 @@ Three layers:
 |------|---------|
 | `fo_init` | Start session |
 | `fo_errors` | Check browser errors |
-| `fo_apply` | Apply known fix (when AUTO-FIX READY) |
+| `fo_apply` | Apply known fix |
 | `fo_sync` | Update context after changes |
 | `fo_search` | Search past solutions |
 | `fo_solved` | Record a fix |
@@ -158,23 +82,32 @@ Three layers:
 
 ---
 
-## Project Structure
+## Supported Editors
 
+- **Claude Code** — MCP integration
+- **Cursor** — MCP integration
+- **Codex** — MCP integration
+
+---
+
+## For Developers
+
+If you prefer manual setup:
+
+```bash
+git clone https://github.com/Nati41/FixOnce.git
+cd FixOnce
+pip3 install -r requirements.txt
+python3 src/server.py
 ```
-FixOnce/
-├── src/
-│   ├── server.py                    # Flask server
-│   ├── api/                         # REST endpoints
-│   ├── mcp_server/
-│   │   └── mcp_memory_server_v2.py  # MCP tools (AI interface)
-│   ├── core/                        # Business logic
-│   └── managers/                    # Project management
-├── data/
-│   ├── dashboard_vnext.html          # Dashboard UI
-│   └── projects_v2/                 # Project memories
-├── setup.sh                         # One-command setup
-└── tests/
-```
+
+Then configure MCP for your editor. See [docs](https://nati41.github.io/FixOnce/).
+
+---
+
+## Version
+
+**v1.0.12** — Port 5000
 
 ---
 
@@ -184,4 +117,4 @@ MIT
 
 ---
 
-**Your AI Never Forgets.**
+**Never debug the same bug twice.**

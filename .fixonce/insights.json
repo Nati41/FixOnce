@@ -1,8 +1,8 @@
 {
   "fixonce_version": "1.0",
   "project_id": "FixOnce_34592c5b",
-  "updated_at": "2026-03-28T21:28:35.296618",
-  "count": 5,
+  "updated_at": "2026-03-29T00:40:58.611865",
+  "count": 16,
   "filter_criteria": "importance=high OR use_count>=3",
   "insights": [
     {
@@ -12,14 +12,26 @@
       "use_count": 3
     },
     {
-      "text": "Chrome extension (extension/) captures browser errors and sends to Flask server for proactive error detection",
-      "timestamp": "2026-03-23T12:56:04.851337",
+      "text": "MCP Server runs on port 5000 (Flask) with tools like auto_init_session, update_live_record, log_decision, search_past_solutions, get_browser_errors",
+      "timestamp": "2026-03-28T22:20:26.296526",
       "importance": "medium",
       "use_count": 3
     },
     {
+      "text": "Chrome extension (extension/) captures browser errors and sends to Flask server for proactive error detection",
+      "timestamp": "2026-03-23T12:56:04.851337",
+      "importance": "high",
+      "use_count": 9
+    },
+    {
       "text": "Project data stored in data/projects_v2/{project_id}.json with embeddings in {project_id}.embeddings/ folder",
       "timestamp": "2026-03-23T12:56:04.843808",
+      "importance": "high",
+      "use_count": 5
+    },
+    {
+      "text": "Testing MCP activity logging after server restart",
+      "timestamp": "2026-03-28T22:20:26.288905",
       "importance": "medium",
       "use_count": 3
     },
@@ -30,10 +42,64 @@
       "use_count": 3
     },
     {
+      "text": "Browser Context v2 complete: Project-aware FAB (only on dev domains), AI-initiated highlights with tooltip and fade-out, bidirectional communication working",
+      "timestamp": "2026-02-25T14:32:17.487253",
+      "importance": "medium",
+      "use_count": 3
+    },
+    {
       "text": "Browser Context v5 polished: dedupe with unique IDs, cleanup on navigation, FAB 3 states (idle/selecting/active), dashboard shows clean status (element count + last highlight)",
       "timestamp": "2026-02-25T19:34:02.446075",
       "importance": "medium",
       "use_count": 3
+    },
+    {
+      "text": "Installer has: auto-port detection (tries 5000-5009), health check via /api/health, checks if already running, LaunchAgent (Mac) / Task Scheduler (Windows) for auto-start",
+      "timestamp": "2026-02-25T22:03:14.547357",
+      "importance": "high",
+      "use_count": 5
+    },
+    {
+      "text": "Archived duplicate/noisy project records (without working_dir) instead of deleting them, to keep rollback safety while cleaning project switcher data.",
+      "timestamp": "2026-03-01T19:04:14.877553",
+      "importance": "medium",
+      "use_count": 3
+    },
+    {
+      "text": "Protocol Rule #9: After fixing browser errors, AI must clear error log via POST /api/clear-logs so dashboard Orb returns to green",
+      "timestamp": "2026-03-01T21:02:02.171107",
+      "importance": "high",
+      "use_count": 7
+    },
+    {
+      "text": "Flask prints need flush=True to appear immediately in terminal. Without it, output is buffered and may not show.",
+      "timestamp": "2026-03-01T23:15:16.340026",
+      "importance": "medium",
+      "use_count": 3
+    },
+    {
+      "text": "Committed knowledge format v1.0: fixonce_version + project_id at root level for forward compatibility and clone sync identification",
+      "timestamp": "2026-03-07T22:06:32.612935",
+      "importance": "medium",
+      "use_count": 4
+    },
+    {
+      "text": "Opening message UX: ההבדל בין 'דוח' ל'סיפור'. במקום bullet points טכניים (משימה, סטטוס, הבא), לספר סיפור קצר: מה עשינו, למה עצרנו, מה רצינו לבדוק, מה התוצאה. זה יוצר תחושת המשכיות אמיתית.",
+      "timestamp": "2026-03-10T11:56:59.852790",
+      "importance": "medium",
+      "use_count": 3
+    },
+    {
+      "text": "Opening message v2: שלושה שיפורים - (1) 'איפה עצרנו' צריך להיות ספציפי טכנית, לא כללי (2) סטטיסטיקות כמו '40 החלטות' הן קרות - להחליף במשפט אנושי על מה המערכת זוכרת (3) לסיים עם הצעד הבא הספציפי, לא רק 'רוצה שנמשיך?'",
+      "timestamp": "2026-03-10T12:02:10.110341",
+      "importance": "medium",
+      "use_count": 3
+    },
+    {
+      "text": "הדשבורד הראשי הוא http://localhost:5000/lite (dashboard_lite.html), לא vnext או app",
+      "timestamp": "2026-03-11T17:39:44.842763",
+      "importance": "high",
+      "use_count": 6
     }
   ]
 }

@@ -1,8 +1,8 @@
 # GitHub Pages configuration
 title: FixOnce
-description: AI Memory Layer - Never debug the same bug twice
-url: https://anthropics.github.io
-baseurl: /fixonce
+description: Your AI fixes bugs — and remembers everything
+url: https://nati41.github.io
+baseurl: /FixOnce
 
 # Disable Jekyll processing (we use static HTML)
 exclude:

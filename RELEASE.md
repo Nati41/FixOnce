@@ -1,30 +1,38 @@
-# FixOnce v1.0 Clean Release
+# FixOnce v1.0.12
 
-## Build artifacts
+## Install
 
-Run:
-
-```bash
-python3 scripts/build_release.py --version 1.0.0
+**👉 Let your AI install it:**
+```
+Install FixOnce for me
 ```
 
-Artifacts are created in:
+Or download from [install page](https://nati41.github.io/FixOnce/install.html).
 
-- `dist/FixOnce-v1.0.0/FixOnce-macOS-v1.0.0.zip`
-- `dist/FixOnce-v1.0.0/FixOnce-Windows-v1.0.0.zip`
-- `dist/FixOnce-v1.0.0/checksums.sha256`
+---
 
-## Install in 5 steps
+## Build (for maintainers)
 
-1. Download and extract the platform zip.
-2. Run installer:
-   - macOS: `./install.sh` (or `install.command`)
-   - Windows: `install.ps1` (or `install.bat`)
-3. Open `http://localhost:5000`.
-4. Restart your editor (Cursor/Claude) so MCP config reloads.
-5. Send `היי` and verify project context appears.
+```bash
+python3 scripts/build_release.py --version 1.0.12
+```
 
-## Smoke test
+Output:
+- `dist/FixOnce-v1.0.12/FixOnce-macOS-v1.0.12.zip`
+- `dist/FixOnce-v1.0.12/FixOnce-Windows-v1.0.12.zip`
 
-Use `release/SMOKE_TEST.md` inside each built zip and mark PASS/FAIL before publishing.
+---
 
+## Verify
+
+1. Open `http://localhost:5000`
+2. Start AI session, say "היי"
+3. Verify project context appears in response
+
+---
+
+## Version Info
+
+- **Version:** v1.0.12
+- **Port:** 5000
+- **MCP Tools:** fo_init, fo_errors, fo_apply, fo_sync, fo_search, fo_solved, fo_decide

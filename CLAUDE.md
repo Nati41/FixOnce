@@ -136,8 +136,8 @@ cd [project-path]
 ```bash
 # Wait for server to start
 sleep 3
-curl -s http://localhost:5001/api/ping
-curl -s http://localhost:5001/api/status | head -20
+curl -s http://localhost:5000/api/ping
+curl -s http://localhost:5000/api/status | head -20
 ```
 
 ### Step 4: Verify LaunchAgent
@@ -155,7 +155,7 @@ fo_errors()
 ### Step 6: Test error flow
 ```bash
 # Send test error
-curl -s -X POST http://localhost:5001/api/log_error \
+curl -s -X POST http://localhost:5000/api/log_error \
   -H "Content-Type: application/json" \
   -d '{"type":"error","data":{"message":"QA test error"}}'
 ```
@@ -163,7 +163,7 @@ Then run `fo_errors()` and verify it appears.
 
 ### Step 7: Test clear flow
 ```bash
-curl -s -X POST http://localhost:5001/api/clear_errors
+curl -s -X POST http://localhost:5000/api/clear_errors
 ```
 Then run `fo_errors()` and verify "No browser errors".
 
