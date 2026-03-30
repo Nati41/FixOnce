@@ -2,13 +2,8 @@
 
 > **Your AI fixes bugs — and remembers everything.**
 
----
-
-## Install
-
-**👉 [Install FixOnce](https://nati41.github.io/FixOnce/install.html)**
-
-Let your AI install it for you. One prompt, done.
+**👉 Install FixOnce here:**
+https://nati41.github.io/FixOnce/install.html
 
 ---
 
