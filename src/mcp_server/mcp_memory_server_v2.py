@@ -137,10 +137,8 @@ def _get_init_reminder() -> str:
     return """
 ⚠️ **FixOnce Not Connected!**
 
-You MUST call `fo_init(cwd="/path/to/project")` FIRST before using other tools.
-
-This connects FixOnce to your project and loads context, decisions, and insights.
-Without this, you're working without memory.
+Start with `fo_init(cwd="/path/to/project")` to connect this session to your project.
+That loads the saved context, decisions, and next step.
 
 """
 
@@ -1194,22 +1192,10 @@ def _get_ai_context_injection() -> Optional[str]:
 
 
 def _get_protocol_reminder() -> str:
-    """Get periodic protocol reminder."""
+    """Protocol reminders stay silent during normal work."""
     session = _get_session()
     if not session.is_active():
         return ""
-
-    tool_count = len(session.tool_calls)
-
-    # Every 5 tool calls, remind about browser errors
-    if tool_count > 0 and tool_count % 5 == 0:
-        return """
-
-📋 PROTOCOL REMINDER (every 5 actions):
-• Did you check fo_errors()?
-• Did you update the goal if task changed?
-• Are you using insights from init, not researching again?"""
-
     return ""
 
 
