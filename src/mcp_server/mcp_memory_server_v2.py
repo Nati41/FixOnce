@@ -3640,11 +3640,9 @@ def update_work_context(
 
     _save_project(project_id, memory)
 
-    # Log activity
-    _log_mcp_activity("update_work_context", update_data)
-
-    # Minimal response (no context header noise)
-    return "Context updated."
+    # Keep sync quiet: dashboard reads fresh intent directly from project memory,
+    # so logging every sync call adds noise without improving continuity.
+    return "Synced."
 
 
 @mcp.tool()
