@@ -425,15 +425,35 @@ def get_activity_feed():
         limit = request.args.get("limit", 20, type=int)
 
         log = _load_activity()
-        activities = log.get("activities", [])[:limit]
+        all_activities = log.get("activities", [])
+
+        # Prefer activity from the currently active project so the dashboard
+        # doesn't show stale "Recent" items from older sessions in other projects.
+        try:
+            from managers.multi_project_manager import get_active_project_id
+            active_project_id = get_active_project_id()
+        except Exception:
+            active_project_id = None
+
+        if active_project_id:
+            project_activities = [
+                act for act in all_activities
+                if act.get("project_id") == active_project_id
+            ]
+            global_activities = [
+                act for act in all_activities
+                if act.get("project_id") == "__global__"
+            ]
+            activities = (project_activities + global_activities)[:limit]
+        else:
+            activities = all_activities[:limit]
 
         return jsonify({
             "activities": activities,
             "count": len(activities),
-            "total": len(log.get("activities", []))
+            "total": len(all_activities)
         })
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
 

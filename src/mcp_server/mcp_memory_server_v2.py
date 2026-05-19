@@ -118,7 +118,7 @@ _session_init_lock = threading.Lock()
 
 
 def _mark_session_initialized():
-    """Mark that auto_init_session was called."""
+    """Mark that the public session init flow completed."""
     global _session_initialized
     with _session_init_lock:
         _session_initialized = True
@@ -867,7 +867,7 @@ def _universal_gate(tool_name: str) -> tuple:
         if _auto_create_session():
             session = _get_session()
         else:
-            return ("Error: No active project session found. Call auto_init_session() again.", "")
+            return ("Error: No active project session found. Call fo_init() again.", "")
 
     # Resolve actor for this tool call
     actor_identity = _resolve_actor_identity()
@@ -1055,7 +1055,7 @@ def _require_project() -> str:
 
     IMPORTANT: This is the NEW way to get project context.
     It NEVER reads from active_project.json.
-    The session must be initialized via init_session() or auto_init_session().
+    The session must be initialized via fo_init().
 
     Returns:
         project_id from the current session
@@ -1065,7 +1065,7 @@ def _require_project() -> str:
     """
     session = _get_session()
     if not session or not session.working_dir:
-        raise ValueError("No project context. Call init_session(cwd) or auto_init_session() first.")
+        raise ValueError("No project context. Call fo_init(cwd) first.")
     return ProjectContext.from_path(session.working_dir)
 
 
@@ -1081,7 +1081,7 @@ def _get_browser_errors_reminder() -> str:
 
 🚨 BROWSER ERRORS DETECTED: {count} errors!
 ═══════════════════════════════════════
-You MUST call: get_browser_errors()
+You MUST call: fo_errors()
 DO NOT ignore this - the user sees these errors!
 ═══════════════════════════════════════"""
         return ""
@@ -1102,7 +1102,7 @@ def _get_ai_context_injection() -> Optional[str]:
     This function implements the AI Context feature:
     - When user enables AI Context mode in dashboard
     - AND has selected element(s) using the FAB in browser
-    - We inject this context into init_session response
+    - We inject this context into fo_init response
     - So the AI knows what "this/that/זה" refers to
 
     Returns:
@@ -1206,7 +1206,7 @@ def _get_protocol_reminder() -> str:
         return """
 
 📋 PROTOCOL REMINDER (every 5 actions):
-• Did you check get_browser_errors()?
+• Did you check fo_errors()?
 • Did you update the goal if task changed?
 • Are you using insights from init, not researching again?"""
 
@@ -1240,10 +1240,9 @@ def _log_mcp_activity(tool_name: str, details: dict = None):
     Log MCP tool calls as activity for dashboard tracking.
 
     This enables visibility into AI memory operations like:
-    - update_live_record (goal changes, insights)
-    - log_decision
-    - log_avoid
-    - search_past_solutions
+    - fo_sync (goal changes, insights)
+    - fo_decide
+    - fo_search
 
     Args:
         tool_name: Name of the MCP tool being called
@@ -2127,7 +2126,7 @@ FixOnce needs a project folder to work with.
    claude
    ```
 
-Or use `init_session(working_dir="/path/to/project")` to connect manually.
+Or call `fo_init(cwd="/path/to/project")` from your project folder.
 
 ---
 🏠 אתה בתיקיית הבית. FixOnce צריך תיקיית פרויקט.
@@ -2140,7 +2139,7 @@ FixOnce needs a project folder with files like:
 
 **What to do:**
 Navigate to your project root and try again, or:
-`init_session(working_dir="/path/to/your/project")`"""
+`fo_init(cwd="/path/to/your/project")`"""
 
 
 def _is_valid_project_dir(path: str) -> bool:
@@ -2414,7 +2413,7 @@ def _get_browser_errors_summary(limit: int = 3) -> Optional[str]:
             lines.append(f"\n✅ **{solutions_found} known fix(es).** Apply them.")
 
         if len(errors) > limit:
-            lines.append(f"_...and {len(errors) - limit} more. Use `get_browser_errors()` for full list._")
+            lines.append(f"_...and {len(errors) - limit} more. Use `fo_errors()` for full list._")
 
         return '\n'.join(lines)
     except Exception:
@@ -2664,7 +2663,7 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
             lines.append(f"{prefix} {text}")
 
         if len(insights) > 5:
-            lines.append(f"_...and {len(insights) - 5} more. Use `search_past_solutions()` to find specific ones._")
+            lines.append(f"_...and {len(insights) - 5} more. Use `fo_search()` to find specific ones._")
         lines.append("")
         lines.append("---")
         lines.append("")
@@ -3200,7 +3199,7 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
                 lines.append(f"{prefix} {text}")
 
             if len(insights) > 5:
-                lines.append(f"_...and {len(insights) - 5} more. Use `search_past_solutions()` to find specific ones._")
+                lines.append(f"_...and {len(insights) - 5} more. Use `fo_search()` to find specific ones._")
             lines.append("")
             lines.append("---")
             lines.append("")
@@ -3309,7 +3308,7 @@ def scan_project() -> str:
     """
     session = _get_session()
     if not session.is_active():
-        return "Error: No active session. Call init_session() first."
+        return "Error: No active session. Call fo_init() first."
 
     working_dir = session.working_dir
 
@@ -3366,7 +3365,7 @@ def scan_project() -> str:
 
     lines.append("")
     lines.append("---")
-    lines.append("Now call `update_live_record()` to save this info.")
+    lines.append("Now call `fo_sync()` to save this info.")
 
     return '\n'.join(lines)
 
@@ -4107,7 +4106,7 @@ def mark_component_stable(name: str, files: str = "") -> str:
     repo_path = gps.get("working_dir", "")
 
     if not repo_path:
-        return context + "[ERROR] No project path. Run auto_init_session first."
+        return context + "[ERROR] No project path. Run fo_init first."
 
     # Find component
     arch = memory.get("live_record", {}).get("architecture", {})
@@ -4190,7 +4189,7 @@ def rollback_component(name: str, mode: str = "files") -> str:
     repo_path = gps.get("working_dir", "")
 
     if not repo_path:
-        return context + "[ERROR] No project path. Run auto_init_session first."
+        return context + "[ERROR] No project path. Run fo_init first."
 
     # Find component
     arch = memory.get("live_record", {}).get("architecture", {})
@@ -4442,7 +4441,7 @@ def auto_discover_components(apply: bool = False) -> str:
         project_path = gps.get("working_dir", "")
 
         if not project_path:
-            return context + "❌ No project path found. Run auto_init_session first."
+            return context + "❌ No project path found. Run fo_init first."
 
         # Get existing components
         existing = memory.get("live_record", {}).get("architecture", {}).get("components", [])
@@ -6006,7 +6005,7 @@ def check_and_report() -> str:
         if len(errors) > 3:
             lines.append(f"  • ...and {len(errors) - 3} more")
         lines.append("")
-        lines.append("**Use `get_browser_errors()` for details.**")
+        lines.append("**Use `fo_errors()` for details.**")
     else:
         lines.append("✅ No browser errors")
 
@@ -6048,7 +6047,7 @@ def generate_context() -> str:
 
     session = _get_session()
     if not session.is_active():
-        return "Error: No active session. Call auto_init_session first."
+        return "Error: No active session. Call fo_init first."
 
     memory = _load_project(session.project_id)
     if not memory:
@@ -6411,8 +6410,17 @@ def _format_minimal_init(working_dir: str) -> str:
         except:
             return None
 
+    def clean_text(value: str, limit: int = 140) -> str:
+        if not value:
+            return ""
+        value = " ".join(str(value).strip().split())
+        if len(value) <= limit:
+            return value
+        return value[:limit - 1].rstrip() + "…"
+
     intent_time = parse_timestamp(intent.get("updated_at"))
     resume_time = parse_timestamp(resume_state.get("updated_at") if resume_state else None)
+    now = datetime.now(intent_time.tzinfo) if intent_time and intent_time.tzinfo else datetime.now()
 
     # Use fresher source, default to intent (more commonly updated via fo_sync)
     use_intent_first = True
@@ -6433,27 +6441,67 @@ def _format_minimal_init(working_dir: str) -> str:
     if not next_thing and resume_state and resume_state.get("active_task"):
         next_thing = resume_state['active_task']
 
-    # Get current goal for context (makes opening feel like real continuation)
+    # Add grounded context fields so the opening reflects real saved state.
     current_goal = intent.get("current_goal", "")
+    work_area = intent.get("work_area", "")
+    last_file = intent.get("last_file", "")
+    short_summary = resume_state.get("short_summary") if resume_state else ""
 
-    # Build natural continuation message
-    # Format: "Back to **Project** — {goal}. Last: X. Next: Y."
-    if current_goal and last_thing and next_thing:
-        return f"Back to **{project_name}** — {current_goal}.\nLast: {last_thing}. Next: {next_thing}."
-    elif current_goal and next_thing:
-        return f"Back to **{project_name}** — {current_goal}.\nNext: {next_thing}."
-    elif current_goal and last_thing:
-        return f"Back to **{project_name}** — {current_goal}.\nLast: {last_thing}. What's next?"
-    elif current_goal:
-        return f"Back to **{project_name}** — {current_goal}.\nReady to continue."
-    elif last_thing and next_thing:
-        return f"Back to **{project_name}**.\nLast: {last_thing}. Next: {next_thing}."
-    elif last_thing:
-        return f"Back to **{project_name}**.\nLast: {last_thing}. What's next?"
-    elif next_thing:
-        return f"Back to **{project_name}**.\nNext: {next_thing}."
+    last_thing = clean_text(last_thing)
+    next_thing = clean_text(next_thing)
+    current_goal = clean_text(current_goal, limit=110)
+    work_area = clean_text(work_area, limit=80)
+    last_file = clean_text(last_file, limit=90)
+    short_summary = clean_text(short_summary)
+
+    freshest_time = intent_time if use_intent_first else resume_time
+    stale_context = False
+    if freshest_time:
+        try:
+            stale_context = (now - freshest_time).days >= 14
+        except:
+            stale_context = False
+
+    # Build natural continuation message with explicit grounding.
+    line1 = f"Back to **{project_name}**."
+
+    context_bits = []
+    if current_goal:
+        context_bits.append(current_goal)
+    if work_area:
+        context_bits.append(f"Area: {work_area}")
+    elif short_summary and not current_goal:
+        context_bits.append(short_summary)
+
+    if stale_context and context_bits:
+        line2 = "Last recorded: " + " — ".join(context_bits)
+    elif context_bits:
+        line2 = " — ".join(context_bits)
     else:
-        return f"Back to **{project_name}**. Ready."
+        line2 = ""
+
+    detail_bits = []
+    if last_thing:
+        detail_bits.append(f"Last: {last_thing}")
+    elif last_file:
+        detail_bits.append(f"Last file: {last_file}")
+
+    if next_thing:
+        detail_bits.append(f"Next: {next_thing}")
+
+    line3 = ". ".join(detail_bits)
+    if line3:
+        line3 += "."
+
+    lines = [line1]
+    if line2:
+        lines.append(line2)
+    if line3:
+        lines.append(line3)
+    elif not line2:
+        lines.append("Ready to continue.")
+
+    return "\n".join(lines)
 
 
 @mcp.tool()

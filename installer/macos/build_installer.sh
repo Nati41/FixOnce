@@ -41,7 +41,7 @@ mkdir -p "$RESOURCES"
 # ============================================================
 echo "[2/5] Creating Info.plist..."
 
-cat > "$CONTENTS/Info.plist" << 'PLIST'
+cat > "$CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -53,9 +53,9 @@ cat > "$CONTENTS/Info.plist" << 'PLIST'
     <key>CFBundleIdentifier</key>
     <string>com.fixonce.installer</string>
     <key>CFBundleVersion</key>
-    <string>1.0.10</string>
+    <string>$VERSION</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.10</string>
+    <string>$VERSION</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
@@ -319,7 +319,7 @@ install_files() {
     PROJECT_ID="FixOnce_$(openssl rand -hex 4)"
     cat > "$INSTALL_DIR/.fixonce/metadata.json" << EOF
 {
-  "fixonce_version": "1.0.10",
+  "fixonce_version": "$VERSION",
   "project_id": "$PROJECT_ID",
   "name": "FixOnce",
   "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",

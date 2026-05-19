@@ -38,6 +38,8 @@ Your AI learns from every fix. Next time the same error appears — it already k
 http://localhost:5000
 ```
 
+Main dashboard: `/`
+
 Shows:
 - Current project and goal
 - Errors detected + auto-fixes ready

@@ -534,7 +534,7 @@
 
         function openFullDashboard() {
             // Try multiple methods to open in browser
-            const url = window.location.origin + '/next';
+            const url = window.location.origin + '/';
 
             // Method 1: Try pywebview API
             if (window.pywebview) {
@@ -547,7 +547,7 @@
             if (newWin) return;
 
             // Method 3: Navigate in same window as fallback
-            window.location.href = '/next';
+            window.location.href = '/';
         }
 
         function timeSince(dateStr) {

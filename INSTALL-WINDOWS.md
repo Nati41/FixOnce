@@ -19,7 +19,7 @@ The installer will:
 - Install Python dependencies
 - Configure Claude Code / Cursor
 - Set up auto-start on login
-- Open the dashboard
+- Open the main dashboard (`/`)
 
 ---
 
@@ -30,7 +30,7 @@ The installer will:
 | **FixOnce Server** | Runs in background on port 5000 |
 | **MCP Connection** | Connects to Claude Code / Cursor |
 | **Chrome Extension** | Captures browser errors (optional) |
-| **Dashboard** | Web UI at http://localhost:5000 |
+| **Dashboard** | Main web UI at http://localhost:5000/ |
 
 ---
 
@@ -101,7 +101,7 @@ After installation, just say in Claude Code or Cursor:
 
 FixOnce will respond with your project context!
 
-**Dashboard:** http://localhost:5000
+**Main dashboard:** http://localhost:5000/
 
 ---
 

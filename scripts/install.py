@@ -13,6 +13,10 @@ import subprocess
 import re
 from pathlib import Path
 
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+from version import VERSION
+
 # FastMCP environment settings
 # FASTMCP_CHECK_FOR_UPDATES accepts: 'stable', 'prerelease', 'off' (NOT 'true'/'false')
 FASTMCP_ENV = {
@@ -1342,7 +1346,7 @@ def mark_installation_complete() -> bool:
     state = {
         "installed": True,
         "installed_at": datetime.now().isoformat(),
-        "version": "1.0.11",
+        "version": VERSION,
         "installer": "cli"
     }
 
