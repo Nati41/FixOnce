@@ -6344,8 +6344,8 @@ def clear_resume_state() -> str:
 
 def _format_minimal_init(working_dir: str) -> str:
     """
-    Format natural, human init response - 2-3 lines max.
-    Should feel like resuming a conversation, not reading a task manager.
+    Format the final human-visible session opener.
+    This is the single source of truth for fo_init/sync openers.
 
     Priority: auto-fixes > errors > continuation context
     Data source: Uses FRESHER of intent vs resume_state (by timestamp)
@@ -6368,12 +6368,12 @@ def _format_minimal_init(working_dir: str) -> str:
         pass
 
     if has_auto_fixes:
-        return f"Back to **{project_name}**.\n\nACTION_REQUIRED: fo_apply"
+        return f"🧠 Back to {project_name}\n\nACTION_REQUIRED: fo_apply\n\nReady."
 
     # Check for live errors - don't report count, fo_errors is source of truth
     live_errors = _get_live_errors()
     if live_errors:
-        return f"Back to **{project_name}**.\n\nACTION_REQUIRED: fo_errors"
+        return f"🧠 Back to {project_name}\n\nACTION_REQUIRED: fo_errors\n\nReady."
 
     # Get both data sources
     resume_state = None
@@ -6446,8 +6446,8 @@ def _format_minimal_init(working_dir: str) -> str:
         except:
             stale_context = False
 
-    # Build natural continuation message with explicit grounding.
-    line1 = f"Back to **{project_name}**."
+    # Build final opener with explicit grounding and stable formatting.
+    line1 = f"🧠 Back to {project_name}"
 
     context_bits = []
     if current_goal:
@@ -6458,32 +6458,32 @@ def _format_minimal_init(working_dir: str) -> str:
         context_bits.append(short_summary)
 
     if stale_context and context_bits:
-        line2 = "Last recorded: " + " — ".join(context_bits)
+        line2 = "Last recorded: " + " / ".join(context_bits)
     elif context_bits:
-        line2 = " — ".join(context_bits)
+        line2 = "\n".join(context_bits)
     else:
         line2 = ""
 
-    detail_bits = []
+    detail_lines = []
     if last_thing:
-        detail_bits.append(f"Last: {last_thing}")
+        detail_lines.append(f"Last:\n{last_thing}.")
     elif last_file:
-        detail_bits.append(f"Last file: {last_file}")
+        detail_lines.append(f"Last file:\n{last_file}.")
 
     if next_thing:
-        detail_bits.append(f"Next: {next_thing}")
+        detail_lines.append(f"Next:\n{next_thing}.")
 
-    line3 = ". ".join(detail_bits)
-    if line3:
-        line3 += "."
-
-    lines = [line1]
+    lines = [line1, ""]
     if line2:
         lines.append(line2)
-    if line3:
-        lines.append(line3)
+        lines.append("")
+    if detail_lines:
+        lines.extend(detail_lines)
+        lines.append("")
     elif not line2:
-        lines.append("Ready to continue.")
+        lines.extend(["Ready to continue.", ""])
+
+    lines.append("Ready.")
 
     return "\n".join(lines)
 
@@ -6493,7 +6493,8 @@ def fo_init(cwd: str = "") -> str:
     """
     Initialize FixOnce session. MUST be called first.
 
-    Returns minimal context: project, last action, next step.
+    Returns the final human-visible session opener, including Ready.
+    Agents should display this opener exactly once and not paraphrase it.
 
     Args:
         cwd: Current working directory (usually provided by Claude Code)

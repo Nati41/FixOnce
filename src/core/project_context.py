@@ -264,6 +264,14 @@ class ProjectContext:
         """
         root_path = Path(project_root).resolve()
         cache_key = str(root_path)
+        home_path = Path.home().resolve()
+
+        # Guard: never create or resolve project metadata for home/root.
+        # These are not real project boundaries and can silently poison routing.
+        if root_path == home_path or root_path == Path('/'):
+            raise ValueError(
+                f"Invalid project root for FixOnce metadata: {root_path}"
+            )
 
         # Check cache
         if cache_key in cls._cache:
