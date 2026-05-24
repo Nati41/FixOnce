@@ -287,6 +287,7 @@ SRC_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SRC_DIR))
 
 from fastmcp import FastMCP
+from core.agent_context import AgentContext
 from core.system_mode import get_system_mode, MODE_FULL, MODE_PASSIVE, MODE_OFF
 
 # Policy Enforcement Engine - must be after sys.path is set
@@ -797,6 +798,51 @@ def _evaluate_current_completion_gate(
     return type("FallbackGateResult", (), {"level": "silent"})()
 
 
+def _get_runtime_session_id(session: SessionContext) -> str:
+    """Build a stable runtime session identifier for the current MCP session."""
+    if not session or not session.project_id or not session.initialized_at:
+        return "unknown-session"
+    return hashlib.md5(
+        f"{session.project_id}_{session.initialized_at}".encode()
+    ).hexdigest()[:8]
+
+
+def build_agent_context(tool_name: str, intent: Optional[str] = None) -> AgentContext:
+    """
+    Build a real AgentContext from current runtime state.
+
+    This is Stage 8 runtime wiring only. It does not change UX or enforce
+    any new behavior.
+    """
+    session = _get_session()
+    actor_identity = _resolve_actor_identity()
+
+    project_id = session.project_id or "unknown-project"
+    session_id = _get_runtime_session_id(session)
+
+    resolved_intent = intent or ""
+    if not resolved_intent and session.is_active():
+        try:
+            memory = _load_project(session.project_id)
+            resolved_intent = (
+                memory.get("live_record", {})
+                .get("intent", {})
+                .get("current_goal", "")
+            )
+        except Exception:
+            resolved_intent = ""
+
+    return AgentContext(
+        actor_name=actor_identity.get("editor", "unknown") or "unknown",
+        actor_source=actor_identity.get("source", "none") or "none",
+        actor_confidence=float(actor_identity.get("confidence", 0.0) or 0.0),
+        tool_name=tool_name,
+        intent=resolved_intent,
+        session_id=session_id,
+        project_id=project_id,
+    )
+
+
 def _get_pending_commands_for_injection() -> list:
     """Get pending commands from dashboard (without marking as delivered)."""
     try:
@@ -996,8 +1042,18 @@ def _universal_gate(tool_name: str) -> tuple:
 
     # Resolve actor for this tool call
     actor_identity = _resolve_actor_identity()
+    agent_ctx = build_agent_context(tool_name)
     _compliance_state["editor"] = actor_identity["editor"]
     _persist_ai_connection(actor_identity, project_id=session.project_id)
+    _compliance_state["agent_context"] = {
+        "actor_name": agent_ctx.actor_name,
+        "actor_source": agent_ctx.actor_source,
+        "actor_confidence": agent_ctx.actor_confidence,
+        "tool_name": agent_ctx.tool_name,
+        "intent": agent_ctx.intent,
+        "session_id": agent_ctx.session_id,
+        "project_id": agent_ctx.project_id,
+    }
 
     # Log tool call
     session.log_tool_call(tool_name)
