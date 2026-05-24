@@ -46,6 +46,18 @@ class TestInterventionPolicy(unittest.TestCase):
         )
         self.assertEqual(result.level, "warn")
 
+    def test_lock_violation_blocks(self):
+        result = evaluate_risk_gate(
+            InterventionContext(lock_violation=True)
+        )
+        self.assertEqual(result.level, "block")
+
+    def test_blocked_component_warns(self):
+        result = evaluate_risk_gate(
+            InterventionContext(blocked_components_relevant=1)
+        )
+        self.assertEqual(result.level, "warn")
+
     def test_completion_missing_fo_solved_warns_not_blocks(self):
         result = evaluate_completion_gate(
             InterventionContext(bug_fix_completed=True, fo_solved_called=False)

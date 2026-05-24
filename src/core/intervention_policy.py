@@ -35,6 +35,8 @@ class InterventionContext:
     auto_fix_ready: bool = False
     decision_conflict_severity: str = ""
     stable_component_touched: bool = False
+    blocked_components_relevant: int = 0
+    lock_violation: bool = False
     risky_change: bool = False
     repeat_bug_detected: bool = False
     similar_past_solution_found: bool = False
@@ -94,7 +96,25 @@ def evaluate_decision_conflict_gate(ctx: InterventionContext) -> InterventionGat
 
 
 def evaluate_risk_gate(ctx: InterventionContext) -> InterventionGateResult:
-    """Warn when touching stable components or when a risky change is flagged."""
+    """Block on lock violations, warn on stable/blocked/risky operations."""
+    if ctx.lock_violation:
+        return InterventionGateResult(
+            gate="risk_gate",
+            level="block",
+            reason="The operation violates a lock or illegal state guard.",
+            evidence={"lock_violation": True},
+            suggested_action="Resolve the lock state before continuing.",
+        )
+
+    if ctx.blocked_components_relevant > 0:
+        return InterventionGateResult(
+            gate="risk_gate",
+            level="warn",
+            reason="Blocked components may affect the requested work.",
+            evidence={"blocked_components_relevant": ctx.blocked_components_relevant},
+            suggested_action="Review blocked components before proceeding.",
+        )
+
     if ctx.risky_change:
         return InterventionGateResult(
             gate="risk_gate",

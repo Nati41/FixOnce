@@ -304,7 +304,11 @@ except ImportError as e:
 # Stage 7 Intervention Policy - isolated gate wiring
 _intervention_policy_available = False
 try:
-    from core.intervention_policy import InterventionContext, evaluate_error_gate
+    from core.intervention_policy import (
+        InterventionContext,
+        evaluate_error_gate,
+        evaluate_risk_gate,
+    )
     _intervention_policy_available = True
     _log("[FixOnce] Intervention policy loaded successfully")
 except ImportError as e:
@@ -706,6 +710,30 @@ def _evaluate_current_error_gate(
     if auto_fix_ready and tool_name != "fo_apply":
         return type("FallbackGateResult", (), {"level": "block"})()
     if live_errors > 0:
+        return type("FallbackGateResult", (), {"level": "warn"})()
+    return type("FallbackGateResult", (), {"level": "silent"})()
+
+
+def _evaluate_current_risk_gate(
+    stable_component_touched: bool = False,
+    blocked_components_relevant: int = 0,
+    lock_violation: bool = False,
+    risky_change: bool = False,
+):
+    """Evaluate the Stage 7 risk gate without changing existing UX strings."""
+    if _intervention_policy_available:
+        return evaluate_risk_gate(
+            InterventionContext(
+                stable_component_touched=stable_component_touched,
+                blocked_components_relevant=blocked_components_relevant,
+                lock_violation=lock_violation,
+                risky_change=risky_change,
+            )
+        )
+
+    if lock_violation:
+        return type("FallbackGateResult", (), {"level": "block"})()
+    if blocked_components_relevant > 0 or stable_component_touched or risky_change:
         return type("FallbackGateResult", (), {"level": "warn"})()
     return type("FallbackGateResult", (), {"level": "silent"})()
 
@@ -3506,7 +3534,10 @@ def update_live_record(section: str, data: str) -> str:
         if new_goal and _policy_available:
             components = lr.get('architecture', {}).get('components', [])
             blocked_relevant = check_blocked_components(new_goal, components)
-            if blocked_relevant:
+            gate_result = _evaluate_current_risk_gate(
+                blocked_components_relevant=len(blocked_relevant)
+            )
+            if gate_result.level in {"warn", "block"}:
                 blocked_names = [b['name'] for b in blocked_relevant]
                 pre_action_warning += f"\n⚠️ **BLOCKED COMPONENTS MAY AFFECT THIS GOAL:**\n"
                 for b in blocked_relevant:
@@ -5940,7 +5971,10 @@ def smart_file_operation(
         elif operation == "write":
             # Check if this affects a stable component BEFORE writing
             stable_impact = _check_stable_component_impact(file_path)
-            if stable_impact:
+            gate_result = _evaluate_current_risk_gate(
+                stable_component_touched=bool(stable_impact)
+            )
+            if gate_result.level in {"warn", "block"}:
                 result_lines.append("")
                 result_lines.append(f"⚠️ **STABILITY WARNING**: This file belongs to stable component '{stable_impact['name']}'")
                 result_lines.append(f"   Checkpoint: {stable_impact['commit']}")
@@ -5958,7 +5992,10 @@ def smart_file_operation(
         elif operation == "append":
             # Check if this affects a stable component BEFORE appending
             stable_impact = _check_stable_component_impact(file_path)
-            if stable_impact:
+            gate_result = _evaluate_current_risk_gate(
+                stable_component_touched=bool(stable_impact)
+            )
+            if gate_result.level in {"warn", "block"}:
                 result_lines.append("")
                 result_lines.append(f"⚠️ **STABILITY WARNING**: This file belongs to stable component '{stable_impact['name']}'")
                 result_lines.append(f"   Checkpoint: {stable_impact['commit']}")
@@ -6143,7 +6180,10 @@ def mark_command_executed(command_id: str, result: str = "success", details: str
     else:
         # EXECUTION LOCK: Only allow marking if status is "delivered"
         current_status = command.get("status", "")
-        if current_status != "delivered":
+        gate_result = _evaluate_current_risk_gate(
+            lock_violation=(current_status != "delivered")
+        )
+        if gate_result.level == "block":
             return f"❌ Cannot mark command `{command_id}` as executed.\nCurrent status: `{current_status}` (must be `delivered`).\n(📌 FixOnce: execution lock rejected)"
 
         # Update command status
