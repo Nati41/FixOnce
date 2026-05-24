@@ -110,11 +110,6 @@ def _mark_installed():
 @installer_bp.route('/install')
 def serve_installer():
     """Serve the installer HTML page."""
-    # If already installed, redirect to dashboard
-    if _is_installed():
-        from flask import redirect
-        return redirect('/')
-
     installer_path = Path(__file__).parent.parent.parent / "data" / "installer.html"
     if installer_path.exists():
         return send_file(installer_path)

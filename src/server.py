@@ -139,12 +139,6 @@ def dashboard():
 @flask_app.route("/install")
 def install_wizard():
     """Serve the installer wizard."""
-    from flask import redirect
-
-    # If already installed, redirect to dashboard
-    if _is_installed():
-        return redirect("/")
-
     installer_path = INSTALL_DATA_DIR / "installer.html"
     if installer_path.exists():
         return _send_dashboard_file(installer_path)

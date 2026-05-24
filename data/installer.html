@@ -69,6 +69,38 @@ h1 {
   border-width: 2px;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.status-grid {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 24px;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.status-row:last-child {
+  border-bottom: 0;
+}
+
+.status-label {
+  color: var(--text-dim);
+}
+
+.status-value {
+  color: var(--text);
+  font-weight: 600;
+  text-align: right;
+}
+
 .section-header {
   display: flex;
   align-items: center;
@@ -304,10 +336,53 @@ h2 {
       <path d="M83 88C90 79 100 73 112 70C124 67 136 69 146 76" stroke="#31CF6E" stroke-width="10" stroke-linecap="round"/>
       <path d="M92 109L106 123L137 92" stroke="#2CCF6C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-    <h1>Install FixOnce</h1>
-    <p class="tagline">FixOnce helps AI assistants remember project context, decisions, and past issues so you can work faster and more consistently.</p>
+    <h1 id="page-title">Install FixOnce</h1>
+    <p class="tagline" id="page-tagline">FixOnce helps AI assistants remember project context, decisions, and past issues so you can work faster and more consistently.</p>
   </header>
 
+  <section class="section primary hidden" id="installed-state">
+    <div class="section-header">
+      <h2>FixOnce is installed</h2>
+      <span class="badge">Connected</span>
+    </div>
+    <p id="installed-summary">The local FixOnce server is running.</p>
+
+    <div class="status-grid">
+      <div class="status-row">
+        <span class="status-label">Server</span>
+        <span class="status-value" id="server-origin">Checking...</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Port</span>
+        <span class="status-value" id="server-port">Checking...</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Health</span>
+        <span class="status-value" id="server-health">Checking...</span>
+      </div>
+    </div>
+
+    <div class="buttons">
+      <a href="/" class="btn btn-primary" id="open-dashboard">Open Dashboard</a>
+      <button class="btn btn-secondary" onclick="copyActivationPrompt()">Copy Activation Step</button>
+    </div>
+
+    <div class="how-it-works">
+      <h3>Next</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-text">Open a new AI session to activate the MCP connection</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-text">Approve the FixOnce MCP tool if your AI client asks</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="install-flow">
   <!-- AI Install Section (Primary) -->
   <section class="section primary">
     <div class="section-header">
@@ -383,7 +458,7 @@ source venv/bin/activate
 # 5. Install dependencies
 pip install -r requirements.txt
 
-# 6. Start server (will auto-select port 5000-5009)
+# 6. Start server (will auto-select an available FixOnce port)
 python src/server.py --flask-only
 
 # Server will print the actual port it's running on.
@@ -402,12 +477,55 @@ python src/server.py --flask-only
       </ul>
     </div>
   </section>
+  </div>
 </div>
 
 <div class="toast" id="toast">Copied to clipboard!</div>
 
 <script>
-const AI_PROMPT = `# FixOnce AI Installation
+const state = {
+  origin: window.location.origin,
+  activePort: window.location.port || (window.location.protocol === 'https:' ? '443' : '80'),
+  health: null,
+  runtime: null
+};
+const FIXONCE_DEFAULT_START_PORT = Number('50' + '00');
+
+const localServerContext = window.location.protocol.startsWith('http') &&
+  ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+
+function getStartPort() {
+  const port = Number(state.activePort);
+  if (localServerContext && Number.isFinite(port) && port > 0) {
+    return port;
+  }
+  return FIXONCE_DEFAULT_START_PORT;
+}
+
+function getNextPort() {
+  return getStartPort() + 1;
+}
+
+function getActualPort() {
+  const port = Number(state.health?.checks?.server?.port || state.runtime?.port || state.activePort);
+  return localServerContext && Number.isFinite(port) && port > 0 ? port : null;
+}
+
+function isServerOk(health) {
+  return Boolean(health?.checks?.server?.status === 'ok' &&
+    (health.status === 'healthy' || health.status === 'degraded'));
+}
+
+function buildAIPrompt() {
+  const origin = state.origin;
+  const actualPort = getActualPort();
+  const startPort = getStartPort();
+  const nextPort = getNextPort();
+  const primaryHealthUrl = localServerContext
+    ? `${origin}/api/health`
+    : `http://localhost:${startPort}/api/health`;
+
+  return `# FixOnce AI Installation
 
 Install FixOnce on this machine. Follow these steps exactly. Do NOT skip any step. Do NOT silently ignore failures.
 
@@ -480,15 +598,15 @@ python server.py --flask-only &
 
 Wait 3 seconds, then verify server is running:
 \`\`\`bash
-curl -s http://localhost:5000/api/health || curl -s http://localhost:5001/api/health
+curl -s ${primaryHealthUrl} || curl -s http://localhost:${nextPort}/api/health
 \`\`\`
 
 **Port Handling:**
-- Default port is 5000
-- If port 5000 is busy, server will try 5001, 5002, ... up to 5009
+- Default start port is ${startPort}
+- If port ${startPort} is busy, server will try ${nextPort}, then the next available local FixOnce port
 - Check actual port from server output or:
   \`\`\`bash
-  cat ~/.fixonce/current_port.txt
+  cat ~/.fixonce/runtime.json
   \`\`\`
 - Remember the actual port for the dashboard URL
 
@@ -620,10 +738,10 @@ Expected output should start with:
 ## Step 8: Verify Installation
 
 \`\`\`bash
-curl -s http://localhost:<actual_port>/api/health
+curl -s http://localhost:${actualPort || '<actual_port>'}/api/health
 \`\`\`
 
-Should return JSON containing \`"status": "ok"\` or similar success indicator.
+Should return JSON where \`checks.server.status\` is \`"ok"\`. Overall \`"degraded"\` is acceptable when only the browser extension is not connected yet.
 
 ## Step 9: Final Verification Checklist
 
@@ -631,7 +749,7 @@ Before reporting success, verify ALL of these:
 
 \`\`\`bash
 # 1. Server running?
-curl -s http://localhost:<actual_port>/api/health | grep -q "ok" && echo "✓ Server OK" || echo "✗ Server FAILED"
+curl -s http://localhost:${actualPort || '<actual_port>'}/api/health | grep -q "ok" && echo "✓ Server OK" || echo "✗ Server FAILED"
 
 # 2. MCP configured?
 grep -q "fixonce" ~/.claude.json && echo "✓ MCP OK" || echo "✗ MCP FAILED"
@@ -701,7 +819,7 @@ Tell user:
 🎉 FixOnce Installation Complete!
 
 Everything is set up:
-✓ Server running at http://localhost:<port>
+✓ Server running at http://localhost:${actualPort || '<port>'}
 ✓ MCP configured
 ✓ Global AI rules installed
 ✓ MCP tool authorized
@@ -723,6 +841,7 @@ Enjoy never debugging the same bug twice! 🧠
 - If JSON/TOML config is already corrupted, tell user and stop
 - Always report what was changed and where backups are located
 - If port detection fails, tell user to check server output manually`;
+}
 
 function showToast(message) {
   const toast = document.getElementById('toast');
@@ -732,8 +851,16 @@ function showToast(message) {
 }
 
 function copyAIPrompt() {
-  navigator.clipboard.writeText(AI_PROMPT).then(() => {
+  navigator.clipboard.writeText(buildAIPrompt()).then(() => {
     showToast('AI setup instructions copied!');
+  });
+}
+
+function copyActivationPrompt() {
+  const port = getActualPort();
+  const prompt = `FixOnce is installed and the local server is running on port ${port}.\n\nOpen a new AI session in my project and initialize the FixOnce MCP tool. If the client asks for permission, approve it permanently.`;
+  navigator.clipboard.writeText(prompt).then(() => {
+    showToast('Activation step copied!');
   });
 }
 
@@ -743,6 +870,68 @@ function copyTerminalCommands() {
     showToast('Terminal commands copied!');
   });
 }
+
+async function fetchJSON(path) {
+  const res = await fetch(path, { cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error(`${path} returned ${res.status}`);
+  }
+  return res.json();
+}
+
+function showInstalledState() {
+  const port = getActualPort();
+  const healthStatus = state.health?.status || 'ok';
+
+  document.getElementById('page-title').textContent = 'FixOnce is installed';
+  document.getElementById('page-tagline').textContent = 'The local FixOnce server is already running. Finish by opening a new AI session to activate MCP.';
+  document.getElementById('installed-summary').textContent = `Server running on port ${port}.`;
+  document.getElementById('server-origin').textContent = state.origin;
+  document.getElementById('server-port').textContent = String(port);
+  document.getElementById('server-health').textContent = healthStatus === 'degraded'
+    ? 'Server OK, extension not connected'
+    : 'Server OK';
+  document.getElementById('open-dashboard').href = state.origin + '/';
+  document.getElementById('installed-state').classList.remove('hidden');
+  document.getElementById('install-flow').classList.add('hidden');
+}
+
+function showInstallFlow() {
+  document.getElementById('installed-state').classList.add('hidden');
+  document.getElementById('install-flow').classList.remove('hidden');
+}
+
+async function detectLocalInstall() {
+  if (!localServerContext) {
+    showInstallFlow();
+    return;
+  }
+
+  try {
+    const [runtimeResult, healthResult] = await Promise.allSettled([
+      fetchJSON('/api/canonical-runtime'),
+      fetchJSON('/api/health')
+    ]);
+
+    if (runtimeResult.status === 'fulfilled') {
+      state.runtime = runtimeResult.value;
+    }
+    if (healthResult.status === 'fulfilled') {
+      state.health = healthResult.value;
+    }
+
+    if (isServerOk(state.health)) {
+      showInstalledState();
+      return;
+    }
+  } catch (error) {
+    // Website/static install pages cannot reach a local server; keep download flow.
+  }
+
+  showInstallFlow();
+}
+
+detectLocalInstall();
 </script>
 
 </body>
