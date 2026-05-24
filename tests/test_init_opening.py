@@ -7,7 +7,7 @@ import sys
 import types
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -67,3 +67,38 @@ class TestInitOpening(unittest.TestCase):
             opener = server._format_minimal_init("/tmp/FixOnce")
 
         self.assertEqual(opener, "🧠 Back to FixOnce\n\nACTION_REQUIRED: fo_errors\n\nReady.")
+
+    def test_format_minimal_init_uses_error_gate_for_auto_fix_ready(self):
+        gate_result = types.SimpleNamespace(level="block")
+        with patch.object(server, "_get_project_id", return_value="proj-1"), \
+             patch.object(server, "_load_project", return_value={}), \
+             patch.object(server, "_get_auto_fixes", return_value=[{"id": "fix-1"}]), \
+             patch.object(server, "_get_live_errors", return_value=[]), \
+             patch.object(server, "_resume_state_available", False), \
+             patch.object(server, "_evaluate_current_error_gate", return_value=gate_result) as gate_mock:
+            opener = server._format_minimal_init("/tmp/FixOnce")
+
+        gate_mock.assert_called_once_with(
+            tool_name="fo_init",
+            live_errors=0,
+            auto_fix_ready=True,
+        )
+        self.assertEqual(opener, "🧠 Back to FixOnce\n\nACTION_REQUIRED: fo_apply\n\nReady.")
+
+    def test_browser_errors_reminder_uses_error_gate(self):
+        response = Mock()
+        response.status_code = 200
+        response.json.return_value = {"count": 2}
+        gate_result = types.SimpleNamespace(level="warn")
+
+        with patch.object(server.requests, "get", return_value=response), \
+             patch.object(server, "_get_auto_fixes", return_value=[]), \
+             patch.object(server, "_evaluate_current_error_gate", return_value=gate_result) as gate_mock:
+            reminder = server._get_browser_errors_reminder()
+
+        gate_mock.assert_called_once_with(
+            tool_name="update_live_record",
+            live_errors=2,
+            auto_fix_ready=False,
+        )
+        self.assertIn("You MUST call: fo_errors()", reminder)

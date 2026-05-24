@@ -301,6 +301,15 @@ except ImportError as e:
     _policy_error = str(e)
     _log(f"[FixOnce] Policy engine not available: {e}")
 
+# Stage 7 Intervention Policy - isolated gate wiring
+_intervention_policy_available = False
+try:
+    from core.intervention_policy import InterventionContext, evaluate_error_gate
+    _intervention_policy_available = True
+    _log("[FixOnce] Intervention policy loaded successfully")
+except ImportError as e:
+    _log(f"[FixOnce] Intervention policy not available: {e}")
+
 # Session Registry for Multi-AI Isolation - must be after sys.path is set
 try:
     from core.session_registry import get_registry, get_or_create_session
@@ -668,6 +677,37 @@ def _get_live_errors() -> list:
         return []
     except Exception:
         return []
+
+
+def _get_auto_fixes() -> list:
+    """Get current auto-fixes, or empty list if pending fixes are unavailable."""
+    try:
+        from core.pending_fixes import get_auto_fixes
+        return get_auto_fixes()
+    except Exception:
+        return []
+
+
+def _evaluate_current_error_gate(
+    tool_name: str,
+    live_errors: int = 0,
+    auto_fix_ready: bool = False,
+):
+    """Evaluate the Stage 7 error gate without changing existing UX strings."""
+    if _intervention_policy_available:
+        return evaluate_error_gate(
+            InterventionContext(
+                tool_name=tool_name,
+                live_errors=live_errors,
+                auto_fix_ready=auto_fix_ready,
+            )
+        )
+
+    if auto_fix_ready and tool_name != "fo_apply":
+        return type("FallbackGateResult", (), {"level": "block"})()
+    if live_errors > 0:
+        return type("FallbackGateResult", (), {"level": "warn"})()
+    return type("FallbackGateResult", (), {"level": "silent"})()
 
 
 def _get_pending_commands_for_injection() -> list:
@@ -1074,7 +1114,12 @@ def _get_browser_errors_reminder() -> str:
         if res.status_code == 200:
             data = res.json()
             count = data.get('count', 0)
-            if count > 0:
+            gate_result = _evaluate_current_error_gate(
+                tool_name="update_live_record",
+                live_errors=count,
+                auto_fix_ready=bool(_get_auto_fixes()),
+            )
+            if gate_result.level in {"warn", "block"}:
                 return f"""
 
 🚨 BROWSER ERRORS DETECTED: {count} errors!
@@ -5287,12 +5332,6 @@ def get_browser_errors(limit: int = 10) -> str:
         data = res.json()
         errors = data.get('errors', [])
 
-        if not errors:
-            return "No browser errors captured."
-
-        # Track ROI: errors caught in real-time
-        _track_roi_event("error_caught_live")
-
         # Classify errors: real vs test/noise
         def is_test_error(err):
             url = err.get('url', '')
@@ -5308,6 +5347,19 @@ def get_browser_errors(limit: int = 10) -> str:
 
         real_errors = [e for e in errors if not is_test_error(e)]
         test_errors = [e for e in errors if is_test_error(e)]
+        gate_result = _evaluate_current_error_gate(
+            tool_name="get_browser_errors",
+            live_errors=len(real_errors),
+            auto_fix_ready=False,
+        )
+
+        if gate_result.level == "silent":
+            if test_errors:
+                return f"{len(test_errors)} test/noise error(s) only. Safe to ignore or clear."
+            return "No browser errors captured."
+
+        # Track ROI: errors caught in real-time
+        _track_roi_event("error_caught_live")
 
         # Auto-populate pending_fixes from previous_solution
         try:
@@ -5335,10 +5387,6 @@ def get_browser_errors(limit: int = 10) -> str:
             for err in real_errors[:limit]:
                 msg = err.get('message', err.get('error', 'Unknown error'))[:80]
                 lines.append(f"• {msg}")
-
-        # Test errors - brief note only
-        if test_errors and not real_errors:
-            return f"{len(test_errors)} test/noise error(s) only. Safe to ignore or clear."
 
         if test_errors and real_errors:
             lines.append(f"(+ {len(test_errors)} test errors)")
@@ -6357,22 +6405,18 @@ def _format_minimal_init(working_dir: str) -> str:
     project_id = _get_project_id(working_dir)
     data = _load_project(project_id)
 
-    # Check for auto-fixes first (top priority)
-    has_auto_fixes = False
-    try:
-        from core.pending_fixes import get_auto_fixes
-        auto_fixes = get_auto_fixes()
-        if auto_fixes:
-            has_auto_fixes = True
-    except:
-        pass
+    auto_fixes = _get_auto_fixes()
+    live_errors = _get_live_errors()
+    gate_result = _evaluate_current_error_gate(
+        tool_name="fo_init",
+        live_errors=len(live_errors),
+        auto_fix_ready=bool(auto_fixes),
+    )
 
-    if has_auto_fixes:
+    if gate_result.level == "block":
         return f"🧠 Back to {project_name}\n\nACTION_REQUIRED: fo_apply\n\nReady."
 
-    # Check for live errors - don't report count, fo_errors is source of truth
-    live_errors = _get_live_errors()
-    if live_errors:
+    if gate_result.level == "warn":
         return f"🧠 Back to {project_name}\n\nACTION_REQUIRED: fo_errors\n\nReady."
 
     # Get both data sources
@@ -6640,6 +6684,7 @@ def fo_errors(limit: int = 5) -> str:
         limit: Max errors to return (default 5)
     """
     lines = []
+    auto_fixes = []
 
     # Check for auto-fixes first
     try:
@@ -6647,8 +6692,13 @@ def fo_errors(limit: int = 5) -> str:
 
         auto_fixes = get_auto_fixes()
         suggested_fixes = get_suggested_fixes()
+        gate_result = _evaluate_current_error_gate(
+            tool_name="fo_errors",
+            live_errors=0,
+            auto_fix_ready=bool(auto_fixes),
+        )
 
-        if auto_fixes:
+        if gate_result.level == "block":
             lines.append(f"**AUTO-FIX READY** — call `fo_apply()` now (mandatory)")
             for fix in auto_fixes[:3]:
                 lines.append(f"• {fix['error_message'][:50]}...")
