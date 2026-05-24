@@ -12,6 +12,7 @@ import tempfile
 import shutil
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -25,7 +26,10 @@ from install import (
     check_port_availability,
     check_disk_space,
     get_fixonce_dir,
-    get_platform
+    get_platform,
+    read_runtime_state,
+    get_runtime_port,
+    wait_for_server_readiness,
 )
 
 
@@ -199,6 +203,109 @@ def test_cross_user_ping():
     return result
 
 
+def test_runtime_state_detected_as_ready():
+    """Installer readiness should succeed when runtime.json exists and health is up."""
+    result = TestResult("Runtime SSOT Readiness")
+    temp_dir = None
+    try:
+        temp_dir = tempfile.mkdtemp(prefix="fixonce_runtime_")
+        temp_home = Path(temp_dir)
+        runtime_dir = temp_home / ".fixonce"
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        runtime_file = runtime_dir / "runtime.json"
+        runtime_file.write_text(json.dumps({
+            "port": 5123,
+            "pid": 12345,
+            "server_url": "http://localhost:5123",
+            "status": "running",
+        }))
+
+        with patch("pathlib.Path.home", return_value=temp_home):
+            state = read_runtime_state()
+            port = get_runtime_port()
+            ready, actual_port, reason = wait_for_server_readiness(
+                default_port=5000,
+                max_attempts=1,
+                poll_interval=0,
+                health_checker=lambda candidate: candidate == 5123,
+            )
+
+        if state and port == 5123 and ready and actual_port == 5123 and not reason:
+            result.passed = True
+            result.message = "runtime.json is enough for installer readiness"
+        else:
+            result.message = f"Unexpected readiness result: state={state}, port={port}, ready={ready}, actual_port={actual_port}, reason={reason}"
+    except Exception as e:
+        result.message = f"Exception: {e}"
+    finally:
+        if temp_dir and Path(temp_dir).exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+    return result
+
+
+def test_runtime_state_without_legacy_port_file():
+    """Installer should not require current_port.txt when runtime.json exists."""
+    result = TestResult("Runtime Without Legacy Port File")
+    temp_dir = None
+    try:
+        temp_dir = tempfile.mkdtemp(prefix="fixonce_no_portfile_")
+        temp_home = Path(temp_dir)
+        runtime_dir = temp_home / ".fixonce"
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        runtime_file = runtime_dir / "runtime.json"
+        runtime_file.write_text(json.dumps({"port": 5333, "pid": 9876}))
+
+        with patch("pathlib.Path.home", return_value=temp_home):
+            ready, actual_port, reason = wait_for_server_readiness(
+                default_port=5000,
+                max_attempts=1,
+                poll_interval=0,
+                health_checker=lambda candidate: candidate == 5333,
+            )
+
+        if ready and actual_port == 5333 and not reason:
+            result.passed = True
+            result.message = "Installer startup works without current_port.txt"
+        else:
+            result.message = f"Legacy port file still required: ready={ready}, port={actual_port}, reason={reason}"
+    except Exception as e:
+        result.message = f"Exception: {e}"
+    finally:
+        if temp_dir and Path(temp_dir).exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+    return result
+
+
+def test_runtime_readiness_fails_clearly_without_runtime_or_health():
+    """Installer should fail clearly when neither runtime.json nor health exists."""
+    result = TestResult("Runtime Readiness Clear Failure")
+    temp_dir = None
+    try:
+        temp_dir = tempfile.mkdtemp(prefix="fixonce_runtime_fail_")
+        temp_home = Path(temp_dir)
+
+        with patch("pathlib.Path.home", return_value=temp_home):
+            ready, actual_port, reason = wait_for_server_readiness(
+                default_port=5000,
+                max_attempts=1,
+                poll_interval=0,
+                health_checker=lambda candidate: False,
+            )
+
+        expected = "Server did not publish runtime.json and no health endpoint responded"
+        if not ready and actual_port is None and reason == expected:
+            result.passed = True
+            result.message = "Installer reports missing runtime and health clearly"
+        else:
+            result.message = f"Unexpected failure message: ready={ready}, port={actual_port}, reason={reason}"
+    except Exception as e:
+        result.message = f"Exception: {e}"
+    finally:
+        if temp_dir and Path(temp_dir).exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+    return result
+
+
 def run_all_installation_tests():
     """Run all installation tests."""
     tests = [
@@ -210,6 +317,9 @@ def run_all_installation_tests():
         test_fixonce_directory_structure,
         test_fresh_install_simulation,
         test_cross_user_ping,
+        test_runtime_state_detected_as_ready,
+        test_runtime_state_without_legacy_port_file,
+        test_runtime_readiness_fails_clearly_without_runtime_or_health,
     ]
 
     results = []

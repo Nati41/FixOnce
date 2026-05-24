@@ -11,6 +11,9 @@ import shutil
 import platform
 import subprocess
 import re
+import time
+import urllib.request
+import urllib.error
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -73,6 +76,99 @@ def get_platform() -> str:
         return 'windows'
     else:
         return 'linux'
+
+
+def get_runtime_file() -> Path:
+    """Return the canonical runtime state file used by the server."""
+    return Path.home() / ".fixonce" / "runtime.json"
+
+
+def read_runtime_state() -> dict | None:
+    """Read the canonical runtime state from USER_DATA_DIR/runtime.json."""
+    runtime_file = get_runtime_file()
+    if not runtime_file.exists():
+        return None
+
+    try:
+        with open(runtime_file, 'r', encoding='utf-8') as f:
+            state = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(state, dict):
+        return None
+
+    return state
+
+
+def get_runtime_port() -> int | None:
+    """Return the canonical runtime port if available."""
+    state = read_runtime_state()
+    if not state:
+        return None
+
+    port = state.get("port")
+    try:
+        return int(port)
+    except (TypeError, ValueError):
+        return None
+
+
+def _probe_server_endpoint(port: int, endpoint: str = "/api/ping", timeout: float = 2.0):
+    """Fetch a local server endpoint and return parsed JSON on success."""
+    url = f"http://localhost:{port}{endpoint}"
+    req = urllib.request.urlopen(url, timeout=timeout)
+    if req.status != 200:
+        return None
+    return json.loads(req.read().decode())
+
+
+def wait_for_server_readiness(
+    default_port: int = 5000,
+    max_attempts: int = 30,
+    poll_interval: float = 0.5,
+    port_range_size: int = 10,
+    health_checker=None,
+) -> tuple[bool, int | None, str]:
+    """
+    Wait for server readiness using canonical runtime.json first, then health scans.
+
+    Returns:
+        (is_ready, port, failure_reason)
+    """
+    if health_checker is None:
+        def health_checker(port: int) -> bool:
+            try:
+                _probe_server_endpoint(port, endpoint="/api/health", timeout=1.0)
+                return True
+            except Exception:
+                return False
+
+    fallback_ports = list(range(default_port, default_port + port_range_size))
+    saw_runtime_port = None
+
+    for _ in range(max_attempts):
+        runtime_port = get_runtime_port()
+        ports_to_try = []
+
+        if runtime_port is not None:
+            saw_runtime_port = runtime_port
+            ports_to_try.append(runtime_port)
+
+        for port in fallback_ports:
+            if port not in ports_to_try:
+                ports_to_try.append(port)
+
+        for port in ports_to_try:
+            if health_checker(port):
+                return True, port, ""
+
+        time.sleep(poll_interval)
+
+    if saw_runtime_port is not None:
+        return False, saw_runtime_port, "Server wrote runtime.json but health endpoint did not respond"
+
+    return False, None, "Server did not publish runtime.json and no health endpoint responded"
 
 
 def get_windows_pythonw(executable: str) -> str:
@@ -1006,60 +1102,44 @@ def check_server_health(port: int = 5000, max_attempts: int = 10) -> tuple:
     Cross-user safety: Only returns True if the server belongs to
     the current user AND the same installation path.
     """
-    import urllib.request
-    import urllib.error
-    import json
     import getpass
 
     fixonce_dir = get_fixonce_dir()
-    port_file = fixonce_dir / "data" / "current_port.txt"
     current_user = getpass.getuser()
     my_install_path = str(fixonce_dir)
 
-    # First try to read actual port from file (server writes this on startup)
     ports_to_try = list(range(port, port + 10))  # 5000-5009
-    if port_file.exists():
-        try:
-            saved_port = int(port_file.read_text().strip())
-            # Put saved port first in the list
-            if saved_port in ports_to_try:
-                ports_to_try.remove(saved_port)
-            ports_to_try.insert(0, saved_port)
-        except (ValueError, IOError):
-            pass
+    runtime_port = get_runtime_port()
+    if runtime_port is not None:
+        if runtime_port in ports_to_try:
+            ports_to_try.remove(runtime_port)
+        ports_to_try.insert(0, runtime_port)
 
     for attempt in range(max_attempts):
         for p in ports_to_try:
             try:
                 # Use /api/ping which returns {"service": "fixonce", "user": "...", "install_path": "..."}
-                url = f"http://localhost:{p}/api/ping"
-                req = urllib.request.urlopen(url, timeout=2)
-                if req.status == 200:
-                    data = json.loads(req.read().decode())
-                    # Verify it's actually FixOnce
-                    if data.get("service") == "fixonce":
-                        # Cross-user check: verify this is OUR server
-                        server_user = data.get("user", "")
-                        server_path = data.get("install_path", "")
+                data = _probe_server_endpoint(p, endpoint="/api/ping", timeout=2.0)
+                # Verify it's actually FixOnce
+                if data.get("service") == "fixonce":
+                    # Cross-user check: verify this is OUR server
+                    server_user = data.get("user", "")
+                    server_path = data.get("install_path", "")
 
-                        if server_user == current_user and server_path == my_install_path:
-                            # This is OUR server
-                            return True, p
-                        else:
-                            # Server belongs to different user/installation - skip
-                            print(f"  {Colors.YELLOW}[INFO]{Colors.END} Port {p}: server belongs to '{server_user}' - skipping")
-                            continue
-            except (urllib.error.URLError, json.JSONDecodeError, Exception):
+                    if server_user == current_user and server_path == my_install_path:
+                        # This is OUR server
+                        return True, p
+                    else:
+                        # Server belongs to different user/installation - skip
+                        print(f"  {Colors.YELLOW}[INFO]{Colors.END} Port {p}: server belongs to '{server_user}' - skipping")
+                        continue
+            except Exception:
                 pass
-        import time
         time.sleep(0.5)
 
-    # Return saved port if available, else default
-    if port_file.exists():
-        try:
-            return False, int(port_file.read_text().strip())
-        except (ValueError, IOError):
-            pass
+    # Return runtime port if available, else default
+    if runtime_port is not None:
+        return False, runtime_port
     return False, port
 
 
@@ -1521,13 +1601,7 @@ def open_web_installer():
     fixonce_dir = get_fixonce_dir()
     current_platform = get_platform()
     server_script = fixonce_dir / "src" / "server.py"
-    port_file = fixonce_dir / "data" / "current_port.txt"
     log_file = fixonce_dir / "data" / "server_startup.log"
-
-    # Delete old port file to ensure we get fresh port
-    if port_file.exists():
-        print(f"  Removing old port file...")
-        port_file.unlink()
 
     # Check if server already running (scan ports 5000-5009)
     print(f"  Checking for running server...")
@@ -1548,36 +1622,23 @@ def open_web_installer():
                 start_new_session=True
             )
 
-        # Wait for port file (server writes this immediately on startup)
+        # Wait for canonical runtime + health instead of legacy current_port.txt
         print(f"  Waiting for server...")
-        for i in range(30):  # 15 seconds max
-            if port_file.exists():
-                try:
-                    port = int(port_file.read_text().strip())
-                    print(f"  Server starting on port {port}...")
-                    break
-                except (ValueError, IOError):
-                    pass
-            time.sleep(0.5)
-        else:
-            print(f"  {Colors.RED}[ERROR]{Colors.END} Server didn't write port file")
+        is_ready, runtime_port, failure_reason = wait_for_server_readiness(
+            default_port=5000,
+            max_attempts=30,
+            poll_interval=0.5,
+        )
+        if not is_ready:
+            detail = failure_reason or "Server did not become ready"
+            print(f"  {Colors.RED}[ERROR]{Colors.END} {detail}")
             if log_file.exists():
                 print(f"  Log: {log_file}")
             return False
+        port = runtime_port
+        print(f"  Server starting on port {port}...")
 
-        # Wait for server to respond
-        for i in range(20):  # 10 seconds max
-            try:
-                import urllib.request
-                req = urllib.request.urlopen(f"http://localhost:{port}/api/health", timeout=1)
-                if req.status == 200:
-                    print(f"  {Colors.GREEN}[OK]{Colors.END} Server running on port {port}")
-                    break
-            except Exception:
-                pass
-            time.sleep(0.5)
-        else:
-            print(f"  {Colors.YELLOW}[WARN]{Colors.END} Server may still be starting...")
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Server running on port {port}")
 
     # Ask user if they want to open dashboard
     dashboard_url = f"http://localhost:{port}"
