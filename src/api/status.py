@@ -959,6 +959,28 @@ def api_dashboard_snapshot():
                 snapshot["has_auto_fix"] = False
                 snapshot["auto_fix_count"] = 0
 
+            # Agent-aware runtime audit fields from shared MCP compliance state.
+            try:
+                from mcp_server.mcp_memory_server_v2 import get_compliance_for_api
+
+                compliance = get_compliance_for_api()
+                agent_context = compliance.get("agent_context") or {}
+                last_agent_intervention = compliance.get("last_agent_intervention") or {}
+
+                snapshot["compliance"] = compliance
+                snapshot["agent_context"] = agent_context
+                snapshot["last_agent_intervention"] = last_agent_intervention
+                snapshot["agent_audit_active"] = bool(
+                    agent_context.get("tool_name")
+                    or last_agent_intervention.get("tool_name")
+                    or compliance.get("tool_calls_count")
+                )
+            except Exception:
+                snapshot["compliance"] = {}
+                snapshot["agent_context"] = {}
+                snapshot["last_agent_intervention"] = {}
+                snapshot["agent_audit_active"] = False
+
         except Exception:
             pass
 
@@ -1183,4 +1205,3 @@ def api_mark_stable(name):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-

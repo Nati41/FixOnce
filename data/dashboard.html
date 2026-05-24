@@ -154,6 +154,16 @@ input:checked + .slider:before {
   color: var(--text-dim);
 }
 
+.project-subtitle {
+  font-size: 11px;
+  color: var(--text);
+  margin-top: 8px;
+}
+
+.project-subtitle.muted {
+  color: var(--text-dim);
+}
+
 /* Status Card */
 .status-row {
   display: flex;
@@ -206,6 +216,57 @@ input:checked + .slider:before {
 .context-value {
   font-size: 12px;
   color: var(--text);
+  min-width: 0;
+  flex: 1;
+}
+
+.context-value.truncate {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.context-value.muted {
+  color: var(--text-dim);
+}
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+
+.agent-stat {
+  min-width: 0;
+}
+
+.agent-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.agent-stat-value {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-stat-value.safe {
+  color: var(--green);
+}
+
+.agent-stat-value.warn {
+  color: var(--amber);
+}
+
+.agent-stat-value.error {
+  color: var(--red);
 }
 
 .context-time {
@@ -333,6 +394,7 @@ body.powered-off .card {
   <div class="card-label">Project</div>
   <div class="project-name" id="projectName">—</div>
   <div class="project-goal" id="projectGoal">No active project</div>
+  <div class="project-subtitle muted" id="projectSubtitle">Audit only</div>
 </div>
 
 <!-- Status -->
@@ -342,6 +404,33 @@ body.powered-off .card {
     <div class="status-row">
       <span class="status-icon status-ok">✓</span>
       <span class="status-text">System healthy</span>
+    </div>
+  </div>
+</div>
+
+<!-- Agent -->
+<div class="card">
+  <div class="card-label">Agent</div>
+  <div class="agent-grid">
+    <div class="agent-stat">
+      <div class="agent-stat-label">Agent</div>
+      <div class="agent-stat-value" id="agentName">unknown</div>
+    </div>
+    <div class="agent-stat">
+      <div class="agent-stat-label">Confidence</div>
+      <div class="agent-stat-value" id="agentConfidence">unknown</div>
+    </div>
+    <div class="agent-stat">
+      <div class="agent-stat-label">Last Tool</div>
+      <div class="agent-stat-value" id="agentLastTool">—</div>
+    </div>
+    <div class="agent-stat">
+      <div class="agent-stat-label">Mode</div>
+      <div class="agent-stat-value" id="agentMode">Audit only</div>
+    </div>
+    <div class="agent-stat">
+      <div class="agent-stat-label">Status</div>
+      <div class="agent-stat-value safe" id="agentStatus">Safe</div>
     </div>
   </div>
 </div>
@@ -377,11 +466,17 @@ body.powered-off .card {
   <span class="sys-item" id="sysMemory" title="Project Memory">
     <span class="sys-dot"></span>Memory
   </span>
+  <span class="sys-item" id="sysPolicy" title="Policy Layer">
+    <span class="sys-dot"></span>Policy
+  </span>
+  <span class="sys-item" id="sysAgent" title="Agent Audit">
+    <span class="sys-dot"></span>Agent
+  </span>
 </div>
 
 <!-- Footer -->
 <div class="footer">
-  <span>FixOnce — AI Memory Layer</span>
+  <span>FixOnce — Memory • Policy • Agent</span>
   <span class="footer-links">
     <a href="/privacy.html">Privacy</a>
     <a href="/terms.html">Terms</a>
@@ -391,6 +486,26 @@ body.powered-off .card {
 
 <script>
 const API = window.location.origin;
+
+function isTransientPollingError(error) {
+  if (!error) return true;
+
+  const name = String(error.name || '');
+  const message = String(error.message || '');
+
+  return (
+    name === 'AbortError' ||
+    name === 'TimeoutError' ||
+    message.includes('Failed to fetch') ||
+    message.includes('NetworkError') ||
+    message.includes('Load failed')
+  );
+}
+
+function logPollingError(label, error) {
+  if (isTransientPollingError(error)) return;
+  console.error(label, error);
+}
 
 async function fetchData() {
   try {
@@ -403,55 +518,61 @@ async function fetchData() {
     const data = await res.json();
     render(data.snapshot || {});
   } catch (e) {
-    console.error('Fetch error:', e);
+    logPollingError('Fetch error:', e);
   }
 }
 
 function render(s) {
+  const primaryAI = getPrimaryAI(s);
+  const agentContext = safeObject(s.agent_context);
+  const lastIntervention = safeObject(s.last_agent_intervention);
+  const policy = safeObject(s.policy);
+  const compliance = safeObject(s.compliance);
+
   // Project
   const projectName = s.project_name || s.project_id || '—';
   const goal = s.current_goal || s.knowledge?.current_goal || '';
   document.getElementById('projectName').textContent = projectName;
   document.getElementById('projectGoal').textContent = goal || 'No active goal';
+  document.getElementById('projectSubtitle').textContent = getProjectSubtitle(s, policy, lastIntervention);
+  document.getElementById('projectSubtitle').className = 'project-subtitle' + (s.agent_audit_active ? '' : ' muted');
 
   // Active AI
-  const activeAI = s.active_ai || s.ai_session?.editor || 'Unknown';
+  const activeAI = agentContext.actor_name || s.active_ai || s.ai_session?.editor || primaryAI.editor || 'unknown';
   document.getElementById('activeAI').textContent = capitalize(activeAI);
 
   // Status - Build status rows
   const statusEl = document.getElementById('statusContent');
   const rows = [];
 
-  // Check for errors
   const errorCount = s.browser_errors?.length || s.error_count || 0;
-  const hasAutoFix = s.has_auto_fix || s.auto_fix_available || false;
+  const intervention = getInterventionLevel(lastIntervention);
+  const agentAuditActive = Boolean(s.agent_audit_active || agentContext.tool_name || compliance.tool_calls_count);
 
-  if (hasAutoFix) {
-    rows.push({
-      icon: '✅',
-      iconClass: 'status-fix',
-      text: 'Fix ready — continue in AI',
-      action: ''
-    });
-  }
-
-  if (errorCount > 0) {
-    rows.push({
-      icon: '⚠️',
-      iconClass: 'status-warn',
-      text: `${errorCount} error${errorCount > 1 ? 's' : ''} — check in AI`,
-      action: ''
-    });
-  }
-
-  if (rows.length === 0) {
-    rows.push({
-      icon: '✓',
-      iconClass: 'status-ok',
-      text: 'No errors',
-      action: ''
-    });
-  }
+  rows.push({
+    icon: errorCount > 0 ? '⚠️' : '✓',
+    iconClass: errorCount > 0 ? 'status-warn' : 'status-ok',
+    text: `Active issues: ${errorCount}`,
+    action: errorCount > 0 ? 'Needs review' : ''
+  });
+  rows.push({
+    icon: '◉',
+    iconClass: 'status-ok',
+    text: 'Policy: Active',
+    action: policy.mode ? `Mode: ${capitalize(policy.mode)}` : 'Audit profile'
+  });
+  rows.push({
+    icon: intervention === 'block' ? '⛔' : intervention === 'warn' ? '⚠️' : '·',
+    iconClass: intervention === 'block' ? 'status-error' : intervention === 'warn' ? 'status-warn' : 'status-ok',
+    text: `Intervention: ${intervention}`,
+    action: intervention === 'silent' ? 'No active intervention' : 'Audit only'
+  });
+  rows.push({
+    icon: agentAuditActive ? '✓' : '·',
+    iconClass: agentAuditActive ? 'status-ok' : 'status-warn',
+    text: `Agent audit: ${agentAuditActive ? 'active' : 'audit only'}`,
+    action: agentContext.tool_name || lastIntervention.tool_name || ''
+  });
 
   statusEl.innerHTML = rows.map(r => `
     <div class="status-row">
@@ -469,8 +590,9 @@ function render(s) {
   const contextCard = document.getElementById('contextCard');
   if (lastChange || nextStep) {
     contextCard.style.display = '';
-    document.getElementById('lastChange').textContent = lastChange || '—';
-    document.getElementById('nextStep').textContent = nextStep || '—';
+    setTextWithTitle(document.getElementById('lastChange'), lastChange || '—');
+    setTextWithTitle(document.getElementById('nextStep'), nextStep || '—');
+    document.getElementById('nextStep').classList.add('truncate');
 
     // Sync time - only show if recent (< 10 min)
     const updatedAt = intent.updated_at;
@@ -490,6 +612,20 @@ function render(s) {
   } else {
     contextCard.style.display = 'none';
   }
+
+  // Agent card
+  const resolvedAgentName = agentContext.actor_name || primaryAI.editor || s.active_ai || 'unknown';
+  const resolvedConfidence = normalizeConfidence(agentContext.actor_confidence ?? primaryAI.actor_confidence);
+  const resolvedLastTool = agentContext.tool_name || lastIntervention.tool_name || '—';
+  const agentStatus = getAgentStatus(errorCount, intervention);
+  const agentStatusEl = document.getElementById('agentStatus');
+
+  setTextWithTitle(document.getElementById('agentName'), resolvedAgentName);
+  document.getElementById('agentConfidence').textContent = resolvedConfidence;
+  setTextWithTitle(document.getElementById('agentLastTool'), resolvedLastTool);
+  document.getElementById('agentMode').textContent = 'Audit only';
+  agentStatusEl.textContent = agentStatus;
+  agentStatusEl.className = 'agent-stat-value ' + (agentStatus === 'Safe' ? 'safe' : 'warn');
 
   // System Status (from real sources)
   const sys = s.system_status || {};
@@ -519,6 +655,19 @@ function render(s) {
     sysMemory.className = 'sys-item warn';
     sysMemory.title = 'Project Memory: Not loaded';
   }
+
+  const sysPolicy = document.getElementById('sysPolicy');
+  sysPolicy.className = policy.mode || policy.reason ? 'sys-item ok' : 'sys-item warn';
+  sysPolicy.title = policy.reason || 'Policy layer active';
+
+  const sysAgent = document.getElementById('sysAgent');
+  if (agentAuditActive) {
+    sysAgent.className = 'sys-item ok';
+    sysAgent.title = 'Agent audit active';
+  } else {
+    sysAgent.className = 'sys-item warn';
+    sysAgent.title = 'Agent audit unavailable - Audit only';
+  }
 }
 
 function relativeTime(ts) {
@@ -536,6 +685,51 @@ function relativeTime(ts) {
 
 function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+function safeObject(value) {
+  return value && typeof value === 'object' ? value : {};
+}
+
+function getPrimaryAI(snapshot) {
+  const ais = Array.isArray(snapshot.active_ais) ? snapshot.active_ais : [];
+  return ais.find(ai => ai?.is_primary) || ais[0] || {};
+}
+
+function normalizeConfidence(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 'unknown';
+  if (num >= 0.8) return 'high';
+  if (num >= 0.5) return 'medium';
+  return 'observed';
+}
+
+function getInterventionLevel(lastIntervention) {
+  const verdict = String(lastIntervention?.verdict || '').toLowerCase();
+  return verdict || 'silent';
+}
+
+function getProjectSubtitle(snapshot, policy, lastIntervention) {
+  if (snapshot.agent_audit_active || lastIntervention.tool_name) {
+    return 'Agent-aware runtime active';
+  }
+  if (policy.mode) {
+    return 'Audit only';
+  }
+  return 'No active intervention';
+}
+
+function getAgentStatus(errorCount, intervention) {
+  if (errorCount > 0 || intervention === 'warn' || intervention === 'block') {
+    return 'Needs attention';
+  }
+  return 'Safe';
+}
+
+function setTextWithTitle(el, text) {
+  const value = text || '—';
+  el.textContent = value;
+  el.title = value;
 }
 
 // Smart activity formatting - result, not technical action
@@ -586,6 +780,7 @@ function formatActivity(act) {
 async function fetchActivity() {
   try {
     const res = await fetch(`${API}/api/activity/feed?limit=1`, {
+      headers: { 'X-Dashboard': 'true' },
       signal: AbortSignal.timeout(3000)
     });
     if (!res.ok) return;
@@ -604,7 +799,7 @@ async function fetchActivity() {
       }
     }
   } catch (e) {
-    console.error('Activity fetch error:', e);
+    logPollingError('Activity fetch error:', e);
   }
 }
 
