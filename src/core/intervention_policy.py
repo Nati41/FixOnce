@@ -41,6 +41,10 @@ class InterventionContext:
     repeat_bug_detected: bool = False
     similar_past_solution_found: bool = False
     task_completed: bool = False
+    significant_work_completed: bool = False
+    sync_recorded: bool = False
+    component_changed: bool = False
+    component_status_updated: bool = False
     bug_fix_completed: bool = False
     fo_solved_called: bool = False
     completion_gate_required: bool = False
@@ -165,6 +169,30 @@ def evaluate_completion_gate(ctx: InterventionContext) -> InterventionGateResult
                 "fo_solved_called": False,
             },
             suggested_action="Call fo_solved()",
+        )
+
+    if ctx.significant_work_completed and not ctx.sync_recorded:
+        return InterventionGateResult(
+            gate="completion_gate",
+            level="warn",
+            reason="Significant work appears complete but fo_sync() was not recorded.",
+            evidence={
+                "significant_work_completed": True,
+                "sync_recorded": False,
+            },
+            suggested_action="Call fo_sync()",
+        )
+
+    if ctx.component_changed and not ctx.component_status_updated:
+        return InterventionGateResult(
+            gate="completion_gate",
+            level="warn",
+            reason="Component work appears complete but update_component_status() was not recorded.",
+            evidence={
+                "component_changed": True,
+                "component_status_updated": False,
+            },
+            suggested_action="Call update_component_status()",
         )
 
     if ctx.task_completed and ctx.completion_gate_required:

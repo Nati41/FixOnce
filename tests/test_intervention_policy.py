@@ -75,6 +75,18 @@ class TestInterventionPolicy(unittest.TestCase):
         )
         self.assertEqual(result.level, "warn")
 
+    def test_significant_work_without_sync_warns(self):
+        result = evaluate_completion_gate(
+            InterventionContext(significant_work_completed=True, sync_recorded=False)
+        )
+        self.assertEqual(result.level, "warn")
+
+    def test_component_changed_without_status_update_warns(self):
+        result = evaluate_completion_gate(
+            InterventionContext(component_changed=True, component_status_updated=False)
+        )
+        self.assertEqual(result.level, "warn")
+
     def test_validate_decision_blocks_high_severity_conflict(self):
         is_valid, message, conflicts = validate_decision(
             "Always store data in Hebrew",

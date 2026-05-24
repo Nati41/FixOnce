@@ -102,3 +102,36 @@ class TestInitOpening(unittest.TestCase):
             auto_fix_ready=False,
         )
         self.assertIn("You MUST call: fo_errors()", reminder)
+
+    def test_fo_apply_keeps_completion_reminder_via_gate(self):
+        completion_result = types.SimpleNamespace(level="warn")
+
+        with patch.object(server, "_universal_gate", return_value=(None, "")), \
+             patch.dict(sys.modules, {}, clear=False), \
+             patch("mcp_memory_server_v2._evaluate_current_repeat_bug_gate", return_value=types.SimpleNamespace(level="warn")), \
+             patch("mcp_memory_server_v2._evaluate_current_completion_gate", return_value=completion_result) as completion_mock:
+            with patch("core.pending_fixes.get_auto_fixes", return_value=[{
+                "id": "fix-1",
+                "solution_text": "Apply known fix",
+                "files": ["src/app.js"],
+            }]), patch("core.pending_fixes.mark_fix_applied", return_value=None):
+                result = server.fo_apply()
+
+        completion_mock.assert_called_once_with(
+            bug_fix_completed=True,
+            fo_solved_called=False,
+        )
+        self.assertIn("Run `fo_solved(error, solution)` when done.", result)
+
+    def test_completion_gate_drives_compliance_flags_without_changing_rule_names(self):
+        session = server.SessionContext(project_id="proj-1", working_dir="/tmp/demo")
+        session.mark_initialized()
+
+        score = session.get_compliance_score()
+        rule_names = [rule["name"] for rule in score["rules"]]
+        rule_map = {rule["id"]: rule["passed"] for rule in score["rules"]}
+
+        self.assertIn("Goal updated", rule_names)
+        self.assertIn("Component status updated", rule_names)
+        self.assertFalse(rule_map["goal_updated"])
+        self.assertFalse(rule_map["component_status"])

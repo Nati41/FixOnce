@@ -306,6 +306,7 @@ _intervention_policy_available = False
 try:
     from core.intervention_policy import (
         InterventionContext,
+        evaluate_completion_gate,
         evaluate_error_gate,
         evaluate_repeat_bug_gate,
         evaluate_risk_gate,
@@ -487,11 +488,20 @@ class SessionContext:
 
     def get_compliance_score(self) -> dict:
         """Calculate compliance score with detailed breakdown."""
+        goal_gate = _evaluate_current_completion_gate(
+            significant_work_completed=True,
+            sync_recorded=self.goal_updated,
+        )
+        component_gate = _evaluate_current_completion_gate(
+            component_changed=True,
+            component_status_updated=self.component_updated,
+        )
+
         rules = [
             {"id": "session_init", "name": "Session initialized", "passed": self.is_active(), "required": True},
-            {"id": "goal_updated", "name": "Goal updated", "passed": self.goal_updated, "required": True},
+            {"id": "goal_updated", "name": "Goal updated", "passed": goal_gate.level == "silent", "required": True},
             {"id": "search_first", "name": "Search before debug", "passed": self.search_performed, "required": False},
-            {"id": "component_status", "name": "Component status updated", "passed": self.component_updated, "required": False},
+            {"id": "component_status", "name": "Component status updated", "passed": component_gate.level == "silent", "required": False},
         ]
 
         # Calculate score (required rules count double)
@@ -753,6 +763,36 @@ def _evaluate_current_repeat_bug_gate(
         )
 
     if similar_past_solution_found or repeat_bug_detected:
+        return type("FallbackGateResult", (), {"level": "warn"})()
+    return type("FallbackGateResult", (), {"level": "silent"})()
+
+
+def _evaluate_current_completion_gate(
+    bug_fix_completed: bool = False,
+    fo_solved_called: bool = False,
+    significant_work_completed: bool = False,
+    sync_recorded: bool = False,
+    component_changed: bool = False,
+    component_status_updated: bool = False,
+):
+    """Evaluate the Stage 7 completion gate without changing existing UX strings."""
+    if _intervention_policy_available:
+        return evaluate_completion_gate(
+            InterventionContext(
+                bug_fix_completed=bug_fix_completed,
+                fo_solved_called=fo_solved_called,
+                significant_work_completed=significant_work_completed,
+                sync_recorded=sync_recorded,
+                component_changed=component_changed,
+                component_status_updated=component_status_updated,
+            )
+        )
+
+    if (
+        (bug_fix_completed and not fo_solved_called)
+        or (significant_work_completed and not sync_recorded)
+        or (component_changed and not component_status_updated)
+    ):
         return type("FallbackGateResult", (), {"level": "warn"})()
     return type("FallbackGateResult", (), {"level": "silent"})()
 
@@ -3720,6 +3760,10 @@ def update_work_context(
     memory['live_record']['updated_at'] = datetime.now().isoformat()
 
     _save_project(project_id, memory)
+    _evaluate_current_completion_gate(
+        significant_work_completed=True,
+        sync_recorded=True,
+    )
 
     # Keep sync quiet: dashboard reads fresh intent directly from project memory,
     # so logging every sync call adds noise without improving continuity.
@@ -4141,6 +4185,10 @@ def update_component_status(name: str, status: str, desc: str = "") -> str:
         "name": name,
         "status": status
     })
+    _evaluate_current_completion_gate(
+        component_changed=True,
+        component_status_updated=True,
+    )
 
     # Status icons for display
     icons = {"done": "🟢", "in_progress": "🟡", "not_started": "⚪", "blocked": "🔴",
@@ -4912,6 +4960,11 @@ def solution_applied(
         )
     except Exception:
         pass  # Don't fail the main operation
+
+    _evaluate_current_completion_gate(
+        bug_fix_completed=True,
+        fo_solved_called=True,
+    )
 
     # Minimal response (no context header noise)
     return "Solution saved."
@@ -6842,7 +6895,12 @@ def fo_apply(fix_id: str = "") -> str:
             # Mark as applied
             mark_fix_applied(fix["id"], success=True)
 
-        lines.append("Run `fo_solved(error, solution)` when done.")
+        completion_gate_result = _evaluate_current_completion_gate(
+            bug_fix_completed=True,
+            fo_solved_called=False,
+        )
+        if completion_gate_result.level == "warn":
+            lines.append("Run `fo_solved(error, solution)` when done.")
 
         return "\n".join(lines)
 
