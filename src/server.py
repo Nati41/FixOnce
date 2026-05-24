@@ -42,6 +42,7 @@ from core.port_manager import (
     release_server_lock,
     get_canonical_port
 )
+from core.install_state import is_fixonce_installed
 
 # ---------------------------------------------------------------------------
 # Port Management (uses core.port_manager for multi-user support)
@@ -108,19 +109,18 @@ def _send_dashboard_file(path):
 def _is_installed() -> bool:
     """Check if FixOnce installation is complete."""
     install_state = DATA_DIR / "install_state.json"
-    if not install_state.exists():
-        print(f"[DEBUG] _is_installed: {install_state} does not exist → False")
-        return False
+    request_port = request.host.split(':')[-1] if ':' in request.host else None
     try:
-        import json
-        with open(install_state, 'r') as f:
-            state = json.load(f)
-        result = state.get("installed", False)
-        print(f"[DEBUG] _is_installed: {install_state} → installed={result}")
-        return result
-    except Exception as e:
-        print(f"[DEBUG] _is_installed: {install_state} error: {e} → False")
-        return False
+        request_port = int(request_port) if request_port is not None else None
+    except ValueError:
+        request_port = None
+
+    result = is_fixonce_installed(request_port=request_port)
+    print(
+        f"[DEBUG] _is_installed: install_state={install_state.exists()} "
+        f"request_port={request_port} → installed={result}"
+    )
+    return result
 
 
 @flask_app.route("/")

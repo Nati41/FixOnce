@@ -13,6 +13,7 @@ from flask import Blueprint, jsonify, send_file, request
 
 # Import DATA_DIR from config to ensure consistent install state location
 from config import DATA_DIR
+from core.install_state import is_fixonce_installed
 
 installer_bp = Blueprint('installer', __name__)
 
@@ -81,16 +82,12 @@ def _get_install_state_file() -> Path:
 
 def _is_installed() -> bool:
     """Check if FixOnce is installed."""
-    state_file = _get_install_state_file()
-    if not state_file.exists():
-        return False
-
+    request_port = request.host.split(':')[-1] if ':' in request.host else None
     try:
-        with open(state_file, 'r') as f:
-            state = json.load(f)
-        return state.get("installed", False)
-    except Exception:
-        return False
+        request_port = int(request_port) if request_port is not None else None
+    except ValueError:
+        request_port = None
+    return is_fixonce_installed(request_port=request_port)
 
 
 def _mark_installed():
