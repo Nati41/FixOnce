@@ -14,6 +14,7 @@ from core.intervention_policy import (
     evaluate_decision_conflict_gate,
     evaluate_error_gate,
     evaluate_intervention,
+    evaluate_repeat_bug_gate,
     evaluate_risk_gate,
 )
 from core.policy_engine import validate_decision
@@ -57,6 +58,16 @@ class TestInterventionPolicy(unittest.TestCase):
             InterventionContext(blocked_components_relevant=1)
         )
         self.assertEqual(result.level, "warn")
+
+    def test_similar_past_solution_warns(self):
+        result = evaluate_repeat_bug_gate(
+            InterventionContext(similar_past_solution_found=True)
+        )
+        self.assertEqual(result.level, "warn")
+
+    def test_no_repeat_history_is_silent(self):
+        result = evaluate_repeat_bug_gate(InterventionContext())
+        self.assertEqual(result.level, "silent")
 
     def test_completion_missing_fo_solved_warns_not_blocks(self):
         result = evaluate_completion_gate(

@@ -307,6 +307,7 @@ try:
     from core.intervention_policy import (
         InterventionContext,
         evaluate_error_gate,
+        evaluate_repeat_bug_gate,
         evaluate_risk_gate,
     )
     _intervention_policy_available = True
@@ -734,6 +735,24 @@ def _evaluate_current_risk_gate(
     if lock_violation:
         return type("FallbackGateResult", (), {"level": "block"})()
     if blocked_components_relevant > 0 or stable_component_touched or risky_change:
+        return type("FallbackGateResult", (), {"level": "warn"})()
+    return type("FallbackGateResult", (), {"level": "silent"})()
+
+
+def _evaluate_current_repeat_bug_gate(
+    similar_past_solution_found: bool = False,
+    repeat_bug_detected: bool = False,
+):
+    """Evaluate the Stage 7 repeat bug gate without changing existing UX strings."""
+    if _intervention_policy_available:
+        return evaluate_repeat_bug_gate(
+            InterventionContext(
+                similar_past_solution_found=similar_past_solution_found,
+                repeat_bug_detected=repeat_bug_detected,
+            )
+        )
+
+    if similar_past_solution_found or repeat_bug_detected:
         return type("FallbackGateResult", (), {"level": "warn"})()
     return type("FallbackGateResult", (), {"level": "silent"})()
 
@@ -5019,7 +5038,12 @@ def _find_solution_for_error(error_message: str, min_similarity: int = 50, min_k
                         'files_changed': session.get('files_changed', [])
                     }
 
-        return best_match
+        gate_result = _evaluate_current_repeat_bug_gate(
+            similar_past_solution_found=bool(best_match)
+        )
+        if gate_result.level == "warn":
+            return best_match
+        return None
 
     except Exception:
         return None
@@ -5214,7 +5238,11 @@ def search_past_solutions(query: str) -> str:
         "found": len(matched_insights) + len(matches)
     })
 
-    if matched_insights:
+    gate_result = _evaluate_current_repeat_bug_gate(
+        similar_past_solution_found=bool(matched_insights)
+    )
+
+    if matched_insights and gate_result.level == "warn":
         _track_roi_event("solution_reused")
 
         # Minimal output - just the best match
@@ -6744,7 +6772,11 @@ def fo_errors(limit: int = 5) -> str:
                 lines.append(f"• {fix['error_message'][:50]}...")
             lines.append("")
 
-        if suggested_fixes:
+        repeat_gate_result = _evaluate_current_repeat_bug_gate(
+            similar_past_solution_found=bool(suggested_fixes or auto_fixes)
+        )
+
+        if suggested_fixes and repeat_gate_result.level == "warn":
             lines.append(f"**{len(suggested_fixes)} suggested fix(es):**")
             for fix in suggested_fixes[:3]:
                 lines.append(f"• {fix['error_message'][:60]} ({fix['confidence']}%)")
@@ -6784,7 +6816,11 @@ def fo_apply(fix_id: str = "") -> str:
 
         auto_fixes = get_auto_fixes()
 
-        if not auto_fixes:
+        repeat_gate_result = _evaluate_current_repeat_bug_gate(
+            similar_past_solution_found=bool(auto_fixes)
+        )
+
+        if not auto_fixes or repeat_gate_result.level == "silent":
             return "No auto-fixes pending. Run `fo_errors()` first."
 
         # Filter by fix_id if provided
