@@ -16,6 +16,7 @@ from core.intervention_policy import (
     evaluate_intervention,
     evaluate_risk_gate,
 )
+from core.policy_engine import validate_decision
 
 
 class TestInterventionPolicy(unittest.TestCase):
@@ -50,6 +51,38 @@ class TestInterventionPolicy(unittest.TestCase):
             InterventionContext(bug_fix_completed=True, fo_solved_called=False)
         )
         self.assertEqual(result.level, "warn")
+
+    def test_validate_decision_blocks_high_severity_conflict(self):
+        is_valid, message, conflicts = validate_decision(
+            "Always store data in Hebrew",
+            "Testing contradiction behavior",
+            [
+                {
+                    "decision": "Always store data in English",
+                    "reason": "Consistency",
+                }
+            ],
+        )
+
+        self.assertFalse(is_valid)
+        self.assertTrue(conflicts)
+        self.assertIn("BLOCKED", message)
+
+    def test_validate_decision_warns_on_similar_conflict(self):
+        is_valid, message, conflicts = validate_decision(
+            "Use REST API for authentication",
+            "Keep auth endpoints conventional",
+            [
+                {
+                    "decision": "Use REST API for auth",
+                    "reason": "Conventional API shape",
+                }
+            ],
+        )
+
+        self.assertTrue(is_valid)
+        self.assertTrue(conflicts)
+        self.assertIn("WARNING", message)
 
 
 if __name__ == "__main__":

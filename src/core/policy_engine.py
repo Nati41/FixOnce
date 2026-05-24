@@ -12,6 +12,8 @@ import re
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
+from core.intervention_policy import InterventionContext, evaluate_decision_conflict_gate
+
 
 # ============================================================
 # CONFLICT DETECTION PATTERNS
@@ -210,23 +212,29 @@ def validate_decision(
     if not conflicts:
         return True, "No conflicts detected", []
 
-    high_severity = [c for c in conflicts if c["severity"] == "HIGH"]
+    top_conflict = conflicts[0]
+    gate_result = evaluate_decision_conflict_gate(
+        InterventionContext(
+            decision_conflict_severity=top_conflict.get("severity", ""),
+            extra={"conflicts": conflicts},
+        )
+    )
 
-    if high_severity and not force:
-        conflict = high_severity[0]
+    if gate_result.level == "block" and not force:
+        conflict = top_conflict
         return False, (
             f"🛑 BLOCKED: {conflict['message']}\n"
             f"Existing decision: \"{conflict['existing_decision']}\"\n"
             f"Use force=true to override, or supersede the existing decision first."
         ), conflicts
 
-    if high_severity and force:
+    if gate_result.level == "block" and force:
         return True, (
             f"⚠️ OVERRIDE: Logging despite conflict.\n"
             f"Consider superseding the conflicting decision."
         ), conflicts
 
-    # Medium severity - warn but allow
+    # Warn-level conflicts are logged but surfaced for review.
     return True, (
         f"⚠️ WARNING: {conflicts[0]['message']}\n"
         f"Decision logged, but review for consistency."
