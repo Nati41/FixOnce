@@ -4,26 +4,24 @@ This IS the FixOnce project itself - a persistent memory layer for AI coding ass
 
 ## On Session Start
 
-1. Call `fo_init(cwd="project-path")` — ONCE only
-2. Respond with 1-2 lines max
+1. Call `fo_init(cwd="project-path")` silently — ONCE only
+2. Display the `fo_init` opener exactly once
+3. Do not paraphrase, summarize, or repeat it
+4. Do not add anything after it if the opener already includes `Ready.`
 
 ## Opening Style
 
-**Use fo_init data for grounded opening:**
-- Mention goal, last action, next step — naturally
-- Sound like resuming work with a partner
-- 2-3 lines max, no generic phrases
+**Required output:**
+- Call `fo_init` silently — no "I'll start...", "Checking...", "Let me..."
+- `fo_init` returns the final human opener, including formatting and `Ready.`
+- Display that opener once, exactly as returned
+- Do not add a separate `Ready.` line
 
-**Good:**
-```
-Back to FixOnce — working on sync polish.
-Last: fixed port detection. Next: verify dashboard.
-```
-
-**Skip:**
-- "Ready", "How can I help"
-- Step lists (1. 2. 3.)
-- Long context dumps
+**Do not:**
+- Explain setup (Codex configured, MCP connected, etc.)
+- Ask "What should we tackle next?" if `fo_init` already includes Next
+- Restate, paraphrase, or summarize the opener
+- Add commentary, verification notes, or follow-up questions after the opener
 
 **ACTION_REQUIRED:** If fo_init contains `ACTION_REQUIRED: fo_X` — call that tool immediately.
 After: Be proactive — suggest fix or offer to apply. Don't ask "מה צריך שאעשה?"

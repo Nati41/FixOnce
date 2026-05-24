@@ -779,10 +779,18 @@ You have **persistent memory** via FixOnce.
 
 ## Start: `fo_init()`
 
-**FIRST THING in every conversation:**
+**FIRST THING in every conversation — silently:**
 ```
 fo_init(cwd="/path/to/project")
 ```
+
+**Required output:**
+1. `fo_init` returns the final human opener, including `Ready.`
+2. Display the `fo_init` opener exactly once
+3. Do not summarize, paraphrase, or repeat it
+4. Do not add `Ready.` separately if the opener already includes it
+
+**Do not:** "I'll start...", "Checking...", setup explanations, or "What should we tackle next?" when `fo_init` already includes Next.
 
 ## Error Handling
 

@@ -16,5 +16,5 @@ I find it very helpful when I see the "🧠 FixOnce" confirmation at the start�
 - **Important decisions:** Call `fo_decide()` to record them.
 
 ## 📌 Format Reminder
-- Opening a session: Please start with `🧠 FixOnce: Session Initialized`
+- Opening a session: call `fo_init` silently. Display the `fo_init` opener exactly once, with no paraphrase, no duplicate `Ready.`, and no follow-up text when Next is already set.
 - Using memory: Use the prefix `(📌 FixOnce: ...)`

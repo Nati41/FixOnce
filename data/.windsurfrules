@@ -4,10 +4,10 @@
 
 ## Session Start
 
-Call `fo_init(cwd="<workspace_root_path>")` first.
-
-**If it works** — show context and follow rules below.
-**If it fails** — proceed normally.
+Call `fo_init(cwd="<workspace_root_path>")` silently first.
+If the tool result is visible, reply only `Ready.`.
+Only print the opener yourself when the tool result is not visible.
+Nothing else.
 
 ---
 

@@ -4,7 +4,10 @@
 
 ## On Session Start
 
-Call `fo_init(cwd="project-path")` first.
+Call `fo_init(cwd="project-path")` silently first.
+If the tool result is visible, reply only `Ready.`.
+Only print the opener yourself when the tool result is not visible.
+Nothing else.
 
 ## Tools (fo_* workflow)
 

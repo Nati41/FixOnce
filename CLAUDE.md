@@ -10,11 +10,20 @@ Say "no fixonce" to disable. Otherwise, FixOnce is mandatory.
 
 ## Opening
 
-**Use fo_init data to ground your opening:**
-- Mention the goal, what was done, what's next
-- Sound like a working partner, not a tool output
-- 2-3 lines, natural, action-oriented
-- No generic: "Ready", "How can I help"
+1. Call `fo_init(cwd="project-path")` silently — ONCE only
+2. Display the `fo_init` opener exactly once
+3. Do not paraphrase, summarize, or repeat it
+4. Do not add anything after it if the opener already includes `Ready.`
+
+**Do not:**
+- Say "I'll start...", "Checking...", "Let me..."
+- Explain setup (Codex configured, MCP connected, etc.)
+- Ask "What should we tackle next?" if `fo_init` already includes Next
+- Restate, paraphrase, or summarize the opener
+- Add commentary, verification notes, or follow-up questions after the opener
+
+`fo_init` is responsible for returning the final human opener, including `Ready.`
+The assistant should display that opener exactly once and add nothing else.
 
 **ACTION_REQUIRED directive:**
 
