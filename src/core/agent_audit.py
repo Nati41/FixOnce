@@ -17,10 +17,13 @@ class AgentAuditEntry:
     actor_source: str
     actor_confidence: float
     tool_name: str
+    intent: str
     gate: str
     verdict: str
+    evidence: Dict[str, Any]
     project_id: str
     session_id: str
+    flow_classification: str
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -34,10 +37,13 @@ def record_agent_audit(
     actor_source: str,
     actor_confidence: float,
     tool_name: str,
+    intent: str,
     gate: str,
     verdict: str,
+    evidence: Dict[str, Any],
     project_id: str,
     session_id: str,
+    flow_classification: str,
     metadata: Dict[str, Any] | None = None,
 ) -> AgentAuditEntry:
     """Append an agent-aware intervention record to the bounded audit trail."""
@@ -46,10 +52,13 @@ def record_agent_audit(
         actor_source=actor_source,
         actor_confidence=actor_confidence,
         tool_name=tool_name,
+        intent=intent,
         gate=gate,
         verdict=verdict,
+        evidence=dict(evidence or {}),
         project_id=project_id,
         session_id=session_id,
+        flow_classification=flow_classification,
         metadata=dict(metadata or {}),
     )
     with _AGENT_AUDIT_LOCK:

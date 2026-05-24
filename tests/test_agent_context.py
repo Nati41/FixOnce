@@ -35,18 +35,22 @@ class TestAgentContext(unittest.TestCase):
             actor_source="session_registry",
             actor_confidence=0.93,
             tool_name="fo_apply",
-            intent="close known error path",
+            intent="apply_fix",
             session_id="sess-1",
             project_id="proj-1",
+            intent_detail="close known error path",
+            flow_classification="migrated",
         )
 
         self.assertEqual(ctx.actor_name, "codex")
         self.assertEqual(ctx.actor_source, "session_registry")
         self.assertEqual(ctx.actor_confidence, 0.93)
         self.assertEqual(ctx.tool_name, "fo_apply")
-        self.assertEqual(ctx.intent, "close known error path")
+        self.assertEqual(ctx.intent, "apply_fix")
+        self.assertEqual(ctx.intent_detail, "close known error path")
         self.assertEqual(ctx.session_id, "sess-1")
         self.assertEqual(ctx.project_id, "proj-1")
+        self.assertEqual(ctx.flow_classification, "migrated")
 
     def test_build_agent_context_uses_detected_actor(self):
         session = server.SessionContext(project_id="proj-1", working_dir="/tmp/demo")
@@ -61,15 +65,17 @@ class TestAgentContext(unittest.TestCase):
              patch.object(server, "_load_project", return_value={
                  "live_record": {"intent": {"current_goal": "Test runtime wiring"}}
              }):
-            ctx = server.build_agent_context("fo_apply")
+            ctx = server.build_agent_context("fo_apply", flow_classification="migrated")
 
         self.assertEqual(ctx.actor_name, "codex")
         self.assertEqual(ctx.actor_source, "env_var")
         self.assertEqual(ctx.actor_confidence, 0.95)
         self.assertEqual(ctx.tool_name, "fo_apply")
-        self.assertEqual(ctx.intent, "Test runtime wiring")
+        self.assertEqual(ctx.intent, "apply_fix")
+        self.assertEqual(ctx.intent_detail, "Test runtime wiring")
         self.assertEqual(ctx.project_id, "proj-1")
         self.assertNotEqual(ctx.session_id, "unknown-session")
+        self.assertEqual(ctx.flow_classification, "migrated")
 
     def test_build_agent_context_uses_unknown_when_actor_missing(self):
         session = server.SessionContext(project_id="proj-2", working_dir="/tmp/demo")
@@ -82,15 +88,17 @@ class TestAgentContext(unittest.TestCase):
                  "confidence": 0.0,
              }), \
              patch.object(server, "_load_project", return_value={}):
-            ctx = server.build_agent_context("fo_sync", intent="Explicit intent")
+            ctx = server.build_agent_context("fo_sync", intent="Explicit intent", flow_classification="migrated")
 
         self.assertEqual(ctx.actor_name, "unknown")
         self.assertEqual(ctx.actor_source, "none")
         self.assertEqual(ctx.actor_confidence, 0.0)
         self.assertEqual(ctx.tool_name, "fo_sync")
-        self.assertEqual(ctx.intent, "Explicit intent")
+        self.assertEqual(ctx.intent, "sync")
+        self.assertEqual(ctx.intent_detail, "Explicit intent")
         self.assertEqual(ctx.project_id, "proj-2")
         self.assertNotEqual(ctx.session_id, "unknown-session")
+        self.assertEqual(ctx.flow_classification, "migrated")
 
 
 if __name__ == "__main__":

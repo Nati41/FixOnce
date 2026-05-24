@@ -39,9 +39,11 @@ class TestAgentRuntime(unittest.TestCase):
                  actor_source="client_actor",
                  actor_confidence=0.9,
                  tool_name="fo_errors",
-                 intent="inspect browser failures",
+                 intent="read",
                  session_id="sess-rt-1",
                  project_id="proj-rt-1",
+                 intent_detail="inspect browser failures",
+                 flow_classification="migrated",
              )):
             result = server._evaluate_current_error_gate(
                 tool_name="fo_errors",
@@ -55,6 +57,8 @@ class TestAgentRuntime(unittest.TestCase):
         self.assertEqual(entries[0]["gate"], "error_gate")
         self.assertEqual(entries[0]["verdict"], "warn")
         self.assertEqual(entries[0]["tool_name"], "fo_errors")
+        self.assertEqual(entries[0]["intent"], "read")
+        self.assertEqual(entries[0]["flow_classification"], "migrated")
 
     def test_runtime_gate_stores_last_agent_intervention_snapshot(self):
         with patch.object(server, "_agent_intervention_available", True), \
@@ -63,9 +67,11 @@ class TestAgentRuntime(unittest.TestCase):
                  actor_source="env_var",
                  actor_confidence=0.92,
                  tool_name="fo_sync",
-                 intent="sync closure state",
+                 intent="sync",
                  session_id="sess-rt-2",
                  project_id="proj-rt-2",
+                 intent_detail="sync closure state",
+                 flow_classification="migrated",
              )):
             result = server._evaluate_current_completion_gate(
                 tool_name="fo_sync",
@@ -79,6 +85,93 @@ class TestAgentRuntime(unittest.TestCase):
         self.assertEqual(snapshot["verdict"], "warn")
         self.assertEqual(snapshot["actor_name"], "codex")
         self.assertEqual(snapshot["project_id"], "proj-rt-2")
+        self.assertEqual(snapshot["intent"], "sync")
+        self.assertEqual(snapshot["flow_classification"], "migrated")
+
+    def test_decision_conflict_runtime_flow_is_migrated(self):
+        with patch.object(server, "_agent_intervention_available", True), \
+             patch.object(server, "build_agent_context", return_value=server.AgentContext(
+                 actor_name="claude",
+                 actor_source="client_actor",
+                 actor_confidence=0.95,
+                 tool_name="log_decision",
+                 intent="decision",
+                 session_id="sess-rt-3",
+                 project_id="proj-rt-3",
+                 intent_detail="conflicting decision",
+                 flow_classification="migrated",
+             )):
+            result = server._evaluate_current_decision_conflict_gate(
+                tool_name="log_decision",
+                decision_conflict_severity="high",
+                conflicts=[{"severity": "high"}],
+                intent="conflicting decision",
+            )
+
+        self.assertEqual(result.level, "block")
+        entries = get_agent_audit(limit=5)
+        self.assertEqual(entries[0]["gate"], "decision_conflict_gate")
+        self.assertEqual(entries[0]["intent"], "decision")
+        self.assertEqual(entries[0]["flow_classification"], "migrated")
+
+    def test_repeat_bug_runtime_flow_uses_search_intent(self):
+        with patch.object(server, "_agent_intervention_available", True), \
+             patch.object(server, "build_agent_context", return_value=server.AgentContext(
+                 actor_name="codex",
+                 actor_source="parent_process",
+                 actor_confidence=0.9,
+                 tool_name="fo_search",
+                 intent="search",
+                 session_id="sess-rt-4",
+                 project_id="proj-rt-4",
+                 intent_detail="find prior solution",
+                 flow_classification="migrated",
+             )):
+            result = server._evaluate_current_repeat_bug_gate(
+                tool_name="fo_search",
+                similar_past_solution_found=True,
+            )
+
+        self.assertEqual(result.level, "warn")
+        entry = get_agent_audit(limit=5)[0]
+        self.assertEqual(entry["gate"], "repeat_bug_gate")
+        self.assertEqual(entry["intent"], "search")
+
+    def test_apply_fix_completion_runtime_flow_records_completion_gate(self):
+        with patch.object(server, "_agent_intervention_available", True), \
+             patch.object(server, "build_agent_context", return_value=server.AgentContext(
+                 actor_name="codex",
+                 actor_source="client_actor",
+                 actor_confidence=0.93,
+                 tool_name="fo_apply",
+                 intent="apply_fix",
+                 session_id="sess-rt-5",
+                 project_id="proj-rt-5",
+                 intent_detail="apply_fix",
+                 flow_classification="migrated",
+             )):
+            result = server._evaluate_current_completion_gate(
+                tool_name="fo_apply",
+                bug_fix_completed=True,
+                fo_solved_called=False,
+            )
+
+        self.assertEqual(result.level, "warn")
+        entry = get_agent_audit(limit=5)[0]
+        self.assertEqual(entry["gate"], "completion_gate")
+        self.assertEqual(entry["tool_name"], "fo_apply")
+        self.assertEqual(entry["intent"], "apply_fix")
+
+    def test_runtime_flow_audit_marks_all_gates_migrated(self):
+        audit = server.get_agent_evaluation_flow_audit()
+
+        self.assertEqual(audit["error_gate"]["classification"], "migrated")
+        self.assertEqual(audit["decision_conflict_gate"]["classification"], "migrated")
+        self.assertEqual(audit["risk_gate"]["classification"], "migrated")
+        self.assertEqual(audit["repeat_bug_gate"]["classification"], "migrated")
+        self.assertEqual(audit["completion_gate"]["classification"], "migrated")
+        self.assertEqual(audit["standalone_bridge"]["classification"], "partial")
+        self.assertEqual(audit["legacy_bypasses"]["bypasses"], [])
 
 
 if __name__ == "__main__":

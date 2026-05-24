@@ -288,7 +288,7 @@ SRC_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SRC_DIR))
 
 from fastmcp import FastMCP
-from core.agent_context import AgentContext
+from core.agent_context import AgentContext, classify_agent_intent
 from core.system_mode import get_system_mode, MODE_FULL, MODE_PASSIVE, MODE_OFF
 
 _agent_intervention_available = False
@@ -729,7 +729,12 @@ def _evaluate_current_error_gate(
     )
     if _intervention_policy_available:
         gate_result = evaluate_error_gate(ctx)
-        _record_agent_intervention(tool_name, ctx, gate_results=[gate_result])
+        _record_agent_intervention(
+            tool_name,
+            ctx,
+            gate_results=[gate_result],
+            flow_classification="migrated",
+        )
         return gate_result
 
     if auto_fix_ready and tool_name != "fo_apply":
@@ -756,7 +761,12 @@ def _evaluate_current_risk_gate(
     )
     if _intervention_policy_available:
         gate_result = evaluate_risk_gate(ctx)
-        _record_agent_intervention(tool_name or "risk_gate", ctx, gate_results=[gate_result])
+        _record_agent_intervention(
+            tool_name or "risk_gate",
+            ctx,
+            gate_results=[gate_result],
+            flow_classification="migrated",
+        )
         return gate_result
 
     if lock_violation:
@@ -779,7 +789,12 @@ def _evaluate_current_repeat_bug_gate(
     )
     if _intervention_policy_available:
         gate_result = evaluate_repeat_bug_gate(ctx)
-        _record_agent_intervention(tool_name or "repeat_bug_gate", ctx, gate_results=[gate_result])
+        _record_agent_intervention(
+            tool_name or "repeat_bug_gate",
+            ctx,
+            gate_results=[gate_result],
+            flow_classification="migrated",
+        )
         return gate_result
 
     if similar_past_solution_found or repeat_bug_detected:
@@ -808,7 +823,12 @@ def _evaluate_current_completion_gate(
     )
     if _intervention_policy_available:
         gate_result = evaluate_completion_gate(ctx)
-        _record_agent_intervention(tool_name or "completion_gate", ctx, gate_results=[gate_result])
+        _record_agent_intervention(
+            tool_name or "completion_gate",
+            ctx,
+            gate_results=[gate_result],
+            flow_classification="migrated",
+        )
         return gate_result
 
     if (
@@ -829,7 +849,43 @@ def _get_runtime_session_id(session: SessionContext) -> str:
     ).hexdigest()[:8]
 
 
-def build_agent_context(tool_name: str, intent: Optional[str] = None) -> AgentContext:
+def _evaluate_current_decision_conflict_gate(
+    tool_name: str = "",
+    decision_conflict_severity: str = "",
+    conflicts: Optional[list] = None,
+    intent: Optional[str] = None,
+):
+    """Evaluate the Stage 7 decision conflict gate via the Stage 8 bridge."""
+    ctx = InterventionContext(
+        tool_name=tool_name,
+        decision_conflict_severity=decision_conflict_severity,
+        extra={"conflicts": list(conflicts or [])},
+    )
+    if _intervention_policy_available:
+        gate_result = evaluate_decision_conflict_gate(ctx)
+        _record_agent_intervention(
+            tool_name or "decision_conflict_gate",
+            ctx,
+            gate_results=[gate_result],
+            intent=intent,
+            flow_classification="migrated",
+        )
+        return gate_result
+
+    severity = (decision_conflict_severity or "").lower()
+    if severity in {"high", "severe", "critical"}:
+        return type("FallbackGateResult", (), {"level": "block"})()
+    if severity in {"medium", "moderate", "low"}:
+        return type("FallbackGateResult", (), {"level": "warn"})()
+    return type("FallbackGateResult", (), {"level": "silent"})()
+
+
+def build_agent_context(
+    tool_name: str,
+    intent: Optional[str] = None,
+    intervention_ctx: Optional[InterventionContext] = None,
+    flow_classification: str = "partial",
+) -> AgentContext:
     """
     Build a real AgentContext from current runtime state.
 
@@ -842,17 +898,23 @@ def build_agent_context(tool_name: str, intent: Optional[str] = None) -> AgentCo
     project_id = session.project_id or "unknown-project"
     session_id = _get_runtime_session_id(session)
 
-    resolved_intent = intent or ""
-    if not resolved_intent and session.is_active():
+    resolved_intent_detail = intent or ""
+    if not resolved_intent_detail and session.is_active():
         try:
             memory = _load_project(session.project_id)
-            resolved_intent = (
+            resolved_intent_detail = (
                 memory.get("live_record", {})
                 .get("intent", {})
                 .get("current_goal", "")
             )
         except Exception:
-            resolved_intent = ""
+            resolved_intent_detail = ""
+
+    resolved_intent, resolved_intent_detail = classify_agent_intent(
+        tool_name,
+        explicit_intent=resolved_intent_detail,
+        intervention_ctx=intervention_ctx,
+    )
 
     return AgentContext(
         actor_name=actor_identity.get("editor", "unknown") or "unknown",
@@ -862,6 +924,8 @@ def build_agent_context(tool_name: str, intent: Optional[str] = None) -> AgentCo
         intent=resolved_intent,
         session_id=session_id,
         project_id=project_id,
+        intent_detail=resolved_intent_detail,
+        flow_classification=flow_classification,
     )
 
 
@@ -870,6 +934,7 @@ def _record_agent_intervention(
     intervention_ctx: InterventionContext,
     gate_results: Optional[list] = None,
     intent: Optional[str] = None,
+    flow_classification: str = "partial",
 ) -> str:
     """
     Stage 8 boundary: consume Stage 7 policy output in an agent-aware way.
@@ -880,7 +945,12 @@ def _record_agent_intervention(
         return "silent"
 
     try:
-        agent_ctx = build_agent_context(tool_name, intent=intent)
+        agent_ctx = build_agent_context(
+            tool_name,
+            intent=intent,
+            intervention_ctx=intervention_ctx,
+            flow_classification=flow_classification,
+        )
         ctx = intervention_ctx
         if gate_results is not None:
             ctx = replace(
@@ -892,6 +962,9 @@ def _record_agent_intervention(
         _compliance_state["last_agent_intervention"] = {
             "tool_name": tool_name,
             "verdict": verdict,
+            "intent": agent_ctx.intent,
+            "intent_detail": agent_ctx.intent_detail,
+            "flow_classification": agent_ctx.flow_classification,
             "actor_name": agent_ctx.actor_name,
             "actor_source": agent_ctx.actor_source,
             "actor_confidence": agent_ctx.actor_confidence,
@@ -904,6 +977,47 @@ def _record_agent_intervention(
     except Exception as e:
         _log(f"[FixOnce] Agent intervention audit failed: {e}")
         return "silent"
+
+
+def get_agent_evaluation_flow_audit() -> Dict[str, Dict[str, Any]]:
+    """Return the Stage 8 runtime classification for each gate flow."""
+    return {
+        "error_gate": {
+            "classification": "migrated",
+            "runtime_entrypoint": "_evaluate_current_error_gate",
+            "bypasses": [],
+        },
+        "decision_conflict_gate": {
+            "classification": "migrated",
+            "runtime_entrypoint": "_evaluate_current_decision_conflict_gate",
+            "bypasses": [],
+        },
+        "risk_gate": {
+            "classification": "migrated",
+            "runtime_entrypoint": "_evaluate_current_risk_gate",
+            "bypasses": [],
+        },
+        "repeat_bug_gate": {
+            "classification": "migrated",
+            "runtime_entrypoint": "_evaluate_current_repeat_bug_gate",
+            "bypasses": [],
+        },
+        "completion_gate": {
+            "classification": "migrated",
+            "runtime_entrypoint": "_evaluate_current_completion_gate",
+            "bypasses": [],
+        },
+        "standalone_bridge": {
+            "classification": "partial",
+            "runtime_entrypoint": "evaluate_agent_intervention",
+            "bypasses": [],
+        },
+        "legacy_bypasses": {
+            "classification": "legacy",
+            "runtime_entrypoint": "",
+            "bypasses": [],
+        },
+    }
 
 
 def _get_pending_commands_for_injection() -> list:
@@ -1114,8 +1228,10 @@ def _universal_gate(tool_name: str) -> tuple:
         "actor_confidence": agent_ctx.actor_confidence,
         "tool_name": agent_ctx.tool_name,
         "intent": agent_ctx.intent,
+        "intent_detail": agent_ctx.intent_detail,
         "session_id": agent_ctx.session_id,
         "project_id": agent_ctx.project_id,
+        "flow_classification": agent_ctx.flow_classification,
     }
 
     # Log tool call
@@ -4051,11 +4167,10 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
             extra={"conflicts": conflicts},
         )
         if _intervention_policy_available:
-            gate_result = evaluate_decision_conflict_gate(decision_gate_ctx)
-            _record_agent_intervention(
-                "log_decision",
-                decision_gate_ctx,
-                gate_results=[gate_result],
+            _evaluate_current_decision_conflict_gate(
+                tool_name="log_decision",
+                decision_conflict_severity=top_severity,
+                conflicts=conflicts,
                 intent=decision,
             )
 
