@@ -14,6 +14,7 @@ import hashlib
 import subprocess
 import threading
 import requests
+from dataclasses import replace
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -290,6 +291,14 @@ from fastmcp import FastMCP
 from core.agent_context import AgentContext
 from core.system_mode import get_system_mode, MODE_FULL, MODE_PASSIVE, MODE_OFF
 
+_agent_intervention_available = False
+try:
+    from core.agent_intervention import evaluate_agent_intervention
+    _agent_intervention_available = True
+    _log("[FixOnce] Agent intervention bridge loaded successfully")
+except ImportError as e:
+    _log(f"[FixOnce] Agent intervention bridge not available: {e}")
+
 # Policy Enforcement Engine - must be after sys.path is set
 try:
     from core.policy_engine import (
@@ -307,6 +316,7 @@ _intervention_policy_available = False
 try:
     from core.intervention_policy import (
         InterventionContext,
+        evaluate_decision_conflict_gate,
         evaluate_completion_gate,
         evaluate_error_gate,
         evaluate_repeat_bug_gate,
@@ -490,10 +500,12 @@ class SessionContext:
     def get_compliance_score(self) -> dict:
         """Calculate compliance score with detailed breakdown."""
         goal_gate = _evaluate_current_completion_gate(
+            tool_name="get_protocol_compliance",
             significant_work_completed=True,
             sync_recorded=self.goal_updated,
         )
         component_gate = _evaluate_current_completion_gate(
+            tool_name="get_protocol_compliance",
             component_changed=True,
             component_status_updated=self.component_updated,
         )
@@ -710,14 +722,15 @@ def _evaluate_current_error_gate(
     auto_fix_ready: bool = False,
 ):
     """Evaluate the Stage 7 error gate without changing existing UX strings."""
+    ctx = InterventionContext(
+        tool_name=tool_name,
+        live_errors=live_errors,
+        auto_fix_ready=auto_fix_ready,
+    )
     if _intervention_policy_available:
-        return evaluate_error_gate(
-            InterventionContext(
-                tool_name=tool_name,
-                live_errors=live_errors,
-                auto_fix_ready=auto_fix_ready,
-            )
-        )
+        gate_result = evaluate_error_gate(ctx)
+        _record_agent_intervention(tool_name, ctx, gate_results=[gate_result])
+        return gate_result
 
     if auto_fix_ready and tool_name != "fo_apply":
         return type("FallbackGateResult", (), {"level": "block"})()
@@ -727,21 +740,24 @@ def _evaluate_current_error_gate(
 
 
 def _evaluate_current_risk_gate(
+    tool_name: str = "",
     stable_component_touched: bool = False,
     blocked_components_relevant: int = 0,
     lock_violation: bool = False,
     risky_change: bool = False,
 ):
     """Evaluate the Stage 7 risk gate without changing existing UX strings."""
+    ctx = InterventionContext(
+        tool_name=tool_name,
+        stable_component_touched=stable_component_touched,
+        blocked_components_relevant=blocked_components_relevant,
+        lock_violation=lock_violation,
+        risky_change=risky_change,
+    )
     if _intervention_policy_available:
-        return evaluate_risk_gate(
-            InterventionContext(
-                stable_component_touched=stable_component_touched,
-                blocked_components_relevant=blocked_components_relevant,
-                lock_violation=lock_violation,
-                risky_change=risky_change,
-            )
-        )
+        gate_result = evaluate_risk_gate(ctx)
+        _record_agent_intervention(tool_name or "risk_gate", ctx, gate_results=[gate_result])
+        return gate_result
 
     if lock_violation:
         return type("FallbackGateResult", (), {"level": "block"})()
@@ -751,17 +767,20 @@ def _evaluate_current_risk_gate(
 
 
 def _evaluate_current_repeat_bug_gate(
+    tool_name: str = "",
     similar_past_solution_found: bool = False,
     repeat_bug_detected: bool = False,
 ):
     """Evaluate the Stage 7 repeat bug gate without changing existing UX strings."""
+    ctx = InterventionContext(
+        tool_name=tool_name,
+        similar_past_solution_found=similar_past_solution_found,
+        repeat_bug_detected=repeat_bug_detected,
+    )
     if _intervention_policy_available:
-        return evaluate_repeat_bug_gate(
-            InterventionContext(
-                similar_past_solution_found=similar_past_solution_found,
-                repeat_bug_detected=repeat_bug_detected,
-            )
-        )
+        gate_result = evaluate_repeat_bug_gate(ctx)
+        _record_agent_intervention(tool_name or "repeat_bug_gate", ctx, gate_results=[gate_result])
+        return gate_result
 
     if similar_past_solution_found or repeat_bug_detected:
         return type("FallbackGateResult", (), {"level": "warn"})()
@@ -769,6 +788,7 @@ def _evaluate_current_repeat_bug_gate(
 
 
 def _evaluate_current_completion_gate(
+    tool_name: str = "",
     bug_fix_completed: bool = False,
     fo_solved_called: bool = False,
     significant_work_completed: bool = False,
@@ -777,17 +797,19 @@ def _evaluate_current_completion_gate(
     component_status_updated: bool = False,
 ):
     """Evaluate the Stage 7 completion gate without changing existing UX strings."""
+    ctx = InterventionContext(
+        tool_name=tool_name,
+        bug_fix_completed=bug_fix_completed,
+        fo_solved_called=fo_solved_called,
+        significant_work_completed=significant_work_completed,
+        sync_recorded=sync_recorded,
+        component_changed=component_changed,
+        component_status_updated=component_status_updated,
+    )
     if _intervention_policy_available:
-        return evaluate_completion_gate(
-            InterventionContext(
-                bug_fix_completed=bug_fix_completed,
-                fo_solved_called=fo_solved_called,
-                significant_work_completed=significant_work_completed,
-                sync_recorded=sync_recorded,
-                component_changed=component_changed,
-                component_status_updated=component_status_updated,
-            )
-        )
+        gate_result = evaluate_completion_gate(ctx)
+        _record_agent_intervention(tool_name or "completion_gate", ctx, gate_results=[gate_result])
+        return gate_result
 
     if (
         (bug_fix_completed and not fo_solved_called)
@@ -841,6 +863,47 @@ def build_agent_context(tool_name: str, intent: Optional[str] = None) -> AgentCo
         session_id=session_id,
         project_id=project_id,
     )
+
+
+def _record_agent_intervention(
+    tool_name: str,
+    intervention_ctx: InterventionContext,
+    gate_results: Optional[list] = None,
+    intent: Optional[str] = None,
+) -> str:
+    """
+    Stage 8 boundary: consume Stage 7 policy output in an agent-aware way.
+
+    This is audit-only. It must not change runtime UX or enforce behavior.
+    """
+    if not _agent_intervention_available:
+        return "silent"
+
+    try:
+        agent_ctx = build_agent_context(tool_name, intent=intent)
+        ctx = intervention_ctx
+        if gate_results is not None:
+            ctx = replace(
+                intervention_ctx,
+                extra={**intervention_ctx.extra, "gate_results": list(gate_results)},
+            )
+
+        verdict = evaluate_agent_intervention(agent_ctx, ctx)
+        _compliance_state["last_agent_intervention"] = {
+            "tool_name": tool_name,
+            "verdict": verdict,
+            "actor_name": agent_ctx.actor_name,
+            "actor_source": agent_ctx.actor_source,
+            "actor_confidence": agent_ctx.actor_confidence,
+            "project_id": agent_ctx.project_id,
+            "session_id": agent_ctx.session_id,
+            "timestamp": datetime.now().isoformat(),
+        }
+        _persist_compliance()
+        return verdict
+    except Exception as e:
+        _log(f"[FixOnce] Agent intervention audit failed: {e}")
+        return "silent"
 
 
 def _get_pending_commands_for_injection() -> list:
@@ -3650,6 +3713,7 @@ def update_live_record(section: str, data: str) -> str:
             components = lr.get('architecture', {}).get('components', [])
             blocked_relevant = check_blocked_components(new_goal, components)
             gate_result = _evaluate_current_risk_gate(
+                tool_name="update_live_record",
                 blocked_components_relevant=len(blocked_relevant)
             )
             if gate_result.level in {"warn", "block"}:
@@ -3772,7 +3836,28 @@ def update_work_context(
     At minimum, update current_goal when starting new work.
     Update last_change and last_file after completing changes.
     """
-    error, context = _universal_gate("update_work_context")
+    return _update_work_context_impl(
+        tool_name="update_work_context",
+        current_goal=current_goal,
+        work_area=work_area,
+        why=why,
+        last_change=last_change,
+        last_file=last_file,
+        next_step=next_step,
+    )
+
+
+def _update_work_context_impl(
+    tool_name: str,
+    current_goal: str = "",
+    work_area: str = "",
+    why: str = "",
+    last_change: str = "",
+    last_file: str = "",
+    next_step: str = "",
+) -> str:
+    """Internal implementation shared by update_work_context and fo_sync."""
+    error, context = _universal_gate(tool_name)
     if error:
         return error
 
@@ -3817,6 +3902,7 @@ def update_work_context(
 
     _save_project(project_id, memory)
     _evaluate_current_completion_gate(
+        tool_name=tool_name,
         significant_work_completed=True,
         sync_recorded=True,
     )
@@ -3958,6 +4044,20 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
         is_valid, message, conflicts = validate_decision(
             decision, reason, active_decisions, force=force
         )
+        top_severity = conflicts[0].get("severity", "") if conflicts else ""
+        decision_gate_ctx = InterventionContext(
+            tool_name="log_decision",
+            decision_conflict_severity=top_severity,
+            extra={"conflicts": conflicts},
+        )
+        if _intervention_policy_available:
+            gate_result = evaluate_decision_conflict_gate(decision_gate_ctx)
+            _record_agent_intervention(
+                "log_decision",
+                decision_gate_ctx,
+                gate_results=[gate_result],
+                intent=decision,
+            )
 
         _log(f"[PolicyEngine] Validating: {decision[:50]}...")
         _log(f"[PolicyEngine] Against {len(active_decisions)} active decisions")
@@ -4242,6 +4342,7 @@ def update_component_status(name: str, status: str, desc: str = "") -> str:
         "status": status
     })
     _evaluate_current_completion_gate(
+        tool_name="update_component_status",
         component_changed=True,
         component_status_updated=True,
     )
@@ -5018,6 +5119,7 @@ def solution_applied(
         pass  # Don't fail the main operation
 
     _evaluate_current_completion_gate(
+        tool_name="solution_applied",
         bug_fix_completed=True,
         fo_solved_called=True,
     )
@@ -5148,6 +5250,7 @@ def _find_solution_for_error(error_message: str, min_similarity: int = 50, min_k
                     }
 
         gate_result = _evaluate_current_repeat_bug_gate(
+            tool_name="_find_solution_for_error",
             similar_past_solution_found=bool(best_match)
         )
         if gate_result.level == "warn":
@@ -5348,6 +5451,7 @@ def search_past_solutions(query: str) -> str:
     })
 
     gate_result = _evaluate_current_repeat_bug_gate(
+        tool_name="search_past_solutions",
         similar_past_solution_found=bool(matched_insights)
     )
 
@@ -6109,6 +6213,7 @@ def smart_file_operation(
             # Check if this affects a stable component BEFORE writing
             stable_impact = _check_stable_component_impact(file_path)
             gate_result = _evaluate_current_risk_gate(
+                tool_name="smart_file_operation",
                 stable_component_touched=bool(stable_impact)
             )
             if gate_result.level in {"warn", "block"}:
@@ -6130,6 +6235,7 @@ def smart_file_operation(
             # Check if this affects a stable component BEFORE appending
             stable_impact = _check_stable_component_impact(file_path)
             gate_result = _evaluate_current_risk_gate(
+                tool_name="smart_file_operation",
                 stable_component_touched=bool(stable_impact)
             )
             if gate_result.level in {"warn", "block"}:
@@ -6318,6 +6424,7 @@ def mark_command_executed(command_id: str, result: str = "success", details: str
         # EXECUTION LOCK: Only allow marking if status is "delivered"
         current_status = command.get("status", "")
         gate_result = _evaluate_current_risk_gate(
+            tool_name="mark_command_executed",
             lock_violation=(current_status != "delivered")
         )
         if gate_result.level == "block":
@@ -6787,7 +6894,8 @@ def fo_sync(
         next_step: Short continuation prompt (e.g., "Test the fix", "Check error flow")
                    NOT numbered lists - just one actionable next step
     """
-    return update_work_context(
+    return _update_work_context_impl(
+        tool_name="fo_sync",
         current_goal=goal,
         work_area=work_area,
         last_change=last_change,
@@ -6882,6 +6990,7 @@ def fo_errors(limit: int = 5) -> str:
             lines.append("")
 
         repeat_gate_result = _evaluate_current_repeat_bug_gate(
+            tool_name="fo_errors",
             similar_past_solution_found=bool(suggested_fixes or auto_fixes)
         )
 
@@ -6926,6 +7035,7 @@ def fo_apply(fix_id: str = "") -> str:
         auto_fixes = get_auto_fixes()
 
         repeat_gate_result = _evaluate_current_repeat_bug_gate(
+            tool_name="fo_apply",
             similar_past_solution_found=bool(auto_fixes)
         )
 
@@ -6952,6 +7062,7 @@ def fo_apply(fix_id: str = "") -> str:
             mark_fix_applied(fix["id"], success=True)
 
         completion_gate_result = _evaluate_current_completion_gate(
+            tool_name="fo_apply",
             bug_fix_completed=True,
             fo_solved_called=False,
         )

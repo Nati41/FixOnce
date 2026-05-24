@@ -118,6 +118,7 @@ class TestInitOpening(unittest.TestCase):
                 result = server.fo_apply()
 
         completion_mock.assert_called_once_with(
+            tool_name="fo_apply",
             bug_fix_completed=True,
             fo_solved_called=False,
         )

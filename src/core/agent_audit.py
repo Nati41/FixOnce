@@ -15,8 +15,12 @@ from typing import Any, Deque, Dict, List
 class AgentAuditEntry:
     actor_name: str
     actor_source: str
+    actor_confidence: float
+    tool_name: str
     gate: str
     verdict: str
+    project_id: str
+    session_id: str
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -28,16 +32,24 @@ _AGENT_AUDIT_LOG: Deque[AgentAuditEntry] = deque(maxlen=500)
 def record_agent_audit(
     actor_name: str,
     actor_source: str,
+    actor_confidence: float,
+    tool_name: str,
     gate: str,
     verdict: str,
+    project_id: str,
+    session_id: str,
     metadata: Dict[str, Any] | None = None,
 ) -> AgentAuditEntry:
     """Append an agent-aware intervention record to the bounded audit trail."""
     entry = AgentAuditEntry(
         actor_name=actor_name,
         actor_source=actor_source,
+        actor_confidence=actor_confidence,
+        tool_name=tool_name,
         gate=gate,
         verdict=verdict,
+        project_id=project_id,
+        session_id=session_id,
         metadata=dict(metadata or {}),
     )
     with _AGENT_AUDIT_LOCK:

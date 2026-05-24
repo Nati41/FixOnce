@@ -38,7 +38,7 @@ class TestAgentIntervention(unittest.TestCase):
 
         self.assertEqual(verdict, "block")
 
-    def test_agent_bridge_writes_audit_entries_for_non_silent_gates(self):
+    def test_agent_bridge_writes_audit_entries_for_all_gate_verdicts(self):
         evaluate_agent_intervention(
             AgentContext(
                 actor_name="codex",
@@ -57,11 +57,19 @@ class TestAgentIntervention(unittest.TestCase):
         )
 
         entries = get_agent_audit(limit=10)
-        self.assertEqual(len(entries), 2)
+        self.assertEqual(len(entries), 5)
         self.assertEqual(entries[0]["actor_name"], "codex")
         self.assertEqual(entries[0]["actor_source"], "session_registry")
+        self.assertEqual(entries[0]["actor_confidence"], 0.88)
+        self.assertEqual(entries[0]["tool_name"], "fo_sync")
+        self.assertEqual(entries[0]["project_id"], "proj-1")
+        self.assertEqual(entries[0]["session_id"], "sess-3")
         self.assertEqual(entries[0]["gate"], "error_gate")
-        self.assertEqual(entries[1]["gate"], "repeat_bug_gate")
+        self.assertEqual(entries[0]["verdict"], "warn")
+        self.assertEqual(entries[1]["gate"], "decision_conflict_gate")
+        self.assertEqual(entries[2]["gate"], "risk_gate")
+        self.assertEqual(entries[3]["gate"], "repeat_bug_gate")
+        self.assertEqual(entries[4]["gate"], "completion_gate")
 
 
 if __name__ == "__main__":
