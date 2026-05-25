@@ -11,6 +11,7 @@ This module provides unified status for:
 """
 
 import json
+import re
 import subprocess
 import shutil
 import requests
@@ -97,6 +98,34 @@ class SystemStatus:
         }
 
 
+SUPPORTED_ONBOARDING_CLIENTS = ("claude", "cursor", "codex", "windsurf")
+FIXONCE_RULES_START = "<!-- FIXONCE-AUTO-INIT:START -->"
+ONBOARDING_STATE_FILE = "onboarding_state.json"
+ONBOARDING_VISIBLE_STATES = {
+    "fresh_install",
+    "detecting",
+    "auto_connecting",
+    "needs_restart",
+    "needs_user_choice",
+    "failed_actionable",
+}
+
+ONBOARDING_TRANSLATIONS = {
+    "en": {
+        "connected_reason": "Ready to use",
+        "needs_restart_reason": "Close and reopen this app to finish connecting it.",
+        "not_installed_reason": "Install this app first if you want to use FixOnce with it.",
+        "failed_reason": "FixOnce could not finish this app connection yet.",
+    },
+    "he": {
+        "connected_reason": "מוכן לשימוש",
+        "needs_restart_reason": "סגור ופתח מחדש את האפליקציה כדי לסיים את החיבור.",
+        "not_installed_reason": "התקן קודם את האפליקציה אם תרצה להשתמש בה עם FixOnce.",
+        "failed_reason": "FixOnce עדיין לא הצליח להשלים את החיבור לאפליקציה הזו.",
+    },
+}
+
+
 def _get_data_dir() -> Path:
     """Get the user data directory path (~/.fixonce/)."""
     from config import USER_DATA_DIR
@@ -160,6 +189,244 @@ def _detect_installed_clients() -> Dict[str, bool]:
         ),
     }
     return checks
+
+
+def _normalize_language(language: Optional[str]) -> str:
+    value = (language or "").strip().lower()
+    return "he" if value.startswith("he") else "en"
+
+
+def _tr(language: str, key: str) -> str:
+    return ONBOARDING_TRANSLATIONS[_normalize_language(language)][key]
+
+
+def _has_managed_rules(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        return FIXONCE_RULES_START in path.read_text(encoding="utf-8")
+    except Exception:
+        return False
+
+
+def _claude_hooks_valid(home: Path) -> bool:
+    settings_path = home / ".claude" / "settings.json"
+    if not settings_path.exists():
+        return True
+
+    try:
+        config = json.loads(settings_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+
+    hooks = config.get("hooks")
+    if not hooks:
+        return True
+
+    pattern = re.compile(r'([/~][^"\']+\.(?:sh|ps1))')
+    for event_hooks in hooks.values():
+        if not isinstance(event_hooks, list):
+            continue
+        for matcher_entry in event_hooks:
+            for hook in matcher_entry.get("hooks", []):
+                command = str(hook.get("command", "")).strip()
+                if not command:
+                    continue
+                matches = pattern.findall(command)
+                for match in matches:
+                    path = Path(match).expanduser()
+                    if not path.exists():
+                        return False
+    return True
+
+
+def _client_rules_ready(client_key: str, home: Path) -> bool:
+    if client_key == "claude":
+        return _has_managed_rules(home / ".claude" / "CLAUDE.md") and _claude_hooks_valid(home)
+    if client_key == "cursor":
+        settings_path = home / "Library" / "Application Support" / "Cursor" / "User" / "settings.json"
+        if not settings_path.exists():
+            settings_path = home / ".config" / "Cursor" / "User" / "settings.json"
+        if not settings_path.exists():
+            settings_path = home / "AppData" / "Roaming" / "Cursor" / "User" / "settings.json"
+        if not settings_path.exists():
+            return False
+        try:
+            config = json.loads(settings_path.read_text(encoding="utf-8"))
+        except Exception:
+            return False
+        rules = str(config.get("cursor.general.aiRules", ""))
+        return "fo_init" in rules
+    if client_key == "codex":
+        return _has_managed_rules(home / ".codex" / "AGENTS.md")
+    if client_key == "windsurf":
+        return _has_managed_rules(home / ".codeium" / "windsurf" / "memories" / "global_rules.md")
+    return False
+
+
+def _onboarding_state_path() -> Path:
+    return _get_data_dir() / ONBOARDING_STATE_FILE
+
+
+def _load_onboarding_state() -> Dict[str, Any]:
+    defaults = {
+        "onboarding_completed": False,
+        "primary_client": None,
+        "should_show_onboarding": True,
+    }
+    path = _onboarding_state_path()
+    if not path.exists():
+        return defaults
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return defaults
+
+    state = defaults.copy()
+    state.update({
+        "onboarding_completed": bool(payload.get("onboarding_completed")),
+        "primary_client": payload.get("primary_client"),
+        "should_show_onboarding": bool(payload.get("should_show_onboarding", True)),
+    })
+    if state["primary_client"] not in SUPPORTED_ONBOARDING_CLIENTS:
+        state["primary_client"] = None
+    return state
+
+
+def _save_onboarding_state(state: Dict[str, Any]) -> None:
+    payload = {
+        "onboarding_completed": bool(state.get("onboarding_completed")),
+        "primary_client": state.get("primary_client"),
+        "should_show_onboarding": bool(state.get("should_show_onboarding", True)),
+    }
+    _onboarding_state_path().write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _resolve_primary_client(
+    sys_status: SystemStatus,
+    clients_payload: List[Dict[str, Any]],
+    persisted_primary: Optional[str] = None,
+) -> Optional[str]:
+    for client_key in SUPPORTED_ONBOARDING_CLIENTS:
+        client = sys_status.mcp.clients.get(client_key)
+        if client and client.connected:
+            return client_key
+
+    for state_name in ("needs_restart", "failed"):
+        match = next((item["client"] for item in clients_payload if item["status"] == state_name and item["installed"]), None)
+        if match:
+            return match
+
+    match = next((item["client"] for item in clients_payload if item["installed"]), None)
+    if match:
+        return match
+
+    if persisted_primary in SUPPORTED_ONBOARDING_CLIENTS:
+        return persisted_primary
+
+    return None
+
+
+def _derive_onboarding_flow_state(
+    sys_status: SystemStatus,
+    clients_payload: List[Dict[str, Any]],
+    state: Dict[str, Any],
+) -> str:
+    has_connected = any(sys_status.mcp.clients.get(client_key, AIClientStatus(name=client_key.title())).connected for client_key in SUPPORTED_ONBOARDING_CLIENTS)
+    installed_clients = [item for item in clients_payload if item["installed"]]
+    has_retryable_failure = any(item["status"] == "failed" and item["retry_available"] for item in clients_payload)
+    has_needs_restart = any(item["status"] == "needs_restart" for item in clients_payload)
+
+    if state.get("onboarding_completed") and not has_connected:
+        return "completed_hidden"
+    if has_connected:
+        return "connected"
+    if has_needs_restart:
+        return "needs_restart"
+    if not installed_clients:
+        return "fresh_install" if sys_status.is_first_launch else "needs_user_choice"
+    if sys_status.is_first_launch and has_retryable_failure:
+        return "auto_connecting"
+    if has_retryable_failure:
+        return "failed_actionable"
+    return "detecting"
+
+
+def build_client_onboarding_payload(status: Optional[SystemStatus] = None, language: str = "en") -> Dict[str, Any]:
+    """Map low-level client health to the first-run dashboard contract."""
+    sys_status = status or get_system_status()
+    home = Path.home()
+    clients_payload = []
+
+    for client_key in SUPPORTED_ONBOARDING_CLIENTS:
+        client = sys_status.mcp.clients.get(client_key, AIClientStatus(name=client_key.title()))
+        installed = bool(client.installed)
+        config_ready = bool(client.configured)
+        rules_ready = _client_rules_ready(client_key, home)
+        ready = config_ready and rules_ready
+
+        if not installed:
+            state = "not_installed"
+            reason = _tr(language, "not_installed_reason")
+            retry_available = False
+            needs_restart = False
+        elif ready and client.connected:
+            state = "connected"
+            reason = _tr(language, "connected_reason")
+            retry_available = False
+            needs_restart = False
+        elif ready:
+            state = "needs_restart"
+            reason = _tr(language, "needs_restart_reason")
+            retry_available = False
+            needs_restart = True
+        else:
+            state = "failed"
+            reason = _tr(language, "failed_reason")
+            retry_available = True
+            needs_restart = False
+
+        clients_payload.append({
+            "client": client_key,
+            "status": state,
+            "reason": reason,
+            "retry_available": retry_available,
+            "installed": installed,
+            "needs_restart": needs_restart,
+        })
+    onboarding_state = _load_onboarding_state()
+    primary_client = _resolve_primary_client(sys_status, clients_payload, onboarding_state.get("primary_client"))
+    flow_state = _derive_onboarding_flow_state(sys_status, clients_payload, onboarding_state)
+    onboarding_completed = bool(onboarding_state.get("onboarding_completed"))
+
+    if flow_state == "connected":
+        onboarding_completed = True
+
+    should_show_onboarding = flow_state in ONBOARDING_VISIBLE_STATES and not onboarding_completed
+    if flow_state == "completed_hidden":
+        should_show_onboarding = False
+
+    next_state = {
+        "onboarding_completed": onboarding_completed,
+        "primary_client": primary_client,
+        "should_show_onboarding": should_show_onboarding,
+    }
+    if next_state != onboarding_state:
+        _save_onboarding_state(next_state)
+
+    return {
+        "clients": clients_payload,
+        "flow_state": flow_state,
+        "primary_client": primary_client,
+        "onboarding_completed": onboarding_completed,
+        "should_show_onboarding": should_show_onboarding,
+    }
+
+
+def get_client_onboarding_status(language: str = "en") -> Dict[str, Any]:
+    """Public helper for the dashboard first-run onboarding contract."""
+    return build_client_onboarding_payload(language=language)
 
 
 def _check_engine(port: int = 5000) -> EngineStatus:

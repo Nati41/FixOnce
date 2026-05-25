@@ -10,9 +10,22 @@ import sys
 import json
 from dataclasses import asdict
 from pathlib import Path
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
 setup_bp = Blueprint('setup', __name__)
+
+
+def _get_request_language() -> str:
+    language = (request.headers.get("Accept-Language") or "").lower()
+    return "he" if language.startswith("he") else "en"
+
+
+def _load_install_module():
+    scripts_dir = Path(__file__).parent.parent.parent / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    import install
+    return install
 
 
 @setup_bp.route('/api/setup/status', methods=['GET'])
@@ -21,9 +34,10 @@ def get_setup_status():
 
     Uses SystemStatus as single source of truth.
     """
-    from core.system_status import get_system_status
+    from core.system_status import get_system_status, build_client_onboarding_payload
 
     sys_status = get_system_status()
+    onboarding = build_client_onboarding_payload(sys_status, _get_request_language())
 
     # Format for backward compatibility with dashboard
     status = {
@@ -56,12 +70,21 @@ def get_setup_status():
             "project_name": sys_status.project.project_name,
             "working_dir": sys_status.project.working_dir
         },
+        "client_onboarding": onboarding,
         "overall": sys_status.overall,
         "is_first_launch": sys_status.is_first_launch,
         "timestamp": sys_status.timestamp
     }
 
     return jsonify(status)
+
+
+@setup_bp.route('/api/setup/client-onboarding', methods=['GET'])
+def get_client_onboarding():
+    """Return the product-facing first-run client onboarding contract."""
+    from core.system_status import get_client_onboarding_status
+
+    return jsonify(get_client_onboarding_status(_get_request_language()))
 
 
 @setup_bp.route('/api/setup/run-install', methods=['POST'])
@@ -139,6 +162,63 @@ def test_ai_connection(client: str):
                 ]
             }
         }), 500
+
+
+@setup_bp.route('/api/setup/retry-ai/<client>', methods=['POST'])
+def retry_ai_connection(client: str):
+    """Retry onboarding for a single client without reinstalling core FixOnce."""
+    client = (client or "").strip().lower()
+    if client not in {"claude", "cursor", "codex", "windsurf"}:
+        return jsonify({"error": f"Unsupported AI client: {client}"}), 400
+
+    install = _load_install_module()
+
+    try:
+        fixonce_dir = install.get_fixonce_dir()
+        editors = install.detect_editors()
+        stdio_config = install.build_install_stdio_config(fixonce_dir)
+
+        config_ok = install.configure_client_mcp(client, stdio_config=stdio_config, editors=editors)
+        rules_ok = install.sync_client_rules(client, fixonce_dir=fixonce_dir)
+
+        from core.system_status import get_client_onboarding_status
+        payload = get_client_onboarding_status(_get_request_language())
+        client_payload = next((item for item in payload["clients"] if item["client"] == client), None)
+
+        return jsonify({
+            "success": bool(config_ok and rules_ok),
+            "client": client_payload,
+            "clients": payload["clients"],
+        }), (200 if config_ok and rules_ok else 422)
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+        }), 500
+
+
+@setup_bp.route('/api/setup/open-app/<client>', methods=['POST'])
+def open_app(client: str):
+    """Best-effort open action for supported desktop apps."""
+    client = (client or "").strip().lower()
+    app_map = {
+        "claude": ["Claude", "Claude Code"],
+        "cursor": ["Cursor"],
+        "windsurf": ["Windsurf"],
+        "codex": ["Codex"],
+    }
+    if client not in app_map:
+        return jsonify({"success": False, "error": f"Unsupported AI client: {client}"}), 400
+
+    for app_name in app_map[client]:
+        try:
+            result = subprocess.run(["open", "-a", app_name], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return jsonify({"success": True})
+        except Exception:
+            continue
+
+    return jsonify({"success": False, "error": "Could not open app"}), 422
 
 
 @setup_bp.route('/api/setup/system-check', methods=['GET'])
