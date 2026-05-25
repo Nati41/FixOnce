@@ -65,6 +65,63 @@ class TestClientOnboarding(unittest.TestCase):
         self.assertIn("[mcp_servers.fixonce]", codex_config.read_text(encoding="utf-8"))
         self.assertIn("fixonce", json.loads(windsurf_config.read_text(encoding="utf-8"))["mcpServers"])
 
+    def test_configure_mcp_writes_global_configs_even_when_editors_not_detected(self):
+        def fake_run(cmd, capture_output=False, text=False, timeout=None):
+            class Result:
+                returncode = 1
+                stdout = ""
+                stderr = ""
+            return Result()
+
+        editors = {
+            "claude_code": False,
+            "cursor": False,
+            "codex": False,
+            "windsurf": False,
+        }
+
+        with patch.object(install.subprocess, "run", side_effect=fake_run), \
+             patch.object(install, "get_platform", return_value="mac"):
+            success = install.configure_mcp(editors)
+
+        self.assertTrue(success)
+        self.assertTrue((self.temp_home / ".claude.json").exists())
+        self.assertTrue((self.temp_home / ".codex" / "config.toml").exists())
+        self.assertTrue((self.temp_home / ".codeium" / "windsurf" / "mcp_config.json").exists())
+        self.assertIn("[mcp_servers.fixonce]", (self.temp_home / ".codex" / "config.toml").read_text(encoding="utf-8"))
+
+    def test_configure_mcp_does_not_write_codex_only_under_project_dir(self):
+        def fake_run(cmd, capture_output=False, text=False, timeout=None):
+            class Result:
+                returncode = 1
+                stdout = ""
+                stderr = ""
+            return Result()
+
+        temp_install_root = self.temp_home / "FixOnceInstall"
+        (temp_install_root / "src" / "mcp_server").mkdir(parents=True, exist_ok=True)
+        (temp_install_root / "src" / "mcp_server" / "mcp_memory_server_v2.py").write_text("# test server\n", encoding="utf-8")
+
+        project_codex = temp_install_root / ".codex" / "config.toml"
+        project_codex.parent.mkdir(parents=True, exist_ok=True)
+        project_codex.write_text("", encoding="utf-8")
+
+        editors = {
+            "claude_code": False,
+            "cursor": False,
+            "codex": False,
+            "windsurf": False,
+        }
+
+        with patch.object(install.subprocess, "run", side_effect=fake_run), \
+             patch.object(install, "get_fixonce_dir", return_value=temp_install_root), \
+             patch.object(install, "get_platform", return_value="mac"):
+            install.configure_mcp(editors)
+
+        global_codex = self.temp_home / ".codex" / "config.toml"
+        self.assertTrue(global_codex.exists())
+        self.assertIn("[mcp_servers.fixonce]", global_codex.read_text(encoding="utf-8"))
+
     def test_sync_rules_writes_global_rules_without_duplication(self):
         with patch.object(install, "configure_claude_hooks", return_value=True), \
              patch.object(install, "get_platform", return_value="mac"):
@@ -84,6 +141,19 @@ class TestClientOnboarding(unittest.TestCase):
         self.assertEqual(windsurf_rules.count(install.FIXONCE_RULES_START), 1)
         self.assertIn("fo_init", cursor_settings["cursor.general.aiRules"])
         self.assertIn("Call it once per session", cursor_settings["cursor.general.aiRules"])
+
+    def test_configure_claude_hooks_skips_missing_hook_files(self):
+        missing_hooks_dir = self.temp_home / "missing-fixonce"
+        missing_hooks_dir.mkdir(parents=True, exist_ok=True)
+
+        with patch.object(install, "get_platform", return_value="mac"):
+            success = install.configure_claude_hooks(missing_hooks_dir)
+
+        self.assertFalse(success)
+        settings_path = self.temp_home / ".claude" / "settings.json"
+        if settings_path.exists():
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            self.assertNotIn("hooks", settings)
 
     def test_system_status_detects_windsurf_configuration(self):
         windsurf_config = self.temp_home / ".codeium" / "windsurf" / "mcp_config.json"

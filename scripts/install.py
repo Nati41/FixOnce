@@ -7,12 +7,10 @@ Works on Mac and Windows
 import os
 import sys
 import json
-import shutil
 import platform
 import subprocess
 import re
 import time
-import textwrap
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -297,29 +295,7 @@ def _write_managed_block(path: Path, content: str):
 
 def _build_cursor_user_rules() -> str:
     """Build plain-text Cursor user rules for auto-init."""
-    return textwrap.dedent(
-        """
-        FixOnce should be used automatically at the first meaningful user message in every new session.
-
-        First-message examples: hi, hello, hey, היי, מה מצבנו, continue.
-
-        On the first meaningful user message:
-        1. Call fo_init(cwd="/path/to/project") silently.
-        2. Call it once per session unless the user explicitly asks to reconnect or the session is reset.
-        3. Show the fo_init opener exactly once.
-        4. Do not paraphrase the opener.
-        5. Do not add a duplicate opener or a second Ready. line.
-
-        If fo_init returns ACTION_REQUIRED, execute it immediately and continue.
-
-        During work:
-        - Before debugging, call fo_search(query).
-        - If browser failures matter, call fo_errors().
-        - After meaningful progress, call fo_sync(last_change, next_step).
-        - After fixing a bug, call fo_solved(error, solution).
-        - Record important decisions with fo_decide(text, reason).
-        """
-    ).strip()
+    return _load_text_asset("global-cursor-rules.md")
 
 
 def _configure_windsurf_mcp_file(path: Path, server_config: dict):
@@ -875,16 +851,14 @@ def configure_mcp(editors: dict) -> bool:
         fastmcp_path
     )
 
-    # Configure Claude Code using the CLI (the proper way)
+    # Always write global user config for Claude Code.
+    claude_cli_success = False
     if editors.get('claude_code', False):
         try:
-            # Remove existing fixonce config if any
             subprocess.run(['claude', 'mcp', 'remove', 'fixonce', '-s', 'user'],
                          capture_output=True, timeout=10)
 
-            # Use fastmcp run if available, otherwise direct python
             mcp_json = json.dumps(stdio_config)
-
             result = subprocess.run(
                 ['claude', 'mcp', 'add-json', 'fixonce', mcp_json, '-s', 'user'],
                 capture_output=True, text=True, timeout=10
@@ -892,22 +866,19 @@ def configure_mcp(editors: dict) -> bool:
 
             if result.returncode == 0:
                 print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code configured via CLI")
-                configured_count += 1
-            else:
-                print(f"  {Colors.YELLOW}[WARN]{Colors.END} Claude CLI config failed, trying file method...")
-                # Fallback to file method
-                _configure_mcp_file(Path.home() / '.claude.json', stdio_config)
-                configured_count += 1
-
+                claude_cli_success = True
         except Exception as e:
             print(f"  {Colors.YELLOW}[WARN]{Colors.END} Claude CLI not available: {e}")
-            # Fallback to file method
-            try:
-                _configure_mcp_file(Path.home() / '.claude.json', stdio_config)
-                print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code configured via file")
-                configured_count += 1
-            except Exception as e2:
-                print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Claude Code: {e2}")
+
+    try:
+        _configure_mcp_file(Path.home() / '.claude.json', stdio_config)
+        if claude_cli_success:
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code config file verified: {Path.home() / '.claude.json'}")
+        else:
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code configured via file")
+        configured_count += 1
+    except Exception as e:
+        print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Claude Code: {e}")
 
     # Configure Cursor using file method
     if editors.get('cursor', False):
@@ -919,25 +890,23 @@ def configure_mcp(editors: dict) -> bool:
         except Exception as e:
             print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Cursor: {e}")
 
-    # Configure Codex
-    if editors.get('codex', False):
-        codex_config = Path.home() / '.codex' / 'config.toml'
-        try:
-            _configure_codex_mcp_file(codex_config, 'fixonce', stdio_config)
-            print(f"  {Colors.GREEN}[OK]{Colors.END} Codex configured: {codex_config}")
-            configured_count += 1
-        except Exception as e:
-            print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Codex: {e}")
+    # Always write global user config for Codex.
+    codex_config = Path.home() / '.codex' / 'config.toml'
+    try:
+        _configure_codex_mcp_file(codex_config, 'fixonce', stdio_config)
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Codex configured: {codex_config}")
+        configured_count += 1
+    except Exception as e:
+        print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Codex: {e}")
 
-    # Configure Windsurf
-    if editors.get('windsurf', False):
-        windsurf_config = Path.home() / '.codeium' / 'windsurf' / 'mcp_config.json'
-        try:
-            _configure_windsurf_mcp_file(windsurf_config, stdio_config)
-            print(f"  {Colors.GREEN}[OK]{Colors.END} Windsurf configured: {windsurf_config}")
-            configured_count += 1
-        except Exception as e:
-            print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Windsurf: {e}")
+    # Always write global user config for Windsurf.
+    windsurf_config = Path.home() / '.codeium' / 'windsurf' / 'mcp_config.json'
+    try:
+        _configure_windsurf_mcp_file(windsurf_config, stdio_config)
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Windsurf configured: {windsurf_config}")
+        configured_count += 1
+    except Exception as e:
+        print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Windsurf: {e}")
 
     if configured_count == 0:
         print(f"  {Colors.YELLOW}[INFO]{Colors.END} No supported AI apps detected yet")
@@ -1061,8 +1030,24 @@ def configure_claude_hooks(fixonce_dir: Path) -> bool:
             with open(settings_path, 'r', encoding='utf-8') as f:
                 existing = json.load(f)
 
-        # Prepare hooks config - OS-specific
         hooks_dir = fixonce_dir / "hooks"
+        if current_platform == 'windows':
+            hook_files = [
+                hooks_dir / "session_start.ps1",
+                hooks_dir / "session_end.ps1",
+                hooks_dir / "post_tool_use.ps1",
+            ]
+        else:
+            hook_files = [
+                hooks_dir / "session_start.sh",
+                hooks_dir / "session_end.sh",
+                hooks_dir / "post_tool_use.sh",
+            ]
+
+        missing_hooks = [str(path) for path in hook_files if not path.exists()]
+        if missing_hooks:
+            print(f"  {Colors.YELLOW}[WARN]{Colors.END} Claude hooks not installed; skipping hook references")
+            return False
 
         if current_platform == 'windows':
             # Windows: Use PowerShell scripts
