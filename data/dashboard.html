@@ -164,6 +164,135 @@ input:checked + .slider:before {
   color: var(--text-dim);
 }
 
+.wizard-card {
+  padding: 14px;
+}
+
+.wizard-header {
+  margin-bottom: 10px;
+}
+
+.wizard-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.wizard-copy {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.wizard-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wizard-client {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.wizard-client-top {
+  display: grid;
+  grid-template-columns: minmax(0, 72px) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.wizard-client-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wizard-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: normal;
+}
+
+.wizard-status.connected {
+  color: var(--green);
+}
+
+.wizard-status.needs_restart,
+.wizard-status.not_installed {
+  color: var(--amber);
+}
+
+.wizard-status.failed {
+  color: var(--red);
+}
+
+.wizard-action-slot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.wizard-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.wizard-btn.primary {
+  border-color: rgba(0, 230, 118, 0.35);
+  background: rgba(0, 230, 118, 0.08);
+}
+
+.wizard-btn.ghost {
+  color: var(--text-dim);
+}
+
+.wizard-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.wizard-btn.hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.wizard-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.summary-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.summary-subtitle {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.summary-actions {
+  margin-top: 10px;
+}
+
+.settings-header {
+  margin-bottom: 10px;
+}
+
 /* Status Card */
 .status-row {
   display: flex;
@@ -389,6 +518,40 @@ body.powered-off .card {
   </div>
 </div>
 
+<!-- First-Run Wizard -->
+<div class="card wizard-card" id="onboardingCard" style="display: none;">
+  <div class="wizard-header">
+    <div>
+      <div class="wizard-title" id="wizardTitle">Connect your AI tools</div>
+      <div class="wizard-copy" id="wizardCopy">FixOnce is ready. Finish connecting the apps you use.</div>
+    </div>
+  </div>
+  <div class="wizard-grid" id="wizardGrid"></div>
+  <div class="wizard-footer">
+    <button class="wizard-btn ghost" id="wizardDismiss" type="button"></button>
+  </div>
+</div>
+
+<!-- AI Summary -->
+<div class="card" id="aiSummaryCard">
+  <div class="card-label">AI</div>
+  <div class="summary-title" id="aiSummaryTitle">Setup needed</div>
+  <div class="summary-subtitle" id="aiSummarySubtitle">Manage AI integrations</div>
+  <div class="summary-actions">
+    <button class="wizard-btn" id="manageIntegrationsBtn" type="button">Manage AI integrations</button>
+  </div>
+</div>
+
+<!-- Settings -> AI Integrations -->
+<div class="card" id="aiIntegrationsCard" style="display: none;">
+  <div class="card-label">Settings</div>
+  <div class="settings-header">
+    <div class="summary-title" id="integrationsTitle">AI Integrations</div>
+    <div class="summary-subtitle" id="integrationsCopy">Manage connected apps and reconnect when needed.</div>
+  </div>
+  <div class="wizard-grid" id="integrationsGrid"></div>
+</div>
+
 <!-- Project -->
 <div class="card">
   <div class="card-label">Project</div>
@@ -486,6 +649,41 @@ body.powered-off .card {
 
 <script>
 const API = window.location.origin;
+const UI_LANG = 'en';
+const WIZARD_COPY = {
+  title: 'Connect your AI tools',
+  copy: 'FixOnce is ready. Finish connecting the apps you use.',
+  choose_title: 'Choose your AI tool',
+  choose_copy: 'Select the app you use so FixOnce can finish connecting it.',
+  reconnect_title: 'Finish connecting your AI tools',
+  reconnect_copy: 'FixOnce is ready. Finish connecting the apps you use.',
+  summary_connected: 'AI Connected',
+  summary_setup_needed: 'AI setup',
+  summary_ready: 'Ready',
+  summary_manage: 'AI integrations',
+  summary_connected_to: 'Connected to',
+  manage_integrations: 'AI integrations',
+  hide_integrations: 'AI integrations',
+  integrations_title: 'AI Integrations',
+  integrations_copy: 'Manage connected apps and reconnect when needed.',
+  connected: 'Connected',
+  needs_restart: 'Open again to finish',
+  not_installed: 'Not installed',
+  failed: 'Could not connect',
+  retry: 'Retry',
+  retrying: 'Retrying…',
+  open_claude: 'Open Claude',
+  open_cursor: 'Open Cursor',
+  open_codex: 'Open Codex',
+  open_windsurf: 'Other AI tools',
+  dismiss: 'Dismiss',
+  continue: 'Got it',
+  retry_success: 'Connection updated.',
+  retry_error: 'Could not update this app right now.',
+  open_error: 'Could not open this app right now.'
+};
+let onboardingDismissed = false;
+let integrationsPanelOpen = false;
 
 function isTransientPollingError(error) {
   if (!error) return true;
@@ -519,6 +717,25 @@ async function fetchData() {
     render(data.snapshot || {});
   } catch (e) {
     logPollingError('Fetch error:', e);
+  }
+}
+
+async function fetchOnboarding() {
+  try {
+    const res = await fetch(`${API}/api/setup/status`, {
+      headers: {
+        'X-Dashboard': 'true',
+        'Accept-Language': UI_LANG
+      },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    renderAISummary(data.client_onboarding || {});
+    renderOnboarding(data);
+    renderIntegrations(data.client_onboarding || {});
+  } catch (e) {
+    logPollingError('Onboarding fetch error:', e);
   }
 }
 
@@ -670,6 +887,147 @@ function render(s) {
   }
 }
 
+function renderOnboarding(data) {
+  const onboarding = data.client_onboarding || { clients: [] };
+  const clients = Array.isArray(onboarding.clients) ? onboarding.clients : [];
+  const card = document.getElementById('onboardingCard');
+  const grid = document.getElementById('wizardGrid');
+  const dismissBtn = document.getElementById('wizardDismiss');
+  const copy = WIZARD_COPY;
+  const flowState = onboarding.flow_state || 'detecting';
+  const shouldShow = Boolean(onboarding.should_show_onboarding);
+
+  const wizardText = getWizardText(flowState, copy);
+  document.getElementById('wizardTitle').textContent = wizardText.title;
+  document.getElementById('wizardCopy').textContent = wizardText.copy;
+
+  if (!clients.length || onboardingDismissed || !shouldShow) {
+    card.style.display = 'none';
+    return;
+  }
+
+  const hasBlockingFailure = clients.some(client => client.status === 'failed');
+  dismissBtn.textContent = hasBlockingFailure ? copy.dismiss : copy.continue;
+  dismissBtn.onclick = () => {
+    onboardingDismissed = true;
+    card.style.display = 'none';
+  };
+
+  renderClientRows(grid, clients, copy);
+
+  card.style.display = '';
+}
+
+function renderAISummary(onboarding) {
+  const copy = WIZARD_COPY;
+  const titleEl = document.getElementById('aiSummaryTitle');
+  const subtitleEl = document.getElementById('aiSummarySubtitle');
+  const manageBtn = document.getElementById('manageIntegrationsBtn');
+  const primaryClient = onboarding.primary_client ? capitalize(onboarding.primary_client) : '';
+  const flowState = onboarding.flow_state || 'detecting';
+  const connected = flowState === 'connected';
+
+  titleEl.textContent = connected ? copy.summary_connected : copy.summary_setup_needed;
+  subtitleEl.textContent = connected && primaryClient
+    ? `${copy.summary_connected_to} ${primaryClient}`
+    : copy.summary_manage;
+
+  manageBtn.textContent = integrationsPanelOpen ? copy.hide_integrations : copy.manage_integrations;
+  manageBtn.onclick = () => {
+    integrationsPanelOpen = !integrationsPanelOpen;
+    renderAISummary(onboarding);
+    renderIntegrations(onboarding);
+  };
+}
+
+function renderIntegrations(onboarding) {
+  const card = document.getElementById('aiIntegrationsCard');
+  const grid = document.getElementById('integrationsGrid');
+  const clients = Array.isArray(onboarding.clients) ? onboarding.clients : [];
+
+  document.getElementById('integrationsTitle').textContent = WIZARD_COPY.integrations_title;
+  document.getElementById('integrationsCopy').textContent = WIZARD_COPY.integrations_copy;
+
+  if (!clients.length || !integrationsPanelOpen) {
+    card.style.display = 'none';
+    return;
+  }
+
+  renderClientRows(grid, clients, WIZARD_COPY);
+  card.style.display = '';
+}
+
+function renderClientRows(container, clients, copy) {
+  container.innerHTML = sortClientsForDisplay(clients).map(client => {
+    let actionHtml = '<span></span>';
+    if (client.retry_available) {
+      actionHtml = `<button class="wizard-btn primary" type="button" data-retry="${client.client}">${copy.retry}</button>`;
+    } else if (client.installed && ['claude', 'cursor', 'windsurf', 'codex'].includes(client.client)) {
+      actionHtml = `<button class="wizard-btn" type="button" data-open="${client.client}">${copy[`open_${client.client}`]}</button>`;
+    }
+
+    return `
+        <div class="wizard-client">
+        <div class="wizard-client-top">
+          <div class="wizard-client-name">${getClientDisplayName(client.client)}</div>
+          <span class="wizard-status ${client.status}">${copy[client.status] || client.reason || client.status}</span>
+          <div class="wizard-action-slot">${actionHtml}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  wireClientActions(container, copy);
+}
+
+function wireClientActions(container, copy) {
+  container.querySelectorAll('[data-retry]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const client = button.getAttribute('data-retry');
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = copy.retrying;
+      try {
+        const res = await fetch(`${API}/api/setup/retry-ai/${client}`, {
+          method: 'POST',
+          headers: { 'Accept-Language': UI_LANG }
+        });
+        const payload = await res.json();
+        if (!res.ok || !payload.success) {
+          throw new Error(payload.error || 'retry_failed');
+        }
+        showToast(copy.retry_success);
+        onboardingDismissed = false;
+        await fetchOnboarding();
+      } catch (e) {
+        showToast(copy.retry_error, true);
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+      }
+    });
+  });
+
+  container.querySelectorAll('[data-open]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const client = button.getAttribute('data-open');
+      try {
+        const res = await fetch(`${API}/api/setup/open-app/${client}`, { method: 'POST' });
+        if (!res.ok) throw new Error('open_failed');
+      } catch (e) {
+        showToast(copy.open_error, true);
+      }
+    });
+  });
+}
+
+function getWizardText(flowState, copy) {
+  if (flowState === 'needs_user_choice' || flowState === 'fresh_install') {
+    return { title: copy.choose_title, copy: copy.choose_copy };
+  }
+  return { title: copy.reconnect_title, copy: copy.reconnect_copy };
+}
+
 function relativeTime(ts) {
   if (!ts) return '';
   const then = new Date(ts).getTime();
@@ -685,6 +1043,26 @@ function relativeTime(ts) {
 
 function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+function getClientDisplayName(client) {
+  const labels = {
+    claude: 'Claude',
+    cursor: 'Cursor',
+    codex: 'Codex',
+    windsurf: 'Other AI tools'
+  };
+  return labels[client] || capitalize(client);
+}
+
+function sortClientsForDisplay(clients) {
+  const order = {
+    claude: 0,
+    cursor: 1,
+    codex: 2,
+    windsurf: 3
+  };
+  return [...clients].sort((a, b) => (order[a.client] ?? 99) - (order[b.client] ?? 99));
 }
 
 function safeObject(value) {
@@ -711,7 +1089,7 @@ function getInterventionLevel(lastIntervention) {
 
 function getProjectSubtitle(snapshot, policy, lastIntervention) {
   if (snapshot.agent_audit_active || lastIntervention.tool_name) {
-    return 'Agent-aware runtime active';
+    return 'AI activity connected';
   }
   if (policy.mode) {
     return 'Audit only';
@@ -851,8 +1229,9 @@ function showToast(msg, isError = false) {
 // Init
 loadPowerState();
 fetchData();
+fetchOnboarding();
 fetchActivity();
-setInterval(() => { fetchData(); fetchActivity(); }, 5000);
+setInterval(() => { fetchData(); fetchOnboarding(); fetchActivity(); }, 5000);
 </script>
 </body>
 </html>
