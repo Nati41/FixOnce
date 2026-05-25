@@ -194,6 +194,21 @@ def _detect_editor_with_confidence() -> tuple:
     if "cursor" in term_program.lower():
         return ("cursor", "term_program", 0.8)
 
+    # Priority 1b: Check Windsurf env vars / host process
+    for key in os.environ:
+        if key.startswith("WINDSURF_"):
+            return ("windsurf", "env_var", 0.9)
+
+    try:
+        ppid = os.getppid()
+        result = subprocess.run(['ps', '-p', str(ppid), '-o', 'command='],
+                              capture_output=True, text=True, timeout=1)
+        parent_cmd = result.stdout.strip().lower()
+        if 'windsurf' in parent_cmd:
+            return ("windsurf", "parent_process", 0.9)
+    except:
+        pass
+
     # Priority 2: Check VS Code
     vscode_pid = os.environ.get("VSCODE_PID", "")
     if vscode_pid:
@@ -222,6 +237,7 @@ def _detect_editor_with_confidence() -> tuple:
     home = Path.home()
     claude_settings = home / ".claude" / "settings.json"
     cursor_config = home / ".cursor" / "mcp.json"
+    windsurf_config = home / ".codeium" / "windsurf" / "mcp_config.json"
 
     if claude_settings.exists():
         try:
@@ -234,6 +250,9 @@ def _detect_editor_with_confidence() -> tuple:
 
     if cursor_config.exists():
         return ("cursor", "config_file", 0.3)
+
+    if windsurf_config.exists():
+        return ("windsurf", "config_file", 0.3)
 
     return ("unknown", "none", 0.0)
 

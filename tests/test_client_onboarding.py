@@ -1,0 +1,108 @@
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+
+import install
+import core.system_status as system_status
+
+
+class TestClientOnboarding(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(prefix="fixonce-client-onboarding-")
+        self.temp_home = Path(self.temp_dir.name)
+        self.detect_patch = patch.object(install, "get_fixonce_dir", return_value=PROJECT_ROOT)
+        self.home_patch = patch("pathlib.Path.home", return_value=self.temp_home)
+        self.detect_patch.start()
+        self.home_patch.start()
+
+    def tearDown(self):
+        self.detect_patch.stop()
+        self.home_patch.stop()
+        self.temp_dir.cleanup()
+
+    def test_configure_mcp_writes_all_supported_client_configs(self):
+        def fake_run(cmd, capture_output=False, text=False, timeout=None):
+            class Result:
+                returncode = 1
+                stdout = ""
+                stderr = ""
+            return Result()
+
+        editors = {
+            "claude_code": True,
+            "cursor": True,
+            "codex": True,
+            "windsurf": True,
+        }
+
+        with patch.object(install.subprocess, "run", side_effect=fake_run), \
+             patch.object(install, "get_platform", return_value="mac"):
+            success = install.configure_mcp(editors)
+
+        self.assertTrue(success)
+
+        claude_config = self.temp_home / ".claude.json"
+        cursor_config = self.temp_home / ".cursor" / "mcp.json"
+        codex_config = self.temp_home / ".codex" / "config.toml"
+        windsurf_config = self.temp_home / ".codeium" / "windsurf" / "mcp_config.json"
+
+        self.assertTrue(claude_config.exists())
+        self.assertTrue(cursor_config.exists())
+        self.assertTrue(codex_config.exists())
+        self.assertTrue(windsurf_config.exists())
+
+        self.assertIn("fixonce", json.loads(claude_config.read_text(encoding="utf-8"))["mcpServers"])
+        self.assertIn("fixonce", json.loads(cursor_config.read_text(encoding="utf-8"))["mcpServers"])
+        self.assertIn("[mcp_servers.fixonce]", codex_config.read_text(encoding="utf-8"))
+        self.assertIn("fixonce", json.loads(windsurf_config.read_text(encoding="utf-8"))["mcpServers"])
+
+    def test_sync_rules_writes_global_rules_without_duplication(self):
+        with patch.object(install, "configure_claude_hooks", return_value=True), \
+             patch.object(install, "get_platform", return_value="mac"):
+            first = install.sync_rules()
+            second = install.sync_rules()
+
+        self.assertTrue(first)
+        self.assertTrue(second)
+
+        claude_rules = (self.temp_home / ".claude" / "CLAUDE.md").read_text(encoding="utf-8")
+        codex_rules = (self.temp_home / ".codex" / "AGENTS.md").read_text(encoding="utf-8")
+        windsurf_rules = (self.temp_home / ".codeium" / "windsurf" / "memories" / "global_rules.md").read_text(encoding="utf-8")
+        cursor_settings = json.loads((self.temp_home / "Library" / "Application Support" / "Cursor" / "User" / "settings.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(claude_rules.count(install.FIXONCE_RULES_START), 1)
+        self.assertEqual(codex_rules.count(install.FIXONCE_RULES_START), 1)
+        self.assertEqual(windsurf_rules.count(install.FIXONCE_RULES_START), 1)
+        self.assertIn("fo_init", cursor_settings["cursor.general.aiRules"])
+        self.assertIn("Call it once per session", cursor_settings["cursor.general.aiRules"])
+
+    def test_system_status_detects_windsurf_configuration(self):
+        windsurf_config = self.temp_home / ".codeium" / "windsurf" / "mcp_config.json"
+        windsurf_config.parent.mkdir(parents=True, exist_ok=True)
+        windsurf_config.write_text(json.dumps({"mcpServers": {"fixonce": {"command": "python"}}}), encoding="utf-8")
+
+        with patch.object(system_status, "_load_runtime_ai_status", return_value={}), \
+             patch.object(system_status, "_detect_installed_clients", return_value={
+                 "codex": False,
+                 "claude": False,
+                 "cursor": False,
+                 "windsurf": True,
+             }):
+            status = system_status._check_mcp()
+
+        self.assertTrue(status.windsurf)
+        self.assertTrue(status.clients["windsurf"].configured)
+        self.assertEqual(status.clients["windsurf"].config_scope, "global")
+
+
+if __name__ == "__main__":
+    unittest.main()

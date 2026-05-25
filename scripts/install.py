@@ -12,6 +12,7 @@ import platform
 import subprocess
 import re
 import time
+import textwrap
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -26,6 +27,9 @@ FASTMCP_ENV = {
     "FASTMCP_SHOW_CLI_BANNER": "false",
     "FASTMCP_CHECK_FOR_UPDATES": "off",
 }
+
+FIXONCE_RULES_START = "<!-- FIXONCE-AUTO-INIT:START -->"
+FIXONCE_RULES_END = "<!-- FIXONCE-AUTO-INIT:END -->"
 
 # Colors for terminal (work on both platforms with colorama fallback)
 class Colors:
@@ -256,6 +260,85 @@ def _configure_codex_mcp_file(path: Path, server_name: str, config: dict):
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(new_content, encoding='utf-8')
+
+
+def _load_text_asset(filename: str) -> str:
+    """Load a text asset from the data directory."""
+    path = ROOT / "data" / filename
+    return path.read_text(encoding="utf-8").strip()
+
+
+def _managed_rules_block(content: str) -> str:
+    """Wrap shared rules content in managed markers for idempotent updates."""
+    return f"{FIXONCE_RULES_START}\n{content.strip()}\n{FIXONCE_RULES_END}"
+
+
+def _upsert_managed_block(existing: str, content: str) -> str:
+    """Insert or replace the managed FixOnce rules block."""
+    block = _managed_rules_block(content)
+    pattern = re.compile(
+        rf"{re.escape(FIXONCE_RULES_START)}.*?{re.escape(FIXONCE_RULES_END)}",
+        re.DOTALL,
+    )
+    if pattern.search(existing):
+        updated = pattern.sub(block, existing)
+    else:
+        base = existing.rstrip()
+        updated = f"{base}\n\n{block}" if base else block
+    return updated.rstrip() + "\n"
+
+
+def _write_managed_block(path: Path, content: str):
+    """Write a managed rules block to a text file without duplicating content."""
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_upsert_managed_block(existing, content), encoding="utf-8")
+
+
+def _build_cursor_user_rules() -> str:
+    """Build plain-text Cursor user rules for auto-init."""
+    return textwrap.dedent(
+        """
+        FixOnce should be used automatically at the first meaningful user message in every new session.
+
+        First-message examples: hi, hello, hey, היי, מה מצבנו, continue.
+
+        On the first meaningful user message:
+        1. Call fo_init(cwd="/path/to/project") silently.
+        2. Call it once per session unless the user explicitly asks to reconnect or the session is reset.
+        3. Show the fo_init opener exactly once.
+        4. Do not paraphrase the opener.
+        5. Do not add a duplicate opener or a second Ready. line.
+
+        If fo_init returns ACTION_REQUIRED, execute it immediately and continue.
+
+        During work:
+        - Before debugging, call fo_search(query).
+        - If browser failures matter, call fo_errors().
+        - After meaningful progress, call fo_sync(last_change, next_step).
+        - After fixing a bug, call fo_solved(error, solution).
+        - Record important decisions with fo_decide(text, reason).
+        """
+    ).strip()
+
+
+def _configure_windsurf_mcp_file(path: Path, server_config: dict):
+    """Write or update Windsurf's global MCP config."""
+    _configure_mcp_file(path, server_config)
+
+
+def _configure_cursor_user_rules(path: Path):
+    """Write Cursor global user rules into settings.json."""
+    existing = {}
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+
+    existing["cursor.general.aiRules"] = _build_cursor_user_rules()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
 
 def run_command(cmd: list, silent: bool = False) -> tuple:
     """Run a command and return (success, output)"""
@@ -638,6 +721,7 @@ def detect_editors() -> dict:
         'claude_code': False,
         'cursor': False,
         'codex': False,
+        'windsurf': False,
         'vscode': False,
         'copilot': False
     }
@@ -654,6 +738,10 @@ def detect_editors() -> dict:
 
         # Check for Cursor
         editors['cursor'] = Path('/Applications/Cursor.app').exists()
+        editors['windsurf'] = (
+            Path('/Applications/Windsurf.app').exists()
+            or (Path.home() / '.codeium' / 'windsurf').exists()
+        )
 
         # Check for VS Code (GitHub Copilot runs inside VS Code)
         editors['vscode'] = Path('/Applications/Visual Studio Code.app').exists()
@@ -676,6 +764,11 @@ def detect_editors() -> dict:
             (local_app_data / 'Programs' / 'Cursor').exists() or
             (local_app_data / 'Programs' / 'cursor').exists()
         )
+        editors['windsurf'] = (
+            (local_app_data / 'Programs' / 'Windsurf').exists() or
+            (local_app_data / 'Programs' / 'windsurf').exists() or
+            (Path.home() / '.codeium' / 'windsurf').exists()
+        )
 
         # VS Code
         editors['vscode'] = (local_app_data / 'Programs' / 'Microsoft VS Code').exists()
@@ -683,6 +776,7 @@ def detect_editors() -> dict:
     else:
         success, _ = run_command(['which', 'codex'])
         editors['codex'] = success or (Path.home() / '.codex').exists()
+        editors['windsurf'] = (Path.home() / '.codeium' / 'windsurf').exists()
 
     # Print results
     for editor, installed in editors.items():
@@ -705,21 +799,36 @@ def get_mcp_config_paths() -> dict:
         # Claude Code uses ~/.claude.json (NOT ~/.claude/settings.json)
         paths['claude_code'] = home / '.claude.json'
         paths['cursor'] = home / '.cursor' / 'mcp.json'
+        paths['windsurf'] = home / '.codeium' / 'windsurf' / 'mcp_config.json'
 
     elif current_platform == 'windows':
         app_data = Path(os.environ.get('APPDATA', home / 'AppData' / 'Roaming'))
         paths['claude_code'] = home / '.claude.json'
         paths['cursor'] = app_data / 'Cursor' / 'mcp.json'
+        paths['windsurf'] = home / '.codeium' / 'windsurf' / 'mcp_config.json'
 
     else:  # Linux
         paths['claude_code'] = home / '.claude.json'
         paths['cursor'] = home / '.cursor' / 'mcp.json'
+        paths['windsurf'] = home / '.codeium' / 'windsurf' / 'mcp_config.json'
 
     return paths
 
+
+def get_cursor_settings_path() -> Path:
+    """Return Cursor's user settings path for the current platform."""
+    home = Path.home()
+    current_platform = get_platform()
+    if current_platform == "mac":
+        return home / "Library" / "Application Support" / "Cursor" / "User" / "settings.json"
+    if current_platform == "windows":
+        app_data = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
+        return app_data / "Cursor" / "User" / "settings.json"
+    return home / ".config" / "Cursor" / "User" / "settings.json"
+
 def configure_mcp(editors: dict) -> bool:
     """Configure MCP for detected editors"""
-    print(f"\n{Colors.BLUE}[3/5]{Colors.END} Configuring MCP (AI Memory Connection)...")
+    print(f"\n{Colors.BLUE}[3/5]{Colors.END} Connecting AI apps...")
 
     fixonce_dir = get_fixonce_dir()
     mcp_server_path = fixonce_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py"
@@ -820,8 +929,18 @@ def configure_mcp(editors: dict) -> bool:
         except Exception as e:
             print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Codex: {e}")
 
+    # Configure Windsurf
+    if editors.get('windsurf', False):
+        windsurf_config = Path.home() / '.codeium' / 'windsurf' / 'mcp_config.json'
+        try:
+            _configure_windsurf_mcp_file(windsurf_config, stdio_config)
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Windsurf configured: {windsurf_config}")
+            configured_count += 1
+        except Exception as e:
+            print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Windsurf: {e}")
+
     if configured_count == 0:
-        print(f"  {Colors.YELLOW}[INFO]{Colors.END} No editors to configure (install Codex, Claude Code, or Cursor first)")
+        print(f"  {Colors.YELLOW}[INFO]{Colors.END} No supported AI apps detected yet")
 
     # Create project-level .mcp.json with CORRECT paths for this machine
     # This is what Claude Code reads when opening the project
@@ -867,106 +986,37 @@ def _configure_mcp_file(path: Path, server_config: dict):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(existing_config, f, indent=2)
 
-# ============ Step 4: Configure Editor Rules ============
-
-FIXONCE_RULES = """# FixOnce Protocol
-
-You have **persistent memory** via FixOnce.
-
-## Start: `fo_init()`
-
-**FIRST THING in every conversation — silently:**
-```
-fo_init(cwd="/path/to/project")
-```
-
-**Required output:**
-1. `fo_init` returns the final human opener, including `Ready.`
-2. Display the `fo_init` opener exactly once
-3. Do not summarize, paraphrase, or repeat it
-4. Do not add `Ready.` separately if the opener already includes it
-
-**Do not:** "I'll start...", "Checking...", setup explanations, or "What should we tackle next?" when `fo_init` already includes Next.
-
-## Error Handling
-
-When `fo_errors()` returns **AUTO-FIX READY**:
-```
-fo_errors()  → sees AUTO-FIX READY
-fo_apply()   → get fix (MANDATORY)
-[apply fix]  → edit code
-fo_solved()  → record it
-fo_sync()    → update context
-```
-
-## Tools
-
-| Tool | When |
-|------|------|
-| `fo_init(cwd)` | Start of conversation |
-| `fo_errors()` | Check browser errors |
-| `fo_apply()` | When AUTO-FIX READY |
-| `fo_search(query)` | Search past solutions |
-| `fo_solved(error, solution)` | After fixing |
-| `fo_sync(last_change)` | After edits |
-| `fo_decide(text, reason)` | Record decision |
-
-Core principle: Never debug the same bug twice."""
-
-
-def configure_cursor_rules() -> bool:
-    """Create .cursorrules in FixOnce project directory.
-
-    Note: Cursor reads .cursorrules from each project root, not from a global location.
-    Users need to copy this file to their own projects, or add rules via Cursor Settings UI.
-    """
-    fixonce_dir = get_fixonce_dir()
-    cursorrules_path = fixonce_dir / ".cursorrules"
-
-    try:
-        with open(cursorrules_path, 'w', encoding='utf-8') as f:
-            f.write(f"# FixOnce - AI Memory Protocol\n\n{FIXONCE_RULES}\n")
-        return True
-    except Exception as e:
-        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not create .cursorrules: {e}")
-        return False
-
-
 def sync_rules() -> bool:
     """Sync rules files for all editors"""
-    print(f"\n{Colors.BLUE}[4/5]{Colors.END} Configuring editor rules...")
+    print(f"\n{Colors.BLUE}[4/5]{Colors.END} Preparing AI startup behavior...")
 
     fixonce_dir = get_fixonce_dir()
+    shared_rules = _load_text_asset("global-agent-rules.md")
+    claude_rules = _load_text_asset("global-claude-md.md")
 
-    # Create .cursorrules in project
-    if configure_cursor_rules():
-        print(f"  {Colors.GREEN}[OK]{Colors.END} .cursorrules created (for Cursor)")
-    else:
-        print(f"  {Colors.YELLOW}[SKIP]{Colors.END} Could not create .cursorrules")
-
-    # Note: GitHub Copilot uses prompts from dashboard, no global rules file
-
-    # Configure Claude Code CLAUDE.md (always update to latest rules)
-    claude_md_path = Path.home() / ".claude" / "CLAUDE.md"
     try:
-        claude_md_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Read existing content if any
-        existing_content = ""
-        if claude_md_path.exists():
-            with open(claude_md_path, 'r', encoding='utf-8') as f:
-                existing_content = f.read()
-
-        # Check if FixOnce rules are already there
-        if "FixOnce" not in existing_content:
-            # Append FixOnce rules
-            with open(claude_md_path, 'a', encoding='utf-8') as f:
-                f.write(f"\n\n{FIXONCE_RULES}\n")
-            print(f"  {Colors.GREEN}[OK]{Colors.END} Added FixOnce rules to CLAUDE.md")
-        else:
-            print(f"  {Colors.GREEN}[OK]{Colors.END} CLAUDE.md already has FixOnce rules")
+        _write_managed_block(Path.home() / ".claude" / "CLAUDE.md", claude_rules)
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Claude startup rules installed")
     except Exception as e:
-        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not update CLAUDE.md: {e}")
+        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not update Claude rules: {e}")
+
+    try:
+        _configure_cursor_user_rules(get_cursor_settings_path())
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Cursor startup rules installed")
+    except Exception as e:
+        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not update Cursor rules: {e}")
+
+    try:
+        _write_managed_block(Path.home() / ".codex" / "AGENTS.md", shared_rules)
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Codex startup rules installed")
+    except Exception as e:
+        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not update Codex rules: {e}")
+
+    try:
+        _write_managed_block(Path.home() / ".codeium" / "windsurf" / "memories" / "global_rules.md", shared_rules)
+        print(f"  {Colors.GREEN}[OK]{Colors.END} Windsurf startup rules installed")
+    except Exception as e:
+        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not update Windsurf rules: {e}")
 
     # Configure Claude Code hooks (CRITICAL for auto-connect!)
     configure_claude_hooks(fixonce_dir)
@@ -2056,11 +2106,18 @@ if __name__ == "__main__":
                         help='Run Doctor mode to diagnose and repair issues')
     parser.add_argument('--preflight', '-p', action='store_true',
                         help='Run only preflight checks')
+    parser.add_argument('--mcp-only', action='store_true',
+                        help='Configure supported AI apps and startup rules only')
     args = parser.parse_args()
 
     if args.doctor:
         print_banner()
         run_doctor()
+    elif args.mcp_only:
+        print_banner()
+        editors = detect_editors()
+        configure_mcp(editors)
+        sync_rules()
     elif args.preflight:
         print_banner()
         run_preflight_checks()

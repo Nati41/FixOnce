@@ -50,6 +50,7 @@ class MCPStatus:
     claude_code: bool = False
     cursor: bool = False
     codex: bool = False
+    windsurf: bool = False
     clients: Dict[str, AIClientStatus] = field(default_factory=dict)
     error: Optional[str] = None
 
@@ -148,6 +149,11 @@ def _detect_installed_clients() -> Dict[str, bool]:
             or Path("/Applications/Cursor.app").exists()
             or Path.home().joinpath("AppData", "Roaming", "Cursor").exists()
         ),
+        "windsurf": bool(
+            (home / ".codeium" / "windsurf").exists()
+            or Path("/Applications/Windsurf.app").exists()
+            or Path.home().joinpath("AppData", "Roaming", "Codeium", "Windsurf").exists()
+        ),
     }
     return checks
 
@@ -181,7 +187,7 @@ def _check_engine(port: int = 5000) -> EngineStatus:
 
 
 def _check_mcp() -> MCPStatus:
-    """Check MCP configuration in Codex, Claude Code, and Cursor."""
+    """Check MCP configuration in Codex, Claude Code, Cursor, and Windsurf."""
     status = MCPStatus()
     home = Path.home()
     runtime_clients = _load_runtime_ai_status()
@@ -191,6 +197,7 @@ def _check_mcp() -> MCPStatus:
         "codex": AIClientStatus(name="Codex", installed=installed_clients.get("codex", False)),
         "claude": AIClientStatus(name="Claude Code", installed=installed_clients.get("claude", False)),
         "cursor": AIClientStatus(name="Cursor", installed=installed_clients.get("cursor", False)),
+        "windsurf": AIClientStatus(name="Windsurf", installed=installed_clients.get("windsurf", False)),
     }
 
     for key, client in clients.items():
@@ -281,9 +288,21 @@ def _check_mcp() -> MCPStatus:
         except Exception as e:
             clients["cursor"].error = str(e)
 
+    windsurf_mcp = home / ".codeium" / "windsurf" / "mcp_config.json"
+    if windsurf_mcp.exists():
+        try:
+            with open(windsurf_mcp, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            if "fixonce" in config.get("mcpServers", {}):
+                clients["windsurf"].configured = True
+                clients["windsurf"].config_scope = "global"
+        except Exception as e:
+            clients["windsurf"].error = str(e)
+
     status.codex = clients["codex"].configured
     status.claude_code = clients["claude"].configured
     status.cursor = clients["cursor"].configured
+    status.windsurf = clients["windsurf"].configured
     status.clients = clients
     status.configured = any(client.configured for client in clients.values())
 

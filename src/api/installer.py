@@ -175,6 +175,28 @@ def configure_mcp():
     except Exception:
         pass
 
+    # Configure Windsurf
+    try:
+        windsurf_config = Path.home() / '.codeium' / 'windsurf' / 'mcp_config.json'
+        windsurf_config.parent.mkdir(parents=True, exist_ok=True)
+
+        existing = {}
+        if windsurf_config.exists():
+            with open(windsurf_config, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+
+        if 'mcpServers' not in existing:
+            existing['mcpServers'] = {}
+
+        existing['mcpServers']['fixonce'] = stdio_config
+
+        with open(windsurf_config, 'w', encoding='utf-8') as f:
+            json.dump(existing, f, indent=2)
+
+        configured.append("Windsurf")
+    except Exception:
+        pass
+
     return jsonify({
         "status": "ok",
         "configured": configured
