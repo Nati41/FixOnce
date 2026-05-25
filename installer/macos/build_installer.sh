@@ -83,6 +83,7 @@ echo "[3/5] Copying FixOnce files..."
 cp -R "$PROJECT_ROOT/src" "$RESOURCES/"
 cp -R "$PROJECT_ROOT/scripts" "$RESOURCES/"
 cp -R "$PROJECT_ROOT/data" "$RESOURCES/"
+cp -R "$PROJECT_ROOT/hooks" "$RESOURCES/" 2>/dev/null || true
 cp -R "$PROJECT_ROOT/extension" "$RESOURCES/" 2>/dev/null || true
 cp "$PROJECT_ROOT/requirements.txt" "$RESOURCES/"
 cp "$PROJECT_ROOT/CLAUDE.md" "$RESOURCES/" 2>/dev/null || true
@@ -755,7 +756,7 @@ wait_for_runtime_health() {
         fi
 
         if [ $((attempt % 5)) -eq 0 ]; then
-            log "  Waiting for FixOnce to finish starting... ($attempt/$max_attempts)"
+            log "  Waiting for FixOnce to finish starting... ($attempt/$max_attempts)" >&2
         fi
     done
 
@@ -815,6 +816,10 @@ verify_and_enable_service() {
         fi
 
         if port=$(wait_for_runtime_health 35); then
+            if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+                log "${RED}✗${NC} Invalid runtime port detected: $port"
+                return 1
+            fi
             log "${GREEN}✓${NC} FixOnce is ready on port $port"
             write_install_state "READY" "FixOnce is ready"
             mkdir -p "$HOME/.fixonce"
@@ -850,7 +855,6 @@ open_dashboard() {
     fi
 
     DASHBOARD_URL="http://localhost:$port"
-    log "  Opening: $DASHBOARD_URL"
     open "$DASHBOARD_URL"
     log "${GREEN}✓${NC} FixOnce opened at $DASHBOARD_URL"
 }
