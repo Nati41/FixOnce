@@ -3,6 +3,7 @@ FixOnce Installer API
 Endpoints for the web-based installer.
 """
 
+import json
 import subprocess
 import sys
 import re
@@ -69,6 +70,25 @@ def _write_codex_config(path: Path, server_name: str, config: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text((content + "\n\n" + "\n".join(lines) if content else "\n".join(lines)) + "\n", encoding='utf-8')
 
+
+def _configure_json_mcp_file(path: Path, server_name: str, config: dict):
+    """Write or update a JSON MCP config file."""
+    existing = {}
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+
+    if not isinstance(existing, dict):
+        existing = {}
+
+    existing.setdefault("mcpServers", {})
+    existing["mcpServers"][server_name] = config
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+
 def _is_installed() -> bool:
     """Check if FixOnce is installed."""
     request_port = request.host.split(':')[-1] if ':' in request.host else None
@@ -117,6 +137,13 @@ def configure_mcp():
     mcp_server = project_root / "src" / "mcp_server" / "mcp_memory_server_v2.py"
     src_path = str(project_root / "src")
 
+    if not mcp_server.exists():
+        return jsonify({
+            "status": "error",
+            "configured": [],
+            "error": f"MCP server not found: {mcp_server}",
+        }), 500
+
     # Find fastmcp
     fastmcp_path = None
     try:
@@ -127,6 +154,8 @@ def configure_mcp():
         pass
 
     stdio_config = _build_stdio_mcp_config(mcp_server, src_path, fastmcp_path)
+
+    claude_config = Path.home() / '.claude.json'
 
     # Try to configure Claude Code
     try:
@@ -145,24 +174,17 @@ def configure_mcp():
     except Exception:
         pass
 
+    try:
+        _configure_json_mcp_file(claude_config, 'fixonce', stdio_config)
+        if "Claude Code" not in configured:
+            configured.append("Claude Code")
+    except Exception:
+        pass
+
     # Configure Cursor
     try:
         cursor_config = Path.home() / '.cursor' / 'mcp.json'
-        cursor_config.parent.mkdir(parents=True, exist_ok=True)
-
-        existing = {}
-        if cursor_config.exists():
-            with open(cursor_config, 'r') as f:
-                existing = json.load(f)
-
-        if 'mcpServers' not in existing:
-            existing['mcpServers'] = {}
-
-        existing['mcpServers']['fixonce'] = stdio_config
-
-        with open(cursor_config, 'w') as f:
-            json.dump(existing, f, indent=2)
-
+        _configure_json_mcp_file(cursor_config, 'fixonce', stdio_config)
         configured.append("Cursor")
     except Exception:
         pass
@@ -178,21 +200,7 @@ def configure_mcp():
     # Configure Windsurf
     try:
         windsurf_config = Path.home() / '.codeium' / 'windsurf' / 'mcp_config.json'
-        windsurf_config.parent.mkdir(parents=True, exist_ok=True)
-
-        existing = {}
-        if windsurf_config.exists():
-            with open(windsurf_config, 'r', encoding='utf-8') as f:
-                existing = json.load(f)
-
-        if 'mcpServers' not in existing:
-            existing['mcpServers'] = {}
-
-        existing['mcpServers']['fixonce'] = stdio_config
-
-        with open(windsurf_config, 'w', encoding='utf-8') as f:
-            json.dump(existing, f, indent=2)
-
+        _configure_json_mcp_file(windsurf_config, 'fixonce', stdio_config)
         configured.append("Windsurf")
     except Exception:
         pass

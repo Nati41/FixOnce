@@ -802,6 +802,118 @@ def get_cursor_settings_path() -> Path:
         return app_data / "Cursor" / "User" / "settings.json"
     return home / ".config" / "Cursor" / "User" / "settings.json"
 
+
+def _find_fastmcp_path() -> str | None:
+    """Locate fastmcp if available."""
+    try:
+        result = subprocess.run(['which', 'fastmcp'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+
+    possible_paths = [
+        Path(sys.executable).parent / 'fastmcp',
+        Path('/usr/local/bin/fastmcp'),
+        Path.home() / '.local' / 'bin' / 'fastmcp',
+    ]
+    for p in possible_paths:
+        if p.exists():
+            return str(p)
+    return None
+
+
+def build_install_stdio_config(fixonce_dir: Path | None = None) -> dict:
+    """Build the shared stdio config used by installer and dashboard retry actions."""
+    fixonce_dir = fixonce_dir or get_fixonce_dir()
+    mcp_server_path = fixonce_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py"
+    src_path = str(fixonce_dir / "src")
+    python_path = sys.executable
+    fastmcp_path = _find_fastmcp_path()
+    return _build_stdio_mcp_config(
+        python_path,
+        str(mcp_server_path),
+        src_path,
+        fastmcp_path
+    )
+
+
+def configure_client_mcp(client: str, stdio_config: dict | None = None, editors: dict | None = None) -> bool:
+    """Configure MCP for a single client without touching installer core flow."""
+    stdio_config = stdio_config or build_install_stdio_config()
+    editors = editors or detect_editors()
+    client = (client or "").strip().lower()
+
+    try:
+        if client == "claude":
+            if editors.get('claude_code', False):
+                try:
+                    subprocess.run(['claude', 'mcp', 'remove', 'fixonce', '-s', 'user'],
+                                 capture_output=True, timeout=10)
+                    mcp_json = json.dumps(stdio_config)
+                    result = subprocess.run(
+                        ['claude', 'mcp', 'add-json', 'fixonce', mcp_json, '-s', 'user'],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    if result.returncode == 0:
+                        print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code configured via CLI")
+                except Exception as e:
+                    print(f"  {Colors.YELLOW}[WARN]{Colors.END} Claude CLI not available: {e}")
+
+            _configure_mcp_file(Path.home() / '.claude.json', stdio_config)
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code configured: {Path.home() / '.claude.json'}")
+            return True
+
+        if client == "cursor":
+            cursor_path = Path.home() / '.cursor' / 'mcp.json'
+            _configure_mcp_file(cursor_path, stdio_config)
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Cursor configured: {cursor_path}")
+            return True
+
+        if client == "codex":
+            codex_config = Path.home() / '.codex' / 'config.toml'
+            _configure_codex_mcp_file(codex_config, 'fixonce', stdio_config)
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Codex configured: {codex_config}")
+            return True
+
+        if client == "windsurf":
+            windsurf_config = Path.home() / '.codeium' / 'windsurf' / 'mcp_config.json'
+            _configure_windsurf_mcp_file(windsurf_config, stdio_config)
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Windsurf configured: {windsurf_config}")
+            return True
+    except Exception as e:
+        print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure {client}: {e}")
+        return False
+
+    raise ValueError(f"Unsupported client: {client}")
+
+
+def sync_client_rules(client: str, fixonce_dir: Path | None = None) -> bool:
+    """Sync rules for a single client."""
+    fixonce_dir = fixonce_dir or get_fixonce_dir()
+    client = (client or "").strip().lower()
+    shared_rules = _load_text_asset("global-agent-rules.md")
+    claude_rules = _load_text_asset("global-claude-md.md")
+
+    try:
+        if client == "claude":
+            _write_managed_block(Path.home() / ".claude" / "CLAUDE.md", claude_rules)
+            configure_claude_hooks(fixonce_dir)
+            return True
+        if client == "cursor":
+            _configure_cursor_user_rules(get_cursor_settings_path())
+            return True
+        if client == "codex":
+            _write_managed_block(Path.home() / ".codex" / "AGENTS.md", shared_rules)
+            return True
+        if client == "windsurf":
+            _write_managed_block(Path.home() / ".codeium" / "windsurf" / "memories" / "global_rules.md", shared_rules)
+            return True
+    except Exception:
+        return False
+
+    raise ValueError(f"Unsupported client: {client}")
+
 def configure_mcp(editors: dict) -> bool:
     """Configure MCP for detected editors"""
     print(f"\n{Colors.BLUE}[3/5]{Colors.END} Connecting AI apps...")
@@ -819,94 +931,25 @@ def configure_mcp(editors: dict) -> bool:
     except Exception:
         pass
 
-    src_path = str(fixonce_dir / "src")
-    python_path = sys.executable
     configured_count = 0
-
-    # Find fastmcp path
-    fastmcp_path = None
-    try:
-        result = subprocess.run(['which', 'fastmcp'], capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            fastmcp_path = result.stdout.strip()
-    except Exception:
-        pass
-
-    # Fallback paths for fastmcp
-    if not fastmcp_path:
-        possible_paths = [
-            Path(sys.executable).parent / 'fastmcp',
-            Path('/usr/local/bin/fastmcp'),
-            Path.home() / '.local' / 'bin' / 'fastmcp',
-        ]
-        for p in possible_paths:
-            if p.exists():
-                fastmcp_path = str(p)
-                break
-
-    stdio_config = _build_stdio_mcp_config(
-        python_path,
-        str(mcp_server_path),
-        src_path,
-        fastmcp_path
-    )
+    stdio_config = build_install_stdio_config(fixonce_dir)
 
     # Always write global user config for Claude Code.
-    claude_cli_success = False
-    if editors.get('claude_code', False):
-        try:
-            subprocess.run(['claude', 'mcp', 'remove', 'fixonce', '-s', 'user'],
-                         capture_output=True, timeout=10)
-
-            mcp_json = json.dumps(stdio_config)
-            result = subprocess.run(
-                ['claude', 'mcp', 'add-json', 'fixonce', mcp_json, '-s', 'user'],
-                capture_output=True, text=True, timeout=10
-            )
-
-            if result.returncode == 0:
-                print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code configured via CLI")
-                claude_cli_success = True
-        except Exception as e:
-            print(f"  {Colors.YELLOW}[WARN]{Colors.END} Claude CLI not available: {e}")
-
-    try:
-        _configure_mcp_file(Path.home() / '.claude.json', stdio_config)
-        if claude_cli_success:
-            print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code config file verified: {Path.home() / '.claude.json'}")
-        else:
-            print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code configured via file")
+    if configure_client_mcp("claude", stdio_config=stdio_config, editors=editors):
         configured_count += 1
-    except Exception as e:
-        print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Claude Code: {e}")
 
     # Configure Cursor using file method
     if editors.get('cursor', False):
-        cursor_path = Path.home() / '.cursor' / 'mcp.json'
-        try:
-            _configure_mcp_file(cursor_path, stdio_config)
-            print(f"  {Colors.GREEN}[OK]{Colors.END} Cursor configured: {cursor_path}")
+        if configure_client_mcp("cursor", stdio_config=stdio_config, editors=editors):
             configured_count += 1
-        except Exception as e:
-            print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Cursor: {e}")
 
     # Always write global user config for Codex.
-    codex_config = Path.home() / '.codex' / 'config.toml'
-    try:
-        _configure_codex_mcp_file(codex_config, 'fixonce', stdio_config)
-        print(f"  {Colors.GREEN}[OK]{Colors.END} Codex configured: {codex_config}")
+    if configure_client_mcp("codex", stdio_config=stdio_config, editors=editors):
         configured_count += 1
-    except Exception as e:
-        print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Codex: {e}")
 
     # Always write global user config for Windsurf.
-    windsurf_config = Path.home() / '.codeium' / 'windsurf' / 'mcp_config.json'
-    try:
-        _configure_windsurf_mcp_file(windsurf_config, stdio_config)
-        print(f"  {Colors.GREEN}[OK]{Colors.END} Windsurf configured: {windsurf_config}")
+    if configure_client_mcp("windsurf", stdio_config=stdio_config, editors=editors):
         configured_count += 1
-    except Exception as e:
-        print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to configure Windsurf: {e}")
 
     if configured_count == 0:
         print(f"  {Colors.YELLOW}[INFO]{Colors.END} No supported AI apps detected yet")

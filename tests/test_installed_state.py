@@ -1,4 +1,4 @@
-import importlib
+import json
 import sys
 import tempfile
 import unittest
@@ -97,6 +97,39 @@ class TestInstalledState(unittest.TestCase):
             response = self.client.get("/", headers={"Host": "localhost:5001"})
 
         self.assertEqual(response.status_code, 200)
+
+    def test_installer_configure_mcp_writes_json_clients(self):
+        temp_home_dir = tempfile.TemporaryDirectory(prefix="fixonce-installer-home-")
+        temp_home = Path(temp_home_dir.name)
+
+        def fake_run(cmd, capture_output=False, text=False, timeout=None):
+            class Result:
+                returncode = 1
+                stdout = ""
+                stderr = ""
+            return Result()
+
+        try:
+            with patch("pathlib.Path.home", return_value=temp_home), \
+                 patch.object(installer_module.subprocess, "run", side_effect=fake_run):
+                response = self.client.post("/api/installer/configure-mcp")
+
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            self.assertEqual(payload["status"], "ok")
+            self.assertIn("Claude Code", payload["configured"])
+            self.assertIn("Cursor", payload["configured"])
+            self.assertIn("Windsurf", payload["configured"])
+
+            claude_config = json.loads((temp_home / ".claude.json").read_text(encoding="utf-8"))
+            cursor_config = json.loads((temp_home / ".cursor" / "mcp.json").read_text(encoding="utf-8"))
+            windsurf_config = json.loads((temp_home / ".codeium" / "windsurf" / "mcp_config.json").read_text(encoding="utf-8"))
+
+            self.assertIn("fixonce", claude_config["mcpServers"])
+            self.assertIn("fixonce", cursor_config["mcpServers"])
+            self.assertIn("fixonce", windsurf_config["mcpServers"])
+        finally:
+            temp_home_dir.cleanup()
 
 
 if __name__ == "__main__":

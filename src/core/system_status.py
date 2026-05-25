@@ -142,15 +142,19 @@ def _detect_installed_clients() -> Dict[str, bool]:
     """Best-effort local install detection for supported AI clients."""
     home = Path.home()
     checks = {
-        "codex": bool(shutil.which("codex") or (home / ".codex").exists()),
-        "claude": bool(shutil.which("claude") or (home / ".claude").exists() or (home / ".claude.json").exists()),
+        "codex": bool(shutil.which("codex") or Path("/Applications/Codex.app").exists()),
+        "claude": bool(
+            shutil.which("claude")
+            or Path("/Applications/Claude.app").exists()
+            or Path("/Applications/Claude Code.app").exists()
+        ),
         "cursor": bool(
-            (home / ".cursor").exists()
+            shutil.which("cursor")
             or Path("/Applications/Cursor.app").exists()
             or Path.home().joinpath("AppData", "Roaming", "Cursor").exists()
         ),
         "windsurf": bool(
-            (home / ".codeium" / "windsurf").exists()
+            shutil.which("windsurf")
             or Path("/Applications/Windsurf.app").exists()
             or Path.home().joinpath("AppData", "Roaming", "Codeium", "Windsurf").exists()
         ),
