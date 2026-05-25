@@ -6,933 +6,310 @@
 <title>Install FixOnce</title>
 <style>
 :root {
-  --bg: #0a0c10;
-  --surface: #12151a;
-  --border: #1e2430;
-  --green: #00e676;
-  --amber: #ffb300;
-  --blue: #448aff;
-  --text: #e0e6ed;
-  --text-dim: #6b7785;
+  --bg: #f3efe6;
+  --ink: #1d1a16;
+  --muted: #6b6258;
+  --panel: rgba(255,255,255,0.72);
+  --line: rgba(29,26,22,0.08);
+  --accent: #0f8c6a;
+  --accent-deep: #0b6c52;
+  --sand: #efe5d3;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* { box-sizing: border-box; }
 
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  margin: 0;
   min-height: 100vh;
-  line-height: 1.6;
+  font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(15,140,106,0.18), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(219,181,111,0.22), transparent 36%),
+    linear-gradient(135deg, #f8f4ea 0%, #efe7d7 100%);
 }
 
-.container {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 48px 24px;
+.shell {
+  width: min(920px, calc(100% - 32px));
+  margin: 32px auto;
+  padding: 32px;
+  border-radius: 28px;
+  background: var(--panel);
+  border: 1px solid rgba(255,255,255,0.6);
+  box-shadow: 0 28px 80px rgba(40, 31, 18, 0.14);
+  backdrop-filter: blur(12px);
 }
 
-header {
-  text-align: center;
-  margin-bottom: 48px;
-}
-
-.logo {
-  width: 80px;
-  height: 80px;
-  margin-bottom: 16px;
+.eyebrow {
+  font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  margin-bottom: 18px;
 }
 
 h1 {
-  font-size: 32px;
-  font-weight: 700;
-  margin-bottom: 12px;
+  margin: 0 0 14px;
+  font-size: clamp(2.6rem, 6vw, 4.8rem);
+  line-height: 0.94;
+  letter-spacing: -0.04em;
 }
 
-.tagline {
-  color: var(--text-dim);
-  font-size: 16px;
-  max-width: 480px;
-  margin: 0 auto;
+.lede {
+  max-width: 620px;
+  margin: 0 0 26px;
+  font-size: 1.08rem;
+  line-height: 1.6;
+  color: var(--muted);
 }
 
-.section {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 32px;
-  margin-bottom: 24px;
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 28px;
 }
 
-.section.primary {
-  border-color: var(--green);
-  border-width: 2px;
+.pill {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.7);
+  border: 1px solid var(--line);
+  font: 600 13px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.card {
+  padding: 24px;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.74);
+  border: 1px solid var(--line);
+}
+
+.stack {
+  display: grid;
+  gap: 16px;
 }
 
 .hidden {
-  display: none !important;
+  display: none;
 }
 
-.status-grid {
-  display: grid;
-  gap: 12px;
-  margin: 20px 0 24px;
-}
-
-.status-row {
+.btn-row {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.status-row:last-child {
-  border-bottom: 0;
-}
-
-.status-label {
-  color: var(--text-dim);
-}
-
-.status-value {
-  color: var(--text);
-  font-weight: 600;
-  text-align: right;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.badge {
-  background: var(--green);
-  color: var(--bg);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-}
-
-.badge.secondary {
-  background: var(--border);
-  color: var(--text-dim);
-}
-
-.badge.placeholder {
-  background: var(--amber);
-  color: var(--bg);
-}
-
-h2 {
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.section p {
-  color: var(--text-dim);
-  margin-bottom: 24px;
-}
-
-.buttons {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
   flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
 }
 
 .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 24px;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  text-decoration: none;
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 14px 22px;
+  font: 600 15px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   cursor: pointer;
-  border: none;
-  transition: opacity 0.2s, transform 0.1s;
+  text-decoration: none;
+  transition: transform 140ms ease, opacity 140ms ease, background 140ms ease;
 }
 
-.btn:hover {
-  opacity: 0.9;
-}
-
-.btn:active {
-  transform: scale(0.98);
-}
+.btn:hover { opacity: 0.94; }
+.btn:active { transform: translateY(1px); }
 
 .btn-primary {
-  background: var(--green);
-  color: var(--bg);
-}
-
-.btn-secondary {
-  background: var(--border);
-  color: var(--text);
-}
-
-.btn-placeholder {
-  background: var(--amber);
-  color: var(--bg);
-  cursor: not-allowed;
-  opacity: 0.8;
-}
-
-.how-it-works {
-  background: rgba(0,230,118,0.05);
-  border-radius: 8px;
-  padding: 20px;
-}
-
-.how-it-works h3 {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 16px;
-  color: var(--green);
-}
-
-.steps {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.step {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.step-num {
-  width: 24px;
-  height: 24px;
-  background: var(--green);
-  color: var(--bg);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.step-text {
-  font-size: 14px;
-  color: var(--text);
-  padding-top: 2px;
-}
-
-.code-block {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px;
-  font-family: 'SF Mono', Monaco, monospace;
-  font-size: 13px;
-  overflow-x: auto;
-  position: relative;
-}
-
-.code-block pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.code-block .copy-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: var(--border);
-  border: none;
-  color: var(--text-dim);
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.code-block .copy-btn:hover {
-  background: var(--blue);
+  background: var(--accent);
   color: white;
 }
 
-.warning {
-  background: rgba(255,179,0,0.1);
-  border: 1px solid var(--amber);
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 24px;
-  font-size: 14px;
-  color: var(--amber);
+.btn-secondary {
+  background: var(--sand);
+  color: var(--ink);
 }
 
-.requirement {
-  font-size: 13px;
-  color: var(--text-dim);
-  margin-top: 16px;
-  padding: 12px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 6px;
+.progress-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
 }
 
-.requirement strong {
-  color: var(--text);
+.progress-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.76);
+  border: 1px solid var(--line);
+  font: 600 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.toast {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%) translateY(100px);
-  background: var(--green);
-  color: var(--bg);
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  opacity: 0;
-  transition: all 0.3s ease;
+.progress-item .mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15,140,106,0.14);
+  color: var(--accent-deep);
 }
 
-.toast.show {
-  transform: translateX(-50%) translateY(0);
-  opacity: 1;
+.advanced {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font: 500 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-@media (max-width: 600px) {
-  .buttons {
+.status-line {
+  font: 600 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--accent-deep);
+}
+
+@media (max-width: 720px) {
+  .shell {
+    width: calc(100% - 20px);
+    margin: 10px auto;
+    padding: 22px;
+    border-radius: 22px;
+  }
+
+  h1 {
+    font-size: 2.9rem;
+  }
+
+  .btn-row {
     flex-direction: column;
   }
 
   .btn {
-    justify-content: center;
+    text-align: center;
   }
 }
 </style>
 </head>
 <body>
-
-<div class="container">
-  <header>
-    <svg class="logo" viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="eyeTop" x1="16" y1="110" x2="204" y2="98" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#1F67C4"/><stop offset="0.55" stop-color="#2FA6E8"/><stop offset="1" stop-color="#39D86F"/>
-        </linearGradient>
-        <linearGradient id="eyeBottom" x1="16" y1="114" x2="204" y2="126" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#1A5CB5"/><stop offset="0.55" stop-color="#2498DE"/><stop offset="1" stop-color="#32CD69"/>
-        </linearGradient>
-      </defs>
-      <path d="M16 110C16 110 51 54 110 54C158 54 187 88 204 103" stroke="url(#eyeTop)" stroke-width="12" stroke-linecap="round"/>
-      <path d="M16 110C16 110 51 166 110 166C158 166 187 132 204 117" stroke="url(#eyeBottom)" stroke-width="12" stroke-linecap="round"/>
-      <circle cx="110" cy="110" r="41" stroke="#2BA4E2" stroke-width="11"/>
-      <path d="M83 88C90 79 100 73 112 70C124 67 136 69 146 76" stroke="#31CF6E" stroke-width="10" stroke-linecap="round"/>
-      <path d="M92 109L106 123L137 92" stroke="#2CCF6C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    <h1 id="page-title">Install FixOnce</h1>
-    <p class="tagline" id="page-tagline">FixOnce helps AI assistants remember project context, decisions, and past issues so you can work faster and more consistently.</p>
-  </header>
-
-  <section class="section primary hidden" id="installed-state">
-    <div class="section-header">
-      <h2>FixOnce is installed</h2>
-      <span class="badge">Connected</span>
-    </div>
-    <p id="installed-summary">The local FixOnce server is running.</p>
-
-    <div class="status-grid">
-      <div class="status-row">
-        <span class="status-label">Server</span>
-        <span class="status-value" id="server-origin">Checking...</span>
+  <main class="shell">
+    <section id="screen-install" class="stack">
+      <div class="eyebrow">FixOnce</div>
+      <h1>Install FixOnce</h1>
+      <p class="lede">Set up shared memory for Claude, Cursor, and Codex in one flow. No manual server steps.</p>
+      <div class="meta">
+        <div class="pill">Works with Claude</div>
+        <div class="pill">Works with Cursor</div>
+        <div class="pill">Works with Codex</div>
+        <div class="pill">About 2 minutes</div>
       </div>
-      <div class="status-row">
-        <span class="status-label">Port</span>
-        <span class="status-value" id="server-port">Checking...</span>
-      </div>
-      <div class="status-row">
-        <span class="status-label">Health</span>
-        <span class="status-value" id="server-health">Checking...</span>
-      </div>
-    </div>
-
-    <div class="buttons">
-      <a href="/" class="btn btn-primary" id="open-dashboard">Open Dashboard</a>
-      <button class="btn btn-secondary" onclick="copyActivationPrompt()">Copy Activation Step</button>
-    </div>
-
-    <div class="how-it-works">
-      <h3>Next</h3>
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <div class="step-text">Open a new AI session to activate the MCP connection</div>
-        </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <div class="step-text">Approve the FixOnce MCP tool if your AI client asks</div>
+      <div class="card">
+        <p class="lede" style="margin-bottom:0;">Use the FixOnce installer app from the DMG. It installs FixOnce, connects your AI tools, starts the background service, and opens FixOnce when everything is ready.</p>
+        <div class="btn-row">
+          <a class="btn btn-primary" id="install-button" href="https://github.com/Nati41/FixOnce/releases/latest">Install</a>
+          <a class="btn btn-secondary" href="/">Open FixOnce</a>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <div id="install-flow">
-  <!-- AI Install Section (Primary) -->
-  <section class="section primary">
-    <div class="section-header">
-      <h2>Install with AI</h2>
-      <span class="badge">Recommended</span>
-    </div>
-    <p>Let your AI assistant install and configure FixOnce for you.</p>
+    <section id="screen-progress" class="stack hidden">
+      <div class="eyebrow">Installing</div>
+      <h1>Setting things up</h1>
+      <p class="lede">FixOnce is taking care of the setup in the background.</p>
+      <div class="progress-list">
+        <div class="progress-item"><span class="mark">1</span><span>Installing memory engine</span></div>
+        <div class="progress-item"><span class="mark">2</span><span>Configuring AI tools</span></div>
+        <div class="progress-item"><span class="mark">3</span><span>Starting services</span></div>
+        <div class="progress-item"><span class="mark">4</span><span>Finalizing</span></div>
+      </div>
+      <div class="status-line" id="progress-detail">Waiting for FixOnce to become ready.</div>
+    </section>
 
-    <div class="buttons">
-      <a href="https://github.com/Nati41/FixOnce/archive/refs/heads/main.zip" class="btn btn-primary">
-        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
-        Download FixOnce.zip
-      </a>
-      <button class="btn btn-secondary" onclick="copyAIPrompt()">
-        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
-        Copy AI Setup Instructions
-      </button>
-    </div>
-
-    <div class="how-it-works">
-      <h3>How it works</h3>
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <div class="step-text">Download or clone FixOnce to your Desktop or Downloads folder</div>
+    <section id="screen-ready" class="stack hidden">
+      <div class="eyebrow">Ready</div>
+      <h1>FixOnce ready</h1>
+      <p class="lede" id="ready-copy">FixOnce is installed and running.</p>
+      <div class="card">
+        <div class="btn-row">
+          <button class="btn btn-primary" data-app="Claude">Open Claude</button>
+          <button class="btn btn-primary" data-app="Cursor">Open Cursor</button>
+          <button class="btn btn-primary" data-app="Codex">Open Codex</button>
         </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <div class="step-text">Copy the setup prompt above</div>
-        </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <div class="step-text">Paste the prompt into Claude Code, Cursor, or Codex</div>
-        </div>
-        <div class="step">
-          <div class="step-num">4</div>
-          <div class="step-text">Let the AI install and configure everything</div>
-        </div>
-        <div class="step">
-          <div class="step-num">5</div>
-          <div class="step-text">Open a new AI session to activate the MCP connection</div>
+        <div class="advanced">
+          Advanced:
+          <a id="dashboard-link" href="/" style="color: var(--accent-deep); font-weight: 700;">Open Dashboard</a>
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- Terminal Install Section (Secondary) -->
-  <section class="section">
-    <div class="section-header">
-      <h2>Install via Terminal</h2>
-      <span class="badge secondary">For developers</span>
-    </div>
-    <p>Quick setup if you prefer the command line. Requires manual MCP configuration afterward.</p>
-
-    <div class="code-block">
-      <button class="copy-btn" onclick="copyTerminalCommands()">Copy</button>
-      <pre id="terminal-commands"># macOS / Linux
-# Requires: Python 3.10 or newer
-
-# 1. Navigate to FixOnce directory
-cd ~/Desktop/FixOnce    # or wherever you extracted it
-
-# 2. Verify Python version (must be 3.10+)
-python3 --version
-
-# 3. Check requirements.txt exists
-ls requirements.txt || echo "ERROR: requirements.txt not found!"
-
-# 4. Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# 5. Install dependencies
-pip install -r requirements.txt
-
-# 6. Start server (will auto-select an available FixOnce port)
-python src/server.py --flask-only
-
-# Server will print the actual port it's running on.
-# Dashboard: http://localhost:PORT
-#
-# After server is running, configure MCP manually
-# or paste the AI Setup prompt into your AI assistant.</pre>
-    </div>
-
-    <div class="requirement">
-      <strong>Requirements:</strong>
-      <ul style="margin-top: 8px; padding-left: 20px;">
-        <li>Python 3.10 or newer (<a href="https://python.org/downloads" style="color: var(--blue);">python.org/downloads</a>)</li>
-        <li>pip (usually included with Python)</li>
-        <li>One of: Claude Code, Cursor, or Codex (for MCP connection)</li>
-      </ul>
-    </div>
-  </section>
-  </div>
-</div>
-
-<div class="toast" id="toast">Copied to clipboard!</div>
+    </section>
+  </main>
 
 <script>
-const state = {
-  origin: window.location.origin,
-  activePort: window.location.port || (window.location.protocol === 'https:' ? '443' : '80'),
-  health: null,
-  runtime: null
+const screens = {
+  install: document.getElementById("screen-install"),
+  progress: document.getElementById("screen-progress"),
+  ready: document.getElementById("screen-ready"),
 };
-const FIXONCE_DEFAULT_START_PORT = Number('50' + '00');
 
-const localServerContext = window.location.protocol.startsWith('http') &&
-  ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+const progressDetail = document.getElementById("progress-detail");
+const readyCopy = document.getElementById("ready-copy");
+const dashboardLink = document.getElementById("dashboard-link");
 
-function getStartPort() {
-  const port = Number(state.activePort);
-  if (localServerContext && Number.isFinite(port) && port > 0) {
-    return port;
-  }
-  return FIXONCE_DEFAULT_START_PORT;
-}
-
-function getNextPort() {
-  return getStartPort() + 1;
-}
-
-function getActualPort() {
-  const port = Number(state.health?.checks?.server?.port || state.runtime?.port || state.activePort);
-  return localServerContext && Number.isFinite(port) && port > 0 ? port : null;
-}
-
-function isServerOk(health) {
-  return Boolean(health?.checks?.server?.status === 'ok' &&
-    (health.status === 'healthy' || health.status === 'degraded'));
-}
-
-function buildAIPrompt() {
-  const origin = state.origin;
-  const actualPort = getActualPort();
-  const startPort = getStartPort();
-  const nextPort = getNextPort();
-  const primaryHealthUrl = localServerContext
-    ? `${origin}/api/health`
-    : `http://localhost:${startPort}/api/health`;
-
-  return `# FixOnce AI Installation
-
-Install FixOnce on this machine. Follow these steps exactly. Do NOT skip any step. Do NOT silently ignore failures.
-
-## Step 1: Detect Environment
-
-1. Detect OS (macOS, Linux, or Windows)
-2. Find Python executable:
-   \`\`\`bash
-   python3 --version
-   \`\`\`
-3. Verify version is >= 3.10
-
-**STOP RULE:** If Python version < 3.10 or Python not found:
-- Tell user: "Python 3.10 or newer is required. Install from https://python.org/downloads"
-- Do NOT proceed further
-
-## Step 2: Locate FixOnce
-
-Find the FixOnce directory. Check these locations IN ORDER:
-- ~/Downloads/FixOnce-main (GitHub ZIP default name)
-- ~/Downloads/FixOnce
-- ~/Desktop/FixOnce-main
-- ~/Desktop/FixOnce
-- Current working directory
-
-Use the FIRST directory found that contains requirements.txt.
-
-If not found, ask user: "Where did you extract FixOnce?"
-
-**STOP RULE:** Verify requirements.txt exists:
-\`\`\`bash
-ls <fixonce_directory>/requirements.txt
-\`\`\`
-If missing, tell user: "requirements.txt not found. FixOnce may be incomplete or corrupted."
-
-Also verify these files exist:
-- src/server.py
-- src/mcp_server/mcp_memory_server_v2.py
-
-## Step 3: Create Virtual Environment
-
-\`\`\`bash
-cd <fixonce_directory>
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\\Scripts\\activate
-\`\`\`
-
-## Step 4: Install Dependencies
-
-\`\`\`bash
-pip install -r requirements.txt
-\`\`\`
-
-**Import Validation:** After install, verify these imports work:
-\`\`\`python
-python3 -c "import flask; import flask_cors; import requests; import fastmcp; print('All imports OK')"
-\`\`\`
-
-If any import fails:
-- Report which package failed
-- Suggest: \`pip install <package_name>\`
-- Do NOT proceed until all imports succeed
-
-## Step 5: Start Server
-
-\`\`\`bash
-cd <fixonce_directory>/src
-python server.py --flask-only &
-\`\`\`
-
-Wait 3 seconds, then verify server is running:
-\`\`\`bash
-curl -s ${primaryHealthUrl} || curl -s http://localhost:${nextPort}/api/health
-\`\`\`
-
-**Port Handling:**
-- Default start port is ${startPort}
-- If port ${startPort} is busy, server will try ${nextPort}, then the next available local FixOnce port
-- Check actual port from server output or:
-  \`\`\`bash
-  cat ~/.fixonce/runtime.json
-  \`\`\`
-- Remember the actual port for the dashboard URL
-
-## Step 6: Configure MCP (CRITICAL - Follow Exactly)
-
-### MCP CONFIG SAFETY RULES:
-- NEVER write \`FASTMCP_CHECK_FOR_UPDATES: "false"\` - this value is INVALID and breaks MCP
-- Allowed values: \`"stable"\`, \`"prerelease"\`, \`"off"\`
-- ALWAYS use \`"off"\` as the default
-- ALWAYS create timestamped backup before modifying any config file
-- NEVER overwrite unrelated config entries
-- If existing JSON/TOML is invalid, STOP and tell user - do not corrupt further
-
-### Backup Command:
-\`\`\`bash
-cp <config_file> <config_file>.backup_$(date +%Y%m%d_%H%M%S)
-\`\`\`
-
-### For Claude Code:
-
-Check if CLI exists:
-\`\`\`bash
-which claude
-\`\`\`
-
-**If CLI exists (preferred):**
-\`\`\`bash
-claude mcp remove fixonce -s user 2>/dev/null
-claude mcp add-json fixonce '{
-  "command": "<fixonce_dir>/venv/bin/fastmcp",
-  "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"],
-  "env": {
-    "PYTHONPATH": "<fixonce_dir>/src",
-    "FASTMCP_CHECK_FOR_UPDATES": "off",
-    "FASTMCP_SHOW_CLI_BANNER": "false"
-  }
-}' -s user
-\`\`\`
-
-**If CLI doesn't exist (fallback to file):**
-1. Create backup of ~/.claude.json
-2. Read existing config (may be empty or not exist)
-3. Merge this entry under mcpServers (do NOT overwrite other servers):
-\`\`\`json
-{
-  "fixonce": {
-    "command": "<fixonce_dir>/venv/bin/fastmcp",
-    "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"],
-    "env": {
-      "PYTHONPATH": "<fixonce_dir>/src",
-      "FASTMCP_CHECK_FOR_UPDATES": "off",
-      "FASTMCP_SHOW_CLI_BANNER": "false"
-    }
-  }
-}
-\`\`\`
-4. Validate JSON syntax before writing
-5. Write updated config
-
-### For Cursor:
-
-1. Create backup of ~/.cursor/mcp.json if it exists
-2. Read or create config
-3. Merge this entry under mcpServers:
-\`\`\`json
-{
-  "fixonce": {
-    "command": "<fixonce_dir>/venv/bin/fastmcp",
-    "args": ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"],
-    "env": {
-      "PYTHONPATH": "<fixonce_dir>/src",
-      "FASTMCP_CHECK_FOR_UPDATES": "off",
-      "FASTMCP_SHOW_CLI_BANNER": "false"
-    }
-  }
-}
-\`\`\`
-4. Validate JSON
-5. Write config
-
-### For Codex:
-
-1. Create backup of ~/.codex/config.toml if it exists
-2. Add or update TOML section:
-\`\`\`toml
-[mcp_servers.fixonce]
-command = "<fixonce_dir>/venv/bin/fastmcp"
-args = ["run", "<fixonce_dir>/src/mcp_server/mcp_memory_server_v2.py", "--transport", "stdio"]
-
-[mcp_servers.fixonce.env]
-PYTHONPATH = "<fixonce_dir>/src"
-FASTMCP_CHECK_FOR_UPDATES = "off"
-FASTMCP_SHOW_CLI_BANNER = "false"
-\`\`\`
-
-## Step 7: Install Global AI Rules (CRITICAL - DO NOT SKIP!)
-
-**⚠️ THIS STEP IS MANDATORY. WITHOUT IT, FIXONCE WILL NOT AUTO-INITIALIZE.**
-
-This step makes FixOnce MANDATORY for all future sessions.
-
-1. Create directory if needed:
-\`\`\`bash
-mkdir -p ~/.claude
-\`\`\`
-
-2. Copy FixOnce rules to global CLAUDE.md:
-\`\`\`bash
-cat <fixonce_dir>/data/global-claude-md.md >> ~/.claude/CLAUDE.md
-\`\`\`
-
-3. **VERIFY the file was created** (DO NOT SKIP THIS CHECK):
-\`\`\`bash
-cat ~/.claude/CLAUDE.md | head -5
-\`\`\`
-
-Expected output should start with:
-\`\`\`
-# FixOnce Memory System
-\`\`\`
-
-**If the file is empty or doesn't exist, the installation FAILED. Re-run step 2.**
-
-**Why this matters:**
-- Without this file, AI treats FixOnce as "optional" and won't auto-initialize
-- With this file, AI MUST call fo_init at every session start
-- This is the difference between "working" and "not working"
-
-## Step 8: Verify Installation
-
-\`\`\`bash
-curl -s http://localhost:${actualPort || '<actual_port>'}/api/health
-\`\`\`
-
-Should return JSON where \`checks.server.status\` is \`"ok"\`. Overall \`"degraded"\` is acceptable when only the browser extension is not connected yet.
-
-## Step 9: Final Verification Checklist
-
-Before reporting success, verify ALL of these:
-
-\`\`\`bash
-# 1. Server running?
-curl -s http://localhost:${actualPort || '<actual_port>'}/api/health | grep -q "ok" && echo "✓ Server OK" || echo "✗ Server FAILED"
-
-# 2. MCP configured?
-grep -q "fixonce" ~/.claude.json && echo "✓ MCP OK" || echo "✗ MCP FAILED"
-
-# 3. Global rules installed? (CRITICAL!)
-head -1 ~/.claude/CLAUDE.md 2>/dev/null | grep -q "FixOnce Memory System" && echo "✓ Rules OK" || echo "✗ Rules FAILED - MUST FIX!"
-\`\`\`
-
-**If any check shows FAILED, go back and fix it before proceeding.**
-
-## Step 10: Report Final Status
-
-Tell user:
-
-\`\`\`
-FixOnce Installation Complete
-
-Server: http://localhost:<actual_port>
-Dashboard: http://localhost:<actual_port>
-
-Verification:
-✓ Server running
-✓ MCP configured for: [list which editors]
-✓ Global AI rules installed (~/.claude/CLAUDE.md)
-
-NEXT: Proceed to Step 11 to authorize the MCP tool.
-\`\`\`
-
-## Step 11: Authorize MCP Tool (CRITICAL - Enables Auto-Start)
-
-**Why this step matters:**
-Claude Code blocks new MCP tools until the user explicitly approves them.
-Without this approval, FixOnce will NEVER auto-initialize on "hi".
-
-**Action:**
-Tell user:
-\`\`\`
-⚡ FINAL STEP - Authorize FixOnce
-
-I need to test the FixOnce connection. When I call the tool:
-→ You will see a permission prompt
-→ Select: "Yes, and don't ask again" (or "Always allow")
-
-This is a ONE-TIME approval. After this, FixOnce will auto-start on every session.
-
-Calling FixOnce now...
-\`\`\`
-
-**Then immediately call:**
-\`\`\`
-fo_init(cwd="<current_directory>")
-\`\`\`
-
-**Expected behavior:**
-1. Claude Code shows permission dialog
-2. User selects "Yes, and don't ask again"
-3. Tool executes and returns session info
-4. Tell user: "✓ FixOnce authorized! From now on, just say 'hi' in any new session."
-
-**If user sees the tool response WITHOUT a permission dialog:**
-That means it was already authorized. Proceed to completion.
-
-## Step 12: Installation Complete
-
-Tell user:
-\`\`\`
-🎉 FixOnce Installation Complete!
-
-Everything is set up:
-✓ Server running at http://localhost:${actualPort || '<port>'}
-✓ MCP configured
-✓ Global AI rules installed
-✓ MCP tool authorized
-
-TO TEST:
-1. Close this Claude Code session
-2. Open a new session in any project folder
-3. Just say "hi"
-4. You should see fo_init called automatically
-
-Enjoy never debugging the same bug twice! 🧠
-\`\`\`
-
-## Error Handling Rules
-
-- If ANY step fails, report the exact error message
-- Do NOT silently skip failures
-- Do NOT modify FixOnce source code
-- If JSON/TOML config is already corrupted, tell user and stop
-- Always report what was changed and where backups are located
-- If port detection fails, tell user to check server output manually`;
-}
-
-function showToast(message) {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2000);
-}
-
-function copyAIPrompt() {
-  navigator.clipboard.writeText(buildAIPrompt()).then(() => {
-    showToast('AI setup instructions copied!');
+function showScreen(name) {
+  Object.entries(screens).forEach(([key, el]) => {
+    el.classList.toggle("hidden", key !== name);
   });
 }
 
-function copyActivationPrompt() {
-  const port = getActualPort();
-  const prompt = `FixOnce is installed and the local server is running on port ${port}.\n\nOpen a new AI session in my project and initialize the FixOnce MCP tool. If the client asks for permission, approve it permanently.`;
-  navigator.clipboard.writeText(prompt).then(() => {
-    showToast('Activation step copied!');
-  });
-}
-
-function copyTerminalCommands() {
-  const commands = document.getElementById('terminal-commands').textContent;
-  navigator.clipboard.writeText(commands).then(() => {
-    showToast('Terminal commands copied!');
-  });
-}
-
-async function fetchJSON(path) {
-  const res = await fetch(path, { cache: 'no-store' });
-  if (!res.ok) {
-    throw new Error(`${path} returned ${res.status}`);
+async function fetchInstallerStatus() {
+  const response = await fetch("/api/installer/status", { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load installer status");
   }
-  return res.json();
+  return response.json();
 }
 
-function showInstalledState() {
-  const port = getActualPort();
-  const healthStatus = state.health?.status || 'ok';
-
-  document.getElementById('page-title').textContent = 'FixOnce is installed';
-  document.getElementById('page-tagline').textContent = 'The local FixOnce server is already running. Finish by opening a new AI session to activate MCP.';
-  document.getElementById('installed-summary').textContent = `Server running on port ${port}.`;
-  document.getElementById('server-origin').textContent = state.origin;
-  document.getElementById('server-port').textContent = String(port);
-  document.getElementById('server-health').textContent = healthStatus === 'degraded'
-    ? 'Server OK, extension not connected'
-    : 'Server OK';
-  document.getElementById('open-dashboard').href = state.origin + '/';
-  document.getElementById('installed-state').classList.remove('hidden');
-  document.getElementById('install-flow').classList.add('hidden');
+function updateProgressLabel(status) {
+  const detail = status.detail || "Waiting for FixOnce to become ready.";
+  progressDetail.textContent = detail;
 }
 
-function showInstallFlow() {
-  document.getElementById('installed-state').classList.add('hidden');
-  document.getElementById('install-flow').classList.remove('hidden');
+function updateReadyState(status) {
+  const port = status.runtime_port ? ` on localhost:${status.runtime_port}` : "";
+  readyCopy.textContent = `FixOnce is installed and running${port}.`;
+  dashboardLink.href = "/";
 }
 
-async function detectLocalInstall() {
-  if (!localServerContext) {
-    showInstallFlow();
-    return;
-  }
-
+async function refreshStatus() {
   try {
-    const [runtimeResult, healthResult] = await Promise.allSettled([
-      fetchJSON('/api/canonical-runtime'),
-      fetchJSON('/api/health')
-    ]);
-
-    if (runtimeResult.status === 'fulfilled') {
-      state.runtime = runtimeResult.value;
-    }
-    if (healthResult.status === 'fulfilled') {
-      state.health = healthResult.value;
-    }
-
-    if (isServerOk(state.health)) {
-      showInstalledState();
+    const status = await fetchInstallerStatus();
+    if (status.installed || status.state === "READY") {
+      updateReadyState(status);
+      showScreen("ready");
       return;
     }
-  } catch (error) {
-    // Website/static install pages cannot reach a local server; keep download flow.
-  }
 
-  showInstallFlow();
+    if (["INSTALLING", "STARTING", "WAITING_HEALTH", "RECOVERY"].includes(status.state)) {
+      updateProgressLabel(status);
+      showScreen("progress");
+      return;
+    }
+
+    showScreen("install");
+  } catch (_error) {
+    showScreen("install");
+  }
 }
 
-detectLocalInstall();
-</script>
+document.getElementById("install-button").addEventListener("click", () => {
+  showScreen("progress");
+  progressDetail.textContent = "Run the FixOnce installer app from the download to finish setup.";
+});
 
+document.querySelectorAll("[data-app]").forEach((button) => {
+  button.addEventListener("click", () => {
+    alert(`Open ${button.dataset.app} from Applications. FixOnce is already configured in the background.`);
+  });
+});
+
+refreshStatus();
+setInterval(refreshStatus, 4000);
+</script>
 </body>
 </html>

@@ -146,6 +146,32 @@ ask_continue() {
     return 0
 }
 
+write_install_state() {
+    local state="$1"
+    local detail="${2:-}"
+    local install_state_dir="$HOME/.fixonce"
+    local install_state_file="$install_state_dir/install_state.json"
+    mkdir -p "$install_state_dir"
+
+    python3 - "$install_state_file" "$state" "$detail" "$INSTALL_DIR" << 'PY'
+import json
+import sys
+from datetime import datetime, timezone
+
+target, state, detail, install_dir = sys.argv[1:]
+payload = {
+    "state": state,
+    "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "detail": detail,
+    "install_dir": install_dir,
+    "metadata": {"source": "macos_installer_app"},
+}
+
+with open(target, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2)
+PY
+}
+
 # ============================================================
 # Pre-flight Checks
 # ============================================================
@@ -241,6 +267,7 @@ preflight() {
 
 install_files() {
     log "${BLUE}Installing FixOnce...${NC}"
+    write_install_state "INSTALLING" "Copying application files"
 
     # ========== COMPLETE PURGE ==========
     # Remove any existing installation to ensure clean state
@@ -335,6 +362,7 @@ EOF
 
 install_dependencies() {
     log "${BLUE}Installing Python dependencies...${NC}"
+    write_install_state "INSTALLING" "Installing application dependencies"
 
     cd "$INSTALL_DIR"
 
@@ -525,6 +553,7 @@ configure_mcp() {
 
 setup_launchagent() {
     log "${BLUE}Setting up auto-start...${NC}"
+    write_install_state "STARTING" "Preparing automatic startup"
 
     LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
     PLIST_FILE="$LAUNCH_AGENTS/com.fixonce.server.plist"
@@ -561,162 +590,182 @@ setup_launchagent() {
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin</string>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
 </dict>
 </plist>
 EOF
 
-    log "${GREEN}✓${NC} LaunchAgent plist created (not loaded yet - waiting for health check)"
+    touch "$USER_LOGS/server.log" "$USER_LOGS/server.error.log"
+    log "${GREEN}✓${NC} Auto-start service prepared"
 }
 
 # ============================================================
-# Health Gate: Verify server works BEFORE enabling LaunchAgent
+# Startup Recovery: load service, wait for readiness, retry once
 # ============================================================
 
-verify_and_enable_service() {
-    log "${BLUE}Verifying server can start...${NC}"
+clear_stale_runtime_state() {
+    local runtime_file="$HOME/.fixonce/runtime.json"
+    local lock_file="$HOME/.fixonce/server.lock"
 
-    VENV_PYTHON="$INSTALL_DIR/venv/bin/python"
-    SERVER_SCRIPT="$INSTALL_DIR/src/server.py"
+    if [ -f "$runtime_file" ]; then
+        local runtime_pid
+        runtime_pid=$(python3 -c "import json; import pathlib; p=pathlib.Path('$runtime_file'); data=json.loads(p.read_text()) if p.exists() else {}; print(data.get('pid',''))" 2>/dev/null)
+        if [ -n "$runtime_pid" ] && ! kill -0 "$runtime_pid" 2>/dev/null; then
+            rm -f "$runtime_file"
+        fi
+    fi
+
+    if [ -f "$lock_file" ]; then
+        local lock_pid
+        lock_pid=$(cat "$lock_file" 2>/dev/null || true)
+        if [ -n "$lock_pid" ] && ! kill -0 "$lock_pid" 2>/dev/null; then
+            rm -f "$lock_file"
+        fi
+    fi
+}
+
+load_launchagent_service() {
     PLIST_FILE="$HOME/Library/LaunchAgents/com.fixonce.server.plist"
-    USER_LOGS="$HOME/.fixonce/logs"
-    CURRENT_USER=$(whoami)
+    local domain="gui/$(id -u)"
+    local label="com.fixonce.server"
 
-    # Start server manually in background for testing
-    log "  Starting server for health check..."
-    "$VENV_PYTHON" "$SERVER_SCRIPT" --flask-only > "$USER_LOGS/health_check.log" 2>&1 &
-    SERVER_PID=$!
+    launchctl bootout "$domain/$label" >/dev/null 2>&1 || true
+    launchctl unload "$PLIST_FILE" >/dev/null 2>&1 || true
 
-    # Wait for server to start (max 15 seconds)
-    PORT=""
-    MAX_ATTEMPTS=15
-    ATTEMPT=0
+    if launchctl bootstrap "$domain" "$PLIST_FILE" >/tmp/fixonce_launchctl.log 2>&1; then
+        launchctl kickstart -k "$domain/$label" >> /tmp/fixonce_launchctl.log 2>&1 || true
+        return 0
+    fi
 
-    while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-        ATTEMPT=$((ATTEMPT + 1))
+    if launchctl load "$PLIST_FILE" >> /tmp/fixonce_launchctl.log 2>&1; then
+        return 0
+    fi
+
+    return 1
+}
+
+discover_runtime_port() {
+    local runtime_file="$HOME/.fixonce/runtime.json"
+    if [ -f "$runtime_file" ]; then
+        python3 -c "import json; print(json.load(open('$runtime_file')).get('port', ''))" 2>/dev/null
+        return
+    fi
+
+    for p in 5000 5001 5002 5003 5004 5005 5006 5007 5008 5009; do
+        if curl -fsS --connect-timeout 1 "http://localhost:$p/api/health" >/dev/null 2>&1; then
+            echo "$p"
+            return
+        fi
+    done
+}
+
+wait_for_runtime_health() {
+    local max_attempts="${1:-30}"
+    local attempt=0
+
+    while [ $attempt -lt $max_attempts ]; do
+        attempt=$((attempt + 1))
         sleep 1
 
-        # Check if process is still alive
-        if ! kill -0 $SERVER_PID 2>/dev/null; then
-            log "${RED}✗${NC} Server process died!"
-            log "  Last 10 lines of log:"
-            tail -10 "$USER_LOGS/health_check.log" 2>/dev/null | while read line; do
-                log "    $line"
-            done
-
-            # Check for common errors
-            if grep -q "ModuleNotFoundError" "$USER_LOGS/health_check.log" 2>/dev/null; then
-                MISSING_MODULE=$(grep "ModuleNotFoundError" "$USER_LOGS/health_check.log" | head -1)
-                log "${RED}✗${NC} Missing Python module: $MISSING_MODULE"
-                show_error "Server failed to start: Missing Python module.\n\n$MISSING_MODULE\n\nTry running:\n$INSTALL_DIR/venv/bin/pip install flask flask-cors mcp fastmcp requests"
-                return 1
-            fi
-
-            show_error "Server failed to start.\n\nCheck log: $USER_LOGS/health_check.log"
-            return 1
+        local runtime_port
+        runtime_port=$(discover_runtime_port)
+        if [ -n "$runtime_port" ] && curl -fsS --connect-timeout 1 "http://localhost:$runtime_port/api/health" >/dev/null 2>&1; then
+            echo "$runtime_port"
+            return 0
         fi
 
-        # Check /api/ping on common ports
-        for p in 5000 5001 5002 5003 5004 5005; do
-            RESPONSE=$(curl -s --connect-timeout 1 "http://localhost:$p/api/ping" 2>/dev/null)
-            if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
-                OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
-                if [ "$OWNER" = "$CURRENT_USER" ]; then
-                    PORT=$p
-                    break 2
-                fi
-            fi
-        done
-
-        if [ $((ATTEMPT % 3)) -eq 0 ]; then
-            log "  Waiting for server... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+        if [ $((attempt % 5)) -eq 0 ]; then
+            log "  Waiting for FixOnce to finish starting... ($attempt/$max_attempts)"
         fi
     done
 
-    # Stop the test server
-    kill $SERVER_PID 2>/dev/null || true
-    wait $SERVER_PID 2>/dev/null || true
+    return 1
+}
 
-    if [ -z "$PORT" ]; then
-        log "${RED}✗${NC} Server failed health check - /api/ping not responding"
-        log "  Check log: $USER_LOGS/health_check.log"
+inspect_startup_failure() {
+    local user_logs="$HOME/.fixonce/logs"
+    local launchctl_log="/tmp/fixonce_launchctl.log"
 
-        # Show relevant error info
-        if [ -f "$USER_LOGS/health_check.log" ]; then
-            log "  Last 5 lines:"
-            tail -5 "$USER_LOGS/health_check.log" | while read line; do
-                log "    $line"
-            done
+    log "  Last launchctl output:"
+    tail -10 "$launchctl_log" 2>/dev/null | while read line; do
+        log "    $line"
+    done
+
+    log "  Last server log lines:"
+    tail -10 "$user_logs/server.log" 2>/dev/null | while read line; do
+        log "    $line"
+    done
+
+    log "  Last server error log lines:"
+    tail -10 "$user_logs/server.error.log" 2>/dev/null | while read line; do
+        log "    $line"
+    done
+}
+
+verify_and_enable_service() {
+    log "${BLUE}Starting FixOnce in the background...${NC}"
+    write_install_state "WAITING_HEALTH" "Starting FixOnce services"
+
+    local port=""
+    local attempt=1
+    local max_attempts=2
+
+    while [ $attempt -le $max_attempts ]; do
+        if [ $attempt -gt 1 ]; then
+            log "${YELLOW}!${NC} First startup attempt did not become ready. Repairing and retrying..."
+            write_install_state "RECOVERY" "Retrying background startup"
+            setup_launchagent
         fi
 
-        show_error "Server health check failed.\n\nThe server started but /api/ping did not respond.\n\nCheck: $USER_LOGS/health_check.log"
-        return 1
-    fi
+        clear_stale_runtime_state
 
-    log "${GREEN}✓${NC} Health check passed! Server responded on port $PORT"
+        if ! load_launchagent_service; then
+            log "${RED}✗${NC} Could not load the auto-start service"
+            inspect_startup_failure
+            attempt=$((attempt + 1))
+            continue
+        fi
 
-    # NOW it's safe to load the LaunchAgent
-    log "  Loading LaunchAgent..."
-    if launchctl load "$PLIST_FILE" 2>&1; then
-        log "${GREEN}✓${NC} LaunchAgent loaded successfully"
-    else
-        log "${YELLOW}!${NC} LaunchAgent load warning (may already be loaded)"
-    fi
-
-    # Save port to user config
-    mkdir -p "$HOME/.fixonce"
-    cat > "$HOME/.fixonce/config.json" << EOF
+        if port=$(wait_for_runtime_health 35); then
+            log "${GREEN}✓${NC} FixOnce is ready on port $port"
+            write_install_state "READY" "FixOnce is ready"
+            mkdir -p "$HOME/.fixonce"
+            cat > "$HOME/.fixonce/config.json" << EOF
 {
-  "port": $PORT,
-  "user": "$CURRENT_USER",
+  "port": $port,
+  "user": "$(whoami)",
   "install_dir": "$INSTALL_DIR",
   "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
+            return 0
+        fi
 
-    return 0
+        log "${YELLOW}!${NC} FixOnce did not become ready after startup attempt $attempt"
+        inspect_startup_failure
+        attempt=$((attempt + 1))
+    done
+
+    write_install_state "FAILED" "Automatic startup failed after retry"
+    return 1
 }
 
-# ============================================================
-# Open Dashboard (after health gate passed)
-# ============================================================
-
 open_dashboard() {
-    log "${BLUE}Opening dashboard...${NC}"
+    log "${BLUE}Opening FixOnce...${NC}"
 
-    CURRENT_USER=$(whoami)
-    CONFIG_FILE="$HOME/.fixonce/config.json"
+    local port
+    port=$(discover_runtime_port)
 
-    # Read port from config (set by verify_and_enable_service)
-    if [ -f "$CONFIG_FILE" ]; then
-        PORT=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('port', ''))" 2>/dev/null)
-    fi
-
-    # Fallback: scan for our port
-    if [ -z "$PORT" ]; then
-        for p in 5000 5001 5002 5003 5004 5005; do
-            RESPONSE=$(curl -s --connect-timeout 1 "http://localhost:$p/api/ping" 2>/dev/null)
-            if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
-                OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
-                if [ "$OWNER" = "$CURRENT_USER" ]; then
-                    PORT=$p
-                    break
-                fi
-            fi
-        done
-    fi
-
-    if [ -z "$PORT" ]; then
-        log "${YELLOW}!${NC} Could not find server port - try 'fixonce dashboard' later"
+    if [ -z "$port" ]; then
+        log "${YELLOW}!${NC} Could not determine the FixOnce address yet"
         return 1
     fi
 
-    DASHBOARD_URL="http://localhost:$PORT"
+    DASHBOARD_URL="http://localhost:$port"
     log "  Opening: $DASHBOARD_URL"
     open "$DASHBOARD_URL"
-
-    log "${GREEN}✓${NC} Dashboard opened at $DASHBOARD_URL"
+    log "${GREEN}✓${NC} FixOnce opened at $DASHBOARD_URL"
 }
 
 # ============================================================
@@ -959,6 +1008,7 @@ CLISCRIPT
 
 main() {
     echo "" > "$LOG_FILE"
+    write_install_state "NOT_INSTALLED" "Installer opened"
 
     log ""
     log "${BLUE}========================================"
@@ -967,7 +1017,7 @@ main() {
     log ""
 
     # Show welcome dialog
-    osascript -e 'display dialog "Welcome to FixOnce!\n\nThis installer will:\n• Install FixOnce to ~/FixOnce\n• Configure auto-start\n• Set up AI integrations\n• Open the Dashboard\n\nClick Continue to begin." with title "FixOnce Installer" buttons {"Cancel", "Continue"} default button "Continue" with icon note' 2>/dev/null || exit 0
+    osascript -e 'display dialog "Install FixOnce\n\nThis setup will:\n• Install FixOnce\n• Connect your AI tools\n• Start FixOnce automatically\n• Open FixOnce when ready\n\nClick Continue to begin." with title "FixOnce Installer" buttons {"Cancel", "Continue"} default button "Continue" with icon note' 2>/dev/null || exit 0
 
     # Run installation steps
     preflight
@@ -980,13 +1030,13 @@ main() {
     # Health gate: verify server works BEFORE enabling LaunchAgent
     if ! verify_and_enable_service; then
         log "${RED}Installation failed: Server health check failed${NC}"
-        log "LaunchAgent was NOT loaded to prevent crash loop."
+        log "Automatic startup could not be completed."
         log ""
-        log "Debug steps:"
-        log "  1. Check: $HOME/.fixonce/logs/health_check.log"
-        log "  2. Try: $INSTALL_DIR/venv/bin/pip install flask flask-cors mcp fastmcp requests"
-        log "  3. Run: fixonce doctor"
-        show_error "Installation incomplete!\n\nServer failed health check.\nLaunchAgent was NOT enabled to prevent crash loop.\n\nSee logs at:\n$HOME/.fixonce/logs/"
+        log "Installer checked:"
+        log "  1. Background service loading"
+        log "  2. Startup retry and repair"
+        log "  3. Server logs in $HOME/.fixonce/logs/"
+        show_error "FixOnce could not finish starting automatically.\n\nThe installer retried startup and collected logs.\n\nSee:\n$HOME/.fixonce/logs/\n\nYou should not need Terminal for normal installs, so this needs follow-up."
         exit 1
     fi
 
@@ -997,16 +1047,16 @@ main() {
     log "  Installation Complete!"
     log "========================================${NC}"
     log ""
-    log "FixOnce is now installed and running."
+    log "FixOnce is now installed and ready."
     log ""
     log "Quick commands:"
-    log "  fixonce status    - Check if running"
-    log "  fixonce dashboard - Open dashboard"
+    log "  fixonce status    - Check FixOnce"
+    log "  fixonce dashboard - Open FixOnce"
     log "  fixonce doctor    - Run diagnostics"
     log ""
 
     # Show success dialog
-    osascript -e 'display dialog "FixOnce installed successfully!\n\nThe Dashboard is now open in your browser.\n\nUseful commands:\n• fixonce status\n• fixonce dashboard\n• fixonce doctor" with title "FixOnce Installer" buttons {"Done"} default button "Done" with icon note'
+    osascript -e 'display dialog "FixOnce ready\n\nFixOnce is installed and running.\n\nYou can now open Claude, Cursor, or Codex.\n\nAdvanced:\n• fixonce dashboard\n• fixonce doctor" with title "FixOnce Installer" buttons {"Done"} default button "Done" with icon note'
 }
 
 # Run main

@@ -3,17 +3,15 @@ FixOnce Installer API
 Endpoints for the web-based installer.
 """
 
-import json
 import subprocess
 import sys
 import re
 from pathlib import Path
-from datetime import datetime
 from flask import Blueprint, jsonify, send_file, request
 
-# Import DATA_DIR from config to ensure consistent install state location
-from config import DATA_DIR
-from core.install_state import is_fixonce_installed
+from config import DATA_DIR  # compatibility for tests that patch installer data dir
+from core.install_state import get_install_snapshot, is_fixonce_installed, mark_install_state
+from core.install_state_machine import InstallState
 
 installer_bp = Blueprint('installer', __name__)
 
@@ -71,15 +69,6 @@ def _write_codex_config(path: Path, server_name: str, config: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text((content + "\n\n" + "\n".join(lines) if content else "\n".join(lines)) + "\n", encoding='utf-8')
 
-# Installation state file - MUST use DATA_DIR (same as server.py)
-def _get_install_state_file() -> Path:
-    """Get the installation state file path.
-
-    Uses DATA_DIR (~/.fixonce/) to ensure consistency with server.py routing.
-    """
-    return DATA_DIR / "install_state.json"
-
-
 def _is_installed() -> bool:
     """Check if FixOnce is installed."""
     request_port = request.host.split(':')[-1] if ':' in request.host else None
@@ -90,18 +79,12 @@ def _is_installed() -> bool:
     return is_fixonce_installed(request_port=request_port)
 
 
-def _mark_installed():
-    """Mark FixOnce as installed."""
-    state_file = _get_install_state_file()
-    state = {
-        "installed": True,
-        "installed_at": datetime.now().isoformat(),
-        "version": "1.0"
-    }
-
-    state_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(state_file, 'w') as f:
-        json.dump(state, f, indent=2)
+def _get_request_port() -> int | None:
+    request_port = request.host.split(':')[-1] if ':' in request.host else None
+    try:
+        return int(request_port) if request_port is not None else None
+    except ValueError:
+        return None
 
 
 @installer_bp.route('/install')
@@ -116,8 +99,12 @@ def serve_installer():
 @installer_bp.route('/api/installer/status')
 def installer_status():
     """Get installation status."""
+    snapshot = get_install_snapshot(request_port=_get_request_port())
     return jsonify({
-        "installed": _is_installed()
+        "installed": snapshot.installed,
+        "state": snapshot.state.value,
+        "detail": snapshot.detail,
+        "runtime_port": snapshot.runtime_port,
     })
 
 
@@ -197,14 +184,12 @@ def configure_mcp():
 @installer_bp.route('/api/installer/complete', methods=['POST'])
 def mark_complete():
     """Mark installation as complete."""
-    _mark_installed()
-    return jsonify({"status": "ok", "installed": True})
+    snapshot = mark_install_state(InstallState.READY, detail="Installation completed from installer API")
+    return jsonify({"status": "ok", "installed": True, "state": snapshot.state.value})
 
 
 @installer_bp.route('/api/installer/reset', methods=['POST'])
 def reset_installation():
     """Reset installation state (for testing)."""
-    state_file = _get_install_state_file()
-    if state_file.exists():
-        state_file.unlink()
-    return jsonify({"status": "ok", "installed": False})
+    snapshot = mark_install_state(InstallState.NOT_INSTALLED, detail="Installation reset from installer API")
+    return jsonify({"status": "ok", "installed": False, "state": snapshot.state.value})

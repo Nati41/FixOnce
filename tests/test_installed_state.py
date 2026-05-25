@@ -1,5 +1,4 @@
 import importlib
-import json
 import sys
 import tempfile
 import unittest
@@ -14,6 +13,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 import server as server_module
 import api.installer as installer_module
 import core.install_state as install_state_module
+from core.install_state_machine import InstallState
 
 
 class TestInstalledState(unittest.TestCase):
@@ -60,20 +60,40 @@ class TestInstalledState(unittest.TestCase):
             response = self.client.get("/api/installer/status", headers={"Host": "localhost:5001"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), {"installed": True})
+        self.assertEqual(
+            response.get_json(),
+            {"installed": True, "state": "READY", "detail": "Canonical runtime is healthy", "runtime_port": 5001},
+        )
 
     def test_installer_status_rejects_runtime_from_other_port(self):
         with patch.object(install_state_module, "get_runtime_state", return_value={"port": 5002, "pid": 123}):
             response = self.client.get("/api/installer/status", headers={"Host": "localhost:5001"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), {"installed": False})
+        self.assertEqual(response.get_json()["installed"], False)
+        self.assertEqual(response.get_json()["state"], "NOT_INSTALLED")
 
-    def test_install_state_file_still_counts_as_installed(self):
-        state_file = self.data_dir / "install_state.json"
-        state_file.write_text(json.dumps({"installed": True}), encoding="utf-8")
+    def test_ready_install_state_transitions_to_starting_without_runtime(self):
+        install_state_module.mark_install_state(
+            InstallState.READY,
+            data_dir=self.data_dir,
+            detail="Previous install finished",
+        )
 
         with patch.object(install_state_module, "get_runtime_state", return_value=None):
+            snapshot = install_state_module.get_install_snapshot(request_port=5001, data_dir=self.data_dir)
+
+        self.assertEqual(snapshot.state, InstallState.STARTING)
+        self.assertFalse(snapshot.installed)
+
+    def test_install_state_file_still_counts_as_installed(self):
+        install_state_module.mark_install_state(
+            InstallState.READY,
+            data_dir=self.data_dir,
+            detail="Install completed",
+        )
+
+        with patch.object(install_state_module, "get_runtime_state", return_value={"port": 5001, "pid": 321}):
             response = self.client.get("/", headers={"Host": "localhost:5001"})
 
         self.assertEqual(response.status_code, 200)
