@@ -2492,17 +2492,13 @@ FixOnce needs a project folder to work with.
 
 **What to do:**
 1. Close this terminal
-2. Open Claude Code **from inside a project folder**:
-   ```
-   cd ~/your-project
-   claude
-   ```
+2. Open from a project folder to continue.
 
 Or call `fo_init(cwd="/path/to/project")` from your project folder.
 
 ---
 🏠 אתה בתיקיית הבית. FixOnce צריך תיקיית פרויקט.
-פתח Claude Code מתוך תיקיית פרויקט (cd ~/project && claude)"""
+פתח מתוך תיקיית פרויקט כדי להמשיך."""
     else:
         return f"""📁 This folder doesn't look like a project: {cwd}
 
@@ -2543,6 +2539,22 @@ def _is_valid_project_dir(path: str) -> bool:
         pass
 
     return False
+
+
+def _resolve_init_working_dir(path: str) -> Optional[str]:
+    """Resolve the working directory used by fo_init/init_session."""
+    if not path or not os.path.isdir(path):
+        return None
+
+    if BOUNDARY_DETECTION_ENABLED:
+        project_root, marker, confidence = find_project_root(path)
+        if project_root and confidence in ("high", "medium"):
+            return project_root
+
+    if _is_valid_project_dir(path):
+        return path
+
+    return None
 
 
 def _get_working_dir_from_recent_activity() -> Optional[str]:
@@ -3640,15 +3652,14 @@ def init_session(working_dir: str = "", port: int = 0) -> str:
         else:
             return f"Error: Could not detect project directory from port {port}. Is a server running?"
 
-    # Phase 1: Use boundary detection to find actual project root
-    if BOUNDARY_DETECTION_ENABLED and working_dir and os.path.isdir(working_dir):
-        project_root, marker, confidence = find_project_root(working_dir)
-        if project_root and confidence in ("high", "medium"):
-            # Use the detected project root instead of raw working_dir
-            _log(f"[MCP] init_session: {working_dir} → {project_root} ({confidence})")
-            working_dir = project_root
+    resolved_dir = _resolve_init_working_dir(working_dir)
+    if resolved_dir and resolved_dir != working_dir:
+        _log(f"[MCP] init_session: {working_dir} → {resolved_dir}")
 
-    return _do_init_session(working_dir)
+    if not resolved_dir:
+        return f"Error: Invalid project directory: {working_dir}"
+
+    return _do_init_session(resolved_dir)
 
 
 @mcp.tool()
@@ -6967,20 +6978,10 @@ def fo_init(cwd: str = "") -> str:
     if mode == MODE_PASSIVE:
         return "FixOnce is in PASSIVE mode."
 
-    # Use boundary detection to find project root
-    working_dir = None
-    if BOUNDARY_DETECTION_ENABLED and cwd and os.path.isdir(cwd):
-        project_root, marker, confidence = find_project_root(cwd)
-        if project_root and confidence in ("high", "medium"):
-            working_dir = project_root
-        elif _is_valid_project_dir(cwd):
-            working_dir = cwd
-
-    if not working_dir and cwd and os.path.isdir(cwd) and _is_valid_project_dir(cwd):
-        working_dir = cwd
+    working_dir = _resolve_init_working_dir(cwd)
 
     if not working_dir:
-        return "Open Claude Code from a project folder."
+        return "Open from a project folder to continue."
 
     # Initialize session (all the background work)
     project_id = _get_project_id(working_dir)
