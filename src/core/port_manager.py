@@ -66,7 +66,11 @@ def save_user_config(config: Dict[str, Any]) -> None:
 def get_preferred_port() -> Optional[int]:
     """Get user's preferred/last-used port from config."""
     config = load_user_config()
-    return config.get("port")
+    port = config.get("port")
+    try:
+        return int(port)
+    except (TypeError, ValueError):
+        return None
 
 
 def set_preferred_port(port: int) -> None:
