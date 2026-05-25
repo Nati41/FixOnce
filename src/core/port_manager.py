@@ -20,6 +20,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Tuple, Dict, Any
 
+from config import PROJECT_ROOT
+
 DEFAULT_PORT = 5000
 MAX_PORT = 5009
 PORT_RANGE = range(DEFAULT_PORT, MAX_PORT + 1)
@@ -318,7 +320,8 @@ def set_runtime_state(port: int, pid: int) -> bool:
         "port": port,
         "pid": pid,
         "started_at": datetime.now().isoformat(),
-        "user": getpass.getuser()
+        "user": getpass.getuser(),
+        "install_path": str(PROJECT_ROOT),
     }
 
     with open(RUNTIME_FILE, 'w') as f:

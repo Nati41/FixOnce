@@ -576,6 +576,7 @@ setup_launchagent() {
     <array>
         <string>$INSTALL_DIR/venv/bin/python</string>
         <string>$INSTALL_DIR/src/server.py</string>
+        <string>--flask-only</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$INSTALL_DIR</string>
@@ -660,9 +661,83 @@ discover_runtime_port() {
     done
 }
 
+validate_runtime_ownership() {
+    local port="$1"
+    local expected_user="$2"
+    local expected_install_dir="$3"
+    local runtime_file="$HOME/.fixonce/runtime.json"
+
+    python3 - "$runtime_file" "$port" "$expected_user" "$expected_install_dir" << 'PY'
+import json
+import os
+import pathlib
+import sys
+import urllib.request
+
+runtime_file = pathlib.Path(sys.argv[1])
+port = int(sys.argv[2])
+expected_user = sys.argv[3]
+expected_install_dir = os.path.realpath(sys.argv[4])
+
+if not runtime_file.exists():
+    print("runtime.json is missing")
+    sys.exit(1)
+
+try:
+    runtime = json.loads(runtime_file.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"runtime.json is invalid: {exc}")
+    sys.exit(1)
+
+runtime_port = runtime.get("port")
+runtime_user = runtime.get("user")
+runtime_install_path = runtime.get("install_path")
+
+if runtime_port != port:
+    print(f"runtime port mismatch: expected {port}, got {runtime_port}")
+    sys.exit(1)
+
+if runtime_user != expected_user:
+    print(f"runtime user mismatch: expected {expected_user}, got {runtime_user}")
+    sys.exit(1)
+
+if os.path.realpath(runtime_install_path or "") != expected_install_dir:
+    print(
+        f"runtime install_path mismatch: expected {expected_install_dir}, "
+        f"got {os.path.realpath(runtime_install_path or '')}"
+    )
+    sys.exit(1)
+
+try:
+    with urllib.request.urlopen(f"http://localhost:{port}/api/ping", timeout=2) as response:
+        ping = json.loads(response.read().decode("utf-8"))
+except Exception as exc:
+    print(f"/api/ping failed: {exc}")
+    sys.exit(1)
+
+if ping.get("service") != "fixonce":
+    print(f"unexpected service identity: {ping.get('service')}")
+    sys.exit(1)
+
+if ping.get("user") != expected_user:
+    print(f"ping user mismatch: expected {expected_user}, got {ping.get('user')}")
+    sys.exit(1)
+
+if os.path.realpath(ping.get("install_path") or "") != expected_install_dir:
+    print(
+        f"ping install_path mismatch: expected {expected_install_dir}, "
+        f"got {os.path.realpath(ping.get('install_path') or '')}"
+    )
+    sys.exit(1)
+
+print("ok")
+PY
+}
+
 wait_for_runtime_health() {
     local max_attempts="${1:-30}"
     local attempt=0
+    local current_user="$(whoami)"
 
     while [ $attempt -lt $max_attempts ]; do
         attempt=$((attempt + 1))
@@ -671,8 +746,12 @@ wait_for_runtime_health() {
         local runtime_port
         runtime_port=$(discover_runtime_port)
         if [ -n "$runtime_port" ] && curl -fsS --connect-timeout 1 "http://localhost:$runtime_port/api/health" >/dev/null 2>&1; then
-            echo "$runtime_port"
-            return 0
+            local ownership_result
+            if ownership_result=$(validate_runtime_ownership "$runtime_port" "$current_user" "$INSTALL_DIR" 2>&1); then
+                echo "$runtime_port"
+                return 0
+            fi
+            echo "$ownership_result" >> /tmp/fixonce_launchctl.log
         fi
 
         if [ $((attempt % 5)) -eq 0 ]; then
@@ -686,11 +765,19 @@ wait_for_runtime_health() {
 inspect_startup_failure() {
     local user_logs="$HOME/.fixonce/logs"
     local launchctl_log="/tmp/fixonce_launchctl.log"
+    local runtime_file="$HOME/.fixonce/runtime.json"
 
     log "  Last launchctl output:"
     tail -10 "$launchctl_log" 2>/dev/null | while read line; do
         log "    $line"
     done
+
+    if [ -f "$runtime_file" ]; then
+        log "  Current runtime.json:"
+        tail -20 "$runtime_file" 2>/dev/null | while read line; do
+            log "    $line"
+        done
+    fi
 
     log "  Last server log lines:"
     tail -10 "$user_logs/server.log" 2>/dev/null | while read line; do
@@ -849,7 +936,8 @@ find_my_port() {
         SAVED_PORT=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('port', ''))" 2>/dev/null)
         if [ -n "$SAVED_PORT" ]; then
             OWNER=$(curl -s "http://localhost:$SAVED_PORT/api/ping" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
-            if [ "$OWNER" = "$CURRENT_USER" ]; then
+            INSTALL_PATH=$(curl -s "http://localhost:$SAVED_PORT/api/ping" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('install_path',''))" 2>/dev/null)
+            if [ "$OWNER" = "$CURRENT_USER" ] && [ "$(python3 -c "import os; print(os.path.realpath('$INSTALL_PATH'))" 2>/dev/null)" = "$(python3 -c "import os; print(os.path.realpath('$FIXONCE_DIR'))")" ]; then
                 echo "$SAVED_PORT"
                 return
             fi
@@ -861,7 +949,8 @@ find_my_port() {
         RESPONSE=$(curl -s "http://localhost:$p/api/ping" 2>/dev/null)
         if echo "$RESPONSE" | grep -q '"service":"fixonce"'; then
             OWNER=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',''))" 2>/dev/null)
-            if [ "$OWNER" = "$CURRENT_USER" ]; then
+            INSTALL_PATH=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('install_path',''))" 2>/dev/null)
+            if [ "$OWNER" = "$CURRENT_USER" ] && [ "$(python3 -c "import os; print(os.path.realpath('$INSTALL_PATH'))" 2>/dev/null)" = "$(python3 -c "import os; print(os.path.realpath('$FIXONCE_DIR'))")" ]; then
                 echo "$p"
                 return
             fi
