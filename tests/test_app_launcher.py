@@ -90,6 +90,36 @@ class TestAppLauncher(unittest.TestCase):
             self.assertEqual(app_launcher.ensure_server_ready(), 5003)
             start_server.assert_not_called()
 
+    def test_windows_server_launch_uses_detached_process_group(self):
+        with patch.object(app_launcher.sys, "platform", "win32"), \
+             patch.object(app_launcher, "clear_stale_state"), \
+             patch.object(app_launcher, "is_frozen", return_value=False), \
+             patch.object(app_launcher, "SERVER_SCRIPT", PROJECT_ROOT / "src" / "server.py"), \
+             patch.object(app_launcher, "get_windows_pythonw", return_value="pythonw.exe"), \
+             patch.object(app_launcher.subprocess, "DETACHED_PROCESS", 0x8, create=True), \
+             patch.object(app_launcher.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, create=True), \
+             patch.object(app_launcher.subprocess, "CREATE_NO_WINDOW", 0x8000000, create=True), \
+             patch.object(app_launcher.subprocess, "Popen") as popen:
+            app_launcher.start_server()
+
+        args, kwargs = popen.call_args
+        self.assertEqual(
+            args[0],
+            ["pythonw.exe", str(PROJECT_ROOT / "src" / "server.py"), "--flask-only", "--quiet", "--strict-port"],
+        )
+        self.assertEqual(kwargs["creationflags"], 0x8000208)
+        self.assertEqual(kwargs["stdout"], app_launcher.subprocess.DEVNULL)
+        self.assertEqual(kwargs["stderr"], app_launcher.subprocess.DEVNULL)
+
+    def test_windows_external_url_uses_shell_not_webbrowser(self):
+        with patch.object(app_launcher.sys, "platform", "win32"), \
+             patch.object(app_launcher.os, "startfile", create=True) as startfile, \
+             patch.object(app_launcher.webbrowser, "open") as browser_open:
+            app_launcher.open_external_url("http://127.0.0.1:5000/")
+
+        startfile.assert_called_once_with("http://127.0.0.1:5000/")
+        browser_open.assert_not_called()
+
     def test_main_dispatches_server_mode_without_flag_leak(self):
         with patch.object(app_launcher, "run_server_mode") as run_server_mode, patch.object(sys, "argv", ["app_launcher.py", "--server", "--flask-only", "--quiet"]):
             app_launcher.main()

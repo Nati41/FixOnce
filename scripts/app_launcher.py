@@ -37,6 +37,18 @@ def is_frozen() -> bool:
     return bool(getattr(sys, "frozen", False))
 
 
+def windows_process_creationflags(detached: bool = True) -> int:
+    """Return Windows flags that isolate child processes from console control events."""
+    if sys.platform != "win32":
+        return 0
+
+    flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    if detached:
+        flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
+        flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return flags
+
+
 def log_event(message: str):
     """Append launcher diagnostics to a local log file."""
     try:
@@ -217,19 +229,18 @@ def start_server():
         raise FileNotFoundError("FixOnce is missing required files.")
 
     if sys.platform == "win32":
-        creationflags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
         if is_frozen():
-            command = [sys.executable, "--server", "--flask-only", "--quiet"]
+            command = [sys.executable, "--server", "--flask-only", "--quiet", "--strict-port"]
         else:
             python_cmd = get_windows_pythonw(sys.executable)
-            command = [python_cmd, str(SERVER_SCRIPT), "--flask-only", "--quiet"]
+            command = [python_cmd, str(SERVER_SCRIPT), "--flask-only", "--quiet", "--strict-port"]
 
         subprocess.Popen(
             command,
             cwd=str(PROJECT_DIR),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            creationflags=creationflags,
+            creationflags=windows_process_creationflags(detached=True),
         )
     else:
         subprocess.Popen(
@@ -242,6 +253,24 @@ def start_server():
     log_event("Requested background server start")
 
 
+def open_external_url(url: str):
+    """Open an external URL without coupling it to the server process group."""
+    if sys.platform == "win32":
+        try:
+            os.startfile(url)  # type: ignore[attr-defined]
+            return
+        except Exception:
+            subprocess.Popen(
+                ["cmd", "/c", "start", "", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=windows_process_creationflags(detached=True),
+            )
+            return
+
+    webbrowser.open(url)
+
+
 def open_dashboard(port: int):
     """Open the dashboard in a native window only."""
     set_dock_icon()
@@ -249,7 +278,7 @@ def open_dashboard(port: int):
 
     class Api:
         def open_url(self, url):
-            webbrowser.open(url)
+            open_external_url(url)
 
     try:
         import webview

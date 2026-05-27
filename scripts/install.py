@@ -192,6 +192,48 @@ def get_windows_pythonw(executable: str) -> str:
     return executable
 
 
+def get_windows_launcher_command(fixonce_dir: Path, server_mode: bool = False) -> tuple[list[str], Path]:
+    """Return the preferred Windows launcher command and working directory."""
+    packaged_candidates = [
+        fixonce_dir / "FixOnce.exe",
+        fixonce_dir / "dist" / "FixOnce" / "FixOnce.exe",
+    ]
+    for exe_path in packaged_candidates:
+        if exe_path.exists():
+            command = [str(exe_path)]
+            if server_mode:
+                command.append("--server")
+            return command, exe_path.parent
+
+    pythonw_cmd = get_windows_pythonw(sys.executable)
+    command = [pythonw_cmd, str(fixonce_dir / "scripts" / "app_launcher.py")]
+    if server_mode:
+        command.append("--server")
+    return command, fixonce_dir
+
+
+def get_launcher_command(fixonce_dir: Path, server_mode: bool = False) -> tuple[list[str], Path]:
+    """Return the canonical FixOnce launcher command for this platform."""
+    if get_platform() == 'windows':
+        return get_windows_launcher_command(fixonce_dir, server_mode=server_mode)
+
+    command = [sys.executable, str(fixonce_dir / "scripts" / "app_launcher.py")]
+    if server_mode:
+        command.append("--server")
+    return command, fixonce_dir
+
+
+def get_detached_creationflags() -> int:
+    """Windows-only process isolation flags; no-op elsewhere."""
+    if get_platform() != 'windows':
+        return 0
+
+    flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
+    flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return flags
+
+
 def _build_stdio_mcp_config(command: str, server_path: str, pythonpath: str, fastmcp_path: str = None) -> dict:
     """Build a stdio MCP config shared by all supported editors."""
     if fastmcp_path:
@@ -242,7 +284,8 @@ def _configure_codex_mcp_file(path: Path, server_name: str, config: dict):
     args = ", ".join(_toml_quote(arg) for arg in config.get("args", []))
     block_lines.append(f"args = [{args}]")
 
-    env = config.get("env", {})
+    env = dict(config.get("env", {}))
+    env.setdefault("FIXONCE_ACTOR", "codex")
     if env:
         block_lines.append("")
         block_lines.append(f"[mcp_servers.{server_name}.env]")
@@ -1222,65 +1265,30 @@ def check_server_health(port: int = 5000, max_attempts: int = 10) -> tuple:
 
 
 def start_server_and_open_dashboard() -> bool:
-    """Start the server and open dashboard with health check"""
+    """Launch FixOnce through the end-user launcher."""
     print(f"\n{Colors.BLUE}[5/5]{Colors.END} Starting FixOnce...")
 
     fixonce_dir = get_fixonce_dir()
-    server_script = fixonce_dir / "src" / "server.py"
-
-    if not server_script.exists():
-        print(f"  {Colors.RED}[ERROR]{Colors.END} Server script not found")
-        return False
 
     current_platform = get_platform()
-
-    # Check if server already running
-    is_running, running_port = check_server_health(5000, max_attempts=2)
-    if is_running:
-        print(f"  {Colors.GREEN}[OK]{Colors.END} Server already running on port {running_port}")
-        dashboard_url = f"http://localhost:{running_port}"
-    else:
-        # Start server in background
-        try:
-            if current_platform == 'windows':
-                python_cmd = sys.executable
-                subprocess.Popen(
-                    f'start /B "" "{python_cmd}" "{server_script}" --flask-only',
-                    shell=True,
-                    cwd=str(fixonce_dir / "src")
-                )
+    try:
+        if current_platform == 'windows':
+            launcher_cmd, _ = get_windows_launcher_command(fixonce_dir)
+            subprocess.Popen(launcher_cmd, creationflags=get_detached_creationflags())
+        elif current_platform == 'mac':
+            app_path = fixonce_dir / "FixOnce.app"
+            if app_path.exists():
+                subprocess.Popen(['open', str(app_path)])
             else:
-                subprocess.Popen(
-                    [sys.executable, str(server_script), '--flask-only'],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    cwd=str(fixonce_dir / "src"),
-                    start_new_session=True
-                )
+                subprocess.Popen([sys.executable, str(fixonce_dir / 'scripts' / 'app_launcher.py')])
+        else:
+            subprocess.Popen([sys.executable, str(fixonce_dir / 'scripts' / 'app_launcher.py')])
 
-            print(f"  {Colors.YELLOW}[...]{Colors.END} Server starting, waiting for health check...")
-
-            # Health check with retries
-            is_healthy, actual_port = check_server_health(5000, max_attempts=15)
-
-            if is_healthy:
-                print(f"  {Colors.GREEN}[OK]{Colors.END} Server healthy on port {actual_port}")
-                dashboard_url = f"http://localhost:{actual_port}"
-            else:
-                print(f"  {Colors.YELLOW}[WARN]{Colors.END} Server may still be starting...")
-                dashboard_url = "http://localhost:5000"
-
-        except Exception as e:
-            print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to start: {e}")
-            return False
-
-    # Don't auto-open dashboard - let user/AI decide
-    print(f"  {Colors.GREEN}[OK]{Colors.END} Server running: {dashboard_url}")
-    print()
-    print(f"  {Colors.GREEN}🎉 FixOnce installed successfully!{Colors.END}")
-    print(f"  Dashboard: {dashboard_url}")
-    print()
-    return True
+        print(f"  {Colors.GREEN}[OK]{Colors.END} FixOnce launched")
+        return True
+    except Exception as e:
+        print(f"  {Colors.RED}[ERROR]{Colors.END} Failed to launch: {e}")
+        return False
 
 # ============ Create Launcher Scripts ============
 
@@ -1455,9 +1463,8 @@ def configure_auto_start() -> bool:
     elif current_platform == 'windows':
         # Create scheduled task for auto-start
         try:
-            server_script = fixonce_dir / "src" / "server.py"
             task_name = "FixOnceServer"
-            pythonw_cmd = get_windows_pythonw(sys.executable)
+            launcher_cmd, launcher_cwd = get_windows_launcher_command(fixonce_dir, server_mode=True)
 
             # Remove existing task if any
             subprocess.run(
@@ -1469,10 +1476,11 @@ def configure_auto_start() -> bool:
             result = subprocess.run([
                 'schtasks', '/create',
                 '/tn', task_name,
-                '/tr', f'"{pythonw_cmd}" "{server_script}" --flask-only',
+                '/tr', subprocess.list2cmdline(launcher_cmd),
                 '/sc', 'onlogon',
                 '/rl', 'limited',
-                '/f'
+                '/f',
+                '/it'
             ], capture_output=True, text=True)
 
             if result.returncode == 0:
@@ -1480,7 +1488,7 @@ def configure_auto_start() -> bool:
                 return True
             else:
                 print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not configure auto-start")
-                print(f"       Run manually: python src/server.py")
+                print(f"       Open FixOnce from the app icon or launcher script instead.")
                 return False
         except Exception as e:
             print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not configure auto-start: {e}")
@@ -1488,7 +1496,7 @@ def configure_auto_start() -> bool:
 
     else:
         print(f"  {Colors.YELLOW}[INFO]{Colors.END} Auto-start not configured for Linux")
-        print(f"       Add to your startup: python3 {fixonce_dir}/src/server.py --flask-only")
+        print(f"       Add the FixOnce launcher to your startup applications.")
         return True
 
 
@@ -1606,10 +1614,10 @@ def start_app():
                 subprocess.Popen([sys.executable, str(fixonce_dir / 'scripts' / 'app_launcher.py')])
                 print(f"  {Colors.GREEN}[OK]{Colors.END} FixOnce launched!")
         elif current_platform == 'windows':
-            pythonw_cmd = get_windows_pythonw(sys.executable)
+            launcher_cmd, _ = get_windows_launcher_command(fixonce_dir)
             subprocess.Popen(
-                [pythonw_cmd, str(fixonce_dir / 'scripts' / 'app_launcher.py')],
-                creationflags=subprocess.DETACHED_PROCESS
+                launcher_cmd,
+                creationflags=get_detached_creationflags()
             )
             print(f"  {Colors.GREEN}[OK]{Colors.END} FixOnce launched!")
         else:
@@ -1651,21 +1659,21 @@ def initialize_fresh_data():
     # Create empty active_project.json (no project selected)
     active_project_file = data_dir / "active_project.json"
     if not active_project_file.exists():
-        with open(active_project_file, 'w') as f:
-            json.dump({"active_id": None, "working_dir": None}, f, indent=2)
+        with open(active_project_file, 'w', encoding='utf-8') as f:
+            json.dump({"active_id": None, "working_dir": None}, f, ensure_ascii=False, indent=2)
         print(f"  {Colors.GREEN}[OK]{Colors.END} Created empty active_project.json")
 
     # Create empty session registry
     session_file = data_dir / "session_registry.json"
     if not session_file.exists():
-        with open(session_file, 'w') as f:
-            json.dump({"sessions": {}}, f, indent=2)
+        with open(session_file, 'w', encoding='utf-8') as f:
+            json.dump({"sessions": {}}, f, ensure_ascii=False, indent=2)
 
     # Create activity log
     activity_file = data_dir / "activity_log.json"
     if not activity_file.exists():
-        with open(activity_file, 'w') as f:
-            json.dump({"activities": []}, f, indent=2)
+        with open(activity_file, 'w', encoding='utf-8') as f:
+            json.dump({"activities": []}, f, ensure_ascii=False, indent=2)
 
     print(f"  {Colors.GREEN}[OK]{Colors.END} Data directory ready")
     return True
@@ -1678,7 +1686,6 @@ def open_web_installer():
     import time
     fixonce_dir = get_fixonce_dir()
     current_platform = get_platform()
-    server_script = fixonce_dir / "src" / "server.py"
     log_file = fixonce_dir / "data" / "server_startup.log"
 
     # Check if server already running (scan ports 5000-5009)
@@ -1690,14 +1697,16 @@ def open_web_installer():
     if not is_running:
         print(f"  Starting FixOnce server...")
 
-        # Start server with logging
+        # Start the background server through the canonical app launcher.
+        launcher_cmd, launcher_cwd = get_launcher_command(fixonce_dir, server_mode=True)
         with open(log_file, 'w') as log:
             subprocess.Popen(
-                [sys.executable, str(server_script), '--flask-only'],
+                launcher_cmd,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                cwd=str(fixonce_dir / "src"),
-                start_new_session=True
+                cwd=str(launcher_cwd),
+                creationflags=get_detached_creationflags(),
+                start_new_session=(current_platform != 'windows')
             )
 
         # Wait for canonical runtime + health instead of legacy current_port.txt
@@ -1845,15 +1854,16 @@ def repair_server() -> bool:
     """Start the FixOnce server."""
     print(f"    {Colors.BLUE}Starting server...{Colors.END}")
     fixonce_dir = get_fixonce_dir()
-    server_script = fixonce_dir / "src" / "server.py"
 
     try:
+        launcher_cmd, launcher_cwd = get_launcher_command(fixonce_dir, server_mode=True)
         subprocess.Popen(
-            [sys.executable, str(server_script), '--flask-only'],
+            launcher_cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            cwd=str(fixonce_dir / "src"),
-            start_new_session=True
+            cwd=str(launcher_cwd),
+            creationflags=get_detached_creationflags(),
+            start_new_session=(get_platform() != 'windows')
         )
         import time
         time.sleep(2)

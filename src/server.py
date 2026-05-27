@@ -4,6 +4,7 @@ Main Flask application with route registration.
 """
 
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -480,12 +481,69 @@ def check_mission_log() -> dict:
 # ---------------------------------------------------------------------------
 # Flask Runner
 # ---------------------------------------------------------------------------
-def _run_flask():
+def _describe_port_owner(port: int) -> str:
+    """Best-effort description of the process occupying a local TCP port."""
+    if sys.platform == "win32":
+        try:
+            result = subprocess.run(
+                ["netstat", "-ano"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                needle = f":{port}"
+                for line in result.stdout.splitlines():
+                    parts = line.split()
+                    if len(parts) >= 5 and parts[0].upper().startswith("TCP"):
+                        local_addr = parts[1]
+                        state = parts[3].upper()
+                        pid = parts[-1]
+                        if local_addr.endswith(needle) and state == "LISTENING":
+                            name = _windows_process_name(pid)
+                            return f"PID {pid}" + (f" ({name})" if name else "")
+        except Exception as exc:
+            return f"unknown process; netstat failed: {type(exc).__name__}: {exc}"
+
+    return "unknown process"
+
+
+def _windows_process_name(pid: str) -> str:
+    try:
+        result = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return ""
+        line = (result.stdout or "").strip().splitlines()[0]
+        if not line or "INFO:" in line:
+            return ""
+        return line.split('","', 1)[0].strip('"')
+    except Exception:
+        return ""
+
+
+def _run_flask(strict_port: bool = False):
     global ACTUAL_PORT
     import os
     import atexit
 
     current_pid = os.getpid()
+    _startup_log(f"_run_flask enter pid={current_pid} strict_port={strict_port}")
+
+    if strict_port and not is_port_available(DEFAULT_PORT):
+        owner = _describe_port_owner(DEFAULT_PORT)
+        print(
+            f"ERROR: port {DEFAULT_PORT} occupied by {owner}. "
+            f"FixOnce QA startup requires port {DEFAULT_PORT}; not falling back.",
+            file=sys.stderr,
+            flush=True,
+        )
+        _startup_log("_run_flask returning: strict port occupied")
+        return
 
     # Try to acquire server lock
     if not acquire_server_lock(current_pid):
@@ -496,14 +554,17 @@ def _run_flask():
         _startup_log("_run_flask returning: server lock unavailable")
         return
 
-    try:
-        requested_port = find_available_port(DEFAULT_PORT)
-    except RuntimeError as e:
-        print(f"[WARNING] {e}")
-        print("   Kill other processes or free up a port.")
-        release_server_lock()
-        _startup_log("_run_flask returning: no available port")
-        return
+    if strict_port:
+        requested_port = DEFAULT_PORT
+    else:
+        try:
+            requested_port = find_available_port(DEFAULT_PORT)
+        except RuntimeError as e:
+            print(f"[WARNING] {e}")
+            print("   Kill other processes or free up a port.")
+            release_server_lock()
+            _startup_log("_run_flask returning: no available port")
+            return
 
     ACTUAL_PORT = int(requested_port)
 
@@ -533,8 +594,10 @@ def _run_flask():
 
     # Cleanup on exit
     def cleanup():
+        _startup_log("_run_flask cleanup enter")
         clear_runtime_state()
         release_server_lock()
+        _startup_log("_run_flask cleanup exit")
 
     atexit.register(cleanup)
 
@@ -548,6 +611,7 @@ def _run_flask():
         _startup_log("_run_flask finally: cleanup complete")
 
     _startup_log("_run_flask returning after blocking server path")
+    _startup_log("_run_flask exit")
 
 
 def _serve_flask_blocking(host: str, port: int):
@@ -555,12 +619,15 @@ def _serve_flask_blocking(host: str, port: int):
     from werkzeug.serving import make_server
 
     server = None
+    _startup_log(f"_serve_flask_blocking enter host={host} port={port}")
     try:
         _startup_log("werkzeug make_server: start")
         server = make_server(host, port, flask_app, threaded=True)
+        _trace_server_shutdown_calls(server)
         _startup_log(f"werkzeug serve_forever: start http://{host}:{port}")
         print(f" * Running on http://{host}:{port}", flush=True)
         server.serve_forever()
+        _startup_log("werkzeug serve_forever returned without exception")
     except KeyboardInterrupt:
         _startup_log("werkzeug serve_forever interrupted by KeyboardInterrupt")
         raise
@@ -573,9 +640,33 @@ def _serve_flask_blocking(host: str, port: int):
         if server is not None:
             server.server_close()
         _startup_log("_serve_flask_blocking finally: server_close complete")
+        _startup_log("_serve_flask_blocking exit")
 
     print("[ERROR] Flask run returned unexpectedly (serve_forever returned without exception)", file=sys.stderr, flush=True)
     _startup_log("_serve_flask_blocking returning after unexpected serve_forever return")
+
+
+def _trace_server_shutdown_calls(server):
+    """Trace only Werkzeug server shutdown/close callers for Windows exit diagnosis."""
+    original_shutdown = server.shutdown
+    original_server_close = server.server_close
+
+    def traced_shutdown(*args, **kwargs):
+        _startup_log("werkzeug server.shutdown called")
+        traceback.print_stack(file=sys.stderr)
+        result = original_shutdown(*args, **kwargs)
+        _startup_log("werkzeug server.shutdown returned")
+        return result
+
+    def traced_server_close(*args, **kwargs):
+        _startup_log("werkzeug server.server_close called")
+        traceback.print_stack(file=sys.stderr)
+        result = original_server_close(*args, **kwargs)
+        _startup_log("werkzeug server.server_close returned")
+        return result
+
+    server.shutdown = traced_shutdown
+    server.server_close = traced_server_close
 
 
 # ---------------------------------------------------------------------------
@@ -587,8 +678,12 @@ def main(argv=None):
     parser.add_argument("--flask-only", action="store_true", help="Run Flask server only (no MCP)")
     parser.add_argument("--minimized", action="store_true", help="Start minimized (for Windows startup)")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress startup messages")
+    parser.add_argument("--strict-port", action="store_true", help="Fail instead of falling back when port 5000 is busy")
     args = parser.parse_args(argv)
-    _startup_log(f"main parsed args: flask_only={args.flask_only} minimized={args.minimized} quiet={args.quiet}")
+    _startup_log(
+        f"main parsed args: flask_only={args.flask_only} minimized={args.minimized} "
+        f"quiet={args.quiet} strict_port={args.strict_port}"
+    )
 
     # First launch initialization - create data files from templates
     _startup_log("project init / first launch: start")
@@ -625,7 +720,7 @@ def main(argv=None):
         else:
             print("[MODE] Running Flask-only mode (no MCP)")
         _startup_log("flask-only run path: start")
-        _run_flask()
+        _run_flask(strict_port=args.strict_port)
         _startup_log("main flask-only path returned from _run_flask")
     else:
         _startup_log("starting Flask background thread for MCP mode")
