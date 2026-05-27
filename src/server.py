@@ -5,6 +5,7 @@ Main Flask application with route registration.
 
 import socket
 import socketserver
+import selectors
 import sys
 import threading
 import time
@@ -570,26 +571,12 @@ def _serve_flask_blocking(host: str, port: int):
             f"[FIXONCE-PROBE flask-only-serve-v3] server_class={server.__class__.__module__}.{server.__class__.__name__}",
             flush=True,
         )
-        original_shutdown = server.shutdown
-        original_server_close = server.server_close
-
-        def traced_shutdown(self):
-            print("[FIXONCE-PROBE flask-only-serve-v3] server.shutdown CALLED", flush=True)
-            traceback.print_stack(file=sys.stderr)
-            return original_shutdown()
-
-        def traced_server_close(self):
-            print("[FIXONCE-PROBE flask-only-serve-v3] server.server_close CALLED", flush=True)
-            traceback.print_stack(file=sys.stderr)
-            return original_server_close()
-
-        server.shutdown = types.MethodType(traced_shutdown, server)
-        server.server_close = types.MethodType(traced_server_close, server)
+        _install_server_shutdown_probes(server)
         print("[FIXONCE-PROBE flask-only-serve-v3] make_server returned; serve_forever will be reached", flush=True)
-        _startup_log(f"socketserver BaseServer.serve_forever: start http://{host}:{port}")
+        _startup_log(f"traced BaseServer poll loop: start http://{host}:{port}")
         print(f" * Running on http://{host}:{port}", flush=True)
         print("[FIXONCE-PROBE flask-only-serve-v3] BEFORE serve_forever", flush=True)
-        socketserver.BaseServer.serve_forever(server)
+        _serve_forever_probe(server)
         print("[FIXONCE-PROBE flask-only-serve-v3] AFTER serve_forever", flush=True)
     except KeyboardInterrupt:
         _startup_log("werkzeug serve_forever interrupted by KeyboardInterrupt")
@@ -606,6 +593,156 @@ def _serve_flask_blocking(host: str, port: int):
 
     print("[ERROR] Flask run returned unexpectedly (serve_forever returned without exception)", file=sys.stderr, flush=True)
     _startup_log("_serve_flask_blocking returning after unexpected serve_forever return")
+
+
+class _SocketProbe:
+    """Proxy a socket so close/fileno calls are visible in Windows diagnostics."""
+
+    def __init__(self, sock):
+        self._sock = sock
+
+    def __getattr__(self, name):
+        return getattr(self._sock, name)
+
+    def __repr__(self):
+        return f"<SocketProbe wrapping {self._sock!r}>"
+
+    def fileno(self):
+        try:
+            value = self._sock.fileno()
+            print(f"[FIXONCE-PROBE flask-only-serve-v3] server.socket.fileno -> {value}", flush=True)
+            return value
+        except BaseException as exc:
+            print(f"[FIXONCE-PROBE flask-only-serve-v3] server.socket.fileno RAISED {type(exc).__name__}: {exc}", flush=True)
+            raise
+
+    def close(self):
+        print("[FIXONCE-PROBE flask-only-serve-v3] server.socket.close CALLED", flush=True)
+        traceback.print_stack(file=sys.stderr)
+        return self._sock.close()
+
+
+def _install_server_shutdown_probes(server):
+    print(f"[FIXONCE-PROBE flask-only-serve-v3] server.__dict__={server.__dict__!r}", flush=True)
+    print(f"[FIXONCE-PROBE flask-only-serve-v3] server.socket={server.socket!r}", flush=True)
+    _print_server_fileno(server, "initial")
+
+    original_shutdown = server.shutdown
+    original_server_close = server.server_close
+    original_fileno = server.fileno
+    original_handle_request = server._handle_request_noblock
+
+    def traced_shutdown(self):
+        print("[FIXONCE-PROBE flask-only-serve-v3] server.shutdown CALLED", flush=True)
+        traceback.print_stack(file=sys.stderr)
+        return original_shutdown()
+
+    def traced_server_close(self):
+        print("[FIXONCE-PROBE flask-only-serve-v3] server.server_close CALLED", flush=True)
+        _print_server_fileno(self, "before server_close")
+        traceback.print_stack(file=sys.stderr)
+        result = original_server_close()
+        _print_server_fileno(self, "after server_close")
+        return result
+
+    def traced_fileno(self):
+        try:
+            value = original_fileno()
+            print(f"[FIXONCE-PROBE flask-only-serve-v3] server.fileno -> {value}", flush=True)
+            return value
+        except BaseException as exc:
+            print(f"[FIXONCE-PROBE flask-only-serve-v3] server.fileno RAISED {type(exc).__name__}: {exc}", flush=True)
+            raise
+
+    def traced_handle_request(self):
+        print("[FIXONCE-PROBE flask-only-serve-v3] _handle_request_noblock ENTER", flush=True)
+        _print_server_fileno(self, "before handle_request")
+        try:
+            return original_handle_request()
+        finally:
+            _print_server_fileno(self, "after handle_request")
+            print("[FIXONCE-PROBE flask-only-serve-v3] _handle_request_noblock EXIT", flush=True)
+
+    server.shutdown = types.MethodType(traced_shutdown, server)
+    server.server_close = types.MethodType(traced_server_close, server)
+    server.fileno = types.MethodType(traced_fileno, server)
+    server._handle_request_noblock = types.MethodType(traced_handle_request, server)
+    server.socket = _SocketProbe(server.socket)
+    print(f"[FIXONCE-PROBE flask-only-serve-v3] server.socket wrapped={server.socket!r}", flush=True)
+    _print_server_fileno(server, "after probe install")
+
+
+def _print_server_fileno(server, label: str):
+    try:
+        server_fd = server.fileno()
+    except BaseException as exc:
+        server_fd = f"{type(exc).__name__}: {exc}"
+    try:
+        socket_fd = server.socket.fileno()
+    except BaseException as exc:
+        socket_fd = f"{type(exc).__name__}: {exc}"
+    shutdown_flag = getattr(server, "_BaseServer__shutdown_request", "<missing>")
+    print(
+        f"[FIXONCE-PROBE flask-only-serve-v3] fileno {label}: "
+        f"server={server_fd} socket={socket_fd} shutdown_flag={shutdown_flag}",
+        flush=True,
+    )
+
+
+def _serve_forever_probe(server, poll_interval: float = 0.5):
+    """Instrument socketserver.BaseServer.serve_forever exit conditions."""
+    shutdown_attr = "_BaseServer__shutdown_request"
+    is_down_attr = "_BaseServer__is_shut_down"
+    print(
+        f"[FIXONCE-PROBE flask-only-serve-v3] poll_loop ENTER "
+        f"poll_interval={poll_interval} shutdown_flag={getattr(server, shutdown_attr, '<missing>')}",
+        flush=True,
+    )
+    getattr(server, is_down_attr).clear()
+    loop_count = 0
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(server, selectors.EVENT_READ)
+            print("[FIXONCE-PROBE flask-only-serve-v3] selector registered server", flush=True)
+
+            while True:
+                shutdown_flag = getattr(server, shutdown_attr)
+                _print_server_fileno(server, f"loop {loop_count} top")
+                if shutdown_flag:
+                    print(
+                        f"[FIXONCE-PROBE flask-only-serve-v3] poll_loop EXIT: shutdown_flag true at loop {loop_count}",
+                        flush=True,
+                    )
+                    break
+
+                ready = selector.select(poll_interval)
+                print(
+                    f"[FIXONCE-PROBE flask-only-serve-v3] selector.select loop={loop_count} ready={bool(ready)} count={len(ready)}",
+                    flush=True,
+                )
+
+                shutdown_flag = getattr(server, shutdown_attr)
+                if shutdown_flag:
+                    print(
+                        f"[FIXONCE-PROBE flask-only-serve-v3] poll_loop EXIT: shutdown_flag true after select at loop {loop_count}",
+                        flush=True,
+                    )
+                    break
+
+                if ready:
+                    print(f"[FIXONCE-PROBE flask-only-serve-v3] poll_loop handling request loop={loop_count}", flush=True)
+                    server._handle_request_noblock()
+
+                server.service_actions()
+                loop_count += 1
+    finally:
+        print(
+            f"[FIXONCE-PROBE flask-only-serve-v3] poll_loop FINALLY "
+            f"loop_count={loop_count} shutdown_flag={getattr(server, shutdown_attr, '<missing>')}",
+            flush=True,
+        )
+        setattr(server, shutdown_attr, False)
+        getattr(server, is_down_attr).set()
 
 
 # ---------------------------------------------------------------------------

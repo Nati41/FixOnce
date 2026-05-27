@@ -45,7 +45,7 @@ class TestServerFlaskOnly(unittest.TestCase):
 
         with patch.object(server_module.flask_app, "run") as app_run, \
              patch("werkzeug.serving.make_server", return_value=fake_server) as make_server, \
-             patch("socketserver.BaseServer.serve_forever", side_effect=KeyboardInterrupt) as serve_forever, \
+             patch.object(server_module, "_serve_forever_probe", side_effect=KeyboardInterrupt) as serve_forever, \
              patch("sys.stdout", stdout), \
              patch("sys.stderr", stderr):
             with self.assertRaises(KeyboardInterrupt):
@@ -69,7 +69,7 @@ class TestServerFlaskOnly(unittest.TestCase):
         stdout = io.StringIO()
 
         with patch("werkzeug.serving.make_server", return_value=fake_server), \
-             patch("socketserver.BaseServer.serve_forever", return_value=None), \
+             patch.object(server_module, "_serve_forever_probe", return_value=None), \
              patch("sys.stderr", stderr), \
              patch("sys.stdout", stdout):
             server_module._serve_flask_blocking("127.0.0.1", 5123)
