@@ -655,12 +655,20 @@ def _install_windows_console_ctrl_probe():
         handler_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
 
         def console_handler(ctrl_type):
+            event_name = event_names.get(ctrl_type, ctrl_type)
             print(
                 f"[FIXONCE-PROBE flask-only-serve-v3] Windows console control event "
-                f"{event_names.get(ctrl_type, ctrl_type)} received thread={threading.current_thread().name}",
+                f"{event_name} received thread={threading.current_thread().name}",
                 flush=True,
             )
             traceback.print_stack(file=sys.stderr)
+            if ctrl_type == 0:
+                print(
+                    "[FIXONCE-PROBE flask-only-serve-v3] CTRL_C_EVENT swallowed temporarily "
+                    "for source isolation",
+                    flush=True,
+                )
+                return True
             return False
 
         _WINDOWS_CTRL_HANDLER = handler_type(console_handler)
