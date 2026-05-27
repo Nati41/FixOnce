@@ -45,9 +45,6 @@ class TestServerFlaskOnly(unittest.TestCase):
 
         with patch.object(server_module.flask_app, "run") as app_run, \
              patch("werkzeug.serving.make_server", return_value=fake_server) as make_server, \
-             patch.object(server_module, "_serve_forever_probe", side_effect=KeyboardInterrupt) as serve_forever, \
-             patch.object(server_module, "_install_interrupt_probes"), \
-             patch.object(server_module, "_print_process_probe"), \
              patch("sys.stdout", stdout), \
              patch("sys.stderr", stderr):
             with self.assertRaises(KeyboardInterrupt):
@@ -55,15 +52,12 @@ class TestServerFlaskOnly(unittest.TestCase):
 
         app_run.assert_not_called()
         make_server.assert_called_once_with("127.0.0.1", 5123, server_module.flask_app, threaded=True)
-        serve_forever.assert_called_once_with(fake_server)
+        fake_server.serve_forever.assert_called_once_with()
         output = stdout.getvalue()
-        self.assertIn("[FIXONCE-PROBE flask-only-serve-v3] entered _serve_flask_blocking", output)
-        self.assertIn("file=", output)
-        self.assertIn("[FIXONCE-PROBE flask-only-serve-v3] server_class=", output)
-        self.assertIn("[FIXONCE-PROBE flask-only-serve-v3] make_server returned; serve_forever will be reached", output)
-        self.assertIn("[FIXONCE-PROBE flask-only-serve-v3] BEFORE serve_forever", output)
-        self.assertIn("[FIXONCE-PROBE flask-only-serve-v3] server.server_close CALLED", output)
-        self.assertNotIn("[FIXONCE-PROBE flask-only-serve-v3] AFTER serve_forever", output)
+        self.assertIn("werkzeug make_server: start", output)
+        self.assertIn("werkzeug serve_forever: start http://127.0.0.1:5123", output)
+        self.assertIn(" * Running on http://127.0.0.1:5123", output)
+        self.assertNotIn("[FIXONCE-PROBE", output)
 
     def test_unexpected_serve_forever_return_is_logged(self):
         fake_server = Mock()
@@ -71,15 +65,13 @@ class TestServerFlaskOnly(unittest.TestCase):
         stdout = io.StringIO()
 
         with patch("werkzeug.serving.make_server", return_value=fake_server), \
-             patch.object(server_module, "_serve_forever_probe", return_value=None), \
-             patch.object(server_module, "_install_interrupt_probes"), \
-             patch.object(server_module, "_print_process_probe"), \
              patch("sys.stderr", stderr), \
              patch("sys.stdout", stdout):
             server_module._serve_flask_blocking("127.0.0.1", 5123)
 
         self.assertIn("[ERROR] Flask run returned unexpectedly", stderr.getvalue())
-        self.assertIn("[FIXONCE-PROBE flask-only-serve-v3] AFTER serve_forever", stdout.getvalue())
+        self.assertIn("werkzeug serve_forever: start http://127.0.0.1:5123", stdout.getvalue())
+        self.assertNotIn("[FIXONCE-PROBE", stdout.getvalue())
 
 
 if __name__ == "__main__":
