@@ -629,6 +629,7 @@ def _serve_flask_blocking(host: str, port: int):
             f"server_class={server.__class__.__module__}.{server.__class__.__name__} "
             f"server_type={type(server)!r}"
         )
+        _trace_server_socket_close(server)
         _log_werkzeug_server_state(server, "before serve_forever")
         _startup_log(f"werkzeug serve_forever: start http://{host}:{port}")
         print(f" * Running on http://{host}:{port}", flush=True)
@@ -655,6 +656,74 @@ def _serve_flask_blocking(host: str, port: int):
 
     print("[ERROR] Flask run returned unexpectedly (serve_forever returned without exception)", file=sys.stderr, flush=True)
     _startup_log("_serve_flask_blocking returning after unexpected serve_forever return")
+
+
+class _ServerSocketCloseTracer:
+    """Trace exactly who closes the Werkzeug listening socket."""
+
+    def __init__(self, wrapped):
+        self._wrapped = wrapped
+
+    def __getattr__(self, name):
+        return getattr(self._wrapped, name)
+
+    def __enter__(self):
+        return self._wrapped.__enter__()
+
+    def __exit__(self, exc_type, exc, tb):
+        return self._wrapped.__exit__(exc_type, exc, tb)
+
+    def __repr__(self):
+        return f"<_ServerSocketCloseTracer wrapped={self._wrapped!r}>"
+
+    def close(self):
+        stack = traceback.extract_stack(limit=12)
+        caller = stack[-2] if len(stack) >= 2 else None
+        _startup_log(
+            "werkzeug socket close called: "
+            f"thread={threading.current_thread().name!r} "
+            f"caller={caller!r} "
+            f"before={_format_socket_state(self._wrapped)}"
+        )
+        print("[STARTUP] werkzeug socket close stack:", file=sys.stderr, flush=True)
+        traceback.print_stack(file=sys.stderr)
+        result = self._wrapped.close()
+        _startup_log(
+            "werkzeug socket close returned: "
+            f"thread={threading.current_thread().name!r} "
+            f"after={_format_socket_state(self._wrapped)}"
+        )
+        return result
+
+
+def _format_socket_state(socket_obj) -> str:
+    if socket_obj is None:
+        return "socket=None"
+
+    try:
+        fileno = socket_obj.fileno()
+    except BaseException as exc:
+        fileno = f"{type(exc).__name__}: {exc}"
+
+    try:
+        socket_name = socket_obj.getsockname()
+    except BaseException as exc:
+        socket_name = f"{type(exc).__name__}: {exc}"
+
+    return f"socket={socket_obj!r} fileno={fileno!r} name={socket_name!r}"
+
+
+def _trace_server_socket_close(server):
+    socket_obj = getattr(server, "socket", None)
+    if socket_obj is None:
+        _startup_log("werkzeug socket close tracer skipped: socket missing")
+        return
+    if isinstance(socket_obj, _ServerSocketCloseTracer):
+        _startup_log("werkzeug socket close tracer already installed")
+        return
+
+    server.socket = _ServerSocketCloseTracer(socket_obj)
+    _startup_log(f"werkzeug socket close tracer installed: {_format_socket_state(socket_obj)}")
 
 
 def _log_werkzeug_server_state(server, label: str):
@@ -688,6 +757,31 @@ def _log_werkzeug_server_state(server, label: str):
     )
 
 
+def _run_minimal_werkzeug_repro():
+    """Run a pure Flask/Werkzeug server with no FixOnce startup wiring."""
+    from flask import Flask
+    from werkzeug.serving import make_server
+
+    app = Flask("fixonce_werkzeug_minimal_repro")
+
+    @app.route("/")
+    def ok():
+        return "ok"
+
+    print("[REPRO] starting pure Werkzeug server on http://127.0.0.1:5000", flush=True)
+    server = make_server("127.0.0.1", 5000, app)
+    print(f"[REPRO] server={server!r} class={server.__class__.__module__}.{server.__class__.__name__}", flush=True)
+    print("[REPRO] serve_forever enter", flush=True)
+    server.serve_forever()
+    print(
+        "[REPRO] serve_forever returned "
+        f"shutdown_request={getattr(server, '_BaseServer__shutdown_request', '<missing>')!r} "
+        f"is_shut_down={getattr(server, '_BaseServer__is_shut_down', '<missing>')!r} "
+        f"socket={getattr(server, 'socket', None)!r}",
+        flush=True,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Main Entry Point
 # ---------------------------------------------------------------------------
@@ -698,7 +792,16 @@ def main(argv=None):
     parser.add_argument("--minimized", action="store_true", help="Start minimized (for Windows startup)")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress startup messages")
     parser.add_argument("--strict-port", action="store_true", help="Fail instead of falling back when port 5000 is busy")
+    parser.add_argument(
+        "--werkzeug-minimal-repro",
+        action="store_true",
+        help="Run a pure Flask/Werkzeug serve_forever repro and skip FixOnce startup",
+    )
     args = parser.parse_args(argv)
+    if args.werkzeug_minimal_repro:
+        _run_minimal_werkzeug_repro()
+        return
+
     _startup_log(
         f"main parsed args: flask_only={args.flask_only} minimized={args.minimized} "
         f"quiet={args.quiet} strict_port={args.strict_port}"
