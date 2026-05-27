@@ -119,6 +119,12 @@ _startup_log("register blueprints: ok")
 # ---------------------------------------------------------------------------
 # Dashboard & Static Routes
 # ---------------------------------------------------------------------------
+@flask_app.route("/_minimal_alive")
+def minimal_alive():
+    """Minimal route inside the real FixOnce Flask app for lifecycle isolation."""
+    return "ok"
+
+
 def _send_dashboard_file(path):
     """Serve dashboard HTML without browser caching."""
     response = make_response(send_file(path))
