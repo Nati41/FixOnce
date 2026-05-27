@@ -621,19 +621,30 @@ def _serve_flask_blocking(host: str, port: int):
     server = None
     _startup_log(f"_serve_flask_blocking enter host={host} port={port}")
     try:
+        _startup_log(f"werkzeug lifecycle before make_server server_type={type(server)!r}")
         _startup_log("werkzeug make_server: start")
         server = make_server(host, port, flask_app, threaded=True)
-        _trace_server_shutdown_calls(server)
+        _startup_log(
+            "werkzeug lifecycle after make_server "
+            f"server_class={server.__class__.__module__}.{server.__class__.__name__} "
+            f"server_type={type(server)!r}"
+        )
+        _log_werkzeug_server_state(server, "before serve_forever")
         _startup_log(f"werkzeug serve_forever: start http://{host}:{port}")
         print(f" * Running on http://{host}:{port}", flush=True)
         server.serve_forever()
         _startup_log("werkzeug serve_forever returned without exception")
+        _log_werkzeug_server_state(server, "after serve_forever return")
     except KeyboardInterrupt:
         _startup_log("werkzeug serve_forever interrupted by KeyboardInterrupt")
+        if server is not None:
+            _log_werkzeug_server_state(server, "after KeyboardInterrupt")
         raise
     except BaseException as exc:
         print(f"[ERROR] Flask server crashed: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
         traceback.print_exc(file=sys.stderr)
+        if server is not None:
+            _log_werkzeug_server_state(server, "after serve_forever exception")
         raise
     finally:
         _startup_log("_serve_flask_blocking finally: server_close starting")
@@ -646,27 +657,35 @@ def _serve_flask_blocking(host: str, port: int):
     _startup_log("_serve_flask_blocking returning after unexpected serve_forever return")
 
 
-def _trace_server_shutdown_calls(server):
-    """Trace only Werkzeug server shutdown/close callers for Windows exit diagnosis."""
-    original_shutdown = server.shutdown
-    original_server_close = server.server_close
+def _log_werkzeug_server_state(server, label: str):
+    """Log narrow Werkzeug lifecycle state around serve_forever()."""
+    try:
+        fileno = server.fileno()
+    except BaseException as exc:
+        fileno = f"{type(exc).__name__}: {exc}"
 
-    def traced_shutdown(*args, **kwargs):
-        _startup_log("werkzeug server.shutdown called")
-        traceback.print_stack(file=sys.stderr)
-        result = original_shutdown(*args, **kwargs)
-        _startup_log("werkzeug server.shutdown returned")
-        return result
+    socket_obj = getattr(server, "socket", None)
+    try:
+        socket_fileno = socket_obj.fileno() if socket_obj is not None else None
+    except BaseException as exc:
+        socket_fileno = f"{type(exc).__name__}: {exc}"
 
-    def traced_server_close(*args, **kwargs):
-        _startup_log("werkzeug server.server_close called")
-        traceback.print_stack(file=sys.stderr)
-        result = original_server_close(*args, **kwargs)
-        _startup_log("werkzeug server.server_close returned")
-        return result
+    try:
+        socket_name = socket_obj.getsockname() if socket_obj is not None else None
+    except BaseException as exc:
+        socket_name = f"{type(exc).__name__}: {exc}"
 
-    server.shutdown = traced_shutdown
-    server.server_close = traced_server_close
+    shutdown_signal = getattr(server, "shutdown_signal", "<missing>")
+    base_shutdown_request = getattr(server, "_BaseServer__shutdown_request", "<missing>")
+
+    _startup_log(
+        f"werkzeug lifecycle {label}: "
+        f"shutdown_signal={shutdown_signal!r} "
+        f"base_shutdown_request={base_shutdown_request!r} "
+        f"fileno={fileno!r} socket={socket_obj!r} "
+        f"socket_fileno={socket_fileno!r} socket_name={socket_name!r} "
+        f"dict={server.__dict__!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
