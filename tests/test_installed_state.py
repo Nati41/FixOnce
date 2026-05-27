@@ -55,6 +55,20 @@ class TestInstalledState(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers["Location"], "/install")
 
+    def test_dashboard_does_not_redirect_when_legacy_install_state_is_installed(self):
+        (self.data_dir / "install_state.json").write_text(json.dumps({
+            "installed": True,
+            "version": "1.0.12",
+            "installer": "cli",
+        }), encoding="utf-8")
+
+        with patch.object(install_state_module, "get_runtime_state", return_value=None):
+            response = self.client.get("/", headers={"Host": "localhost:5001"}, follow_redirects=False)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotEqual(response.headers.get("Location"), "/install")
+        self.assertIn(b"<!DOCTYPE html>", response.data)
+
     def test_installer_status_uses_runtime_on_dynamic_port(self):
         with patch.object(install_state_module, "get_runtime_state", return_value={"port": 5001, "pid": 123}):
             response = self.client.get("/api/installer/status", headers={"Host": "localhost:5001"})

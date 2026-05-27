@@ -87,6 +87,19 @@ def load_snapshot(data_dir: Optional[Path] = None) -> InstallSnapshot:
     except (OSError, json.JSONDecodeError):
         return InstallSnapshot(state=InstallState.FAILED, detail="Invalid install_state.json")
 
+    metadata = payload.get("metadata") or {}
+    if payload.get("installed") is True and "state" not in payload:
+        metadata = {**metadata, "legacy_installed": True}
+        return InstallSnapshot(
+            state=InstallState.READY,
+            updated_at=payload.get("installed_at") or payload.get("updated_at"),
+            detail=str(payload.get("detail", "Legacy install marker is present")),
+            install_dir=str(payload.get("install_dir", "")),
+            runtime_port=payload.get("runtime_port"),
+            runtime_pid=payload.get("runtime_pid"),
+            metadata=metadata,
+        )
+
     return InstallSnapshot(
         state=_coerce_state(payload.get("state")),
         updated_at=payload.get("updated_at"),
@@ -94,7 +107,7 @@ def load_snapshot(data_dir: Optional[Path] = None) -> InstallSnapshot:
         install_dir=str(payload.get("install_dir", "")),
         runtime_port=payload.get("runtime_port"),
         runtime_pid=payload.get("runtime_pid"),
-        metadata=payload.get("metadata") or {},
+        metadata=metadata,
     )
 
 
@@ -138,7 +151,7 @@ def resolve_install_snapshot(request_port: Optional[int] = None, data_dir: Optio
             snapshot.detail = "Canonical runtime is healthy"
         return snapshot
 
-    if snapshot.state == InstallState.READY:
+    if snapshot.state == InstallState.READY and not snapshot.metadata.get("legacy_installed"):
         snapshot.state = InstallState.STARTING
         if not snapshot.detail:
             snapshot.detail = "Runtime not available yet"

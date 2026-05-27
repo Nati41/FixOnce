@@ -1,4 +1,5 @@
 import sys
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -51,6 +52,30 @@ class TestInstallStateMachine(unittest.TestCase):
 
         self.assertEqual(snapshot.state, state_machine.InstallState.STARTING)
         self.assertFalse(snapshot.installed)
+
+    def test_legacy_installed_marker_loads_as_ready(self):
+        (self.data_dir / "install_state.json").write_text(json.dumps({
+            "installed": True,
+            "installed_at": "2026-03-19T12:11:00",
+        }), encoding="utf-8")
+
+        snapshot = state_machine.load_snapshot(data_dir=self.data_dir)
+
+        self.assertEqual(snapshot.state, state_machine.InstallState.READY)
+        self.assertTrue(snapshot.installed)
+        self.assertTrue(snapshot.metadata["legacy_installed"])
+
+    def test_legacy_installed_marker_stays_ready_without_runtime(self):
+        (self.data_dir / "install_state.json").write_text(json.dumps({
+            "installed": True,
+            "installed_at": "2026-03-19T12:11:00",
+        }), encoding="utf-8")
+
+        with patch.object(state_machine, "get_runtime_state", return_value=None):
+            snapshot = state_machine.resolve_install_snapshot(request_port=5003, data_dir=self.data_dir)
+
+        self.assertEqual(snapshot.state, state_machine.InstallState.READY)
+        self.assertTrue(snapshot.installed)
 
 
 if __name__ == "__main__":
