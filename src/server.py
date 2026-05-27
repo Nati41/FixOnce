@@ -6,24 +6,38 @@ Main Flask application with route registration.
 import socket
 import sys
 import threading
+import time
+import traceback
 from pathlib import Path
 from datetime import datetime
 
 from flask import Flask, send_file, jsonify, request, make_response
 from flask_cors import CORS
 
+_STARTUP_T0 = time.monotonic()
+
+
+def _startup_log(label: str):
+    elapsed = time.monotonic() - _STARTUP_T0
+    print(f"[STARTUP {elapsed:6.2f}s] {label}", flush=True)
+
+
 # MCP import - may fail if mcp package has issues
+_startup_log("import fastmcp: start")
 try:
     from fastmcp import FastMCP
     MCP_AVAILABLE = True
+    _startup_log("import fastmcp: ok")
 except ImportError as e:
     MCP_AVAILABLE = False
     print(f"[WARNING] FastMCP not available: {e}")
     print("   Running in Flask-only mode")
+    _startup_log("import fastmcp: unavailable")
 
 # Add server directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
+_startup_log("import config/core/api modules: start")
 from config import VERSION, APP_NAME, DEFAULT_PORT, MAX_PORT_ATTEMPTS, DATA_DIR, INSTALL_DATA_DIR, PROJECT_ROOT as PROJECT_DIR
 from core.db_solutions import init_all_databases, find_solution_hybrid
 from api import register_blueprints, errors_bp
@@ -42,6 +56,7 @@ from core.port_manager import (
     get_canonical_port
 )
 from core.install_state import is_fixonce_installed
+_startup_log("import config/core/api modules: ok")
 
 # ---------------------------------------------------------------------------
 # Port Management (uses core.port_manager for multi-user support)
@@ -69,13 +84,16 @@ def find_available_port(start_port: int = DEFAULT_PORT, max_attempts: int = MAX_
 # Semantic Engine (optional)
 # ---------------------------------------------------------------------------
 try:
+    _startup_log("semantic import: start")
     from core.semantic_engine import SemanticEngine, get_engine, reset_engine
     SEMANTIC_ENABLED = True
     print("[OK] Semantic Engine loaded successfully")
+    _startup_log("semantic import: ok")
 except ImportError as e:
     SEMANTIC_ENABLED = False
     print(f"[WARNING] Semantic Engine not available: {e}")
     print("   Falling back to exact/LIKE matching")
+    _startup_log("semantic import: unavailable")
 
 
 # ---------------------------------------------------------------------------
@@ -84,13 +102,17 @@ except ImportError as e:
 # Configure Flask with data directory for templates and static files
 # Flask serves static files from INSTALL directory (dashboard, templates)
 # User data goes to USER_DATA_DIR (~/.fixonce/)
+_startup_log("flask app creation: start")
 flask_app = Flask(__name__,
                   template_folder=str(INSTALL_DATA_DIR),
                   static_folder=str(INSTALL_DATA_DIR))
 CORS(flask_app)
+_startup_log("flask app creation: ok")
 
 # Register all route blueprints
+_startup_log("register blueprints: start")
 register_blueprints(flask_app)
+_startup_log("register blueprints: ok")
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +129,7 @@ def _send_dashboard_file(path):
 
 def _is_installed() -> bool:
     """Check if FixOnce installation is complete."""
+    _startup_log("install state check: start")
     install_state = DATA_DIR / "install_state.json"
     request_port = request.host.split(':')[-1] if ':' in request.host else None
     try:
@@ -115,6 +138,7 @@ def _is_installed() -> bool:
         request_port = None
 
     result = is_fixonce_installed(request_port=request_port)
+    _startup_log(f"install state check: ok installed={result}")
     print(
         f"[DEBUG] _is_installed: install_state={install_state.exists()} "
         f"request_port={request_port} → installed={result}"
@@ -469,6 +493,7 @@ def _run_flask():
         print("\033[1;31m❌ Another FixOnce server is already running.\033[0m")
         print("   Use 'kill <pid>' to stop it, or check ~/.fixonce/runtime.json")
         print()
+        _startup_log("_run_flask returning: server lock unavailable")
         return
 
     try:
@@ -477,6 +502,7 @@ def _run_flask():
         print(f"[WARNING] {e}")
         print("   Kill other processes or free up a port.")
         release_server_lock()
+        _startup_log("_run_flask returning: no available port")
         return
 
     ACTUAL_PORT = int(requested_port)
@@ -495,6 +521,7 @@ def _run_flask():
         print("\033[1;31m❌ Failed to set runtime state - another server may be running.\033[0m")
         print()
         release_server_lock()
+        _startup_log("_run_flask returning: runtime state rejected")
         return
 
     # Save port to multiple locations for different consumers:
@@ -516,18 +543,48 @@ def _run_flask():
     except KeyboardInterrupt:
         print("\n[MODE] Flask server stopped")
     finally:
+        _startup_log("_run_flask finally: cleanup starting")
         cleanup()
+        _startup_log("_run_flask finally: cleanup complete")
+
+    _startup_log("_run_flask returning after blocking server path")
 
 
 def _serve_flask_blocking(host: str, port: int):
     """Run Flask in a blocking mode suitable for --flask-only startup."""
-    flask_app.run(
-        host=host,
-        port=port,
-        debug=False,
-        use_reloader=False,
-        threaded=True,
-    )
+    import os
+    from werkzeug.serving import make_server
+
+    server = None
+    try:
+        print(
+            f"[FIXONCE-PROBE flask-only-serve-v3] entered _serve_flask_blocking "
+            f"pid={os.getpid()} file={Path(__file__).resolve()} host={host} port={port}",
+            flush=True,
+        )
+        _startup_log("werkzeug make_server: start")
+        server = make_server(host, port, flask_app, threaded=True)
+        print("[FIXONCE-PROBE flask-only-serve-v3] make_server returned; serve_forever will be reached", flush=True)
+        _startup_log(f"werkzeug serve_forever: start http://{host}:{port}")
+        print(f" * Running on http://{host}:{port}", flush=True)
+        print("[FIXONCE-PROBE flask-only-serve-v3] BEFORE serve_forever", flush=True)
+        server.serve_forever()
+        print("[FIXONCE-PROBE flask-only-serve-v3] AFTER serve_forever", flush=True)
+    except KeyboardInterrupt:
+        _startup_log("werkzeug serve_forever interrupted by KeyboardInterrupt")
+        raise
+    except BaseException as exc:
+        print(f"[ERROR] Flask server crashed: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        raise
+    finally:
+        _startup_log("_serve_flask_blocking finally: server_close starting")
+        if server is not None:
+            server.server_close()
+        _startup_log("_serve_flask_blocking finally: server_close complete")
+
+    print("[ERROR] Flask run returned unexpectedly (serve_forever returned without exception)", file=sys.stderr, flush=True)
+    _startup_log("_serve_flask_blocking returning after unexpected serve_forever return")
 
 
 # ---------------------------------------------------------------------------
@@ -540,13 +597,18 @@ def main(argv=None):
     parser.add_argument("--minimized", action="store_true", help="Start minimized (for Windows startup)")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress startup messages")
     args = parser.parse_args(argv)
+    _startup_log(f"main parsed args: flask_only={args.flask_only} minimized={args.minimized} quiet={args.quiet}")
 
     # First launch initialization - create data files from templates
+    _startup_log("project init / first launch: start")
     from core.first_launch import ensure_initialized
     ensure_initialized()
+    _startup_log("project init / first launch: ok")
 
     # Initialize databases
+    _startup_log("database init: start")
     init_all_databases()
+    _startup_log("database init: ok")
 
     # Skip banner in quiet/minimized mode
     if not args.quiet and not args.minimized:
@@ -571,10 +633,14 @@ def main(argv=None):
             print("[MODE] Running Flask-only mode (MCP not available)")
         else:
             print("[MODE] Running Flask-only mode (no MCP)")
+        _startup_log("flask-only run path: start")
         _run_flask()
+        _startup_log("main flask-only path returned from _run_flask")
     else:
+        _startup_log("starting Flask background thread for MCP mode")
         flask_thread = threading.Thread(target=_run_flask, daemon=True)
         flask_thread.start()
+        _startup_log("starting MCP stdio run loop")
         mcp.run()
 
 
