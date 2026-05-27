@@ -11,19 +11,150 @@ import sys
 import os
 import json
 import hashlib
+import atexit
+import signal
 import subprocess
 import threading
 import requests
+import contextlib
+import functools
+import tempfile
+import traceback
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dataclasses import replace
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
+
+_MCP_WINDOWS_CTRL_HANDLER = None
 
 
 def _log(*args, **kwargs):
     """MCP-safe logging: never write to stdout on stdio transport."""
     kwargs.pop("file", None)
     print(*args, file=sys.stderr, flush=True, **kwargs)
+
+
+def _mcp_process_event(message: str, include_stack: bool = False):
+    """Log MCP process lifecycle diagnostics without polluting stdout."""
+    line = f"[{datetime.now().isoformat()}] [MCP-PROCESS] {message}"
+    try:
+        print(line, file=sys.stderr, flush=True)
+    except Exception:
+        pass
+
+    try:
+        log_dir = Path.home() / ".fixonce" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with (log_dir / "mcp_process_events.log").open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+            if include_stack:
+                stack_text = "".join(traceback.format_stack())
+                handle.write(stack_text + "\n")
+    except Exception:
+        pass
+
+
+def _mcp_process_identity(label: str):
+    parent_cmd = _get_windows_parent_command_line(os.getppid()) if sys.platform == "win32" else ""
+    _mcp_process_event(
+        f"{label}: pid={os.getpid()} ppid={os.getppid()} platform={sys.platform} "
+        f"executable={sys.executable!r} argv={sys.argv!r} cwd={os.getcwd()!r} "
+        f"file={Path(__file__).resolve()}"
+    )
+    if parent_cmd:
+        _mcp_process_event(f"{label}: parent_command={parent_cmd}")
+
+
+def _get_windows_parent_command_line(ppid: int) -> str:
+    if not ppid:
+        return ""
+    try:
+        cmd = [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            f"(Get-CimInstance Win32_Process -Filter \"ProcessId={int(ppid)}\").CommandLine",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+        if result.returncode == 0:
+            return (result.stdout or "").strip()
+        return f"<parent lookup failed rc={result.returncode}: {(result.stderr or '').strip()}>"
+    except Exception as exc:
+        return f"<parent lookup failed {type(exc).__name__}: {exc}>"
+
+
+def _install_mcp_process_event_probes():
+    _install_mcp_signal_probe(signal.SIGINT, "SIGINT")
+    sigbreak = getattr(signal, "SIGBREAK", None)
+    if sigbreak is not None:
+        _install_mcp_signal_probe(sigbreak, "SIGBREAK")
+    _install_mcp_windows_console_ctrl_probe()
+    atexit.register(lambda: _mcp_process_event("atexit cleanup reached"))
+
+
+def _install_mcp_signal_probe(signum, name: str):
+    current = signal.getsignal(signum)
+    if getattr(current, "_fixonce_mcp_probe", False):
+        return
+
+    def traced_signal_handler(received_signum, frame):
+        _mcp_process_event(
+            f"{name} RECEIVED signum={received_signum} thread={threading.current_thread().name}",
+            include_stack=False,
+        )
+        if frame is not None:
+            try:
+                stack_text = "".join(traceback.format_stack(frame))
+                _mcp_process_event(f"{name} stack:\n{stack_text}")
+            except Exception:
+                pass
+
+        previous = traced_signal_handler._previous_handler
+        if previous in (None, signal.SIG_DFL):
+            raise KeyboardInterrupt
+        if previous == signal.SIG_IGN:
+            return None
+        if callable(previous):
+            return previous(received_signum, frame)
+        raise KeyboardInterrupt
+
+    traced_signal_handler._fixonce_mcp_probe = True
+    traced_signal_handler._previous_handler = current
+    signal.signal(signum, traced_signal_handler)
+
+
+def _install_mcp_windows_console_ctrl_probe():
+    global _MCP_WINDOWS_CTRL_HANDLER
+    if sys.platform != "win32" or _MCP_WINDOWS_CTRL_HANDLER is not None:
+        return
+
+    try:
+        import ctypes
+
+        event_names = {
+            0: "CTRL_C_EVENT",
+            1: "CTRL_BREAK_EVENT",
+            2: "CTRL_CLOSE_EVENT",
+            5: "CTRL_LOGOFF_EVENT",
+            6: "CTRL_SHUTDOWN_EVENT",
+        }
+        handler_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
+
+        def console_handler(ctrl_type):
+            event_name = event_names.get(ctrl_type, ctrl_type)
+            _mcp_process_event(
+                f"Windows console control event {event_name} received "
+                f"thread={threading.current_thread().name}",
+                include_stack=True,
+            )
+            return False
+
+        _MCP_WINDOWS_CTRL_HANDLER = handler_type(console_handler)
+        ok = ctypes.windll.kernel32.SetConsoleCtrlHandler(_MCP_WINDOWS_CTRL_HANDLER, True)
+        _mcp_process_event(f"SetConsoleCtrlHandler installed ok={bool(ok)}")
+    except BaseException as exc:
+        _mcp_process_event(f"SetConsoleCtrlHandler install failed {type(exc).__name__}: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -50,7 +181,7 @@ def _get_api_url() -> str:
     try:
         runtime_file = Path.home() / ".fixonce" / "runtime.json"
         if runtime_file.exists():
-            with open(runtime_file, 'r') as f:
+            with open(runtime_file, 'r', encoding='utf-8') as f:
                 state = json.load(f)
             port = state.get("port", 5000)
             _cached_api_url = f"http://localhost:{port}"
@@ -75,7 +206,7 @@ def _debug_log(message: str):
         log_dir = Path.home() / ".fixonce"
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / "mcp_debug.log"
-        with open(log_file, "a") as f:
+        with open(log_file, "a", encoding='utf-8') as f:
             f.write(f"[{datetime.now().isoformat()}] {message}\n")
     except Exception:
         pass  # Silent fail - debug logs are non-critical
@@ -154,6 +285,27 @@ This is mandatory enforcement mode. FixOnce will not allow work to proceed witho
 an explicit project connection for the current session."""
 
 
+def _get_parent_process_command() -> str:
+    """Return the parent command when the platform exposes a safe process probe."""
+    if os.name == "nt":
+        return ""
+
+    try:
+        ppid = os.getppid()
+        result = subprocess.run(
+            ['ps', '-p', str(ppid), '-o', 'command='],
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip().lower()
+    except Exception:
+        pass
+
+    return ""
+
+
 def _detect_editor_with_confidence() -> tuple:
     """
     Detect which editor/AI is running this MCP server.
@@ -168,18 +320,11 @@ def _detect_editor_with_confidence() -> tuple:
     if codex_home:
         return ("codex", "env_var", 1.0)
 
-    # Check parent process for codex/fastmcp
-    try:
-        ppid = os.getppid()
-        result = subprocess.run(['ps', '-p', str(ppid), '-o', 'command='],
-                              capture_output=True, text=True, timeout=1)
-        parent_cmd = result.stdout.strip().lower()
-        if 'codex' in parent_cmd:
-            return ("codex", "parent_process", 0.9)
-        if 'fastmcp' in parent_cmd:
-            return ("codex", "parent_process", 0.7)
-    except:
-        pass
+    parent_cmd = _get_parent_process_command()
+    if 'codex' in parent_cmd:
+        return ("codex", "parent_process", 0.9)
+    if 'fastmcp' in parent_cmd:
+        return ("codex", "parent_process", 0.7)
 
     # Priority 1: Check Cursor env vars - HIGH confidence
     cursor_channel = os.environ.get("CURSOR_CHANNEL", "")
@@ -199,15 +344,8 @@ def _detect_editor_with_confidence() -> tuple:
         if key.startswith("WINDSURF_"):
             return ("windsurf", "env_var", 0.9)
 
-    try:
-        ppid = os.getppid()
-        result = subprocess.run(['ps', '-p', str(ppid), '-o', 'command='],
-                              capture_output=True, text=True, timeout=1)
-        parent_cmd = result.stdout.strip().lower()
-        if 'windsurf' in parent_cmd:
-            return ("windsurf", "parent_process", 0.9)
-    except:
-        pass
+    if 'windsurf' in parent_cmd:
+        return ("windsurf", "parent_process", 0.9)
 
     # Priority 2: Check VS Code
     vscode_pid = os.environ.get("VSCODE_PID", "")
@@ -223,15 +361,8 @@ def _detect_editor_with_confidence() -> tuple:
         return ("vscode", "env_var", 0.9)
 
     # Priority 3: Check parent process for Claude Code - HIGH confidence
-    try:
-        ppid = os.getppid()
-        result = subprocess.run(['ps', '-p', str(ppid), '-o', 'command='],
-                              capture_output=True, text=True, timeout=1)
-        parent_cmd = result.stdout.strip().lower()
-        if 'claude' in parent_cmd:
-            return ("claude", "parent_process", 0.9)
-    except:
-        pass
+    if 'claude' in parent_cmd:
+        return ("claude", "parent_process", 0.9)
 
     # Priority 4: Check config files - MEDIUM confidence (heuristic)
     home = Path.home()
@@ -576,8 +707,8 @@ AI_CONNECTIONS_FILE = USER_DATA_DIR / "ai_connections.json"
 def _persist_compliance():
     """Save compliance state to file for Flask API access."""
     try:
-        with open(COMPLIANCE_FILE, 'w') as f:
-            json.dump(_compliance_state, f)
+        with open(COMPLIANCE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(_compliance_state, f, ensure_ascii=False)
     except Exception:
         pass
 
@@ -586,7 +717,7 @@ def _load_compliance() -> dict:
     """Load compliance state from file."""
     try:
         if COMPLIANCE_FILE.exists():
-            with open(COMPLIANCE_FILE, 'r') as f:
+            with open(COMPLIANCE_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
     except Exception:
         pass
@@ -601,8 +732,8 @@ def _persist_session(project_id: str, working_dir: str):
             "working_dir": working_dir,
             "timestamp": datetime.now().isoformat()
         }
-        with open(SESSION_FILE, 'w') as f:
-            json.dump(data, f)
+        with open(SESSION_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
     except Exception:
         pass
 
@@ -611,10 +742,6 @@ def _persist_ai_connection(actor_identity: Dict[str, Any], project_id: Optional[
     """Persist last-seen heartbeat for the current AI client."""
     try:
         editor = actor_identity.get("editor", "unknown")
-        # If detection failed, default to "claude" since MCP is most commonly used with Claude Code
-        if editor == "unknown":
-            editor = "claude"
-            actor_identity = {"editor": "claude", "source": "mcp_fallback", "confidence": 0.3}
 
         payload = {"clients": {}}
         if AI_CONNECTIONS_FILE.exists():
@@ -648,7 +775,7 @@ def _recover_session() -> Optional[tuple]:
         if not SESSION_FILE.exists():
             return None
 
-        with open(SESSION_FILE, 'r') as f:
+        with open(SESSION_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
         # Check if session is recent (within last hour)
@@ -2062,6 +2189,80 @@ def _update_snapshot(project_id: str, working_dir: str, data: Dict[str, Any]):
 # ============================================================
 
 mcp = FastMCP("fixonce")
+_MCP_TOOL_TIMEOUT_SECONDS = 20
+_FO_SYNC_TIMEOUT_SECONDS = 8
+_SEMANTIC_SEARCH_TIMEOUT_SECONDS = 5
+_tool_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="fixonce-mcp-tool")
+_original_mcp_tool = mcp.tool
+
+
+def _mcp_error_log_file() -> Path:
+    path = USER_DATA_DIR / "logs" / "mcp_errors.log"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _log_tool_exception(tool_name: str, exc: BaseException) -> None:
+    message = f"[{datetime.now().isoformat()}] {tool_name}: {type(exc).__name__}: {exc}"
+    _log(f"[MCPToolError] {message}")
+    try:
+        with _mcp_error_log_file().open("a", encoding="utf-8") as handle:
+            handle.write(message + "\n")
+            handle.write(traceback.format_exc())
+            handle.write("\n")
+    except Exception:
+        pass
+
+
+def _format_tool_error(tool_name: str, exc: BaseException) -> str:
+    return (
+        f"FixOnce MCP tool error in {tool_name}: "
+        f"{type(exc).__name__}: {str(exc)[:300]}"
+    )
+
+
+def _run_tool_body(mcp_tool_name: str, func, *args, **kwargs):
+    with contextlib.redirect_stdout(sys.stderr):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            _log_tool_exception(mcp_tool_name, exc)
+            return _format_tool_error(mcp_tool_name, exc)
+
+
+def _run_tool_with_timeout(mcp_tool_name: str, func, timeout_seconds: int, *args, **kwargs):
+    future = _tool_executor.submit(_run_tool_body, mcp_tool_name, func, *args, **kwargs)
+    try:
+        return future.result(timeout=timeout_seconds)
+    except FutureTimeoutError:
+        _log(f"[MCPToolTimeout] {mcp_tool_name} exceeded {timeout_seconds}s")
+        return (
+            f"FixOnce MCP tool timeout in {mcp_tool_name}: "
+            f"operation exceeded {timeout_seconds}s and was left in background."
+        )
+
+
+def _safe_tool_handler(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        tool_name = getattr(func, "__name__", "unknown_tool")
+        return _run_tool_body(tool_name, func, *args, **kwargs)
+    return wrapper
+
+
+def _safe_mcp_tool(*tool_args, **tool_kwargs):
+    if tool_args and callable(tool_args[0]) and len(tool_args) == 1 and not tool_kwargs:
+        return _original_mcp_tool(_safe_tool_handler(tool_args[0]))
+
+    original_decorator = _original_mcp_tool(*tool_args, **tool_kwargs)
+
+    def decorator(func):
+        return original_decorator(_safe_tool_handler(func))
+
+    return decorator
+
+
+mcp.tool = _safe_mcp_tool
 
 
 def _get_working_dir_from_port(port: int) -> Optional[str]:
@@ -2358,7 +2559,7 @@ def _get_active_port_from_dashboard() -> Optional[int]:
         active_file = USER_DATA_DIR / "active_project.json"
 
         if active_file.exists():
-            with open(active_file, 'r') as f:
+            with open(active_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 # Extract port from "localhost-5000" or "localhost:5000"
                 active_id = data.get('active_id', '') or data.get('display_name', '')
@@ -2564,7 +2765,7 @@ def _get_working_dir_from_recent_activity() -> Optional[str]:
         if not activity_file.exists():
             return None
 
-        with open(activity_file, 'r') as f:
+        with open(activity_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
         activities = data.get('activities', [])
@@ -4058,6 +4259,102 @@ def _update_work_context_impl(
     return "Synced."
 
 
+def _lightweight_tool_gate(tool_name: str) -> Optional[str]:
+    """Minimal session gate for hot-path tools that must not block on context assembly."""
+    current_mode = _get_fixonce_mode()
+    if current_mode == MODE_OFF:
+        return "FixOnce is off. Proceed normally without FixOnce tools."
+    if current_mode == MODE_PASSIVE:
+        return "FixOnce is in PASSIVE mode. Write/action tools are disabled until mode returns to FULL."
+    if not _is_session_initialized():
+        return _get_init_enforcement_error()
+
+    session = _get_session()
+    if not session.is_active() and not _auto_create_session():
+        return "Error: No active project session found. Call fo_init() again."
+
+    session = _get_session()
+    try:
+        session.log_tool_call(tool_name)
+        _sync_compliance()
+    except Exception as exc:
+        _log(f"[FixOnce] Lightweight gate compliance update failed: {exc}")
+
+    return None
+
+
+def _load_project_lightweight(project_id: str) -> Dict[str, Any]:
+    path = _get_project_path(project_id)
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _save_project_lightweight(project_id: str, data: Dict[str, Any]) -> None:
+    path = _get_project_path(project_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(dir=path.parent, prefix=f".{path.stem}_", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    except Exception:
+        try:
+            os.unlink(temp_path)
+        except Exception:
+            pass
+        raise
+
+
+def _update_work_context_lightweight(
+    tool_name: str,
+    current_goal: str = "",
+    work_area: str = "",
+    why: str = "",
+    last_change: str = "",
+    last_file: str = "",
+    next_step: str = "",
+) -> str:
+    error = _lightweight_tool_gate(tool_name)
+    if error:
+        return error
+
+    update_data = {}
+    if current_goal:
+        update_data['current_goal'] = current_goal
+    if work_area:
+        update_data['work_area'] = work_area
+    if why:
+        update_data['why'] = why
+    if last_change:
+        update_data['last_change'] = last_change
+    if last_file:
+        update_data['last_file'] = last_file
+
+    if not update_data and not next_step:
+        return "Error: No fields provided to update"
+
+    update_data['next_step'] = _normalize_next_step(next_step) if next_step else ""
+
+    session = _get_session()
+    if current_goal:
+        session.mark_goal_updated()
+        _sync_compliance()
+
+    memory = _load_project_lightweight(session.project_id)
+    memory.setdefault('live_record', {})
+    memory['live_record'].setdefault('intent', {})
+    memory['live_record']['intent'].update(update_data)
+    memory['live_record']['intent']['updated_at'] = datetime.now().isoformat()
+    memory['live_record']['updated_at'] = datetime.now().isoformat()
+
+    _save_project_lightweight(session.project_id, memory)
+    return "Synced."
+
+
 @mcp.tool()
 def sync_to_active_project() -> str:
     """
@@ -5233,9 +5530,9 @@ def solution_applied(
         from config import PERSONAL_DB_PATH
         engine = get_engine(PERSONAL_DB_PATH)
         engine.save_solution(error_message, solution)
-        print(f"[fo_solved] Saved to semantic engine: {error_message[:50]}...")
+        _log(f"[fo_solved] Saved to semantic engine: {error_message[:50]}...")
     except Exception as e:
-        print(f"[fo_solved] Semantic engine save failed: {e}")
+        _log(f"[fo_solved] Semantic engine save failed: {e}")
 
     # Track ROI
     _track_roi_event("solution_saved")
@@ -5452,8 +5749,23 @@ def search_past_solutions(query: str) -> str:
     semantic_results = []
     if _semantic_available:
         try:
-            semantic_results = search_project(session.project_id, query, k=5, min_score=0.3)
+            future = _tool_executor.submit(
+                _run_tool_body,
+                "semantic_search",
+                search_project,
+                session.project_id,
+                query,
+                k=5,
+                min_score=0.3,
+            )
+            semantic_results = future.result(timeout=_SEMANTIC_SEARCH_TIMEOUT_SECONDS)
+            if isinstance(semantic_results, str):
+                _log(f"[SemanticSearch] Error result: {semantic_results}")
+                semantic_results = []
             _log(f"[SemanticSearch] Found {len(semantic_results)} results for '{query}'")
+        except FutureTimeoutError:
+            _log(f"[SemanticSearch] Timeout after {_SEMANTIC_SEARCH_TIMEOUT_SECONDS}s, falling back to string match")
+            semantic_results = []
         except Exception as e:
             _log(f"[SemanticSearch] Error: {e}, falling back to string match")
             semantic_results = []
@@ -7029,14 +7341,17 @@ def fo_sync(
         next_step: Short continuation prompt (e.g., "Test the fix", "Check error flow")
                    NOT numbered lists - just one actionable next step
     """
-    return _update_work_context_impl(
+    return _run_tool_with_timeout(
+        "fo_sync",
+        _update_work_context_lightweight,
+        _FO_SYNC_TIMEOUT_SECONDS,
         tool_name="fo_sync",
         current_goal=goal,
         work_area=work_area,
         last_change=last_change,
         last_file=last_file,
         why=why,
-        next_step=next_step
+        next_step=next_step,
     )
 
 
@@ -7305,4 +7620,18 @@ def get_compliance_for_api() -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run(show_banner=False)
+    _install_mcp_process_event_probes()
+    _mcp_process_identity("mcp main starting")
+    try:
+        _mcp_process_event("mcp.run entering")
+        mcp.run(show_banner=False)
+        _mcp_process_event("mcp.run returned without exception")
+    except KeyboardInterrupt:
+        _mcp_process_event("mcp.run interrupted by KeyboardInterrupt")
+        raise
+    except BaseException as exc:
+        _mcp_process_event(f"mcp.run crashed {type(exc).__name__}: {exc}")
+        traceback.print_exc(file=sys.stderr)
+        raise
+    finally:
+        _mcp_process_event("mcp main finally reached")
