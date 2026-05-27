@@ -9,7 +9,7 @@ This module provides:
 """
 
 import re
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Callable, List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
 from core.intervention_policy import InterventionContext, evaluate_decision_conflict_gate
@@ -196,7 +196,8 @@ def validate_decision(
     decision: str,
     reason: str,
     existing_decisions: List[Dict[str, Any]],
-    force: bool = False
+    force: bool = False,
+    gate_evaluator: Optional[Callable[[InterventionContext], Any]] = None,
 ) -> Tuple[bool, str, List[Dict[str, Any]]]:
     """
     Validate a decision before logging.
@@ -213,8 +214,10 @@ def validate_decision(
         return True, "No conflicts detected", []
 
     top_conflict = conflicts[0]
-    gate_result = evaluate_decision_conflict_gate(
+    evaluator = gate_evaluator or evaluate_decision_conflict_gate
+    gate_result = evaluator(
         InterventionContext(
+            tool_name="log_decision",
             decision_conflict_severity=top_conflict.get("severity", ""),
             extra={"conflicts": conflicts},
         )

@@ -4519,22 +4519,17 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
     if _policy_available:
         # Filter to active decisions only for validation
         active_decisions = [d for d in memory['decisions'] if not d.get('superseded')]
-        is_valid, message, conflicts = validate_decision(
-            decision, reason, active_decisions, force=force
-        )
-        top_severity = conflicts[0].get("severity", "") if conflicts else ""
-        decision_gate_ctx = InterventionContext(
-            tool_name="log_decision",
-            decision_conflict_severity=top_severity,
-            extra={"conflicts": conflicts},
-        )
+        decision_gate_evaluator = None
         if _intervention_policy_available:
-            _evaluate_current_decision_conflict_gate(
+            decision_gate_evaluator = lambda ctx: _evaluate_current_decision_conflict_gate(
                 tool_name="log_decision",
-                decision_conflict_severity=top_severity,
-                conflicts=conflicts,
+                decision_conflict_severity=ctx.decision_conflict_severity,
+                conflicts=ctx.extra.get("conflicts", []),
                 intent=decision,
             )
+        is_valid, message, conflicts = validate_decision(
+            decision, reason, active_decisions, force=force, gate_evaluator=decision_gate_evaluator
+        )
 
         _log(f"[PolicyEngine] Validating: {decision[:50]}...")
         _log(f"[PolicyEngine] Against {len(active_decisions)} active decisions")

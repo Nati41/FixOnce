@@ -173,6 +173,60 @@ class TestAgentRuntime(unittest.TestCase):
         self.assertEqual(audit["standalone_bridge"]["classification"], "partial")
         self.assertEqual(audit["legacy_bypasses"]["bypasses"], [])
 
+    def test_log_decision_policy_validation_uses_agent_aware_gate(self):
+        session = server.SessionContext(project_id="proj-rt-decision", working_dir="/tmp/demo")
+        session.initialized_at = "2026-05-27T16:00:00"
+        memory = {
+            "decisions": [
+                {
+                    "decision": "Always use SQLite for local storage",
+                    "reason": "Existing architecture decision",
+                }
+            ]
+        }
+
+        def fake_validate(_decision, _reason, _active_decisions, force=False, gate_evaluator=None):
+            self.assertFalse(force)
+            self.assertTrue(callable(gate_evaluator))
+            gate_result = gate_evaluator(server.InterventionContext(
+                tool_name="log_decision",
+                decision_conflict_severity="high",
+                extra={"conflicts": [{"severity": "high"}]},
+            ))
+            self.assertEqual(gate_result.level, "block")
+            return False, "blocked by policy", [{"severity": "high"}]
+
+        with patch.object(server, "_universal_gate", return_value=("", "")), \
+             patch.object(server, "_get_session", return_value=session), \
+             patch.object(server, "_load_project", return_value=memory), \
+             patch.object(server, "_save_project") as save_project, \
+             patch.object(server, "_policy_available", True), \
+             patch.object(server, "_intervention_policy_available", True), \
+             patch.object(server, "_agent_intervention_available", True), \
+             patch.object(server, "validate_decision", side_effect=fake_validate), \
+             patch.object(server, "build_agent_context", return_value=server.AgentContext(
+                 actor_name="codex",
+                 actor_source="client_actor",
+                 actor_confidence=0.97,
+                 tool_name="log_decision",
+                 intent="decision",
+                 session_id="sess-rt-decision",
+                 project_id="proj-rt-decision",
+                 intent_detail="Never use SQLite for local storage",
+                 flow_classification="migrated",
+             )):
+            result = server.log_decision(
+                "Never use SQLite for local storage",
+                "Requirements changed",
+            )
+
+        self.assertIn("Decision NOT logged", result)
+        save_project.assert_not_called()
+        entry = get_agent_audit(limit=5)[0]
+        self.assertEqual(entry["gate"], "decision_conflict_gate")
+        self.assertEqual(entry["intent"], "decision")
+        self.assertEqual(entry["flow_classification"], "migrated")
+
 
 if __name__ == "__main__":
     unittest.main()
