@@ -41,31 +41,35 @@ class TestServerFlaskOnly(unittest.TestCase):
         fake_server = Mock()
         fake_server.serve_forever.side_effect = KeyboardInterrupt
         stdout = io.StringIO()
+        stderr = io.StringIO()
 
         with patch.object(server_module.flask_app, "run") as app_run, \
              patch("werkzeug.serving.make_server", return_value=fake_server) as make_server, \
-             patch("sys.stdout", stdout):
+             patch("socketserver.BaseServer.serve_forever", side_effect=KeyboardInterrupt) as serve_forever, \
+             patch("sys.stdout", stdout), \
+             patch("sys.stderr", stderr):
             with self.assertRaises(KeyboardInterrupt):
                 server_module._serve_flask_blocking("127.0.0.1", 5123)
 
         app_run.assert_not_called()
         make_server.assert_called_once_with("127.0.0.1", 5123, server_module.flask_app, threaded=True)
-        fake_server.serve_forever.assert_called_once()
-        fake_server.server_close.assert_called_once()
+        serve_forever.assert_called_once_with(fake_server)
         output = stdout.getvalue()
         self.assertIn("[FIXONCE-PROBE flask-only-serve-v3] entered _serve_flask_blocking", output)
         self.assertIn("file=", output)
+        self.assertIn("[FIXONCE-PROBE flask-only-serve-v3] server_class=", output)
         self.assertIn("[FIXONCE-PROBE flask-only-serve-v3] make_server returned; serve_forever will be reached", output)
         self.assertIn("[FIXONCE-PROBE flask-only-serve-v3] BEFORE serve_forever", output)
+        self.assertIn("[FIXONCE-PROBE flask-only-serve-v3] server.server_close CALLED", output)
         self.assertNotIn("[FIXONCE-PROBE flask-only-serve-v3] AFTER serve_forever", output)
 
     def test_unexpected_serve_forever_return_is_logged(self):
         fake_server = Mock()
-        fake_server.serve_forever.return_value = None
         stderr = io.StringIO()
         stdout = io.StringIO()
 
         with patch("werkzeug.serving.make_server", return_value=fake_server), \
+             patch("socketserver.BaseServer.serve_forever", return_value=None), \
              patch("sys.stderr", stderr), \
              patch("sys.stdout", stdout):
             server_module._serve_flask_blocking("127.0.0.1", 5123)

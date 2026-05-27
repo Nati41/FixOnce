@@ -4,10 +4,12 @@ Main Flask application with route registration.
 """
 
 import socket
+import socketserver
 import sys
 import threading
 import time
 import traceback
+import types
 from pathlib import Path
 from datetime import datetime
 
@@ -564,11 +566,30 @@ def _serve_flask_blocking(host: str, port: int):
         )
         _startup_log("werkzeug make_server: start")
         server = make_server(host, port, flask_app, threaded=True)
+        print(
+            f"[FIXONCE-PROBE flask-only-serve-v3] server_class={server.__class__.__module__}.{server.__class__.__name__}",
+            flush=True,
+        )
+        original_shutdown = server.shutdown
+        original_server_close = server.server_close
+
+        def traced_shutdown(self):
+            print("[FIXONCE-PROBE flask-only-serve-v3] server.shutdown CALLED", flush=True)
+            traceback.print_stack(file=sys.stderr)
+            return original_shutdown()
+
+        def traced_server_close(self):
+            print("[FIXONCE-PROBE flask-only-serve-v3] server.server_close CALLED", flush=True)
+            traceback.print_stack(file=sys.stderr)
+            return original_server_close()
+
+        server.shutdown = types.MethodType(traced_shutdown, server)
+        server.server_close = types.MethodType(traced_server_close, server)
         print("[FIXONCE-PROBE flask-only-serve-v3] make_server returned; serve_forever will be reached", flush=True)
-        _startup_log(f"werkzeug serve_forever: start http://{host}:{port}")
+        _startup_log(f"socketserver BaseServer.serve_forever: start http://{host}:{port}")
         print(f" * Running on http://{host}:{port}", flush=True)
         print("[FIXONCE-PROBE flask-only-serve-v3] BEFORE serve_forever", flush=True)
-        server.serve_forever()
+        socketserver.BaseServer.serve_forever(server)
         print("[FIXONCE-PROBE flask-only-serve-v3] AFTER serve_forever", flush=True)
     except KeyboardInterrupt:
         _startup_log("werkzeug serve_forever interrupted by KeyboardInterrupt")
