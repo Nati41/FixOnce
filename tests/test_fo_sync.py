@@ -28,9 +28,9 @@ import mcp_memory_server_v2 as server
 
 
 class TestFoSync(unittest.TestCase):
-    def test_fo_sync_uses_internal_impl_not_decorated_tool_object(self):
+    def test_fo_sync_uses_lightweight_impl_not_decorated_tool_object(self):
         with patch.object(server, "update_work_context", object()), \
-             patch.object(server, "_update_work_context_impl", return_value="Synced.") as impl_mock:
+             patch.object(server, "_update_work_context_lightweight", return_value="Synced.") as impl_mock:
             result = server.fo_sync(
                 goal="Close Stage 8 runtime wiring",
                 work_area="agent runtime",

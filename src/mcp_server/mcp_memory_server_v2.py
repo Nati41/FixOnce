@@ -15,6 +15,7 @@ import atexit
 import signal
 import subprocess
 import threading
+import time
 import requests
 import contextlib
 import functools
@@ -85,10 +86,13 @@ def _get_windows_parent_command_line(ppid: int) -> str:
 
 
 def _install_mcp_process_event_probes():
-    _install_mcp_signal_probe(signal.SIGINT, "SIGINT")
-    sigbreak = getattr(signal, "SIGBREAK", None)
-    if sigbreak is not None:
-        _install_mcp_signal_probe(sigbreak, "SIGBREAK")
+    if threading.current_thread() is threading.main_thread():
+        _install_mcp_signal_probe(signal.SIGINT, "SIGINT")
+        sigbreak = getattr(signal, "SIGBREAK", None)
+        if sigbreak is not None:
+            _install_mcp_signal_probe(sigbreak, "SIGBREAK")
+    else:
+        _mcp_process_event("signal probes skipped: not main thread")
     _install_mcp_windows_console_ctrl_probe()
     atexit.register(lambda: _mcp_process_event("atexit cleanup reached"))
 
@@ -2231,15 +2235,42 @@ def _run_tool_body(mcp_tool_name: str, func, *args, **kwargs):
 
 
 def _run_tool_with_timeout(mcp_tool_name: str, func, timeout_seconds: int, *args, **kwargs):
+    start = time.monotonic()
+    if mcp_tool_name == "fo_sync":
+        _mcp_process_event(
+            f"fo_sync enter timeout={timeout_seconds}s "
+            f"goal={kwargs.get('current_goal', '')!r} "
+            f"work_area={kwargs.get('work_area', '')!r} "
+            f"last_file={kwargs.get('last_file', '')!r}"
+        )
+
     future = _tool_executor.submit(_run_tool_body, mcp_tool_name, func, *args, **kwargs)
     try:
-        return future.result(timeout=timeout_seconds)
+        result = future.result(timeout=timeout_seconds)
+        if mcp_tool_name == "fo_sync":
+            duration = time.monotonic() - start
+            _mcp_process_event(
+                f"fo_sync normal return duration={duration:.3f}s "
+                f"result_type={type(result).__name__}"
+            )
+        return result
     except FutureTimeoutError:
+        duration = time.monotonic() - start
         _log(f"[MCPToolTimeout] {mcp_tool_name} exceeded {timeout_seconds}s")
+        if mcp_tool_name == "fo_sync":
+            _mcp_process_event(f"fo_sync timeout duration={duration:.3f}s limit={timeout_seconds}s")
         return (
             f"FixOnce MCP tool timeout in {mcp_tool_name}: "
             f"operation exceeded {timeout_seconds}s and was left in background."
         )
+    except BaseException as exc:
+        duration = time.monotonic() - start
+        if mcp_tool_name == "fo_sync":
+            _mcp_process_event(
+                f"fo_sync exception duration={duration:.3f}s "
+                f"{type(exc).__name__}: {exc}"
+            )
+        raise
 
 
 def _safe_tool_handler(func):
@@ -2251,13 +2282,17 @@ def _safe_tool_handler(func):
 
 
 def _safe_mcp_tool(*tool_args, **tool_kwargs):
-    if tool_args and callable(tool_args[0]) and len(tool_args) == 1 and not tool_kwargs:
-        return _original_mcp_tool(_safe_tool_handler(tool_args[0]))
+    if tool_args and callable(tool_args[0]) and len(tool_args) == 1:
+        safe_func = _safe_tool_handler(tool_args[0])
+        _original_mcp_tool(safe_func, **tool_kwargs)
+        return safe_func
 
     original_decorator = _original_mcp_tool(*tool_args, **tool_kwargs)
 
     def decorator(func):
-        return original_decorator(_safe_tool_handler(func))
+        safe_func = _safe_tool_handler(func)
+        original_decorator(safe_func)
+        return safe_func
 
     return decorator
 

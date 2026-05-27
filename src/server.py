@@ -6,6 +6,7 @@ Main Flask application with route registration.
 import socket
 import socketserver
 import selectors
+import os
 import signal
 import sys
 import threading
@@ -602,10 +603,16 @@ def _serve_flask_blocking(host: str, port: int):
 
 def _install_interrupt_probes():
     """Log SIGINT/SIGBREAK and Windows console control events before normal handling."""
-    _install_signal_probe(signal.SIGINT, "SIGINT")
-    sigbreak = getattr(signal, "SIGBREAK", None)
-    if sigbreak is not None:
-        _install_signal_probe(sigbreak, "SIGBREAK")
+    if threading.current_thread() is threading.main_thread():
+        _install_signal_probe(signal.SIGINT, "SIGINT")
+        sigbreak = getattr(signal, "SIGBREAK", None)
+        if sigbreak is not None:
+            _install_signal_probe(sigbreak, "SIGBREAK")
+    else:
+        print(
+            "[FIXONCE-PROBE flask-only-serve-v3] signal probes skipped: not main thread",
+            flush=True,
+        )
     _install_windows_console_ctrl_probe()
 
 
@@ -732,7 +739,8 @@ class _SocketProbe:
     def fileno(self):
         try:
             value = self._sock.fileno()
-            print(f"[FIXONCE-PROBE flask-only-serve-v3] server.socket.fileno -> {value}", flush=True)
+            if _verbose_poll_probe():
+                print(f"[FIXONCE-PROBE flask-only-serve-v3] server.socket.fileno -> {value}", flush=True)
             return value
         except BaseException as exc:
             print(f"[FIXONCE-PROBE flask-only-serve-v3] server.socket.fileno RAISED {type(exc).__name__}: {exc}", flush=True)
@@ -811,6 +819,10 @@ def _print_server_fileno(server, label: str):
     )
 
 
+def _verbose_poll_probe() -> bool:
+    return os.getenv("FIXONCE_VERBOSE_POLL_PROBE") == "1"
+
+
 def _serve_forever_probe(server, poll_interval: float = 0.5):
     """Instrument socketserver.BaseServer.serve_forever exit conditions."""
     shutdown_attr = "_BaseServer__shutdown_request"
@@ -829,7 +841,8 @@ def _serve_forever_probe(server, poll_interval: float = 0.5):
 
             while True:
                 shutdown_flag = getattr(server, shutdown_attr)
-                _print_server_fileno(server, f"loop {loop_count} top")
+                if _verbose_poll_probe():
+                    _print_server_fileno(server, f"loop {loop_count} top")
                 if shutdown_flag:
                     print(
                         f"[FIXONCE-PROBE flask-only-serve-v3] poll_loop EXIT: shutdown_flag true at loop {loop_count}",
@@ -838,10 +851,11 @@ def _serve_forever_probe(server, poll_interval: float = 0.5):
                     break
 
                 ready = selector.select(poll_interval)
-                print(
-                    f"[FIXONCE-PROBE flask-only-serve-v3] selector.select loop={loop_count} ready={bool(ready)} count={len(ready)}",
-                    flush=True,
-                )
+                if ready or _verbose_poll_probe():
+                    print(
+                        f"[FIXONCE-PROBE flask-only-serve-v3] selector.select loop={loop_count} ready={bool(ready)} count={len(ready)}",
+                        flush=True,
+                    )
 
                 shutdown_flag = getattr(server, shutdown_attr)
                 if shutdown_flag:
