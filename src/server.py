@@ -11,7 +11,6 @@ from datetime import datetime
 
 from flask import Flask, send_file, jsonify, request, make_response
 from flask_cors import CORS
-from werkzeug.serving import make_server
 
 # MCP import - may fail if mcp package has issues
 try:
@@ -480,15 +479,14 @@ def _run_flask():
         release_server_lock()
         return
 
-    server = make_server("0.0.0.0", requested_port, flask_app)
-    ACTUAL_PORT = int(server.server_port)
+    ACTUAL_PORT = int(requested_port)
 
     if ACTUAL_PORT != DEFAULT_PORT:
         print()
         print(f"\033[1;33m⚠️  Port {DEFAULT_PORT} busy. FixOnce is live on http://localhost:{ACTUAL_PORT}\033[0m")
         print()
 
-    # Update the discovered port after the server socket is actually bound.
+    # Publish the discovered port before entering the blocking Flask run loop.
     set_actual_port(ACTUAL_PORT)
 
     # Write canonical runtime state (SINGLE SOURCE OF TRUTH)
@@ -504,7 +502,7 @@ def _run_flask():
     set_preferred_port(ACTUAL_PORT)
     # 2. Project data dir (for legacy/backup)
     port_file = DATA_DIR / "current_port.txt"
-    port_file.write_text(str(ACTUAL_PORT))
+    port_file.write_text(str(ACTUAL_PORT), encoding="utf-8")
 
     # Cleanup on exit
     def cleanup():
@@ -513,19 +511,35 @@ def _run_flask():
 
     atexit.register(cleanup)
 
-    server.serve_forever()
+    try:
+        _serve_flask_blocking("127.0.0.1", ACTUAL_PORT)
+    except KeyboardInterrupt:
+        print("\n[MODE] Flask server stopped")
+    finally:
+        cleanup()
+
+
+def _serve_flask_blocking(host: str, port: int):
+    """Run Flask in a blocking mode suitable for --flask-only startup."""
+    flask_app.run(
+        host=host,
+        port=port,
+        debug=False,
+        use_reloader=False,
+        threaded=True,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Main Entry Point
 # ---------------------------------------------------------------------------
-if __name__ == "__main__":
+def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--flask-only", action="store_true", help="Run Flask server only (no MCP)")
     parser.add_argument("--minimized", action="store_true", help="Start minimized (for Windows startup)")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress startup messages")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # First launch initialization - create data files from templates
     from core.first_launch import ensure_initialized
@@ -562,3 +576,7 @@ if __name__ == "__main__":
         flask_thread = threading.Thread(target=_run_flask, daemon=True)
         flask_thread.start()
         mcp.run()
+
+
+if __name__ == "__main__":
+    main()
