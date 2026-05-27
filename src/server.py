@@ -6,6 +6,7 @@ Main Flask application with route registration.
 import socket
 import socketserver
 import selectors
+import signal
 import sys
 import threading
 import time
@@ -18,6 +19,7 @@ from flask import Flask, send_file, jsonify, request, make_response
 from flask_cors import CORS
 
 _STARTUP_T0 = time.monotonic()
+_WINDOWS_CTRL_HANDLER = None
 
 
 def _startup_log(label: str):
@@ -565,8 +567,11 @@ def _serve_flask_blocking(host: str, port: int):
             f"pid={os.getpid()} file={Path(__file__).resolve()} host={host} port={port}",
             flush=True,
         )
+        _install_interrupt_probes()
+        _print_process_probe("before make_server")
         _startup_log("werkzeug make_server: start")
         server = make_server(host, port, flask_app, threaded=True)
+        _print_process_probe("after make_server")
         print(
             f"[FIXONCE-PROBE flask-only-serve-v3] server_class={server.__class__.__module__}.{server.__class__.__name__}",
             flush=True,
@@ -593,6 +598,115 @@ def _serve_flask_blocking(host: str, port: int):
 
     print("[ERROR] Flask run returned unexpectedly (serve_forever returned without exception)", file=sys.stderr, flush=True)
     _startup_log("_serve_flask_blocking returning after unexpected serve_forever return")
+
+
+def _install_interrupt_probes():
+    """Log SIGINT/SIGBREAK and Windows console control events before normal handling."""
+    _install_signal_probe(signal.SIGINT, "SIGINT")
+    sigbreak = getattr(signal, "SIGBREAK", None)
+    if sigbreak is not None:
+        _install_signal_probe(sigbreak, "SIGBREAK")
+    _install_windows_console_ctrl_probe()
+
+
+def _install_signal_probe(signum, name: str):
+    current = signal.getsignal(signum)
+    if getattr(current, "_fixonce_probe", False):
+        return
+
+    def traced_signal_handler(received_signum, frame):
+        print(
+            f"[FIXONCE-PROBE flask-only-serve-v3] {name} RECEIVED "
+            f"signum={received_signum} thread={threading.current_thread().name}",
+            flush=True,
+        )
+        if frame is not None:
+            traceback.print_stack(frame, file=sys.stderr)
+
+        previous = traced_signal_handler._previous_handler
+        if previous in (None, signal.SIG_DFL):
+            raise KeyboardInterrupt
+        if previous == signal.SIG_IGN:
+            return None
+        if callable(previous):
+            return previous(received_signum, frame)
+        raise KeyboardInterrupt
+
+    traced_signal_handler._fixonce_probe = True
+    traced_signal_handler._previous_handler = current
+    signal.signal(signum, traced_signal_handler)
+
+
+def _install_windows_console_ctrl_probe():
+    global _WINDOWS_CTRL_HANDLER
+    if sys.platform != "win32" or _WINDOWS_CTRL_HANDLER is not None:
+        return
+
+    try:
+        import ctypes
+
+        event_names = {
+            0: "CTRL_C_EVENT",
+            1: "CTRL_BREAK_EVENT",
+            2: "CTRL_CLOSE_EVENT",
+            5: "CTRL_LOGOFF_EVENT",
+            6: "CTRL_SHUTDOWN_EVENT",
+        }
+        handler_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
+
+        def console_handler(ctrl_type):
+            print(
+                f"[FIXONCE-PROBE flask-only-serve-v3] Windows console control event "
+                f"{event_names.get(ctrl_type, ctrl_type)} received thread={threading.current_thread().name}",
+                flush=True,
+            )
+            traceback.print_stack(file=sys.stderr)
+            return False
+
+        _WINDOWS_CTRL_HANDLER = handler_type(console_handler)
+        ok = ctypes.windll.kernel32.SetConsoleCtrlHandler(_WINDOWS_CTRL_HANDLER, True)
+        print(f"[FIXONCE-PROBE flask-only-serve-v3] SetConsoleCtrlHandler installed ok={bool(ok)}", flush=True)
+    except BaseException as exc:
+        print(
+            f"[FIXONCE-PROBE flask-only-serve-v3] SetConsoleCtrlHandler install failed "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
+
+
+def _print_process_probe(label: str):
+    import os
+
+    print(
+        f"[FIXONCE-PROBE flask-only-serve-v3] process {label}: "
+        f"pid={os.getpid()} ppid={os.getppid()} platform={sys.platform} "
+        f"executable={sys.executable!r} argv={sys.argv!r} cwd={os.getcwd()!r}",
+        flush=True,
+    )
+    parent_cmd = _get_parent_command_line(os.getppid())
+    if parent_cmd:
+        print(f"[FIXONCE-PROBE flask-only-serve-v3] parent command: {parent_cmd}", flush=True)
+
+
+def _get_parent_command_line(ppid: int) -> str:
+    if sys.platform != "win32" or not ppid:
+        return ""
+
+    try:
+        import subprocess
+
+        cmd = [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            f"(Get-CimInstance Win32_Process -Filter \"ProcessId={int(ppid)}\").CommandLine",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+        if result.returncode == 0:
+            return (result.stdout or "").strip()
+    except Exception as exc:
+        return f"<parent lookup failed: {type(exc).__name__}: {exc}>"
+    return ""
 
 
 class _SocketProbe:
