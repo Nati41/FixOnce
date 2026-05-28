@@ -33,16 +33,22 @@ if _startup_flag_enabled("--no-boundary"):
 
 
 # MCP import - may fail if mcp package has issues
-_startup_log("import fastmcp: start")
-try:
-    from fastmcp import FastMCP
-    MCP_AVAILABLE = True
-    _startup_log("import fastmcp: ok")
-except ImportError as e:
+if _startup_flag_enabled("--no-mcp-import"):
     MCP_AVAILABLE = False
-    print(f"[WARNING] FastMCP not available: {e}")
-    print("   Running in Flask-only mode")
-    _startup_log("import fastmcp: unavailable")
+    FastMCP = None
+    print("[STARTUP] MCP import skipped by --no-mcp-import", flush=True)
+else:
+    _startup_log("import fastmcp: start")
+    try:
+        from fastmcp import FastMCP
+        MCP_AVAILABLE = True
+        _startup_log("import fastmcp: ok")
+    except ImportError as e:
+        MCP_AVAILABLE = False
+        FastMCP = None
+        print(f"[WARNING] FastMCP not available: {e}")
+        print("   Running in Flask-only mode")
+        _startup_log("import fastmcp: unavailable")
 
 # Add server directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -814,6 +820,8 @@ def main(argv=None):
     parser.add_argument("--no-boundary", action="store_true", help="Disable boundary detection for startup isolation")
     parser.add_argument("--no-db", action="store_true", help="Skip database initialization for startup isolation")
     parser.add_argument("--no-init", action="store_true", help="Skip first-launch initialization for startup isolation")
+    parser.add_argument("--no-mcp-import", action="store_true", help="Skip FastMCP import for startup isolation")
+    parser.add_argument("--no-dashboard-auto-open", action="store_true", help="Accepted diagnostic flag; server.py does not auto-open dashboards")
     parser.add_argument(
         "--werkzeug-minimal-repro",
         action="store_true",
@@ -828,8 +836,12 @@ def main(argv=None):
         f"main parsed args: flask_only={args.flask_only} minimized={args.minimized} "
         f"quiet={args.quiet} strict_port={args.strict_port} "
         f"no_semantic={args.no_semantic} no_boundary={args.no_boundary} "
-        f"no_db={args.no_db} no_init={args.no_init}"
+        f"no_db={args.no_db} no_init={args.no_init} "
+        f"no_mcp_import={args.no_mcp_import} "
+        f"no_dashboard_auto_open={args.no_dashboard_auto_open}"
     )
+    if args.no_dashboard_auto_open:
+        _startup_log("dashboard auto-open disabled by --no-dashboard-auto-open")
 
     # First launch initialization - create data files from templates
     if args.no_init:
