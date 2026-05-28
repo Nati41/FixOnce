@@ -7,3 +7,4 @@ scikit-learn>=1.0.0
 watchdog>=4.0.0
 fastembed>=0.2.0
 onnxruntime>=1.16.0
+waitress>=2.1.0

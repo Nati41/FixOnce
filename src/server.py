@@ -3,7 +3,6 @@ FixOnce Server
 Main Flask application with route registration.
 """
 
-import socket
 import subprocess
 import sys
 import threading
@@ -639,171 +638,51 @@ def _run_flask(strict_port: bool = False):
 
 
 def _serve_flask_blocking(host: str, port: int):
-    """Run Flask in a blocking mode suitable for --flask-only startup."""
+    """Run Flask in blocking mode.
+
+    On Windows we use Waitress because the Werkzeug dev server can crash with
+    WinError 10038 / "serve_forever returned without exception" when serving
+    the dashboard. macOS/Linux keep using Werkzeug.
+    """
+    _startup_log(f"_serve_flask_blocking enter host={host} port={port} platform={sys.platform!r}")
+
+    if sys.platform == "win32":
+        from waitress import serve
+
+        _startup_log(f"waitress serve: start http://{host}:{port}")
+        print(f" * Running on http://{host}:{port}", flush=True)
+        serve(flask_app, host=host, port=port, threads=8)
+
+        print("[ERROR] Waitress returned unexpectedly", file=sys.stderr, flush=True)
+        _startup_log("_serve_flask_blocking returned unexpectedly from waitress")
+        return
+
     from werkzeug.serving import make_server
 
     server = None
-    _startup_log(f"_serve_flask_blocking enter host={host} port={port}")
     try:
-        _startup_log(f"werkzeug lifecycle before make_server server_type={type(server)!r}")
         _startup_log("werkzeug make_server: start")
         server = make_server(host, port, flask_app, threaded=True)
-        _startup_log(
-            "werkzeug lifecycle after make_server "
-            f"server_class={server.__class__.__module__}.{server.__class__.__name__} "
-            f"server_type={type(server)!r}"
-        )
-        _trace_server_socket_close(server)
-        _log_werkzeug_server_state(server, "before serve_forever")
         _startup_log(f"werkzeug serve_forever: start http://{host}:{port}")
         print(f" * Running on http://{host}:{port}", flush=True)
         server.serve_forever()
         _startup_log("werkzeug serve_forever returned without exception")
-        _log_werkzeug_server_state(server, "after serve_forever return")
     except KeyboardInterrupt:
         _startup_log("werkzeug serve_forever interrupted by KeyboardInterrupt")
-        if server is not None:
-            _log_werkzeug_server_state(server, "after KeyboardInterrupt")
         raise
     except BaseException as exc:
         print(f"[ERROR] Flask server crashed: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
         traceback.print_exc(file=sys.stderr)
-        if server is not None:
-            _log_werkzeug_server_state(server, "after serve_forever exception")
         raise
     finally:
-        _startup_log("_serve_flask_blocking finally: server_close starting")
         if server is not None:
+            _startup_log("_serve_flask_blocking finally: server_close starting")
             server.server_close()
-        _startup_log("_serve_flask_blocking finally: server_close complete")
+            _startup_log("_serve_flask_blocking finally: server_close complete")
         _startup_log("_serve_flask_blocking exit")
 
     print("[ERROR] Flask run returned unexpectedly (serve_forever returned without exception)", file=sys.stderr, flush=True)
     _startup_log("_serve_flask_blocking returning after unexpected serve_forever return")
-
-
-class _ServerSocketCloseTracer:
-    """Trace exactly who closes the Werkzeug listening socket."""
-
-    def __init__(self, wrapped):
-        self._wrapped = wrapped
-
-    def __getattr__(self, name):
-        return getattr(self._wrapped, name)
-
-    def __enter__(self):
-        return self._wrapped.__enter__()
-
-    def __exit__(self, exc_type, exc, tb):
-        return self._wrapped.__exit__(exc_type, exc, tb)
-
-    def __repr__(self):
-        return f"<_ServerSocketCloseTracer wrapped={self._wrapped!r}>"
-
-    def close(self):
-        stack = traceback.extract_stack(limit=12)
-        caller = stack[-2] if len(stack) >= 2 else None
-        _startup_log(
-            "werkzeug socket close called: "
-            f"thread={threading.current_thread().name!r} "
-            f"caller={caller!r} "
-            f"before={_format_socket_state(self._wrapped)}"
-        )
-        print("[STARTUP] werkzeug socket close stack:", file=sys.stderr, flush=True)
-        traceback.print_stack(file=sys.stderr)
-        result = self._wrapped.close()
-        _startup_log(
-            "werkzeug socket close returned: "
-            f"thread={threading.current_thread().name!r} "
-            f"after={_format_socket_state(self._wrapped)}"
-        )
-        return result
-
-
-def _format_socket_state(socket_obj) -> str:
-    if socket_obj is None:
-        return "socket=None"
-
-    try:
-        fileno = socket_obj.fileno()
-    except BaseException as exc:
-        fileno = f"{type(exc).__name__}: {exc}"
-
-    try:
-        socket_name = socket_obj.getsockname()
-    except BaseException as exc:
-        socket_name = f"{type(exc).__name__}: {exc}"
-
-    return f"socket={socket_obj!r} fileno={fileno!r} name={socket_name!r}"
-
-
-def _trace_server_socket_close(server):
-    socket_obj = getattr(server, "socket", None)
-    if socket_obj is None:
-        _startup_log("werkzeug socket close tracer skipped: socket missing")
-        return
-    if isinstance(socket_obj, _ServerSocketCloseTracer):
-        _startup_log("werkzeug socket close tracer already installed")
-        return
-
-    server.socket = _ServerSocketCloseTracer(socket_obj)
-    _startup_log(f"werkzeug socket close tracer installed: {_format_socket_state(socket_obj)}")
-
-
-def _log_werkzeug_server_state(server, label: str):
-    """Log narrow Werkzeug lifecycle state around serve_forever()."""
-    try:
-        fileno = server.fileno()
-    except BaseException as exc:
-        fileno = f"{type(exc).__name__}: {exc}"
-
-    socket_obj = getattr(server, "socket", None)
-    try:
-        socket_fileno = socket_obj.fileno() if socket_obj is not None else None
-    except BaseException as exc:
-        socket_fileno = f"{type(exc).__name__}: {exc}"
-
-    try:
-        socket_name = socket_obj.getsockname() if socket_obj is not None else None
-    except BaseException as exc:
-        socket_name = f"{type(exc).__name__}: {exc}"
-
-    shutdown_signal = getattr(server, "shutdown_signal", "<missing>")
-    base_shutdown_request = getattr(server, "_BaseServer__shutdown_request", "<missing>")
-
-    _startup_log(
-        f"werkzeug lifecycle {label}: "
-        f"shutdown_signal={shutdown_signal!r} "
-        f"base_shutdown_request={base_shutdown_request!r} "
-        f"fileno={fileno!r} socket={socket_obj!r} "
-        f"socket_fileno={socket_fileno!r} socket_name={socket_name!r} "
-        f"dict={server.__dict__!r}"
-    )
-
-
-def _run_minimal_werkzeug_repro():
-    """Run a pure Flask/Werkzeug server with no FixOnce startup wiring."""
-    from flask import Flask
-    from werkzeug.serving import make_server
-
-    app = Flask("fixonce_werkzeug_minimal_repro")
-
-    @app.route("/")
-    def ok():
-        return "ok"
-
-    print("[REPRO] starting pure Werkzeug server on http://127.0.0.1:5000", flush=True)
-    server = make_server("127.0.0.1", 5000, app)
-    print(f"[REPRO] server={server!r} class={server.__class__.__module__}.{server.__class__.__name__}", flush=True)
-    print("[REPRO] serve_forever enter", flush=True)
-    server.serve_forever()
-    print(
-        "[REPRO] serve_forever returned "
-        f"shutdown_request={getattr(server, '_BaseServer__shutdown_request', '<missing>')!r} "
-        f"is_shut_down={getattr(server, '_BaseServer__is_shut_down', '<missing>')!r} "
-        f"socket={getattr(server, 'socket', None)!r}",
-        flush=True,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -821,27 +700,15 @@ def main(argv=None):
     parser.add_argument("--no-db", action="store_true", help="Skip database initialization for startup isolation")
     parser.add_argument("--no-init", action="store_true", help="Skip first-launch initialization for startup isolation")
     parser.add_argument("--no-mcp-import", action="store_true", help="Skip FastMCP import for startup isolation")
-    parser.add_argument("--no-dashboard-auto-open", action="store_true", help="Accepted diagnostic flag; server.py does not auto-open dashboards")
-    parser.add_argument(
-        "--werkzeug-minimal-repro",
-        action="store_true",
-        help="Run a pure Flask/Werkzeug serve_forever repro and skip FixOnce startup",
-    )
     args = parser.parse_args(argv)
-    if args.werkzeug_minimal_repro:
-        _run_minimal_werkzeug_repro()
-        return
 
     _startup_log(
         f"main parsed args: flask_only={args.flask_only} minimized={args.minimized} "
         f"quiet={args.quiet} strict_port={args.strict_port} "
         f"no_semantic={args.no_semantic} no_boundary={args.no_boundary} "
         f"no_db={args.no_db} no_init={args.no_init} "
-        f"no_mcp_import={args.no_mcp_import} "
-        f"no_dashboard_auto_open={args.no_dashboard_auto_open}"
+        f"no_mcp_import={args.no_mcp_import}"
     )
-    if args.no_dashboard_auto_open:
-        _startup_log("dashboard auto-open disabled by --no-dashboard-auto-open")
 
     # First launch initialization - create data files from templates
     if args.no_init:

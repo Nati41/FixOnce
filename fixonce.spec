@@ -1,118 +1,106 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
 FixOnce PyInstaller Spec File
-Builds a standalone Windows EXE with all dependencies bundled.
+Builds the Windows app starting from the end-user launcher.
 
 Usage:
     pyinstaller fixonce.spec
 
 Output:
-    dist/FixOnce/FixOnce.exe (one-folder mode)
-    or dist/FixOnce.exe (one-file mode, slower startup)
+    dist/FixOnce/FixOnce.exe
 """
 
-import os
-import sys
 from pathlib import Path
 
-# Get the project root
+
 PROJECT_ROOT = Path(SPECPATH)
 
-# Collect all data files
+
+def data_entry(relative_path: str):
+    path = PROJECT_ROOT / relative_path
+    return (str(path), str(Path(relative_path).parent))
+
+
 datas = [
-    # Dashboard HTML files
-    (str(PROJECT_ROOT / 'data' / 'dashboard_vnext.html'), 'data'),
-    (str(PROJECT_ROOT / 'data' / 'dashboard_app.html'), 'data'),
-    (str(PROJECT_ROOT / 'data' / 'logo.png'), 'data'),
-
-    # Template JSON files (initial state)
-    (str(PROJECT_ROOT / 'data' / 'project_memory.template.json'), 'data'),
-
-    # Chrome Extension (will be copied to AppData on first run)
-    (str(PROJECT_ROOT / 'extension'), 'extension'),
-
-    # Assets
-    (str(PROJECT_ROOT / 'assets'), 'assets'),
+    data_entry("data/dashboard.html"),
+    data_entry("data/dashboard_app.html"),
+    data_entry("data/installer.html"),
+    data_entry("data/privacy.html"),
+    data_entry("data/terms.html"),
+    data_entry("data/security.html"),
+    data_entry("data/test_error.html"),
+    data_entry("data/logo.png"),
+    data_entry("data/app-icon.png"),
+    data_entry("data/fixonce_logo.svg"),
+    data_entry("data/project_memory.template.json"),
+    data_entry("data/active_project.template.json"),
+    data_entry("data/activity_log.template.json"),
+    data_entry("data/session_registry.template.json"),
+    data_entry("data/global-claude-md.md"),
+    data_entry("data/global-cursor-rules.md"),
+    data_entry("data/global-agent-rules.md"),
+    (str(PROJECT_ROOT / "extension"), "extension"),
+    (str(PROJECT_ROOT / "assets"), "assets"),
 ]
 
-# Hidden imports that PyInstaller might miss
+
 hiddenimports = [
-    # Flask ecosystem
-    'flask',
-    'flask_cors',
-    'werkzeug',
-    'jinja2',
-    'markupsafe',
-    'itsdangerous',
-    'click',
-
-    # MCP
-    'fastmcp',
-    'mcp',
-
-    # Embeddings (heavy!)
-    'fastembed',
-    'onnxruntime',
-    'onnx',
-
-    # ML/Search
-    'sklearn',
-    'sklearn.metrics',
-    'sklearn.metrics.pairwise',
-    'numpy',
-
-    # File watching
-    'watchdog',
-    'watchdog.observers',
-    'watchdog.events',
-
-    # Standard lib that might be missed
-    'json',
-    'sqlite3',
-    'threading',
-    'socket',
-    'pathlib',
-
-    # FixOnce internal modules
-    'src.config',
-    'src.windows_bootstrap',
-    'src.core',
-    'src.core.db_solutions',
-    'src.core.error_store',
-    'src.core.embeddings',
-    'src.core.embeddings.fastembed_provider',
-    'src.core.embeddings.provider',
-    'src.api',
-    'src.managers',
-    'src.mcp_server',
-    'src.mcp_server.mcp_memory_server_v2',
-    'src.file_watcher',
-
-    # Also try without src. prefix (PyInstaller path handling)
-    'config',
-    'windows_bootstrap',
-    'core',
-    'api',
-    'managers',
-    'mcp_server',
+    "flask",
+    "flask_cors",
+    "werkzeug",
+    "jinja2",
+    "markupsafe",
+    "itsdangerous",
+    "click",
+    "waitress",
+    "fastmcp",
+    "mcp",
+    "fastembed",
+    "onnxruntime",
+    "onnx",
+    "sklearn",
+    "sklearn.metrics",
+    "sklearn.metrics.pairwise",
+    "numpy",
+    "watchdog",
+    "watchdog.observers",
+    "watchdog.events",
+    "webview",
+    "webview.guilib",
+    "webview.util",
+    "webview.platforms",
+    "webview.platforms.edgechromium",
+    "webview.platforms.mshtml",
+    "webview.platforms.winforms",
+    "json",
+    "sqlite3",
+    "threading",
+    "socket",
+    "pathlib",
+    "server",
+    "config",
+    "windows_bootstrap",
+    "core",
+    "api",
+    "managers",
+    "mcp_server",
 ]
 
-# Exclude unnecessary packages to reduce size
+
 excludes = [
-    'tkinter',
-    'matplotlib',
-    'PIL',
-    'pandas',
-    'scipy',  # fastembed might pull this, but we can try without
-    'torch',  # We use ONNX, not PyTorch
-    'tensorflow',
-    'keras',
+    "matplotlib",
+    "PIL",
+    "pandas",
+    "scipy",
+    "torch",
+    "tensorflow",
+    "keras",
 ]
 
-# Analysis
+
 a = Analysis(
-    [str(PROJECT_ROOT / 'src' / 'server.py')],
-    pathex=[str(PROJECT_ROOT), str(PROJECT_ROOT / 'src')],
+    [str(PROJECT_ROOT / "scripts" / "app_launcher.py")],
+    pathex=[str(PROJECT_ROOT), str(PROJECT_ROOT / "src"), str(PROJECT_ROOT / "scripts")],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -123,30 +111,25 @@ a = Analysis(
     noarchive=False,
 )
 
-# Remove duplicate files
 pyz = PYZ(a.pure)
 
-# ============================================================================
-# ONE-FOLDER MODE (Recommended for development/testing)
-# Faster startup, easier to debug, larger folder size
-# ============================================================================
 exe = EXE(
     pyz,
     a.scripts,
     [],
-    exclude_binaries=True,  # One-folder mode
-    name='FixOnce',
+    exclude_binaries=True,
+    name="FixOnce",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,  # Compress binaries
-    console=True,  # Set to False for GUI-only (no terminal window)
+    upx=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(PROJECT_ROOT / 'FixOnce.ico'),  # Windows icon
+    icon=str(PROJECT_ROOT / "FixOnce.ico"),
 )
 
 coll = COLLECT(
@@ -156,31 +139,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='FixOnce',
+    name="FixOnce",
 )
-
-# ============================================================================
-# ONE-FILE MODE (Uncomment below, comment above COLLECT block)
-# Single EXE, slower startup (extracts to temp), easier distribution
-# ============================================================================
-# exe = EXE(
-#     pyz,
-#     a.scripts,
-#     a.binaries,
-#     a.datas,
-#     [],
-#     name='FixOnce',
-#     debug=False,
-#     bootloader_ignore_signals=False,
-#     strip=False,
-#     upx=True,
-#     upx_exclude=[],
-#     runtime_tmpdir=None,
-#     console=True,
-#     disable_windowed_traceback=False,
-#     argv_emulation=False,
-#     target_arch=None,
-#     codesign_identity=None,
-#     entitlements_file=None,
-#     icon=str(PROJECT_ROOT / 'FixOnce.ico'),
-# )
