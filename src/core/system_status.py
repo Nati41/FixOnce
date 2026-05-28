@@ -505,7 +505,7 @@ def _check_mcp() -> MCPStatus:
     claude_json = home / ".claude.json"
     if claude_json.exists():
         try:
-            with open(claude_json, 'r') as f:
+            with open(claude_json, 'r', encoding='utf-8') as f:
                 config = json.load(f)
 
             # Check global mcpServers
@@ -540,7 +540,7 @@ def _check_mcp() -> MCPStatus:
     cursor_mcp = home / ".cursor" / "mcp.json"
     if cursor_mcp.exists():
         try:
-            with open(cursor_mcp, 'r') as f:
+            with open(cursor_mcp, 'r', encoding='utf-8') as f:
                 config = json.load(f)
             if "fixonce" in config.get("mcpServers", {}):
                 clients["cursor"].configured = True
@@ -589,7 +589,7 @@ def _check_extension() -> ExtensionStatus:
     ping_file = data_dir / "extension_ping.json"
     if ping_file.exists():
         try:
-            with open(ping_file, 'r') as f:
+            with open(ping_file, 'r', encoding='utf-8') as f:
                 ping_data = json.load(f)
             status.installed = True
             status.connected = ping_data.get("connected", False)
@@ -635,7 +635,7 @@ def _check_project() -> ProjectStatus:
         return status
 
     try:
-        with open(active_file, 'r') as f:
+        with open(active_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
         active_id = data.get("active_id")
@@ -653,7 +653,7 @@ def _check_project() -> ProjectStatus:
         project_file = projects_dir / f"{active_id}.json"
         if project_file.exists():
             try:
-                with open(project_file, 'r') as f:
+                with open(project_file, 'r', encoding='utf-8') as f:
                     project_data = json.load(f)
                 project_info = project_data.get("project_info", {})
                 status.project_name = project_info.get("name") or active_id.split("_")[0]
@@ -838,8 +838,8 @@ def clear_active_project():
         "cleared_at": datetime.now().isoformat()
     }
 
-    with open(active_file, 'w') as f:
-        json.dump(data, f, indent=2)
+    with open(active_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def set_active_project(project_id: str, working_dir: Optional[str] = None):
@@ -859,5 +859,5 @@ def set_active_project(project_id: str, working_dir: Optional[str] = None):
         "activated_at": datetime.now().isoformat()
     }
 
-    with open(active_file, 'w') as f:
-        json.dump(data, f, indent=2)
+    with open(active_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
