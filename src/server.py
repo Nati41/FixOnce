@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 import traceback
+import os
 from pathlib import Path
 from datetime import datetime
 
@@ -21,6 +22,14 @@ _STARTUP_T0 = time.monotonic()
 def _startup_log(label: str):
     elapsed = time.monotonic() - _STARTUP_T0
     print(f"[STARTUP {elapsed:6.2f}s] {label}", flush=True)
+
+
+def _startup_flag_enabled(flag: str) -> bool:
+    return flag in sys.argv[1:]
+
+
+if _startup_flag_enabled("--no-boundary"):
+    os.environ["FIXONCE_DISABLE_BOUNDARY"] = "1"
 
 
 # MCP import - may fail if mcp package has issues
@@ -85,11 +94,14 @@ def find_available_port(start_port: int = DEFAULT_PORT, max_attempts: int = MAX_
 # Semantic Engine (optional)
 # ---------------------------------------------------------------------------
 try:
-    _startup_log("semantic import: start")
-    from core.semantic_engine import SemanticEngine, get_engine, reset_engine
-    SEMANTIC_ENABLED = True
-    print("[OK] Semantic Engine loaded successfully")
-    _startup_log("semantic import: ok")
+    if _startup_flag_enabled("--no-semantic"):
+        raise ImportError("--no-semantic startup flag")
+    else:
+        _startup_log("semantic import: start")
+        from core.semantic_engine import SemanticEngine, get_engine, reset_engine
+        SEMANTIC_ENABLED = True
+        print("[OK] Semantic Engine loaded successfully")
+        _startup_log("semantic import: ok")
 except ImportError as e:
     SEMANTIC_ENABLED = False
     print(f"[WARNING] Semantic Engine not available: {e}")
@@ -798,6 +810,10 @@ def main(argv=None):
     parser.add_argument("--minimized", action="store_true", help="Start minimized (for Windows startup)")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress startup messages")
     parser.add_argument("--strict-port", action="store_true", help="Fail instead of falling back when port 5000 is busy")
+    parser.add_argument("--no-semantic", action="store_true", help="Disable semantic engine for startup isolation")
+    parser.add_argument("--no-boundary", action="store_true", help="Disable boundary detection for startup isolation")
+    parser.add_argument("--no-db", action="store_true", help="Skip database initialization for startup isolation")
+    parser.add_argument("--no-init", action="store_true", help="Skip first-launch initialization for startup isolation")
     parser.add_argument(
         "--werkzeug-minimal-repro",
         action="store_true",
@@ -810,19 +826,27 @@ def main(argv=None):
 
     _startup_log(
         f"main parsed args: flask_only={args.flask_only} minimized={args.minimized} "
-        f"quiet={args.quiet} strict_port={args.strict_port}"
+        f"quiet={args.quiet} strict_port={args.strict_port} "
+        f"no_semantic={args.no_semantic} no_boundary={args.no_boundary} "
+        f"no_db={args.no_db} no_init={args.no_init}"
     )
 
     # First launch initialization - create data files from templates
-    _startup_log("project init / first launch: start")
-    from core.first_launch import ensure_initialized
-    ensure_initialized()
-    _startup_log("project init / first launch: ok")
+    if args.no_init:
+        _startup_log("project init / first launch: skipped by --no-init")
+    else:
+        _startup_log("project init / first launch: start")
+        from core.first_launch import ensure_initialized
+        ensure_initialized()
+        _startup_log("project init / first launch: ok")
 
     # Initialize databases
-    _startup_log("database init: start")
-    init_all_databases()
-    _startup_log("database init: ok")
+    if args.no_db:
+        _startup_log("database init: skipped by --no-db")
+    else:
+        _startup_log("database init: start")
+        init_all_databases()
+        _startup_log("database init: ok")
 
     # Skip banner in quiet/minimized mode
     if not args.quiet and not args.minimized:

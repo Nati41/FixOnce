@@ -18,17 +18,21 @@ if str(SRC_DIR) not in sys.path:
 from flask import Blueprint, jsonify, request
 from datetime import datetime
 import json
+import os
 import subprocess
 import hashlib
 
 # Boundary detection imports
 try:
-    from core.boundary_detector import (
-        detect_boundary_violation,
-        handle_boundary_transition
-    )
-    BOUNDARY_DETECTION_ENABLED = True
-    print("[Activity] Boundary detection ENABLED")
+    if os.environ.get("FIXONCE_DISABLE_BOUNDARY") == "1":
+        raise ImportError("disabled by FIXONCE_DISABLE_BOUNDARY")
+    else:
+        from core.boundary_detector import (
+            detect_boundary_violation,
+            handle_boundary_transition
+        )
+        BOUNDARY_DETECTION_ENABLED = True
+        print("[Activity] Boundary detection ENABLED")
 except ImportError as e:
     BOUNDARY_DETECTION_ENABLED = False
     print(f"[Activity] Boundary detection not available: {e}")
