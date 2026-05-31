@@ -16,19 +16,21 @@ if errorlevel 1 (
     exit /b 1
 )
 
+set "PYTHON=python"
+
 REM Check/Install PyInstaller
 echo Checking PyInstaller...
-pip show pyinstaller >nul 2>&1
+%PYTHON% -m pip show pyinstaller >nul 2>&1
 if errorlevel 1 (
     echo Installing PyInstaller...
-    pip install pyinstaller
+    %PYTHON% -m pip install pyinstaller
 )
 
 REM Install dependencies
 echo.
 echo Installing dependencies...
-pip install -r requirements.txt
-pip install fastembed onnxruntime
+%PYTHON% -m pip install -r requirements.txt
+%PYTHON% -m pip install fastembed onnxruntime
 
 REM Create .ico if missing (Windows needs .ico, not .icns)
 if not exist "FixOnce.ico" (
@@ -45,7 +47,7 @@ echo Building FixOnce...
 echo This may take a few minutes...
 echo.
 
-pyinstaller fixonce.spec --clean
+%PYTHON% -m PyInstaller fixonce.spec --clean
 
 if errorlevel 1 (
     echo.
@@ -61,6 +63,8 @@ echo   BUILD SUCCESSFUL!
 echo ======================================
 echo.
 echo Output: dist\FixOnce\FixOnce.exe
+echo Entry point: scripts\app_launcher.py
+echo Windowed mode: enabled
 echo.
 echo To test:
 echo   cd dist\FixOnce

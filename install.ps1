@@ -16,6 +16,42 @@ Write-Host "🧠 FixOnce Installer for Windows" -ForegroundColor Cyan
 Write-Host "=================================" -ForegroundColor Cyan
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$LauncherScript = Join-Path $ScriptDir "scripts\app_launcher.py"
+$PackagedExe = Join-Path $ScriptDir "FixOnce.exe"
+if (-not (Test-Path $PackagedExe)) {
+    $DistExe = Join-Path $ScriptDir "dist\FixOnce\FixOnce.exe"
+    if (Test-Path $DistExe) { $PackagedExe = $DistExe }
+}
+
+function Get-LauncherCommand {
+    param(
+        [switch]$ServerMode
+    )
+
+    if (Test-Path $PackagedExe) {
+        $args = @()
+        if ($ServerMode) { $args += "--server" }
+        return @{
+            FilePath = $PackagedExe
+            Arguments = $args
+            WorkingDirectory = (Split-Path -Parent $PackagedExe)
+            DisplayName = "FixOnce.exe"
+        }
+    }
+
+    $pythonwCmd = $pythonCmd -replace "python\.exe$", "pythonw.exe"
+    if (-not (Test-Path $pythonwCmd)) { $pythonwCmd = $pythonCmd }
+
+    $args = @("`"$LauncherScript`"")
+    if ($ServerMode) { $args += "--server" }
+
+    return @{
+        FilePath = $pythonwCmd
+        Arguments = $args
+        WorkingDirectory = $ScriptDir
+        DisplayName = "app launcher"
+    }
+}
 
 # ============ Step 1: Check Python ============
 Write-Step "Checking Python..."
@@ -201,6 +237,7 @@ args = ["$mcpServerPath"]
 
 [mcp_servers.fixonce.env]
 PYTHONPATH = "$srcPath"
+FIXONCE_ACTOR = "codex"
 "@
 
 try {
@@ -306,7 +343,6 @@ try {
 Write-Step "Configuring auto-start..."
 
 $taskName = "FixOnceServer"
-$serverScript = Join-Path $ScriptDir "src\server.py"
 
 # Check if task already exists
 $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -315,11 +351,9 @@ if ($existingTask) {
     Write-OK "Auto-start already configured"
 } else {
     try {
-        # Find pythonw for background execution
-        $pythonwCmd = $pythonCmd -replace "python\.exe$", "pythonw.exe"
-        if (-not (Test-Path $pythonwCmd)) { $pythonwCmd = $pythonCmd }
-
-        $action = New-ScheduledTaskAction -Execute $pythonwCmd -Argument "`"$serverScript`" --flask-only" -WorkingDirectory (Join-Path $ScriptDir "src")
+        $serverLaunch = Get-LauncherCommand -ServerMode
+        $argumentString = ($serverLaunch.Arguments -join " ")
+        $action = New-ScheduledTaskAction -Execute $serverLaunch.FilePath -Argument $argumentString -WorkingDirectory $serverLaunch.WorkingDirectory
         $trigger = New-ScheduledTaskTrigger -AtLogOn
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
         $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
@@ -328,7 +362,7 @@ if ($existingTask) {
         Write-OK "Auto-start configured (Task Scheduler with restart on failure)"
     } catch {
         Write-Warn "Could not configure auto-start: $_"
-        Write-Host "  You can start manually: python src\server.py"
+        Write-Host "  You can still launch FixOnce from the app icon."
     }
 }
 
@@ -375,18 +409,15 @@ try {
     Write-Warn "Could not save installation state: $_"
 }
 
-# ============ Start Server ============
-Write-Host "`n[✓] Starting FixOnce..." -ForegroundColor Cyan
+# ============ Launch App ============
+Write-Host "`n[✓] Launching FixOnce..." -ForegroundColor Cyan
 
 try {
-    Start-Process -FilePath $pythonCmd -ArgumentList "`"$serverScript`" --flask-only" -WorkingDirectory (Join-Path $ScriptDir "src") -WindowStyle Hidden
-    Start-Sleep -Seconds 2
-
-    # Open dashboard
-    Start-Process "http://localhost:5000"
-    Write-OK "FixOnce started! Dashboard opening..."
+    $appLaunch = Get-LauncherCommand
+    Start-Process -FilePath $appLaunch.FilePath -ArgumentList $appLaunch.Arguments -WorkingDirectory $appLaunch.WorkingDirectory
+    Write-OK "FixOnce launched"
 } catch {
-    Write-Warn "Could not auto-start. Run manually: python src\server.py"
+    Write-Warn "Could not launch FixOnce automatically. Open FixOnce from the app icon."
 }
 
 # ============ Done ============
@@ -396,7 +427,7 @@ Write-Host "  ✓ Installation Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  FixOnce will start automatically on login." -ForegroundColor White
-Write-Host "  Dashboard: http://localhost:5000" -ForegroundColor Cyan
+Write-Host "  Open FixOnce from the app icon whenever you want the dashboard window." -ForegroundColor White
 Write-Host ""
 Write-Host "  To uninstall: .\uninstall.ps1" -ForegroundColor Yellow
 Write-Host ""

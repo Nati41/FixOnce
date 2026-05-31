@@ -35,9 +35,14 @@ Write-Host ""
 
 # Stop server
 Write-Host "[1/5] Stopping FixOnce server..."
-Get-Process -Name "python*" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -match "server.py|mcp_memory_server" } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object {
+        ($_.Name -match '^python.*\.exe$|^FixOnce\.exe$') -and
+        ($_.CommandLine -match 'server\.py|mcp_memory_server|--server')
+    } |
+    ForEach-Object {
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
 Write-OK "Server stopped"
 
 # Remove Scheduled Task
