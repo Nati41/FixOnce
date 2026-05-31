@@ -4,6 +4,7 @@ SQLite database operations for storing and retrieving solutions.
 """
 
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -13,22 +14,28 @@ from config import PERSONAL_DB_PATH, TEAM_DB_PATH
 
 def init_db(db_path: Path, db_name: str = "Database"):
     """Initialize a SQLite database and create the solutions table."""
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS solutions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            error_message TEXT NOT NULL,
-            solution_text TEXT NOT NULL,
-            timestamp TEXT NOT NULL,
-            error_clean TEXT,
-            confidence_score REAL DEFAULT 1.0,
-            success_count INTEGER DEFAULT 0
-        )
-    """)
-    conn.commit()
-    conn.close()
-    print(f"[DB] {db_name} initialized at {db_path}")
+    started = time.monotonic()
+    print(f"[DB] {db_name} init start at {db_path}", flush=True)
+    conn = sqlite3.connect(db_path, timeout=3)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA busy_timeout=3000")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS solutions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                error_message TEXT NOT NULL,
+                solution_text TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                error_clean TEXT,
+                confidence_score REAL DEFAULT 1.0,
+                success_count INTEGER DEFAULT 0
+            )
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+    elapsed = time.monotonic() - started
+    print(f"[DB] {db_name} initialized at {db_path} ({elapsed:.2f}s)", flush=True)
 
 
 def get_all_solutions(db_path: Path) -> list[dict]:

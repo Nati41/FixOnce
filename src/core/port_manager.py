@@ -48,7 +48,7 @@ def load_user_config() -> Dict[str, Any]:
     config_file = get_user_config_file()
     if config_file.exists():
         try:
-            with open(config_file, 'r') as f:
+            with open(config_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             pass
@@ -59,8 +59,8 @@ def save_user_config(config: Dict[str, Any]) -> None:
     """Save user-specific configuration."""
     config_file = get_user_config_file()
     config_file.parent.mkdir(exist_ok=True)
-    with open(config_file, 'w') as f:
-        json.dump(config, f, indent=2)
+    with open(config_file, 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
 
 
 def get_preferred_port() -> Optional[int]:
@@ -286,7 +286,7 @@ def get_runtime_state() -> Optional[Dict[str, Any]]:
         return None
 
     try:
-        with open(RUNTIME_FILE, 'r') as f:
+        with open(RUNTIME_FILE, 'r', encoding='utf-8') as f:
             state = json.load(f)
 
         # Validate PID is still running
@@ -328,8 +328,8 @@ def set_runtime_state(port: int, pid: int) -> bool:
         "install_path": str(PROJECT_ROOT),
     }
 
-    with open(RUNTIME_FILE, 'w') as f:
-        json.dump(state, f, indent=2)
+    with open(RUNTIME_FILE, 'w', encoding='utf-8') as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
 
     return True
 
@@ -368,7 +368,7 @@ def acquire_server_lock(pid: int) -> bool:
 
     if LOCK_FILE.exists():
         try:
-            with open(LOCK_FILE, 'r') as f:
+            with open(LOCK_FILE, 'r', encoding='utf-8') as f:
                 existing_pid = int(f.read().strip())
 
             if is_pid_running(existing_pid):
@@ -377,7 +377,7 @@ def acquire_server_lock(pid: int) -> bool:
             pass  # Stale or invalid lock file
 
     # Write our PID
-    with open(LOCK_FILE, 'w') as f:
+    with open(LOCK_FILE, 'w', encoding='utf-8') as f:
         f.write(str(pid))
 
     return True

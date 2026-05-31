@@ -31,7 +31,7 @@ def _load_pending() -> List[Dict[str, Any]]:
     if not PENDING_FILE.exists():
         return []
     try:
-        with open(PENDING_FILE, 'r') as f:
+        with open(PENDING_FILE, 'r', encoding='utf-8') as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_SH)
             data = json.load(f)
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
@@ -44,9 +44,9 @@ def _save_pending(pending: List[Dict[str, Any]]):
     """Save pending fixes to file."""
     PENDING_FILE.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with open(PENDING_FILE, 'w') as f:
+        with open(PENDING_FILE, 'w', encoding='utf-8') as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-            json.dump({"pending": pending[-MAX_PENDING:], "updated": datetime.now().isoformat()}, f, indent=2)
+            json.dump({"pending": pending[-MAX_PENDING:], "updated": datetime.now().isoformat()}, f, ensure_ascii=False, indent=2)
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
     except IOError as e:
         print(f"[pending_fixes] Save error: {e}")

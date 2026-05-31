@@ -273,7 +273,7 @@ def _get_project_id_smart(cwd: str, file_path: str) -> str:
         active_file = DATA_DIR / "active_project.json"
         if active_file.exists():
             import json
-            with open(active_file, 'r') as f:
+            with open(active_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             active_id = data.get("active_id")
             if active_id:
@@ -460,4 +460,3 @@ def get_activity_feed():
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-

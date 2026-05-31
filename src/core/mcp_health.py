@@ -80,7 +80,7 @@ def _read_last_mcp_activity() -> Tuple[Optional[datetime], Optional[str]]:
     ai_conn_file = _get_ai_connections_file()
     if ai_conn_file.exists():
         try:
-            with open(ai_conn_file, 'r') as f:
+            with open(ai_conn_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
             clients = data.get("clients", {})
@@ -103,7 +103,7 @@ def _read_last_mcp_activity() -> Tuple[Optional[datetime], Optional[str]]:
     debug_log = _get_mcp_debug_log()
     if debug_log.exists():
         try:
-            with open(debug_log, 'r') as f:
+            with open(debug_log, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
 
             # Parse last line for timestamp
@@ -144,7 +144,7 @@ def _check_config_validity() -> Tuple[bool, str, list]:
     if project_mcp.exists():
         config_path = str(project_mcp)
         try:
-            with open(project_mcp, 'r') as f:
+            with open(project_mcp, 'r', encoding='utf-8') as f:
                 config = json.load(f)
 
             fixonce_config = config.get("mcpServers", {}).get("fixonce", {})
@@ -172,7 +172,7 @@ def _check_config_validity() -> Tuple[bool, str, list]:
     claude_json = home / ".claude.json"
     if claude_json.exists():
         try:
-            with open(claude_json, 'r') as f:
+            with open(claude_json, 'r', encoding='utf-8') as f:
                 config = json.load(f)
 
             mcp_servers = config.get("mcpServers", {})
@@ -193,7 +193,7 @@ def _check_config_validity() -> Tuple[bool, str, list]:
     settings_json = home / ".claude" / "settings.json"
     if settings_json.exists():
         try:
-            with open(settings_json, 'r') as f:
+            with open(settings_json, 'r', encoding='utf-8') as f:
                 config = json.load(f)
 
             if "fixonce" in config.get("mcpServers", {}):
