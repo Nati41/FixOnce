@@ -197,6 +197,63 @@ def retry_ai_connection(client: str):
         }), 500
 
 
+@setup_bp.route('/api/setup/repair-mcp', methods=['POST'])
+def repair_mcp_connection():
+    """Repair local MCP setup and report honest client-session limitations."""
+    from core.mcp_health import get_mcp_health_for_dashboard
+    from core.mcp_session_health import mark_recovery_attempt, record_mcp_success
+
+    actor = None
+    try:
+        payload = request.get_json(silent=True) or {}
+        actor = (payload.get("client") or payload.get("actor") or "").strip().lower() or None
+    except Exception:
+        actor = None
+
+    mark_recovery_attempt(actor=actor, source="dashboard")
+
+    checks = {
+        "server_running": True,
+        "config_checked": False,
+        "config_repaired": False,
+        "rules_synced": False,
+        "stale_process_cleanup": "skipped_client_owned_transport",
+    }
+
+    try:
+        install = _load_install_module()
+        fixonce_dir = install.get_fixonce_dir()
+        editors = install.detect_editors()
+        stdio_config = install.build_install_stdio_config(fixonce_dir)
+
+        targets = [actor] if actor in {"claude", "cursor", "codex", "windsurf"} else ["claude", "cursor", "codex", "windsurf"]
+        config_results = []
+        rules_results = []
+        for client in targets:
+            config_results.append(bool(install.configure_client_mcp(client, stdio_config=stdio_config, editors=editors)))
+            rules_results.append(bool(install.sync_client_rules(client, fixonce_dir=fixonce_dir)))
+
+        checks["config_checked"] = True
+        checks["config_repaired"] = all(config_results) if config_results else False
+        checks["rules_synced"] = all(rules_results) if rules_results else False
+    except Exception as e:
+        checks["config_error"] = str(e)
+
+    health = get_mcp_health_for_dashboard()
+    if health.get("state") in {"active", "stale"} and health.get("session", {}).get("state") != "session_lost":
+        record_mcp_success(tool_name="repair_mcp", actor_identity={"editor": actor or "unknown", "source": "dashboard"})
+
+    return jsonify({
+        "success": True,
+        "checks": checks,
+        "mcp_health": get_mcp_health_for_dashboard(),
+        "message": (
+            "Repair completed. If this chat still cannot use FixOnce tools, "
+            "open a new AI chat or reconnect the MCP server in your client."
+        ),
+    })
+
+
 @setup_bp.route('/api/setup/open-app/<client>', methods=['POST'])
 def open_app(client: str):
     """Best-effort open action for supported desktop apps."""

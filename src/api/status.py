@@ -282,6 +282,21 @@ def api_mcp_health():
         }), 500
 
 
+@status_bp.route("/mcp/session", methods=["GET"])
+def api_mcp_session_health():
+    """Return AI-chat MCP session health without importing the MCP server."""
+    try:
+        from core.mcp_session_health import get_session_health
+        return jsonify(get_session_health())
+    except Exception as e:
+        return jsonify({
+            "state": "unknown",
+            "status": "error",
+            "message": f"MCP session check failed: {e}",
+            "needs_reconnect": True,
+        }), 500
+
+
 @status_bp.route("/system/mode", methods=["GET"])
 def api_get_system_mode():
     """Get global FixOnce operating mode."""

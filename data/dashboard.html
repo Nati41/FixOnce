@@ -680,7 +680,11 @@ const WIZARD_COPY = {
   continue: 'Got it',
   retry_success: 'Connection updated.',
   retry_error: 'Could not update this app right now.',
-  open_error: 'Could not open this app right now.'
+  open_error: 'Could not open this app right now.',
+  repair_mcp: 'Check MCP',
+  repairing_mcp: 'Checking...',
+  repair_done: 'Repair completed. If tools still fail, open a new AI chat or reconnect MCP in your client.',
+  repair_error: 'Could not run MCP repair right now.'
 };
 let onboardingDismissed = false;
 let integrationsPanelOpen = false;
@@ -791,13 +795,27 @@ function render(s) {
     action: agentContext.tool_name || lastIntervention.tool_name || ''
   });
 
+  const mcpSession = safeObject(s.mcp_health?.session);
+  const mcpState = mcpSession.state || s.mcp_health?.state || 'unknown';
+  const mcpLabel = getMcpSessionLabel(mcpState);
+  const mcpMessage = mcpSession.message || s.mcp_health?.message || 'MCP session status is unknown.';
+  const mcpIconClass = mcpState === 'session_lost' ? 'status-error' : mcpState === 'degraded' ? 'status-warn' : mcpState === 'connected' ? 'status-ok' : 'status-warn';
+  rows.push({
+    icon: mcpState === 'session_lost' ? '!' : mcpState === 'connected' ? '✓' : '·',
+    iconClass: mcpIconClass,
+    text: `MCP: ${mcpLabel}`,
+    action: `<button class="wizard-btn" type="button" id="repairMcpBtn">${WIZARD_COPY.repair_mcp}</button>`,
+    title: mcpMessage
+  });
+
   statusEl.innerHTML = rows.map(r => `
-    <div class="status-row">
+    <div class="status-row" ${r.title ? `title="${escapeHtml(r.title)}"` : ''}>
       <span class="status-icon ${r.iconClass}">${r.icon}</span>
-      <span class="status-text">${r.text}</span>
+      <span class="status-text">${escapeHtml(r.text)}</span>
       ${r.action ? `<span class="status-action">${r.action}</span>` : ''}
     </div>
   `).join('');
+  wireRepairMcpButton();
 
   // Context - from intent/live_record
   const intent = s.intent || s.live_record?.intent || {};
@@ -1067,6 +1085,56 @@ function sortClientsForDisplay(clients) {
 
 function safeObject(value) {
   return value && typeof value === 'object' ? value : {};
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  }[char]));
+}
+
+function getMcpSessionLabel(state) {
+  const labels = {
+    connected: 'Connected',
+    degraded: 'Degraded',
+    reconnecting: 'Reconnecting',
+    session_lost: 'Session lost',
+    unknown: 'Unknown'
+  };
+  return labels[state] || labels.unknown;
+}
+
+function wireRepairMcpButton() {
+  const button = document.getElementById('repairMcpBtn');
+  if (!button) return;
+  button.addEventListener('click', async () => {
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = WIZARD_COPY.repairing_mcp;
+    try {
+      const res = await fetch(`${API}/api/setup/repair-mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept-Language': UI_LANG },
+        body: JSON.stringify({})
+      });
+      const payload = await res.json();
+      if (!res.ok || !payload.success) {
+        throw new Error(payload.error || 'repair_failed');
+      }
+      showToast(payload.message || WIZARD_COPY.repair_done);
+      await fetchData();
+      await fetchOnboarding();
+    } catch (e) {
+      showToast(WIZARD_COPY.repair_error, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  });
 }
 
 function getPrimaryAI(snapshot) {

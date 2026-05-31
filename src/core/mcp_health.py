@@ -316,6 +316,15 @@ def get_mcp_health_for_dashboard() -> Dict[str, Any]:
     - details: additional info
     """
     result = check_mcp_health()
+    try:
+        from core.mcp_session_health import get_session_health
+        session_health = get_session_health()
+    except Exception as e:
+        session_health = {
+            "state": "unknown",
+            "message": "MCP session status is unknown.",
+            "error": str(e),
+        }
 
     # Map state to UI status
     status_map = {
@@ -335,10 +344,20 @@ def get_mcp_health_for_dashboard() -> Dict[str, Any]:
         "inactive": "MCP Not Configured"
     }
 
+    if session_health.get("state") == "session_lost":
+        status = "error"
+        message = session_health.get("message") or "MCP session lost"
+    elif session_health.get("state") == "degraded":
+        status = "warning"
+        message = session_health.get("message") or "MCP connection degraded"
+    else:
+        status = status_map.get(result.state, "error")
+        message = message_map.get(result.state, result.reason)
+
     return {
-        "status": status_map.get(result.state, "error"),
+        "status": status,
         "state": result.state,
-        "message": message_map.get(result.state, result.reason),
+        "message": message,
         "reason": result.reason,
         "last_tool_call": result.last_tool_call,
         "config_path": result.config_path,
@@ -346,7 +365,8 @@ def get_mcp_health_for_dashboard() -> Dict[str, Any]:
         "is_active": result.state == "active",
         "is_usable": result.state in ("active", "stale"),
         "needs_restart": result.state in ("stale", "configured"),
-        "needs_fix": result.state in ("misconfigured", "inactive")
+        "needs_fix": result.state in ("misconfigured", "inactive"),
+        "session": session_health,
     }
 
 

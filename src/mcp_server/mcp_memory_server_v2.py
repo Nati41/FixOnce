@@ -2219,18 +2219,59 @@ def _log_tool_exception(tool_name: str, exc: BaseException) -> None:
 
 
 def _format_tool_error(tool_name: str, exc: BaseException) -> str:
+    try:
+        from core.mcp_session_health import classify_mcp_error, user_message_for_state, get_session_health
+        if classify_mcp_error(exc).is_transport_failure:
+            return user_message_for_state(get_session_health())
+    except Exception:
+        pass
     return (
         f"FixOnce MCP tool error in {tool_name}: "
         f"{type(exc).__name__}: {str(exc)[:300]}"
     )
 
 
+def _mcp_actor_for_health() -> Dict[str, Any]:
+    try:
+        return _resolve_actor_identity()
+    except Exception:
+        return {"editor": "unknown", "source": "none", "confidence": 0.0}
+
+
+def _record_mcp_tool_success(tool_name: str) -> None:
+    try:
+        from core.mcp_session_health import record_mcp_success
+        record_mcp_success(tool_name=tool_name, actor_identity=_mcp_actor_for_health())
+    except Exception:
+        pass
+
+
+def _record_mcp_tool_failure(tool_name: str, exc: BaseException) -> Optional[str]:
+    try:
+        from core.mcp_session_health import classify_mcp_error, record_mcp_failure, user_message_for_state
+        state = record_mcp_failure(
+            exc,
+            tool_name=tool_name,
+            actor_identity=_mcp_actor_for_health(),
+        )
+        if classify_mcp_error(exc).is_transport_failure and state.get("state") == "session_lost":
+            return user_message_for_state(state)
+    except Exception:
+        pass
+    return None
+
+
 def _run_tool_body(mcp_tool_name: str, func, *args, **kwargs):
     with contextlib.redirect_stdout(sys.stderr):
         try:
-            return func(*args, **kwargs)
+            result = func(*args, **kwargs)
+            _record_mcp_tool_success(mcp_tool_name)
+            return result
         except Exception as exc:
             _log_tool_exception(mcp_tool_name, exc)
+            friendly = _record_mcp_tool_failure(mcp_tool_name, exc)
+            if friendly:
+                return friendly
             return _format_tool_error(mcp_tool_name, exc)
 
 
@@ -7656,11 +7697,26 @@ if __name__ == "__main__":
         _mcp_process_event("mcp.run entering")
         mcp.run(show_banner=False)
         _mcp_process_event("mcp.run returned without exception")
+        try:
+            from core.mcp_session_health import mark_session_lost
+            mark_session_lost("MCP process exited; client transport closed", actor_identity=_mcp_actor_for_health())
+        except Exception:
+            pass
     except KeyboardInterrupt:
         _mcp_process_event("mcp.run interrupted by KeyboardInterrupt")
+        try:
+            from core.mcp_session_health import mark_session_lost
+            mark_session_lost("MCP process interrupted by KeyboardInterrupt", actor_identity=_mcp_actor_for_health())
+        except Exception:
+            pass
         raise
     except BaseException as exc:
         _mcp_process_event(f"mcp.run crashed {type(exc).__name__}: {exc}")
+        try:
+            from core.mcp_session_health import mark_session_lost
+            mark_session_lost(f"MCP process crashed: {type(exc).__name__}: {exc}", actor_identity=_mcp_actor_for_health())
+        except Exception:
+            pass
         traceback.print_exc(file=sys.stderr)
         raise
     finally:

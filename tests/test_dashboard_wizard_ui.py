@@ -33,6 +33,11 @@ class TestDashboardWizardUI(unittest.TestCase):
         self.assertIn("fetch(`${API}/api/setup/retry-ai/${client}`", self.html)
         self.assertIn("method: 'POST'", self.html)
 
+    def test_repair_mcp_button_targets_repair_endpoint(self):
+        self.assertIn("repairMcpBtn", self.html)
+        self.assertIn("fetch(`${API}/api/setup/repair-mcp`", self.html)
+        self.assertIn("open a new AI chat or reconnect MCP", self.html)
+
     def test_summary_card_exposes_manage_ai_integrations_entry(self):
         self.assertIn('id="aiSummaryTitle"', self.html)
         self.assertIn("AI integrations", self.html)
