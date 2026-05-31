@@ -333,7 +333,10 @@ def _derive_onboarding_flow_state(
     clients_payload: List[Dict[str, Any]],
     state: Dict[str, Any],
 ) -> str:
-    has_connected = any(sys_status.mcp.clients.get(client_key, AIClientStatus(name=client_key.title())).connected for client_key in SUPPORTED_ONBOARDING_CLIENTS)
+    has_connected = any(
+        item["status"] == "connected"
+        for item in clients_payload
+    )
     installed_clients = [item for item in clients_payload if item["installed"]]
     has_retryable_failure = any(item["status"] == "failed" and item["retry_available"] for item in clients_payload)
     has_needs_restart = any(item["status"] == "needs_restart" for item in clients_payload)
@@ -361,17 +364,25 @@ def build_client_onboarding_payload(status: Optional[SystemStatus] = None, langu
 
     for client_key in SUPPORTED_ONBOARDING_CLIENTS:
         client = sys_status.mcp.clients.get(client_key, AIClientStatus(name=client_key.title()))
-        installed = bool(client.installed)
         config_ready = bool(client.configured)
+        installed = bool(client.installed or client.configured or client.connected)
         rules_ready = _client_rules_ready(client_key, home)
         ready = config_ready and rules_ready
+        mcp_connected = bool(client.connected)
+        if client_key == "codex" and ready and not mcp_connected:
+            try:
+                from core.mcp_session_health import get_session_health
+                session_health = get_session_health()
+                mcp_connected = session_health.get("state") == "connected"
+            except Exception:
+                mcp_connected = False
 
         if not installed:
             state = "not_installed"
             reason = _tr(language, "not_installed_reason")
             retry_available = False
             needs_restart = False
-        elif ready and client.connected:
+        elif ready and mcp_connected:
             state = "connected"
             reason = _tr(language, "connected_reason")
             retry_available = False

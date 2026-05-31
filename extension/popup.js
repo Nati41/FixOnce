@@ -84,6 +84,37 @@ async function isDomainAllowed(domain) {
   return { allowed: false, reason: 'blocked' };
 }
 
+function getFixOnceStatus(tabId) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: 'GET_FIXONCE_STATUS', tabId }, (response) => {
+      if (chrome.runtime.lastError || !response) {
+        resolve({
+          serverConnected: false,
+          activePort: null,
+          lastHandshakeAt: null,
+          errorsCaptured: 0
+        });
+        return;
+      }
+      resolve(response);
+    });
+  });
+}
+
+function setStatusRow(prefix, connected, text, meta = '') {
+  const indicator = document.getElementById(`${prefix}-status-indicator`);
+  const dot = document.getElementById(`${prefix}-status-dot`);
+  const textEl = document.getElementById(`${prefix}-status-text`);
+  const metaEl = document.getElementById(`${prefix}-status-meta`);
+  const stateClass = connected ? 'active' : 'sleeping';
+
+  indicator.className = `status-indicator ${stateClass}`;
+  dot.className = `status-dot ${stateClass}`;
+  textEl.className = `status-text ${stateClass}`;
+  textEl.textContent = text;
+  if (metaEl) metaEl.textContent = meta;
+}
+
 // Update UI based on domain status
 async function updateUI() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -101,22 +132,30 @@ async function updateUI() {
   document.getElementById('domain-badge').textContent = currentDomain;
 
   const status = await isDomainAllowed(currentDomain);
+  const fixonceStatus = await getFixOnceStatus(currentTab.id);
 
-  const statusIndicator = document.getElementById('status-indicator');
-  const statusDot = document.getElementById('status-dot');
-  const statusText = document.getElementById('status-text');
   const sleepingView = document.getElementById('sleeping-view');
   const activeView = document.getElementById('active-view');
   const whitelistInfo = document.getElementById('whitelist-info');
   const activeInfo = document.getElementById('active-info');
+  const siteErrorCount = document.getElementById('site-error-count');
+
+  setStatusRow(
+    'fixonce',
+    fixonceStatus.serverConnected,
+    fixonceStatus.serverConnected ? 'FixOnce: Connected' : 'FixOnce: Not connected',
+    fixonceStatus.serverConnected && fixonceStatus.activePort ? `Port ${fixonceStatus.activePort}` : ''
+  );
+
+  setStatusRow(
+    'site',
+    status.allowed,
+    status.allowed ? 'Current site: Monitoring enabled' : 'Current site: Not monitored'
+  );
+
+  siteErrorCount.textContent = `Errors captured: ${fixonceStatus.errorsCaptured || 0}`;
 
   if (status.allowed) {
-    // Active state
-    statusIndicator.className = 'status-indicator active';
-    statusDot.className = 'status-dot active';
-    statusText.className = 'status-text active';
-    statusText.textContent = 'Tracking errors';
-
     sleepingView.style.display = 'none';
     activeView.style.display = 'block';
 
@@ -134,12 +173,6 @@ async function updateUI() {
     // Load stats
     loadStats();
   } else {
-    // Sleeping state
-    statusIndicator.className = 'status-indicator sleeping';
-    statusDot.className = 'status-dot sleeping';
-    statusText.className = 'status-text sleeping';
-    statusText.textContent = 'Inactive on this site';
-
     sleepingView.style.display = 'block';
     activeView.style.display = 'none';
     whitelistInfo.textContent = '';

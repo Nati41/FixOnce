@@ -61,6 +61,44 @@ def set_extension_connected(connected: bool, last_seen: str = None):
     global EXTENSION_CONNECTED, EXTENSION_LAST_SEEN
     EXTENSION_CONNECTED = connected
     EXTENSION_LAST_SEEN = last_seen or datetime.now().isoformat()
+    try:
+        USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        (USER_DATA_DIR / "extension_ping.json").write_text(json.dumps({
+            "connected": connected,
+            "timestamp": EXTENSION_LAST_SEEN,
+            "source": "handshake",
+        }, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _get_extension_status_payload() -> dict:
+    """Return extension status from heartbeat memory and persisted ping file."""
+    if EXTENSION_CONNECTED:
+        return {
+            "connected": True,
+            "last_seen": EXTENSION_LAST_SEEN,
+            "source": "heartbeat",
+        }
+
+    ping_file = USER_DATA_DIR / "extension_ping.json"
+    try:
+        if ping_file.exists():
+            ping_data = json.loads(ping_file.read_text(encoding="utf-8"))
+            if ping_data.get("connected"):
+                return {
+                    "connected": True,
+                    "last_seen": ping_data.get("timestamp"),
+                    "source": "ping_file",
+                }
+    except Exception:
+        pass
+
+    return {
+        "connected": False,
+        "last_seen": None,
+        "source": "ready_to_connect",
+    }
 
 
 @status_bp.route("/ping")
@@ -158,9 +196,13 @@ def _dev_only_guard():
 @status_bp.route("/handshake", methods=["POST"])
 def api_handshake():
     """Called by Chrome Extension on install/startup to signal connection."""
-    global EXTENSION_CONNECTED, EXTENSION_LAST_SEEN
-    EXTENSION_CONNECTED = True
-    EXTENSION_LAST_SEEN = datetime.now().isoformat()
+    set_extension_connected(True)
+    try:
+        from core.install_state import mark_install_state
+        from core.install_state_machine import InstallState
+        mark_install_state(InstallState.READY, detail="Extension handshake completed")
+    except Exception:
+        pass
     print(f"🤝 Extension handshake received at {EXTENSION_LAST_SEEN}")
     return jsonify({"status": "connected", "timestamp": EXTENSION_LAST_SEEN})
 
@@ -178,9 +220,11 @@ def api_status():
     except Exception:
         pass
 
+    extension_status = _get_extension_status_payload()
     return jsonify({
-        "extension_connected": EXTENSION_CONNECTED,
-        "extension_last_seen": EXTENSION_LAST_SEEN,
+        "extension_connected": extension_status["connected"],
+        "extension_last_seen": extension_status["last_seen"],
+        "extension_source": extension_status["source"],
         "events_today": events_today,
         "server_running": True,
         "port": ACTUAL_PORT
@@ -235,12 +279,14 @@ def api_health():
         health["checks"]["projects"] = {"status": "warning", "message": "No projects yet"}
 
     # Check 5: Extension connection
+    extension_status = _get_extension_status_payload()
     health["checks"]["extension"] = {
-        "status": "ok" if EXTENSION_CONNECTED else "warning",
-        "connected": EXTENSION_CONNECTED,
-        "last_seen": EXTENSION_LAST_SEEN
+        "status": "ok" if extension_status["connected"] else "warning",
+        "connected": extension_status["connected"],
+        "last_seen": extension_status["last_seen"],
+        "source": extension_status["source"],
     }
-    if not EXTENSION_CONNECTED:
+    if not extension_status["connected"]:
         issues.append("Chrome extension not connected")
 
     # Check 6: Active project (no project is a valid state)
@@ -439,6 +485,17 @@ def api_dashboard_snapshot():
             snapshot["system_mode"] = get_system_mode()
         except Exception:
             pass
+
+        try:
+            from core.install_state import get_install_snapshot
+            install_snapshot = get_install_snapshot(request_port=ACTUAL_PORT)
+            snapshot["install_state"] = (
+                install_snapshot.to_dict()
+                if hasattr(install_snapshot, "to_dict")
+                else dict(install_snapshot)
+            )
+        except Exception:
+            snapshot["install_state"] = {"state": "CHECKING", "detail": "Checking integrations"}
 
         # === Active AIs & Handoffs ===
         try:
@@ -1046,19 +1103,7 @@ def api_dashboard_snapshot():
                     "last_activity": primary.get("last_activity")
                 }
 
-            # Extension status from real heartbeat
-            if EXTENSION_CONNECTED:
-                system_status["extension"] = {
-                    "connected": True,
-                    "last_seen": EXTENSION_LAST_SEEN,
-                    "source": "heartbeat"
-                }
-            else:
-                system_status["extension"] = {
-                    "connected": False,
-                    "last_seen": None,
-                    "source": "no_heartbeat"
-                }
+            system_status["extension"] = _get_extension_status_payload()
 
             # Memory status from active project
             from managers.multi_project_manager import get_active_project_id

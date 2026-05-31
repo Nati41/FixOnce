@@ -46,6 +46,7 @@ async function discoverServer() {
 
 let errorQueue = [];
 let isServerAvailable = true;
+let lastHandshakeAt = null;
 let flushTimer = null;
 const MAX_ERROR_QUEUE_SIZE = 500; // Prevent unbounded memory growth
 
@@ -102,28 +103,36 @@ async function isDomainAllowed(domain) {
   return permanent.includes(domain) || session.includes(domain);
 }
 
-// Update extension icon based on domain status
-async function updateIcon(tabId, domain) {
-  const allowed = await isDomainAllowed(domain);
-
-  // Set badge
-  if (allowed) {
-    chrome.action.setBadgeBackgroundColor({ tabId, color: '#81b29a' });
-    chrome.action.setBadgeText({ tabId, text: '' });
-  } else {
-    chrome.action.setBadgeBackgroundColor({ tabId, color: '#555' });
-    chrome.action.setBadgeText({ tabId, text: 'OFF' });
+// Update extension badge based on FixOnce connection only.
+// Current-site monitoring and captured errors are shown separately in the popup.
+async function updateConnectionBadge(tabId) {
+  const details = {};
+  if (typeof tabId === 'number') {
+    details.tabId = tabId;
   }
+
+  if (isServerAvailable) {
+    chrome.action.setBadgeBackgroundColor({ ...details, color: '#81b29a' });
+    chrome.action.setBadgeText({ ...details, text: '✓' });
+  } else {
+    chrome.action.setBadgeBackgroundColor({ ...details, color: '#555' });
+    chrome.action.setBadgeText({ ...details, text: 'OFF' });
+  }
+}
+
+function updateAllConnectionBadges() {
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach((tab) => updateConnectionBadge(tab.id));
+  });
 }
 
 // Track error counts per tab
 const tabErrorCounts = {};
 
 function updateErrorBadge(tabId, count) {
-  if (count > 0) {
-    chrome.action.setBadgeBackgroundColor({ tabId, color: '#e76f51' });
-    chrome.action.setBadgeText({ tabId, text: count > 99 ? '99+' : String(count) });
-  }
+  // Keep the badge reserved for global FixOnce connection.
+  // The popup shows per-site error counts explicitly.
+  updateConnectionBadge(tabId);
 }
 
 // ===== SERVER COMMUNICATION =====
@@ -141,9 +150,13 @@ async function sendHandshake() {
     if (response.ok) {
       console.log('[FixOnce] Handshake successful on port ' + ACTIVE_PORT);
       isServerAvailable = true;
+      lastHandshakeAt = new Date().toISOString();
+      updateAllConnectionBadges();
     }
   } catch {
     console.log('[FixOnce] Server not available for handshake');
+    isServerAvailable = false;
+    updateAllConnectionBadges();
   }
 }
 
@@ -175,9 +188,12 @@ async function checkServer() {
     isServerAvailable = response.ok;
     if (isServerAvailable) {
       sendHandshake();
+    } else {
+      updateAllConnectionBadges();
     }
   } catch {
     isServerAvailable = false;
+    updateAllConnectionBadges();
     // Try to discover server on next check
     discoverServer();
   }
@@ -254,7 +270,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       queueError(payload);
 
-      // Update error count badge
+      // Track captured errors for popup status.
       const tabId = sender.tab?.id;
       if (tabId) {
         tabErrorCounts[tabId] = (tabErrorCounts[tabId] || 0) + 1;
@@ -271,6 +287,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'WHITELIST_UPDATED') {
     console.log('[FixOnce] Whitelist updated:', message.domain, message.action);
     sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.type === 'GET_FIXONCE_STATUS') {
+    const tabId = message.tabId;
+    sendResponse({
+      serverConnected: isServerAvailable,
+      activePort: ACTIVE_PORT,
+      lastHandshakeAt,
+      errorsCaptured: typeof tabId === 'number' ? (tabErrorCounts[tabId] || 0) : 0
+    });
     return true;
   }
 
@@ -353,8 +380,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   try {
     const tab = await chrome.tabs.get(activeInfo.tabId);
     if (tab.url) {
-      const domain = getDomain(tab.url);
-      updateIcon(activeInfo.tabId, domain);
+      updateConnectionBadge(activeInfo.tabId);
     }
   } catch {}
 });
@@ -362,8 +388,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 // Update icon when tab URL changes
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
-    const domain = getDomain(tab.url);
-    updateIcon(tabId, domain);
+    updateConnectionBadge(tabId);
 
     // Reset error count for new page
     tabErrorCounts[tabId] = 0;
@@ -424,6 +449,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // Discover server on startup, then check periodically
 discoverServer().then(() => {
   checkServer();
+  updateAllConnectionBadges();
 });
 
 setInterval(checkServer, 30000);

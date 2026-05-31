@@ -684,6 +684,7 @@ const WIZARD_COPY = {
   integrations_copy: 'Manage connected apps and reconnect when needed.',
   connected: 'Connected',
   needs_restart: 'Open again to finish',
+  checking: 'Checking...',
   not_installed: 'Not installed',
   failed: 'Could not connect',
   retry: 'Retry',
@@ -700,7 +701,9 @@ const WIZARD_COPY = {
   repair_mcp: 'Check MCP',
   repairing_mcp: 'Checking...',
   repair_done: 'Repair completed. If tools still fail, open a new AI chat or reconnect MCP in your client.',
-  repair_error: 'Could not run MCP repair right now.'
+  repair_error: 'Could not run MCP repair right now.',
+  finalizing_setup: 'Finalizing setup...',
+  checking_integrations: 'Checking integrations...'
 };
 let onboardingDismissed = false;
 let integrationsPanelOpen = false;
@@ -775,7 +778,8 @@ function render(s) {
   document.getElementById('projectSubtitle').className = 'project-subtitle' + (s.agent_audit_active ? '' : ' muted');
 
   // Active AI
-  const activeAI = agentContext.actor_name || s.active_ai || s.ai_session?.editor || primaryAI.editor || 'unknown';
+  const setupFinalizing = isSetupFinalizing(s);
+  const activeAI = agentContext.actor_name || s.active_ai || s.ai_session?.editor || primaryAI.editor || (setupFinalizing ? 'checking...' : 'unknown');
   document.getElementById('activeAI').textContent = capitalize(activeAI);
 
   // Status - Build status rows
@@ -813,15 +817,28 @@ function render(s) {
 
   const mcpSession = safeObject(s.mcp_health?.session);
   const mcpState = mcpSession.state || s.mcp_health?.state || 'unknown';
-  const mcpLabel = getMcpSessionLabel(mcpState);
-  const mcpMessage = mcpSession.message || s.mcp_health?.message || 'MCP session status is unknown.';
-  const mcpIconClass = mcpState === 'session_lost' ? 'status-error' : mcpState === 'degraded' ? 'status-warn' : mcpState === 'connected' ? 'status-ok' : 'status-warn';
+  const mcpChecking = setupFinalizing && mcpState === 'unknown';
+  const mcpLabel = mcpChecking ? WIZARD_COPY.checking_integrations : getMcpSessionLabel(mcpState);
+  const mcpMessage = mcpChecking ? 'FixOnce is finishing integration checks.' : (mcpSession.message || s.mcp_health?.message || 'MCP session status is unknown.');
+  const mcpIconClass = mcpState === 'session_lost' ? 'status-error' : mcpState === 'degraded' || mcpChecking ? 'status-warn' : mcpState === 'connected' ? 'status-ok' : 'status-warn';
   rows.push({
-    icon: mcpState === 'session_lost' ? '!' : mcpState === 'connected' ? '✓' : '·',
+    icon: mcpState === 'session_lost' ? '!' : mcpState === 'connected' ? '✓' : mcpChecking ? '…' : '·',
     iconClass: mcpIconClass,
     text: `MCP: ${mcpLabel}`,
     action: `<button class="wizard-btn" type="button" id="repairMcpBtn">${WIZARD_COPY.repair_mcp}</button>`,
     title: mcpMessage
+  });
+
+  const sys = s.system_status || {};
+  const extensionConnected = Boolean(sys.extension?.connected);
+  rows.push({
+    icon: extensionConnected ? '✓' : '·',
+    iconClass: extensionConnected ? 'status-ok' : 'status-warn',
+    text: `FixOnce extension: ${extensionConnected ? 'Connected' : 'Ready to connect'}`,
+    action: 'Current site monitoring is shown in the extension popup',
+    title: extensionConnected
+      ? 'FixOnce extension is connected to the local server. This is separate from whether the current website is monitored.'
+      : 'FixOnce extension is optional. MCP and server can still be connected.'
   });
 
   statusEl.innerHTML = rows.map(r => `
@@ -865,7 +882,7 @@ function render(s) {
   }
 
   // Agent card
-  const resolvedAgentName = agentContext.actor_name || primaryAI.editor || s.active_ai || 'unknown';
+  const resolvedAgentName = agentContext.actor_name || primaryAI.editor || s.active_ai || (setupFinalizing ? WIZARD_COPY.finalizing_setup : 'unknown');
   const resolvedConfidence = normalizeConfidence(agentContext.actor_confidence ?? primaryAI.actor_confidence);
   const resolvedLastTool = agentContext.tool_name || lastIntervention.tool_name || '—';
   const agentStatus = getAgentStatus(errorCount, intervention);
@@ -879,8 +896,6 @@ function render(s) {
   agentStatusEl.className = 'agent-stat-value ' + (agentStatus === 'Safe' ? 'safe' : 'warn');
 
   // System Status (from real sources)
-  const sys = s.system_status || {};
-
   // Server status - if we got data, server is up
   const sysFixonce = document.getElementById('sysFixonce');
   sysFixonce.className = 'sys-item ok';
@@ -890,11 +905,11 @@ function render(s) {
   const sysExtension = document.getElementById('sysExtension');
   if (sys.extension?.connected) {
     sysExtension.className = 'sys-item ok';
-    sysExtension.title = 'Browser Extension: Connected' +
+    sysExtension.title = 'FixOnce extension: Connected. Current-site monitoring is controlled per website in the extension popup.' +
       (sys.extension.last_seen ? ' (' + relativeTime(sys.extension.last_seen) + ')' : '');
   } else {
     sysExtension.className = 'sys-item warn';
-    sysExtension.title = 'Browser Extension: Not detected';
+    sysExtension.title = 'FixOnce extension: Ready to connect. This does not affect MCP or server connection.';
   }
 
   // Memory status - from active project
@@ -917,7 +932,7 @@ function render(s) {
     sysAgent.title = 'Agent audit active';
   } else {
     sysAgent.className = 'sys-item warn';
-    sysAgent.title = 'Agent audit unavailable - Audit only';
+    sysAgent.title = setupFinalizing ? 'Agent audit: Checking integrations' : 'Agent audit unavailable - Audit only';
   }
 }
 
@@ -1012,6 +1027,13 @@ function renderClientRows(container, clients, copy) {
   }).join('');
 
   wireClientActions(container, copy);
+}
+
+function isSetupFinalizing(s) {
+  const installState = String(s.install_state?.state || '').toUpperCase();
+  if (['INSTALLING', 'WAITING_HEALTH', 'STARTING', 'READY'].includes(installState)) return true;
+  const mcpState = s.mcp_health?.session?.state || s.mcp_health?.state;
+  return !mcpState || mcpState === 'unknown';
 }
 
 function wireClientActions(container, copy) {
@@ -1119,7 +1141,7 @@ function getMcpSessionLabel(state) {
     degraded: 'Degraded',
     reconnecting: 'Reconnecting',
     session_lost: 'Session lost',
-    unknown: 'Unknown'
+    unknown: 'Checking integrations...'
   };
   return labels[state] || labels.unknown;
 }

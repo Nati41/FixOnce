@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 import re
+import os
 from pathlib import Path
 from flask import Blueprint, jsonify, send_file, request
 
@@ -217,6 +218,59 @@ def mark_complete():
     """Mark installation as complete."""
     snapshot = mark_install_state(InstallState.READY, detail="Installation completed from installer API")
     return jsonify({"status": "ok", "installed": True, "state": snapshot.state.value})
+
+
+@installer_bp.route('/api/installer/extension-status')
+def installer_extension_status():
+    """Return the same extension status source used by dashboard/status APIs."""
+    try:
+        from api.status import _get_extension_status_payload
+        extension = _get_extension_status_payload()
+    except Exception:
+        extension = {"connected": False, "last_seen": None, "source": "unknown"}
+
+    if extension.get("connected"):
+        try:
+            mark_install_state(InstallState.READY, detail="Extension handshake completed")
+        except Exception:
+            pass
+
+    return jsonify({
+        "status": "ok",
+        "extension": extension,
+        "installed": bool(extension.get("connected")),
+    })
+
+
+@installer_bp.route('/api/installer/open-chrome-extensions', methods=['POST'])
+def open_chrome_extensions():
+    """Open Chrome extensions page from installer UI."""
+    try:
+        subprocess.run(
+            ['open', '-a', 'Google Chrome', 'chrome://extensions/'],
+            capture_output=True,
+            timeout=5,
+        )
+        return jsonify({"status": "ok"})
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
+@installer_bp.route('/api/installer/open-extension-folder', methods=['POST'])
+def open_extension_folder():
+    """Open the installed extension folder from installer UI."""
+    extension_dir = Path.home() / "FixOnce" / "extension"
+    if not extension_dir.exists():
+        return jsonify({
+            "status": "error",
+            "error": f"Extension folder not found: {extension_dir}",
+        }), 404
+
+    try:
+        subprocess.run(['open', str(extension_dir)], capture_output=True, timeout=5)
+        return jsonify({"status": "ok", "path": str(extension_dir)})
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
 
 
 @installer_bp.route('/api/installer/reset', methods=['POST'])
