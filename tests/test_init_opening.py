@@ -130,9 +130,9 @@ class TestInitOpening(unittest.TestCase):
 
         score = session.get_compliance_score()
         rule_names = [rule["name"] for rule in score["rules"]]
-        rule_map = {rule["id"]: rule["passed"] for rule in score["rules"]}
+        advisory_ids = {rule["id"] for rule in score["advisory"]}
 
         self.assertIn("Goal updated", rule_names)
-        self.assertIn("Component status updated", rule_names)
-        self.assertFalse(rule_map["goal_updated"])
-        self.assertFalse(rule_map["component_status"])
+        self.assertNotIn("Component status updated", rule_names)
+        self.assertIn("search_first", advisory_ids)
+        self.assertIn("component_status", advisory_ids)

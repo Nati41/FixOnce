@@ -658,17 +658,24 @@ class SessionContext:
             significant_work_completed=True,
             sync_recorded=self.goal_updated,
         )
-        component_gate = _evaluate_current_completion_gate(
-            tool_name="get_protocol_compliance",
-            component_changed=True,
-            component_status_updated=self.component_updated,
-        )
 
         rules = [
             {"id": "session_init", "name": "Session initialized", "passed": self.is_active(), "required": True},
             {"id": "goal_updated", "name": "Goal updated", "passed": goal_gate.level == "silent", "required": True},
-            {"id": "search_first", "name": "Search before debug", "passed": self.search_performed, "required": False},
-            {"id": "component_status", "name": "Component status updated", "passed": component_gate.level == "silent", "required": False},
+        ]
+        advisory = [
+            {
+                "id": "search_first",
+                "name": "Search before debug",
+                "active": self.search_performed,
+                "scope": "debugging only",
+            },
+            {
+                "id": "component_status",
+                "name": "Component status update",
+                "active": self.component_updated,
+                "scope": "meaningful component changes only",
+            },
         ]
 
         # Calculate score (required rules count double)
@@ -685,6 +692,7 @@ class SessionContext:
         return {
             "score": score,
             "rules": rules,
+            "advisory": advisory,
             "passed": sum(1 for r in rules if r["passed"]),
             "total": len(rules),
             "tool_calls": len(self.tool_calls)
@@ -1313,6 +1321,14 @@ def _build_context_header() -> str:
     return '\n'.join(lines)
 
 
+_CONTEXT_HEADER_TOOLS = {
+    "get_live_record",
+    "get_policy_status",
+    "get_stability_report",
+    "check_and_report",
+}
+
+
 def _universal_gate(tool_name: str) -> tuple:
     """
     Universal gate for all MCP tools.
@@ -1409,8 +1425,9 @@ def _universal_gate(tool_name: str) -> tuple:
     # UPDATE ACTIVE AI on every tool call (lightweight)
     _update_active_ai(actor_identity)
 
-    # BUILD CONTEXT HEADER (injected into response)
-    context = _build_context_header()
+    # MCP Diet v3: repeated tool calls should not pay a dashboard/status header
+    # tax. Deep resume and explicit diagnostic tools can still opt in.
+    context = _build_context_header() if tool_name in _CONTEXT_HEADER_TOOLS else ""
 
     return (None, context)
 
@@ -2285,9 +2302,33 @@ def _run_tool_with_timeout(mcp_tool_name: str, func, timeout_seconds: int, *args
             f"last_file={kwargs.get('last_file', '')!r}"
         )
 
-    future = _tool_executor.submit(_run_tool_body, mcp_tool_name, func, *args, **kwargs)
+    parent_session = _get_session()
+    worker_session_ref = {}
+
+    def run_with_current_session():
+        if parent_session and parent_session.is_active():
+            worker_session = SessionContext(parent_session.project_id, parent_session.working_dir)
+            worker_session.initialized_at = parent_session.initialized_at
+            worker_session.decisions_displayed = parent_session.decisions_displayed
+            worker_session.goal_updated = parent_session.goal_updated
+            worker_session.search_performed = parent_session.search_performed
+            worker_session.component_updated = parent_session.component_updated
+            worker_session.decision_logged = parent_session.decision_logged
+            worker_session.tool_calls = list(parent_session.tool_calls)
+            _session_local.session = worker_session
+            worker_session_ref["session"] = worker_session
+        return _run_tool_body(mcp_tool_name, func, *args, **kwargs)
+
+    future = _tool_executor.submit(run_with_current_session)
     try:
         result = future.result(timeout=timeout_seconds)
+        worker_session = worker_session_ref.get("session")
+        if worker_session and parent_session:
+            parent_session.goal_updated = worker_session.goal_updated
+            parent_session.search_performed = worker_session.search_performed
+            parent_session.component_updated = worker_session.component_updated
+            parent_session.decision_logged = worker_session.decision_logged
+            parent_session.tool_calls = list(worker_session.tool_calls)
         if mcp_tool_name == "fo_sync":
             duration = time.monotonic() - start
             _mcp_process_event(
@@ -6391,6 +6432,13 @@ def get_protocol_compliance() -> str:
         icon = "✅" if rule["passed"] else ("❌" if rule["required"] else "⚠️")
         req = " (required)" if rule["required"] else ""
         lines.append(f"{icon} {rule['name']}{req}")
+
+    advisory = score_data.get("advisory") or []
+    if advisory:
+        lines.append("\nAdvisory only:")
+        for item in advisory:
+            icon = "✓" if item.get("active") else "·"
+            lines.append(f"{icon} {item['name']} ({item['scope']})")
 
     # Tool calls
     lines.append(f"\n📊 Tool calls this session: {score_data['tool_calls']}")
