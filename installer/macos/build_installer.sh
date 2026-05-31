@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
 APP_NAME="FixOnce Installer"
-DMG_NAME="FixOnce-Installer"
+DMG_NAME="FixOnce-mac-beta"
 VERSION=$(
     python3 - "$PROJECT_ROOT/src/version.py" <<'PY' 2>/dev/null || echo "1.0.0"
 import pathlib
@@ -1209,36 +1209,54 @@ DMG_TEMP="$BUILD_DIR/dmg_temp"
 mkdir -p "$DMG_TEMP"
 cp -R "$APP_BUNDLE" "$DMG_TEMP/"
 
-# Create a symbolic link to Applications
-ln -s /Applications "$DMG_TEMP/Applications"
-
 # Create README
-cat > "$DMG_TEMP/README.txt" << 'README'
-FixOnce Installer
-=================
+cat > "$DMG_TEMP/README - Install FixOnce.txt" << 'README'
+FixOnce macOS Beta Installer
+============================
 
 To install FixOnce:
 1. Double-click "FixOnce Installer.app"
-2. Follow the on-screen instructions
-3. The Dashboard will open automatically when done
+2. Click Continue / Install
+3. The dashboard will open automatically when installation finishes
+
+macOS security note:
+This beta DMG is unsigned and not notarized yet.
+If macOS blocks the app, right-click "FixOnce Installer.app" and choose Open.
+If macOS still blocks it, this build needs signing/notarization before wider testing.
 
 Requirements:
 - macOS 10.15 or later
-- Python 3.8 or later (usually pre-installed)
+- Python 3.10 or later
 
 After installation:
 - FixOnce will start automatically on login
-- Use 'fixonce' command in Terminal for control
-- Dashboard at http://localhost:5000
+- The dashboard opens automatically
+- Advanced users can run: fixonce status
 
 For help: https://github.com/Nati41/FixOnce
 README
 
-# Create DMG
-hdiutil create -volname "FixOnce Installer" \
+if ! hdiutil create -volname "FixOnce Installer" \
     -srcfolder "$DMG_TEMP" \
     -ov -format UDZO \
-    "$DMG_PATH"
+    "$DMG_PATH"; then
+    echo ""
+    echo "========================================"
+    echo "  DMG Creation Failed"
+    echo "========================================"
+    echo ""
+    echo "hdiutil is unavailable or broken in this environment."
+    echo "The installer staging folder is ready and was kept at:"
+    echo "$DMG_TEMP"
+    echo ""
+    echo "Staged DMG root contents:"
+    find "$DMG_TEMP" -maxdepth 1 -mindepth 1 -print | sed 's#^.*/#  - #'
+    echo ""
+    echo "To create the DMG on a real macOS machine, run:"
+    echo "bash installer/macos/build_installer.sh"
+    echo ""
+    exit 1
+fi
 
 # Clean up
 rm -rf "$DMG_TEMP"
