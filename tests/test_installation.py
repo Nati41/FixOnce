@@ -30,6 +30,7 @@ from install import (
     read_runtime_state,
     get_runtime_port,
     wait_for_server_readiness,
+    get_windows_launcher_command,
 )
 
 
@@ -235,6 +236,54 @@ def test_runtime_state_detected_as_ready():
             result.message = "runtime.json is enough for installer readiness"
         else:
             result.message = f"Unexpected readiness result: state={state}, port={port}, ready={ready}, actual_port={actual_port}, reason={reason}"
+    except Exception as e:
+        result.message = f"Exception: {e}"
+    finally:
+        if temp_dir and Path(temp_dir).exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+    return result
+
+
+def test_windows_launcher_command_prefers_packaged_exe():
+    """Windows launcher should prefer FixOnce.exe when available."""
+    result = TestResult("Windows Launcher Prefers EXE")
+    temp_dir = None
+    try:
+        temp_dir = tempfile.mkdtemp(prefix="fixonce_win_launcher_")
+        temp_path = Path(temp_dir)
+        exe_path = temp_path / "FixOnce.exe"
+        exe_path.write_text("stub", encoding="utf-8")
+
+        command, working_dir = get_windows_launcher_command(temp_path, server_mode=True)
+        if command == [str(exe_path), "--server"] and working_dir == temp_path:
+            result.passed = True
+            result.message = "Packaged EXE selected for server mode"
+        else:
+            result.message = f"Unexpected launcher command: {command}, cwd={working_dir}"
+    except Exception as e:
+        result.message = f"Exception: {e}"
+    finally:
+        if temp_dir and Path(temp_dir).exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+    return result
+
+
+def test_windows_launcher_command_falls_back_to_app_launcher():
+    """Windows launcher should fall back to app_launcher.py when EXE is absent."""
+    result = TestResult("Windows Launcher Falls Back")
+    temp_dir = None
+    try:
+        temp_dir = tempfile.mkdtemp(prefix="fixonce_win_launcher_")
+        temp_path = Path(temp_dir)
+        (temp_path / "scripts").mkdir(parents=True, exist_ok=True)
+        (temp_path / "scripts" / "app_launcher.py").write_text("print('stub')", encoding="utf-8")
+
+        command, working_dir = get_windows_launcher_command(temp_path, server_mode=True)
+        if command[-2:] == [str(temp_path / "scripts" / "app_launcher.py"), "--server"] and working_dir == temp_path:
+            result.passed = True
+            result.message = "app_launcher.py selected as fallback"
+        else:
+            result.message = f"Unexpected launcher command: {command}, cwd={working_dir}"
     except Exception as e:
         result.message = f"Exception: {e}"
     finally:

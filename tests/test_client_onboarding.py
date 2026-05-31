@@ -63,7 +63,13 @@ class TestClientOnboarding(unittest.TestCase):
         self.assertIn("fixonce", json.loads(claude_config.read_text(encoding="utf-8"))["mcpServers"])
         self.assertIn("fixonce", json.loads(cursor_config.read_text(encoding="utf-8"))["mcpServers"])
         self.assertIn("[mcp_servers.fixonce]", codex_config.read_text(encoding="utf-8"))
+        self.assertIn('FIXONCE_ACTOR = "codex"', codex_config.read_text(encoding="utf-8"))
         self.assertIn("fixonce", json.loads(windsurf_config.read_text(encoding="utf-8"))["mcpServers"])
+
+    def test_windows_installer_codex_block_sets_actor(self):
+        installer_text = (PROJECT_ROOT / "install.ps1").read_text(encoding="utf-8")
+
+        self.assertIn('FIXONCE_ACTOR = "codex"', installer_text)
 
     def test_configure_mcp_writes_global_configs_even_when_editors_not_detected(self):
         def fake_run(cmd, capture_output=False, text=False, timeout=None):

@@ -60,7 +60,8 @@ def _write_codex_config(path: Path, server_name: str, config: dict):
         f"args = [{', '.join(_toml_quote(arg) for arg in config.get('args', []))}]",
     ]
 
-    env = config.get("env", {})
+    env = dict(config.get("env", {}))
+    env.setdefault("FIXONCE_ACTOR", "codex")
     if env:
         lines.append("")
         lines.append(f"[mcp_servers.{server_name}.env]")

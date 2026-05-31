@@ -8,10 +8,17 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 
+from config import DATA_DIR, INSTALL_DATA_DIR
+
 
 def get_data_dir() -> Path:
-    """Get the data directory path."""
-    return Path(__file__).parent.parent.parent / "data"
+    """Get the user data directory path."""
+    return DATA_DIR
+
+
+def get_install_data_dir() -> Path:
+    """Get the bundled installation assets directory."""
+    return INSTALL_DATA_DIR
 
 
 def is_first_launch() -> bool:
@@ -31,7 +38,7 @@ def is_first_launch() -> bool:
 
         # Also check if file is empty or has null/empty data
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 # For active_project, check if it has a valid active_id
                 if filename == "active_project.json":
@@ -46,6 +53,7 @@ def is_first_launch() -> bool:
 def initialize_data_files():
     """Initialize data files from templates."""
     data_dir = get_data_dir()
+    install_data_dir = get_install_data_dir()
 
     # Ensure directories exist
     (data_dir / "projects_v2").mkdir(parents=True, exist_ok=True)
@@ -62,7 +70,7 @@ def initialize_data_files():
     initialized = []
 
     for template_name, target_name in templates.items():
-        template_path = data_dir / template_name
+        template_path = install_data_dir / template_name
         target_path = data_dir / target_name
 
         # Only create if target doesn't exist
@@ -82,8 +90,8 @@ def initialize_data_files():
     for filename in empty_json_files:
         filepath = data_dir / filename
         if not filepath.exists():
-            with open(filepath, 'w') as f:
-                json.dump({}, f)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump({}, f, ensure_ascii=False)
             initialized.append(filename)
 
     # Create gitkeep files
@@ -122,7 +130,7 @@ def get_first_launch_status() -> dict:
     active_file = data_dir / "active_project.json"
     if active_file.exists():
         try:
-            with open(active_file, 'r') as f:
+            with open(active_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 status["has_active_project"] = data.get("active_id") is not None
         except (json.JSONDecodeError, IOError):

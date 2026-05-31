@@ -30,18 +30,9 @@ def get_user_data_dir() -> Path:
     user_dir.mkdir(exist_ok=True)
     return user_dir
 
-# Use Windows bootstrap for EXE mode, user home for normal operation
-if getattr(sys, 'frozen', False):
-    # Running as PyInstaller EXE - import bootstrap module
-    try:
-        from src.windows_bootstrap import get_data_dir
-        USER_DATA_DIR = get_data_dir()
-    except ImportError:
-        from windows_bootstrap import get_data_dir
-        USER_DATA_DIR = get_data_dir()
-else:
-    # Running as script - use user's home directory
-    USER_DATA_DIR = get_user_data_dir()
+# User runtime state must always live in ~/.fixonce, including Windows EXE mode.
+# Installation assets may be bundled elsewhere, but install_state.json is per-user.
+USER_DATA_DIR = get_user_data_dir()
 
 # DATA_DIR now points to USER data (private per user)
 # For templates/dashboard, use INSTALL_DATA_DIR
