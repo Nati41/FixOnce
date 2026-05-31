@@ -68,6 +68,21 @@ body {
   gap: 12px;
 }
 
+.header-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  padding: 5px 9px;
+  border-radius: 8px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.header-btn:hover {
+  border-color: rgba(0, 230, 118, 0.35);
+  background: rgba(0, 230, 118, 0.08);
+}
+
 .ai-badge {
   font-size: 11px;
   color: var(--text-dim);
@@ -507,6 +522,7 @@ body.powered-off .card {
     <span class="version" id="version">v1.0.12</span>
   </div>
   <div class="header-right">
+    <button class="header-btn" type="button" onclick="openInBrowser()">Open in Browser</button>
     <div class="ai-badge">
       <span class="ai-dot"></span>
       <span id="activeAI">Claude</span>
@@ -1292,6 +1308,20 @@ function showToast(msg, isError = false) {
     toast.classList.remove('show');
     setTimeout(() => toast.remove(), 300);
   }, 2500);
+}
+
+function openInBrowser() {
+  const url = `${window.location.origin}/`;
+
+  if (window.pywebview) {
+    window.pywebview.api.open_url(url);
+    return;
+  }
+
+  const newWin = window.open(url, '_blank');
+  if (newWin) return;
+
+  window.location.href = url;
 }
 
 // Init

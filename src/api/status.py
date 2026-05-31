@@ -16,13 +16,44 @@ import subprocess
 import getpass
 
 from . import status_bp, get_project_from_request
-from config import PROJECT_ROOT, VERSION
+from config import PROJECT_ROOT, USER_DATA_DIR, VERSION
 from core.system_mode import get_system_mode, set_system_mode, VALID_MODES
 
 # Global state (will be set by main app)
 EXTENSION_CONNECTED = False
 EXTENSION_LAST_SEEN = None
 ACTUAL_PORT = 5000
+
+
+def _get_mcp_compliance_for_api() -> dict:
+    """Read shared MCP compliance state without importing the MCP server."""
+    compliance_file = USER_DATA_DIR / "mcp_compliance.json"
+    try:
+        if compliance_file.exists():
+            state = json.loads(compliance_file.read_text(encoding="utf-8"))
+        else:
+            state = {}
+    except Exception:
+        state = {}
+
+    return {
+        "session_initialized": state.get("session_active", False),
+        "initialized_at": state.get("initialized_at"),
+        "decisions_displayed": state.get("decisions_displayed", False),
+        "goal_updated": state.get("goal_updated", False),
+        "search_performed": state.get("search_performed", False),
+        "component_updated": state.get("component_updated", False),
+        "decision_logged": state.get("decision_logged", False),
+        "tool_calls_count": state.get("tool_calls_count", 0),
+        "score": state.get("score", 0),
+        "rules": state.get("rules", []),
+        "last_session_init": state.get("last_session_init"),
+        "violations": state.get("violations", [])[-5:],
+        "editor": state.get("editor"),
+        "project_id": state.get("project_id"),
+        "agent_context": state.get("agent_context") or {},
+        "last_agent_intervention": state.get("last_agent_intervention") or {},
+    }
 
 
 def set_extension_connected(connected: bool, last_seen: str = None):
@@ -784,8 +815,7 @@ def api_dashboard_snapshot():
 
                 if compliance_percent is None:
                     try:
-                        from mcp_server.mcp_memory_server_v2 import get_compliance_for_api
-                        compliance = get_compliance_for_api()
+                        compliance = _get_mcp_compliance_for_api()
                         checks = [
                             bool(compliance.get("session_initialized")),
                             bool(compliance.get("decisions_displayed")),
@@ -976,9 +1006,7 @@ def api_dashboard_snapshot():
 
             # Agent-aware runtime audit fields from shared MCP compliance state.
             try:
-                from mcp_server.mcp_memory_server_v2 import get_compliance_for_api
-
-                compliance = get_compliance_for_api()
+                compliance = _get_mcp_compliance_for_api()
                 agent_context = compliance.get("agent_context") or {}
                 last_agent_intervention = compliance.get("last_agent_intervention") or {}
 
