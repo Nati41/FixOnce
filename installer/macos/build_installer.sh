@@ -11,7 +11,20 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
 APP_NAME="FixOnce Installer"
 DMG_NAME="FixOnce-Installer"
-VERSION=$(cat "$PROJECT_ROOT/src/version.py" 2>/dev/null | grep -o '"[^"]*"' | tr -d '"' || echo "1.0.0")
+VERSION=$(
+    python3 - "$PROJECT_ROOT/src/version.py" <<'PY' 2>/dev/null || echo "1.0.0"
+import pathlib
+import re
+import sys
+text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+match = re.search(r'^__version__\s*=\s*"([^"]+)"', text, re.MULTILINE)
+print(match.group(1) if match else "1.0.0")
+PY
+)
+APP_ONLY=0
+if [ "${1:-}" = "--app-only" ]; then
+    APP_ONLY=1
+fi
 
 echo "========================================"
 echo "  FixOnce macOS Installer Builder"
@@ -154,7 +167,21 @@ write_install_state() {
     local install_state_file="$install_state_dir/install_state.json"
     mkdir -p "$install_state_dir"
 
-    python3 - "$install_state_file" "$state" "$detail" "$INSTALL_DIR" << 'PY'
+    local state_python="${SELECTED_PYTHON:-}"
+    if [ -z "$state_python" ]; then
+        for candidate in /usr/local/bin/python3.13 /opt/homebrew/bin/python3.13 /usr/local/bin/python3.12 /opt/homebrew/bin/python3.12 /usr/local/bin/python3.11 /opt/homebrew/bin/python3.11 /usr/local/bin/python3.10 /opt/homebrew/bin/python3.10 /usr/local/bin/python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
+            if [ -x "$candidate" ]; then
+                state_python="$candidate"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$state_python" ]; then
+        return 0
+    fi
+
+    "$state_python" - "$install_state_file" "$state" "$detail" "$INSTALL_DIR" << 'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -1157,6 +1184,19 @@ main 2>&1 | tee -a "$LOG_FILE"
 INSTALLER_SCRIPT
 
 chmod +x "$MACOS/installer"
+
+if [ "$APP_ONLY" -eq 1 ]; then
+    echo ""
+    echo "========================================"
+    echo "  App Prototype Build Complete!"
+    echo "========================================"
+    echo ""
+    echo "Output: $APP_BUNDLE"
+    echo ""
+    echo "To test: open \"$APP_BUNDLE\""
+    echo ""
+    exit 0
+fi
 
 # ============================================================
 # Step 5: Create DMG
