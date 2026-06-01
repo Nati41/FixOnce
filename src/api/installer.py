@@ -6,71 +6,16 @@ Endpoints for the web-based installer.
 import json
 import subprocess
 import sys
-import re
 import os
 from pathlib import Path
 from flask import Blueprint, jsonify, send_file, request
 
 from config import DATA_DIR, INSTALL_DATA_DIR, get_install_data_dir  # compatibility for tests that patch installer data dir
+from core.mcp_config import build_stdio_mcp_config, write_codex_config
 from core.install_state import get_install_snapshot, is_fixonce_installed, mark_install_state
 from core.install_state_machine import InstallState
 
 installer_bp = Blueprint('installer', __name__)
-
-# FastMCP environment settings
-# FASTMCP_CHECK_FOR_UPDATES accepts: 'stable', 'prerelease', 'off' (NOT 'true'/'false')
-FASTMCP_ENV = {
-    "FASTMCP_SHOW_CLI_BANNER": "false",
-    "FASTMCP_CHECK_FOR_UPDATES": "off",
-}
-
-
-def _build_stdio_mcp_config(mcp_server: Path, src_path: str, fastmcp_path: str = None) -> dict:
-    """Build a stdio MCP config shared by all editors."""
-    if fastmcp_path:
-        return {
-            "command": fastmcp_path,
-            "args": ["run", str(mcp_server), "--transport", "stdio", "--no-banner"],
-            "env": {"PYTHONPATH": src_path, **FASTMCP_ENV}
-        }
-
-    return {
-        "command": sys.executable,
-        "args": [str(mcp_server)],
-        "env": {"PYTHONPATH": src_path}
-    }
-
-
-def _toml_quote(value: str) -> str:
-    return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
-
-
-def _write_codex_config(path: Path, server_name: str, config: dict):
-    """Write or update a Codex MCP server entry."""
-    content = path.read_text(encoding='utf-8') if path.exists() else ""
-    for pattern in (
-        rf'(?ms)^\[mcp_servers\.{re.escape(server_name)}\]\n(?:.*\n)*?(?=^\[|\Z)',
-        rf'(?ms)^\[mcp_servers\.{re.escape(server_name)}\.env\]\n(?:.*\n)*?(?=^\[|\Z)',
-    ):
-        content = re.sub(pattern, '', content)
-    content = content.strip()
-
-    lines = [
-        f"[mcp_servers.{server_name}]",
-        f"command = {_toml_quote(config['command'])}",
-        f"args = [{', '.join(_toml_quote(arg) for arg in config.get('args', []))}]",
-    ]
-
-    env = dict(config.get("env", {}))
-    env.setdefault("FIXONCE_ACTOR", "codex")
-    if env:
-        lines.append("")
-        lines.append(f"[mcp_servers.{server_name}.env]")
-        for key, value in env.items():
-            lines.append(f"{key} = {_toml_quote(value)}")
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text((content + "\n\n" + "\n".join(lines) if content else "\n".join(lines)) + "\n", encoding='utf-8')
 
 
 def _configure_json_mcp_file(path: Path, server_name: str, config: dict):
@@ -245,7 +190,9 @@ def configure_mcp():
     except Exception:
         pass
 
-    stdio_config = _build_stdio_mcp_config(mcp_server, src_path, fastmcp_path)
+    stdio_config = build_stdio_mcp_config(mcp_server, src_path, fastmcp_path)
+    if not fastmcp_path:
+        stdio_config["command"] = sys.executable
 
     claude_config = Path.home() / '.claude.json'
 
@@ -284,7 +231,7 @@ def configure_mcp():
     # Configure Codex
     try:
         codex_config = Path.home() / '.codex' / 'config.toml'
-        _write_codex_config(codex_config, 'fixonce', stdio_config)
+        write_codex_config(codex_config, 'fixonce', stdio_config)
         configured.append("Codex")
     except Exception:
         pass

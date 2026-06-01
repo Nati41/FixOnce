@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -253,6 +254,64 @@ def _import_install_state_helpers():
         sys.path.insert(0, str(PROJECT_DIR / "src"))
         from core.install_state_machine import InstallState, persist_snapshot
     return InstallState, persist_snapshot
+
+
+def _packaged_mcp_server_path() -> Path | None:
+    """Return the packaged MCP server source path used by stdio clients."""
+    install_dir = get_packaged_install_dir()
+    candidates = [
+        install_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py",
+        install_dir / "_internal" / "src" / "mcp_server" / "mcp_memory_server_v2.py",
+    ]
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.insert(0, Path(meipass) / "src" / "mcp_server" / "mcp_memory_server_v2.py")
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _external_python_command() -> str | None:
+    """Resolve a user Python command for stdio MCP config."""
+    for command in ("python", "python3", "py"):
+        resolved = shutil.which(command)
+        if resolved:
+            return resolved
+    return None
+
+
+def configure_packaged_windows_mcp(log_fn: Callable[[str], None] | None = None) -> bool:
+    """Register per-user MCP config for packaged Windows installs."""
+    write_log = log_fn or bootstrap_log
+    if sys.platform != "win32":
+        write_log("MCP registration skipped: not Windows")
+        return False
+
+    mcp_server = _packaged_mcp_server_path()
+    if mcp_server is None:
+        write_log("MCP registration skipped: mcp_memory_server_v2.py not found")
+        return False
+
+    python_command = _external_python_command()
+    if python_command is None:
+        write_log("MCP registration skipped: Python command not found")
+        return False
+
+    try:
+        from core.mcp_config import build_stdio_mcp_config, write_codex_config
+
+        src_path = str(mcp_server.parent.parent)
+        stdio_config = build_stdio_mcp_config(mcp_server, src_path)
+        stdio_config["command"] = python_command
+        codex_config = Path.home() / ".codex" / "config.toml"
+        write_codex_config(codex_config, "fixonce", stdio_config)
+        write_log(f"MCP registration ready: Codex config {codex_config}")
+        return True
+    except Exception as exc:
+        write_log(f"MCP registration failed: {type(exc).__name__}: {exc}")
+        return False
 
 
 def _read_runtime_pid_port() -> tuple[int | None, int | None]:
@@ -544,6 +603,11 @@ def run_bootstrap() -> int:
             bootstrap_log("WARNING: Autostart was not configured; continuing bootstrap")
         else:
             bootstrap_log(f"Autostart configured via {autostart_method}")
+
+        if configure_packaged_windows_mcp():
+            bootstrap_log("MCP registration completed")
+        else:
+            bootstrap_log("WARNING: MCP registration did not complete")
 
         persist_snapshot(
             InstallState.STARTING,

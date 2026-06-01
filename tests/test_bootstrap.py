@@ -265,6 +265,49 @@ class TestBootstrap(unittest.TestCase):
         self.assertEqual(snapshot.install_dir, r"C:\Apps\FixOnce")
         self.assertTrue(any("Bootstrap completed successfully" in line for line in self._log_lines()))
 
+    def test_run_bootstrap_registers_codex_mcp_for_fresh_windows_user(self):
+        home_dir = Path(self.temp_dir.name) / "home"
+        install_dir = Path(self.temp_dir.name) / "FixOnce"
+        mcp_server = install_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py"
+        mcp_server.parent.mkdir(parents=True, exist_ok=True)
+        mcp_server.write_text("# test mcp server\n", encoding="utf-8")
+        self.runtime_file.write_text(
+            json.dumps({"port": 5000, "pid": 4242, "install_path": str(install_dir)}),
+            encoding="utf-8",
+        )
+
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(app_launcher, "is_frozen", return_value=True), patch.object(
+            app_launcher,
+            "get_packaged_install_dir",
+            return_value=install_dir,
+        ), patch.object(
+            app_launcher,
+            "configure_windows_autostart",
+            return_value=app_launcher.AUTOSTART_METHOD_SCHEDULED_TASK,
+        ), patch.object(
+            app_launcher,
+            "ensure_packaged_server_running",
+            return_value=5000,
+        ), patch.object(
+            app_launcher,
+            "_external_python_command",
+            return_value=r"C:\Python313\python.exe",
+        ), patch("pathlib.Path.home", return_value=home_dir), patch.object(app_launcher, "open_dashboard"):
+            first = app_launcher.run_bootstrap()
+            second = app_launcher.run_bootstrap()
+
+        self.assertEqual(first, 0)
+        self.assertEqual(second, 0)
+        codex_config = home_dir / ".codex" / "config.toml"
+        self.assertTrue(codex_config.exists())
+        text = codex_config.read_text(encoding="utf-8")
+        self.assertEqual(text.count("[mcp_servers.fixonce]"), 1)
+        self.assertEqual(text.count("[mcp_servers.fixonce.env]"), 1)
+        self.assertIn(r'command = "C:\\Python313\\python.exe"', text)
+        self.assertIn("mcp_memory_server_v2.py", text)
+        self.assertIn('FIXONCE_ACTOR = "codex"', text)
+        self.assertTrue(any("MCP registration completed" in line for line in self._log_lines()))
+
     def test_run_bootstrap_idempotent_second_run(self):
         self.install_state_file.write_text(
             json.dumps(
