@@ -28,6 +28,10 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 _MCP_WINDOWS_CTRL_HANDLER = None
+_fo_init_trace_local = threading.local()
+_FO_INIT_TRACE_STEP = 0
+_FO_INIT_TRACE_LOCK = threading.Lock()
+_FO_INIT_TRACE_WATCHDOG_INTERVAL_SECONDS = 10
 
 
 def _log(*args, **kwargs):
@@ -54,6 +58,151 @@ def _mcp_process_event(message: str, include_stack: bool = False):
                 handle.write(stack_text + "\n")
     except Exception:
         pass
+
+
+def _fo_init_trace_file() -> Path:
+    path = Path.home() / ".fixonce" / "logs" / "fo_init_trace.log"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _fo_init_trace_enabled() -> bool:
+    return bool(getattr(_fo_init_trace_local, "enabled", False))
+
+
+def _fo_init_trace(message: str, include_stack: bool = False) -> None:
+    if not _fo_init_trace_enabled():
+        return
+
+    global _FO_INIT_TRACE_STEP
+    try:
+        with _FO_INIT_TRACE_LOCK:
+            _FO_INIT_TRACE_STEP += 1
+            step = _FO_INIT_TRACE_STEP
+        request_id = getattr(_fo_init_trace_local, "request_id", "unknown")
+        elapsed = time.monotonic() - getattr(_fo_init_trace_local, "started_at", time.monotonic())
+        line = (
+            f"[{datetime.now().isoformat()}] "
+            f"step={step:04d} request={request_id} elapsed={elapsed:.3f}s "
+            f"pid={os.getpid()} thread={threading.get_ident()} {message}"
+        )
+        with _fo_init_trace_file().open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+            if include_stack:
+                handle.write("".join(traceback.format_stack()))
+                handle.write("\n")
+    except Exception:
+        pass
+
+
+def _fo_init_trace_raw(message: str, include_stack: bool = False) -> None:
+    try:
+        line = (
+            f"[{datetime.now().isoformat()}] "
+            f"pid={os.getpid()} thread={threading.get_ident()} {message}"
+        )
+        with _fo_init_trace_file().open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+            if include_stack:
+                handle.write("".join(traceback.format_stack()))
+                handle.write("\n")
+    except Exception:
+        pass
+
+
+class _FoInitTraceScope:
+    def __init__(self, cwd: str):
+        self.cwd = cwd
+        self.previous_enabled = False
+        self.previous_request_id = None
+        self.previous_started_at = None
+        self.request_id = f"{os.getpid()}-{int(time.time() * 1000)}-{threading.get_ident()}"
+        self.thread_id = threading.get_ident()
+        self.done = threading.Event()
+
+    def __enter__(self):
+        self.previous_enabled = bool(getattr(_fo_init_trace_local, "enabled", False))
+        self.previous_request_id = getattr(_fo_init_trace_local, "request_id", None)
+        self.previous_started_at = getattr(_fo_init_trace_local, "started_at", None)
+        self.started_at = time.monotonic()
+        _fo_init_trace_local.enabled = True
+        _fo_init_trace_local.request_id = self.request_id
+        _fo_init_trace_local.started_at = self.started_at
+        _fo_init_trace(f"FO_INIT_REQUEST_RECEIVED cwd={self.cwd!r}", include_stack=True)
+        watchdog = threading.Thread(
+            target=self._watchdog,
+            name="fo-init-trace-watchdog",
+            daemon=True,
+        )
+        watchdog.start()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc is None:
+            _fo_init_trace("FO_INIT_SCOPE_EXIT_OK")
+        else:
+            _fo_init_trace(f"FO_INIT_SCOPE_EXIT_ERROR {exc_type.__name__}: {exc}", include_stack=True)
+        self.done.set()
+        _fo_init_trace_local.enabled = self.previous_enabled
+        _fo_init_trace_local.request_id = self.previous_request_id
+        _fo_init_trace_local.started_at = self.previous_started_at
+        return False
+
+    def _watchdog(self):
+        while not self.done.wait(_FO_INIT_TRACE_WATCHDOG_INTERVAL_SECONDS):
+            try:
+                frame = sys._current_frames().get(self.thread_id)
+                with _fo_init_trace_file().open("a", encoding="utf-8") as handle:
+                    elapsed = time.monotonic() - self.started_at
+                    handle.write(
+                        f"[{datetime.now().isoformat()}] "
+                        f"request={self.request_id} elapsed={elapsed:.3f}s "
+                        f"pid={os.getpid()} thread={self.thread_id} FO_INIT_WATCHDOG_STACK\n"
+                    )
+                    if frame is not None:
+                        handle.write("".join(traceback.format_stack(frame)))
+                    else:
+                        handle.write("watchdog could not locate target thread frame\n")
+                    handle.write("\n")
+            except Exception:
+                pass
+
+
+class _FoInitStdoutTraceProxy:
+    def __init__(self, wrapped):
+        self._wrapped = wrapped
+
+    def write(self, data):
+        result = self._wrapped.write(data)
+        try:
+            if data:
+                preview = str(data).replace("\r", "\\r").replace("\n", "\\n")[:160]
+                line = (
+                    f"[{datetime.now().isoformat()}] "
+                    f"pid={os.getpid()} thread={threading.get_ident()} "
+                    f"JSON_RPC_STDOUT_WRITE len={len(data)} preview={preview!r}"
+                )
+                with _fo_init_trace_file().open("a", encoding="utf-8") as handle:
+                    handle.write(line + "\n")
+        except Exception:
+            pass
+        return result
+
+    def flush(self):
+        result = self._wrapped.flush()
+        try:
+            line = (
+                f"[{datetime.now().isoformat()}] "
+                f"pid={os.getpid()} thread={threading.get_ident()} JSON_RPC_STDOUT_FLUSH"
+            )
+            with _fo_init_trace_file().open("a", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+        except Exception:
+            pass
+        return result
+
+    def __getattr__(self, name):
+        return getattr(self._wrapped, name)
 
 
 def _mcp_process_identity(label: str):
@@ -180,23 +329,30 @@ def _get_api_url() -> str:
 
     now = time.time()
     if _cached_api_url and (now - _api_url_cache_time) < 5:
+        _fo_init_trace(f"_get_api_url cache_hit url={_cached_api_url!r}")
         return _cached_api_url
 
     try:
         runtime_file = Path.home() / ".fixonce" / "runtime.json"
+        _fo_init_trace(f"_get_api_url runtime_exists_check path={runtime_file}")
         if runtime_file.exists():
+            _fo_init_trace(f"_get_api_url runtime_read_before path={runtime_file}")
             with open(runtime_file, 'r', encoding='utf-8') as f:
                 state = json.load(f)
+            _fo_init_trace(f"_get_api_url runtime_read_after path={runtime_file}")
             port = state.get("port", 5000)
             _cached_api_url = f"http://localhost:{port}"
             _api_url_cache_time = now
+            _fo_init_trace(f"_get_api_url resolved_from_runtime url={_cached_api_url!r}")
             return _cached_api_url
-    except Exception:
+    except Exception as exc:
+        _fo_init_trace(f"_get_api_url runtime_error {type(exc).__name__}: {exc}", include_stack=True)
         pass
 
     # Fallback to default port
     _cached_api_url = "http://localhost:5000"
     _api_url_cache_time = now
+    _fo_init_trace(f"_get_api_url fallback url={_cached_api_url!r}")
     return _cached_api_url
 
 
@@ -739,6 +895,7 @@ def _load_compliance() -> dict:
 def _persist_session(project_id: str, working_dir: str):
     """Save current session to file for recovery after restart."""
     try:
+        _fo_init_trace(f"FS_WRITE_BEFORE _persist_session path={SESSION_FILE}")
         data = {
             "project_id": project_id,
             "working_dir": working_dir,
@@ -746,7 +903,9 @@ def _persist_session(project_id: str, working_dir: str):
         }
         with open(SESSION_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False)
-    except Exception:
+        _fo_init_trace(f"FS_WRITE_AFTER _persist_session path={SESSION_FILE}")
+    except Exception as exc:
+        _fo_init_trace(f"_persist_session error {type(exc).__name__}: {exc}", include_stack=True)
         pass
 
 
@@ -856,21 +1015,31 @@ def _auto_create_session() -> bool:
 def _get_live_errors() -> list:
     """Get unacknowledged browser errors."""
     try:
-        res = requests.get(f'{_get_api_url()}/api/live-errors?since=600', timeout=2)
+        url = f'{_get_api_url()}/api/live-errors?since=600'
+        _fo_init_trace(f"HTTP_GET_BEFORE _get_live_errors url={url} timeout=2")
+        res = requests.get(url, timeout=2)
+        _fo_init_trace(f"HTTP_GET_AFTER _get_live_errors status={res.status_code}")
         if res.status_code == 200:
             data = res.json()
+            _fo_init_trace(f"_get_live_errors json_after count={len(data.get('errors', []))}")
             return data.get('errors', [])[:5]  # Max 5
         return []
-    except Exception:
+    except Exception as exc:
+        _fo_init_trace(f"_get_live_errors error {type(exc).__name__}: {exc}", include_stack=True)
         return []
 
 
 def _get_auto_fixes() -> list:
     """Get current auto-fixes, or empty list if pending fixes are unavailable."""
     try:
+        _fo_init_trace("_get_auto_fixes import_before")
         from core.pending_fixes import get_auto_fixes
-        return get_auto_fixes()
-    except Exception:
+        _fo_init_trace("_get_auto_fixes import_after call_before")
+        fixes = get_auto_fixes()
+        _fo_init_trace(f"_get_auto_fixes call_after count={len(fixes)}")
+        return fixes
+    except Exception as exc:
+        _fo_init_trace(f"_get_auto_fixes error {type(exc).__name__}: {exc}", include_stack=True)
         return []
 
 
@@ -2281,15 +2450,36 @@ def _record_mcp_tool_failure(tool_name: str, exc: BaseException) -> Optional[str
 def _run_tool_body(mcp_tool_name: str, func, *args, **kwargs):
     with contextlib.redirect_stdout(sys.stderr):
         try:
+            if mcp_tool_name == "fo_init":
+                _fo_init_trace_raw(
+                    f"MCP_HANDLER_ENTER tool={mcp_tool_name} "
+                    f"args_count={len(args)} kwargs_keys={list(kwargs.keys())}",
+                    include_stack=True,
+                )
             result = func(*args, **kwargs)
+            if mcp_tool_name == "fo_init":
+                _fo_init_trace_raw(
+                    f"MCP_HANDLER_RESULT_READY type={type(result).__name__} "
+                    f"length={len(result) if isinstance(result, str) else 'non-str'}"
+                )
+                _fo_init_trace_raw("MCP_RECORD_SUCCESS_BEFORE")
             _record_mcp_tool_success(mcp_tool_name)
+            if mcp_tool_name == "fo_init":
+                _fo_init_trace_raw("MCP_RECORD_SUCCESS_AFTER")
             return result
         except Exception as exc:
+            if mcp_tool_name == "fo_init":
+                _fo_init_trace_raw(f"MCP_HANDLER_EXCEPTION {type(exc).__name__}: {exc}", include_stack=True)
             _log_tool_exception(mcp_tool_name, exc)
             friendly = _record_mcp_tool_failure(mcp_tool_name, exc)
             if friendly:
+                if mcp_tool_name == "fo_init":
+                    _fo_init_trace_raw(f"MCP_HANDLER_FRIENDLY_ERROR length={len(friendly)}")
                 return friendly
-            return _format_tool_error(mcp_tool_name, exc)
+            formatted = _format_tool_error(mcp_tool_name, exc)
+            if mcp_tool_name == "fo_init":
+                _fo_init_trace_raw(f"MCP_HANDLER_FORMATTED_ERROR length={len(formatted)}")
+            return formatted
 
 
 def _run_tool_with_timeout(mcp_tool_name: str, func, timeout_seconds: int, *args, **kwargs):
@@ -2426,7 +2616,10 @@ def _get_project_id(working_dir: str) -> str:
     IMPORTANT: This now delegates to ProjectContext.from_path()
     which is the SINGLE SOURCE OF TRUTH for project ID generation.
     """
-    return ProjectContext.from_path(working_dir)
+    _fo_init_trace(f"PROJECT_ID_BEFORE ProjectContext.from_path working_dir={working_dir!r}")
+    project_id = ProjectContext.from_path(working_dir)
+    _fo_init_trace(f"PROJECT_ID_AFTER project_id={project_id!r}")
+    return project_id
 
 
 def _get_project_path(project_id: str) -> Path:
@@ -2437,34 +2630,56 @@ def _get_project_path(project_id: str) -> Path:
 def _load_project(project_id: str) -> Dict[str, Any]:
     """Load project memory with auto-recovery from backups."""
     path = _get_project_path(project_id)
+    _fo_init_trace(
+        f"FS_READ_PREPARE _load_project project_id={project_id!r} path={path} "
+        f"safe_file={_safe_file_available}"
+    )
 
     if _safe_file_available:
         # Use safe read with auto-recovery
-        return atomic_json_read(str(path), default={}, auto_recover=True)
+        _fo_init_trace(f"FS_READ_BEFORE _load_project atomic_json_read path={path}")
+        data = atomic_json_read(str(path), default={}, auto_recover=True)
+        _fo_init_trace(f"FS_READ_AFTER _load_project atomic_json_read path={path} keys={len(data) if isinstance(data, dict) else 'non-dict'}")
+        return data
 
     # Fallback to regular json
+    _fo_init_trace(f"FS_EXISTS_BEFORE _load_project path={path}")
     if path.exists():
+        _fo_init_trace(f"FS_READ_BEFORE _load_project open path={path}")
         with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+        _fo_init_trace(f"FS_READ_AFTER _load_project open path={path} keys={len(data) if isinstance(data, dict) else 'non-dict'}")
+        return data
+    _fo_init_trace(f"FS_EXISTS_AFTER _load_project missing path={path}")
     return {}
 
 
 def _save_project(project_id: str, data: Dict[str, Any]):
     """Save project memory with auto-backup (to V2 canonical storage)."""
     path = _get_project_path(project_id)
+    _fo_init_trace(
+        f"FS_WRITE_PREPARE _save_project project_id={project_id!r} path={path} "
+        f"safe_file={_safe_file_available}"
+    )
 
     if _safe_file_available:
         # Use safe write with auto-backup
+        _fo_init_trace(f"FS_WRITE_BEFORE _save_project atomic_json_write path={path}")
         atomic_json_write(str(path), data, create_backup=True)
+        _fo_init_trace(f"FS_WRITE_AFTER _save_project atomic_json_write path={path}")
     else:
         # Fallback to regular json
+        _fo_init_trace(f"FS_WRITE_BEFORE _save_project open path={path}")
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        _fo_init_trace(f"FS_WRITE_AFTER _save_project open path={path}")
 
     # Update index snapshot
     session = _get_session()
     if session.working_dir:
+        _fo_init_trace("_save_project update_snapshot_before")
         _update_snapshot(project_id, session.working_dir, data)
+        _fo_init_trace("_save_project update_snapshot_after")
 
 
 def _init_project_memory(working_dir: str) -> Dict[str, Any]:
@@ -2861,17 +3076,30 @@ def _is_valid_project_dir(path: str) -> bool:
 
 def _resolve_init_working_dir(path: str) -> Optional[str]:
     """Resolve the working directory used by fo_init/init_session."""
+    _fo_init_trace(f"RESOLVE_WORKING_DIR_ENTER path={path!r}")
+    _fo_init_trace(f"FS_ISDIR_BEFORE _resolve_init_working_dir path={path!r}")
     if not path or not os.path.isdir(path):
+        _fo_init_trace(f"FS_ISDIR_AFTER invalid path={path!r}")
         return None
+    _fo_init_trace(f"FS_ISDIR_AFTER valid path={path!r}")
 
     if BOUNDARY_DETECTION_ENABLED:
+        _fo_init_trace(f"BOUNDARY_DETECTION_BEFORE find_project_root path={path!r}")
         project_root, marker, confidence = find_project_root(path)
+        _fo_init_trace(
+            f"BOUNDARY_DETECTION_AFTER project_root={project_root!r} "
+            f"marker={marker!r} confidence={confidence!r}"
+        )
         if project_root and confidence in ("high", "medium"):
+            _fo_init_trace(f"RESOLVE_WORKING_DIR_RETURN boundary project_root={project_root!r}")
             return project_root
 
+    _fo_init_trace(f"VALID_PROJECT_BEFORE _is_valid_project_dir path={path!r}")
     if _is_valid_project_dir(path):
+        _fo_init_trace(f"VALID_PROJECT_AFTER true path={path!r}")
         return path
 
+    _fo_init_trace(f"VALID_PROJECT_AFTER false path={path!r}")
     return None
 
 
@@ -7261,33 +7489,49 @@ def _format_minimal_init(working_dir: str) -> str:
     from pathlib import Path
     from datetime import datetime
 
+    _fo_init_trace(f"FORMAT_INIT_ENTER working_dir={working_dir!r}")
     project_name = Path(working_dir).name
+    _fo_init_trace(f"FORMAT_INIT_PROJECT_NAME project_name={project_name!r}")
     project_id = _get_project_id(working_dir)
+    _fo_init_trace(f"FORMAT_INIT_LOAD_PROJECT_BEFORE project_id={project_id!r}")
     data = _load_project(project_id)
+    _fo_init_trace(f"FORMAT_INIT_LOAD_PROJECT_AFTER has_data={bool(data)}")
 
+    _fo_init_trace("FORMAT_INIT_AUTO_FIXES_BEFORE")
     auto_fixes = _get_auto_fixes()
+    _fo_init_trace(f"FORMAT_INIT_AUTO_FIXES_AFTER count={len(auto_fixes)}")
+    _fo_init_trace("FORMAT_INIT_LIVE_ERRORS_BEFORE")
     live_errors = _get_live_errors()
+    _fo_init_trace(f"FORMAT_INIT_LIVE_ERRORS_AFTER count={len(live_errors)}")
+    _fo_init_trace("FORMAT_INIT_ERROR_GATE_BEFORE")
     gate_result = _evaluate_current_error_gate(
         tool_name="fo_init",
         live_errors=len(live_errors),
         auto_fix_ready=bool(auto_fixes),
     )
+    _fo_init_trace(f"FORMAT_INIT_ERROR_GATE_AFTER level={gate_result.level!r}")
 
     if gate_result.level == "block":
+        _fo_init_trace("FORMAT_INIT_RETURN action_required_fo_apply")
         return f"🧠 Back to {project_name}\n\nACTION_REQUIRED: fo_apply\n\nReady."
 
     if gate_result.level == "warn":
+        _fo_init_trace("FORMAT_INIT_RETURN action_required_fo_errors")
         return f"🧠 Back to {project_name}\n\nACTION_REQUIRED: fo_errors\n\nReady."
 
     # Get both data sources
     resume_state = None
     if _resume_state_available:
         try:
+            _fo_init_trace("FORMAT_INIT_RESUME_STATE_BEFORE")
             resume_state = _get_resume_state(project_id)
-        except:
+            _fo_init_trace(f"FORMAT_INIT_RESUME_STATE_AFTER exists={bool(resume_state)}")
+        except Exception as exc:
+            _fo_init_trace(f"FORMAT_INIT_RESUME_STATE_ERROR {type(exc).__name__}: {exc}", include_stack=True)
             pass
 
     intent = data.get("live_record", {}).get("intent", {}) if data else {}
+    _fo_init_trace(f"FORMAT_INIT_INTENT_LOADED keys={list(intent.keys()) if isinstance(intent, dict) else 'non-dict'}")
 
     # Determine which source is fresher (intent from fo_sync, resume_state from save_resume_state)
     def parse_timestamp(ts):
@@ -7389,7 +7633,9 @@ def _format_minimal_init(working_dir: str) -> str:
 
     lines.append("Ready.")
 
-    return "\n".join(lines)
+    result = "\n".join(lines)
+    _fo_init_trace(f"FORMAT_INIT_RETURN_OK length={len(result)}")
+    return result
 
 
 @mcp.tool()
@@ -7403,40 +7649,72 @@ def fo_init(cwd: str = "") -> str:
     Args:
         cwd: Current working directory (usually provided by Claude Code)
     """
-    mode = _get_fixonce_mode()
-    if mode == MODE_OFF:
-        return "FixOnce is off."
-    if mode == MODE_PASSIVE:
-        return "FixOnce is in PASSIVE mode."
+    with _FoInitTraceScope(cwd):
+        _fo_init_trace("FO_INIT_BODY_ENTER")
+        _fo_init_trace("FO_INIT_MODE_BEFORE")
+        mode = _get_fixonce_mode()
+        _fo_init_trace(f"FO_INIT_MODE_AFTER mode={mode!r}")
+        if mode == MODE_OFF:
+            _fo_init_trace("FO_INIT_RETURN mode_off")
+            return "FixOnce is off."
+        if mode == MODE_PASSIVE:
+            _fo_init_trace("FO_INIT_RETURN mode_passive")
+            return "FixOnce is in PASSIVE mode."
 
-    working_dir = _resolve_init_working_dir(cwd)
+        _fo_init_trace("FO_INIT_RESOLVE_WORKING_DIR_BEFORE")
+        working_dir = _resolve_init_working_dir(cwd)
+        _fo_init_trace(f"FO_INIT_RESOLVE_WORKING_DIR_AFTER working_dir={working_dir!r}")
 
-    if not working_dir:
-        return "Open from a project folder to continue."
+        if not working_dir:
+            _fo_init_trace("FO_INIT_RETURN no_project_folder")
+            return "Open from a project folder to continue."
 
-    # Initialize session (all the background work)
-    project_id = _get_project_id(working_dir)
-    _set_session(project_id, working_dir)
-    _persist_session(project_id, working_dir)
-    session = _get_session()
-    session.mark_initialized()
-    session.log_tool_call("fo_init")
-    _mark_session_initialized()
+        # Initialize session (all the background work)
+        _fo_init_trace("FO_INIT_PROJECT_ID_BEFORE")
+        project_id = _get_project_id(working_dir)
+        _fo_init_trace(f"FO_INIT_PROJECT_ID_AFTER project_id={project_id!r}")
+        _fo_init_trace("FO_INIT_SET_SESSION_BEFORE")
+        _set_session(project_id, working_dir)
+        _fo_init_trace("FO_INIT_SET_SESSION_AFTER")
+        _fo_init_trace("FO_INIT_PERSIST_SESSION_BEFORE")
+        _persist_session(project_id, working_dir)
+        _fo_init_trace("FO_INIT_PERSIST_SESSION_AFTER")
+        _fo_init_trace("FO_INIT_GET_SESSION_BEFORE")
+        session = _get_session()
+        _fo_init_trace(f"FO_INIT_GET_SESSION_AFTER session_exists={bool(session)}")
+        _fo_init_trace("FO_INIT_MARK_INITIALIZED_BEFORE")
+        session.mark_initialized()
+        _fo_init_trace("FO_INIT_MARK_INITIALIZED_AFTER")
+        _fo_init_trace("FO_INIT_LOG_TOOL_CALL_BEFORE")
+        session.log_tool_call("fo_init")
+        _fo_init_trace("FO_INIT_LOG_TOOL_CALL_AFTER")
+        _fo_init_trace("FO_INIT_MARK_GLOBAL_INITIALIZED_BEFORE")
+        _mark_session_initialized()
+        _fo_init_trace("FO_INIT_MARK_GLOBAL_INITIALIZED_AFTER")
 
-    # Update active project for dashboard
-    try:
-        from managers.multi_project_manager import set_active_project
-        set_active_project(
-            project_id=project_id,
-            detected_from="fo_init",
-            display_name=Path(working_dir).name,
-            working_dir=working_dir
-        )
-    except:
-        pass
+        # Update active project for dashboard
+        try:
+            _fo_init_trace("FO_INIT_ACTIVE_PROJECT_IMPORT_BEFORE")
+            from managers.multi_project_manager import set_active_project
+            _fo_init_trace("FO_INIT_ACTIVE_PROJECT_IMPORT_AFTER")
+            _fo_init_trace("FO_INIT_ACTIVE_PROJECT_SET_BEFORE")
+            set_active_project(
+                project_id=project_id,
+                detected_from="fo_init",
+                display_name=Path(working_dir).name,
+                working_dir=working_dir
+            )
+            _fo_init_trace("FO_INIT_ACTIVE_PROJECT_SET_AFTER")
+        except Exception as exc:
+            _fo_init_trace(f"FO_INIT_ACTIVE_PROJECT_ERROR {type(exc).__name__}: {exc}", include_stack=True)
+            pass
 
-    # Return minimal formatted output
-    return _format_minimal_init(working_dir)
+        # Return minimal formatted output
+        _fo_init_trace("FO_INIT_FORMAT_RESPONSE_BEFORE")
+        result = _format_minimal_init(working_dir)
+        _fo_init_trace(f"FO_INIT_FORMAT_RESPONSE_AFTER length={len(result)}")
+        _fo_init_trace("FO_INIT_RETURN_TO_FASTMCP_BEFORE")
+        return result
 
 
 @mcp.tool()
@@ -7743,7 +8021,12 @@ if __name__ == "__main__":
     _mcp_process_identity("mcp main starting")
     try:
         _mcp_process_event("mcp.run entering")
-        mcp.run(show_banner=False)
+        original_stdout = sys.stdout
+        sys.stdout = _FoInitStdoutTraceProxy(original_stdout)
+        try:
+            mcp.run(show_banner=False)
+        finally:
+            sys.stdout = original_stdout
         _mcp_process_event("mcp.run returned without exception")
         try:
             from core.mcp_session_health import mark_session_lost
