@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from flask import Blueprint, jsonify, send_file, request
 
-from config import DATA_DIR  # compatibility for tests that patch installer data dir
+from config import DATA_DIR, INSTALL_DATA_DIR, get_install_data_dir  # compatibility for tests that patch installer data dir
 from core.install_state import get_install_snapshot, is_fixonce_installed, mark_install_state
 from core.install_state_machine import InstallState
 
@@ -109,11 +109,101 @@ def _get_request_port() -> int | None:
         return None
 
 
+def _unique_paths(paths: list[Path]) -> list[Path]:
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        try:
+            key = str(path.resolve())
+        except OSError:
+            key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(path)
+    return unique
+
+
+def _resolved_app_dir() -> Path:
+    """Return the directory containing the packaged app executable."""
+    return Path(sys.executable).resolve().parent
+
+
+def _installer_html_candidates() -> list[Path]:
+    app_dir = _resolved_app_dir()
+    module_root = Path(__file__).resolve().parent.parent.parent
+    meipass = getattr(sys, "_MEIPASS", None)
+
+    candidates = [
+        get_install_data_dir() / "installer.html",
+        INSTALL_DATA_DIR / "installer.html",
+        app_dir / "_internal" / "data" / "installer.html",
+        app_dir / "data" / "installer.html",
+        Path.cwd() / "_internal" / "data" / "installer.html",
+        Path.cwd() / "data" / "installer.html",
+        module_root / "data" / "installer.html",
+    ]
+    if meipass:
+        candidates.insert(0, Path(meipass) / "data" / "installer.html")
+
+    return _unique_paths(candidates)
+
+
+def _installer_entrypoint_candidates() -> list[Path]:
+    app_dir = _resolved_app_dir()
+    names = ("install.ps1", "install.bat", "uninstall.ps1")
+    return _unique_paths([app_dir / name for name in names])
+
+
+def _write_installer_discovery_diagnostics(html_candidates: list[Path]):
+    """Print installer discovery diagnostics for packaged Windows support."""
+    app_dir = _resolved_app_dir()
+    lines = [
+        "FixOnce installer discovery diagnostics:",
+        f"  sys.executable={sys.executable}",
+        f"  __file__={__file__}",
+        f"  resolved_app_directory={app_dir}",
+        f"  sys.frozen={getattr(sys, 'frozen', False)}",
+        f"  sys._MEIPASS={getattr(sys, '_MEIPASS', None)}",
+        "  installer_html_paths_checked:",
+    ]
+    for path in html_candidates:
+        lines.append(f"    {path} exists={os.path.exists(path)}")
+
+    lines.append("  installer_entrypoint_paths_checked:")
+    for path in _installer_entrypoint_candidates():
+        lines.append(f"    {path} exists={os.path.exists(path)}")
+
+    message = "\n".join(lines)
+    try:
+        sys.stderr.write(message + "\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+
+    try:
+        log_dir = DATA_DIR / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with (log_dir / "installer_discovery.log").open("a", encoding="utf-8") as handle:
+            handle.write(message + "\n")
+    except Exception:
+        pass
+
+
 @installer_bp.route('/install')
 def serve_installer():
     """Serve the installer HTML page."""
-    installer_path = Path(__file__).parent.parent.parent / "data" / "installer.html"
-    if installer_path.exists():
+    html_candidates = _installer_html_candidates()
+    _write_installer_discovery_diagnostics(html_candidates)
+    for installer_path in html_candidates:
+        if os.path.exists(installer_path):
+            return send_file(installer_path)
+
+    if html_candidates:
+        installer_path = html_candidates[0]
+    else:
+        installer_path = Path("installer.html")
+    if os.path.exists(installer_path):
         return send_file(installer_path)
     return "Installer not found", 404
 

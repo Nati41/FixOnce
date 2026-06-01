@@ -1,4 +1,5 @@
 import json
+import io
 import sys
 import tempfile
 import unittest
@@ -74,6 +75,39 @@ class TestInstalledState(unittest.TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers["Location"], "/install")
+
+    def test_installer_route_serves_packaged_internal_data_path(self):
+        with tempfile.TemporaryDirectory(prefix="fixonce-packaged-install-") as temp_dir:
+            app_dir = Path(temp_dir)
+            installer_html = app_dir / "_internal" / "data" / "installer.html"
+            installer_html.parent.mkdir(parents=True, exist_ok=True)
+            installer_html.write_text("<!DOCTYPE html><title>Installer</title>", encoding="utf-8")
+
+            with patch.object(installer_module, "_installer_html_candidates", return_value=[installer_html]), \
+                 patch.object(installer_module, "_write_installer_discovery_diagnostics"):
+                response = self.client.get("/install", headers={"Host": "localhost:5001"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"<title>Installer</title>", response.data)
+
+    def test_installer_discovery_diagnostics_print_checked_paths(self):
+        existing_path = self.data_dir / "installer.html"
+        missing_path = self.data_dir / "missing.html"
+        existing_path.write_text("<!DOCTYPE html>", encoding="utf-8")
+        stderr = io.StringIO()
+
+        with patch.object(installer_module.sys, "executable", str(self.data_dir / "FixOnce.exe")), \
+             patch.object(installer_module.sys, "stderr", stderr):
+            installer_module._write_installer_discovery_diagnostics([existing_path, missing_path])
+
+        output = stderr.getvalue()
+        self.assertIn("sys.executable=", output)
+        self.assertIn("__file__=", output)
+        self.assertIn("resolved_app_directory=", output)
+        self.assertIn("installer_html_paths_checked:", output)
+        self.assertIn(f"{existing_path} exists=True", output)
+        self.assertIn(f"{missing_path} exists=False", output)
+        self.assertIn("installer_entrypoint_paths_checked:", output)
 
     def test_dashboard_does_not_redirect_when_legacy_install_state_is_installed(self):
         (self.data_dir / "install_state.json").write_text(json.dumps({
