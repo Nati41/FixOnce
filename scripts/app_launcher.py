@@ -28,9 +28,16 @@ CONFIG_FILE = USER_DATA_DIR / "config.json"
 LOCK_FILE = USER_DATA_DIR / "server.lock"
 LOG_DIR = USER_DATA_DIR / "logs"
 LAUNCHER_LOG = LOG_DIR / "app_launcher.log"
+BOOTSTRAP_LOG = LOG_DIR / "bootstrap.log"
+BOOTSTRAP_TASK_NAME = "FixOnceServer"
+BOOTSTRAP_STARTUP_SHORTCUT_NAME = "FixOnceServer.lnk"
+AUTOSTART_METHOD_SCHEDULED_TASK = "scheduled_task"
+AUTOSTART_METHOD_STARTUP_SHORTCUT = "startup_shortcut"
+AUTOSTART_METHOD_NONE = "none"
 DEFAULT_PORT = 5000
 PORT_RANGE = range(DEFAULT_PORT, DEFAULT_PORT + 10)
 START_TIMEOUT_SECONDS = 12.0
+BOOTSTRAP_HEALTH_TIMEOUT_SECONDS = 45.0
 
 
 def is_frozen() -> bool:
@@ -55,6 +62,17 @@ def log_event(message: str):
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         with LAUNCHER_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
+
+
+def bootstrap_log(message: str):
+    """Append first-run bootstrap diagnostics to ~/.fixonce/logs/bootstrap.log."""
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with BOOTSTRAP_LOG.open("a", encoding="utf-8") as handle:
             handle.write(f"[{timestamp}] {message}\n")
     except Exception:
         pass
@@ -199,6 +217,389 @@ def wait_for_server(timeout: float = START_TIMEOUT_SECONDS) -> int | None:
             return port
         time.sleep(0.5)
     return None
+
+
+def wait_for_health(timeout: float = BOOTSTRAP_HEALTH_TIMEOUT_SECONDS, log_fn: Callable[[str], None] | None = None) -> int | None:
+    """Wait until /api/health returns OK on a FixOnce server owned by this install."""
+    write_log = log_fn or bootstrap_log
+    deadline = time.time() + timeout
+    attempt = 0
+    while time.time() < deadline:
+        attempt += 1
+        port = discover_running_port()
+        if port is not None and endpoint_responds(port, "/api/health", timeout=1.5):
+            write_log(f"Health OK on port {port} (attempt {attempt})")
+            return port
+        write_log(f"Waiting for /api/health (attempt {attempt})")
+        time.sleep(0.5)
+    write_log("Timed out waiting for /api/health")
+    return None
+
+
+def get_packaged_install_dir() -> Path:
+    """Directory containing the packaged FixOnce.exe."""
+    return Path(sys.executable).resolve().parent
+
+
+def get_packaged_server_command() -> list[str]:
+    """Command line used for background server and scheduled-task autostart."""
+    return [sys.executable, "--server"]
+
+
+def _import_install_state_helpers():
+    if is_frozen():
+        from core.install_state_machine import InstallState, persist_snapshot
+    else:
+        sys.path.insert(0, str(PROJECT_DIR / "src"))
+        from core.install_state_machine import InstallState, persist_snapshot
+    return InstallState, persist_snapshot
+
+
+def _read_runtime_pid_port() -> tuple[int | None, int | None]:
+    runtime = read_json(RUNTIME_FILE)
+    runtime_pid = runtime.get("pid")
+    runtime_port = runtime.get("port")
+    try:
+        runtime_pid = int(runtime_pid) if runtime_pid is not None else None
+    except (TypeError, ValueError):
+        runtime_pid = None
+    try:
+        runtime_port = int(runtime_port) if runtime_port is not None else None
+    except (TypeError, ValueError):
+        runtime_port = None
+    return runtime_pid, runtime_port
+
+
+def _powershell_single_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def windows_scheduled_task_exists(task_name: str = BOOTSTRAP_TASK_NAME) -> bool:
+    """Return True when the current user already has the logon task registered."""
+    if sys.platform != "win32":
+        return False
+
+    ps_script = (
+        f"$task = Get-ScheduledTask -TaskName {_powershell_single_quote(task_name)} "
+        "-ErrorAction SilentlyContinue; "
+        "if ($null -eq $task) { exit 1 } else { exit 0 }"
+    )
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return True
+
+    fallback = subprocess.run(
+        ["schtasks", "/query", "/tn", task_name],
+        capture_output=True,
+        text=True,
+    )
+    return fallback.returncode == 0
+
+
+def _register_user_logon_task_powershell(
+    task_name: str,
+    executable: str,
+    argument_string: str,
+    working_directory: str,
+) -> tuple[bool, str]:
+    """Register a per-user logon task for the current interactive account (no admin)."""
+    ps_script = f"""
+$ErrorActionPreference = 'Stop'
+$action = New-ScheduledTaskAction `
+  -Execute {_powershell_single_quote(executable)} `
+  -Argument {_powershell_single_quote(argument_string)} `
+  -WorkingDirectory {_powershell_single_quote(working_directory)}
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+$settings = New-ScheduledTaskSettingsSet `
+  -AllowStartIfOnBatteries `
+  -DontStopIfGoingOnBatteries `
+  -StartWhenAvailable `
+  -RestartCount 3 `
+  -RestartInterval (New-TimeSpan -Minutes 1)
+$principal = New-ScheduledTaskPrincipal `
+  -UserId $env:USERNAME `
+  -LogonType Interactive `
+  -RunLevel Limited
+Register-ScheduledTask `
+  -TaskName {_powershell_single_quote(task_name)} `
+  -Action $action `
+  -Trigger $trigger `
+  -Settings $settings `
+  -Principal $principal `
+  -Force | Out-Null
+"""
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return True, ""
+    detail = (result.stderr or result.stdout or "").strip()
+    return False, detail or "unknown PowerShell error"
+
+
+def _register_user_logon_task_schtasks(
+    task_name: str,
+    command: list[str],
+) -> tuple[bool, str]:
+    """Fallback per-user task registration without /IT (avoids elevation quirks)."""
+    result = subprocess.run(
+        [
+            "schtasks",
+            "/create",
+            "/tn",
+            task_name,
+            "/tr",
+            subprocess.list2cmdline(command),
+            "/sc",
+            "onlogon",
+            "/rl",
+            "LIMITED",
+            "/f",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return True, ""
+    detail = (result.stderr or result.stdout or "").strip()
+    return False, detail or "unknown schtasks error"
+
+
+def ensure_windows_scheduled_task(log_fn: Callable[[str], None] | None = None) -> bool:
+    """
+    Create or update the FixOnceServer per-user logon task (idempotent).
+
+    Returns False when autostart could not be configured; callers may continue setup.
+    """
+    write_log = log_fn or bootstrap_log
+    if sys.platform != "win32":
+        write_log("Scheduled task setup skipped: not Windows")
+        return False
+
+    command = get_packaged_server_command()
+    executable = command[0]
+    argument_string = subprocess.list2cmdline(command[1:]) if len(command) > 1 else ""
+    working_directory = str(get_packaged_install_dir())
+
+    write_log(
+        f"Configuring per-user scheduled task {BOOTSTRAP_TASK_NAME}: "
+        f"execute={executable!r} args={argument_string!r} cwd={working_directory!r}"
+    )
+
+    if windows_scheduled_task_exists():
+        write_log(f"Scheduled task {BOOTSTRAP_TASK_NAME} already exists; updating")
+
+    ok, detail = _register_user_logon_task_powershell(
+        BOOTSTRAP_TASK_NAME,
+        executable,
+        argument_string,
+        working_directory,
+    )
+    if ok:
+        write_log(f"Scheduled task {BOOTSTRAP_TASK_NAME} ready (Register-ScheduledTask)")
+        return True
+
+    write_log(f"Register-ScheduledTask failed: {detail}")
+
+    ok, detail = _register_user_logon_task_schtasks(BOOTSTRAP_TASK_NAME, command)
+    if ok:
+        write_log(f"Scheduled task {BOOTSTRAP_TASK_NAME} ready (schtasks fallback)")
+        return True
+
+    write_log(f"WARNING: Scheduled task setup failed (non-fatal): {detail}")
+    return False
+
+
+def get_windows_startup_folder() -> Path:
+    """Per-user Startup folder used for logon autostart shortcuts."""
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    return Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+
+
+def get_windows_startup_shortcut_path() -> Path:
+    return get_windows_startup_folder() / BOOTSTRAP_STARTUP_SHORTCUT_NAME
+
+
+def ensure_windows_startup_shortcut(log_fn: Callable[[str], None] | None = None) -> bool:
+    """Create or update the FixOnceServer Startup folder shortcut (idempotent)."""
+    write_log = log_fn or bootstrap_log
+    if sys.platform != "win32":
+        write_log("Startup shortcut setup skipped: not Windows")
+        return False
+
+    command = get_packaged_server_command()
+    executable = command[0]
+    argument_string = subprocess.list2cmdline(command[1:]) if len(command) > 1 else ""
+    working_directory = str(get_packaged_install_dir())
+    shortcut_path = get_windows_startup_shortcut_path()
+
+    write_log(
+        f"Configuring Startup shortcut {shortcut_path}: "
+        f"target={executable!r} args={argument_string!r} cwd={working_directory!r}"
+    )
+
+    shortcut_path.parent.mkdir(parents=True, exist_ok=True)
+    ps_script = f"""
+$ErrorActionPreference = 'Stop'
+$shell = New-Object -ComObject WScript.Shell
+$shortcut = $shell.CreateShortcut({_powershell_single_quote(str(shortcut_path))})
+$shortcut.TargetPath = {_powershell_single_quote(executable)}
+$shortcut.Arguments = {_powershell_single_quote(argument_string)}
+$shortcut.WorkingDirectory = {_powershell_single_quote(working_directory)}
+$shortcut.WindowStyle = 7
+$iconPath = Join-Path {_powershell_single_quote(working_directory)} 'FixOnce.exe'
+if (Test-Path $iconPath) {{ $shortcut.IconLocation = "$iconPath,0" }}
+$shortcut.Save()
+"""
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0 and shortcut_path.exists():
+        write_log(f"Startup shortcut ready: {shortcut_path}")
+        return True
+
+    detail = (result.stderr or result.stdout or "").strip()
+    write_log(f"Startup shortcut setup failed: {detail or 'unknown error'}")
+    return False
+
+
+def configure_windows_autostart(log_fn: Callable[[str], None] | None = None) -> str:
+    """
+    Configure Windows logon autostart (tiered).
+
+    Returns autostart_method: scheduled_task, startup_shortcut, or none.
+    """
+    write_log = log_fn or bootstrap_log
+    if sys.platform != "win32":
+        write_log("Autostart setup skipped: not Windows")
+        return AUTOSTART_METHOD_NONE
+
+    if ensure_windows_scheduled_task(log_fn=write_log):
+        return AUTOSTART_METHOD_SCHEDULED_TASK
+
+    write_log("Scheduled task unavailable; trying Startup folder shortcut fallback")
+    if ensure_windows_startup_shortcut(log_fn=write_log):
+        return AUTOSTART_METHOD_STARTUP_SHORTCUT
+
+    write_log("WARNING: No autostart method configured (non-fatal)")
+    return AUTOSTART_METHOD_NONE
+
+
+def ensure_packaged_server_running(log_fn: Callable[[str], None] | None = None) -> int | None:
+    """Start or reuse the background server; return port when /api/health is OK."""
+    write_log = log_fn or bootstrap_log
+    clear_stale_state()
+
+    port = discover_running_port()
+    if port is not None and endpoint_responds(port, "/api/health", timeout=1.5):
+        write_log(f"Reusing running server on port {port}")
+        return port
+
+    write_log("Starting background server via FixOnce.exe --server")
+    start_server()
+    return wait_for_health(log_fn=write_log)
+
+
+def run_bootstrap() -> int:
+    """
+    Windows packaged first-run setup: autostart task, server health, READY state, dashboard.
+    Idempotent when run multiple times.
+    """
+    if sys.platform != "win32":
+        bootstrap_log("Bootstrap is only supported on Windows")
+        return 1
+
+    if not is_frozen():
+        bootstrap_log("Bootstrap requires a packaged FixOnce.exe build")
+        return 1
+
+    bootstrap_log("Bootstrap started")
+    install_dir = str(get_packaged_install_dir())
+    InstallState = None
+    persist_snapshot = None
+
+    try:
+        InstallState, persist_snapshot = _import_install_state_helpers()
+        persist_snapshot(
+            InstallState.INSTALLING,
+            detail="Bootstrap started",
+            install_dir=install_dir,
+            metadata={"bootstrap": True},
+        )
+        bootstrap_log("install_state set to INSTALLING")
+
+        autostart_method = configure_windows_autostart()
+        bootstrap_metadata = {"bootstrap": True, "autostart_method": autostart_method}
+        if autostart_method == AUTOSTART_METHOD_NONE:
+            bootstrap_log("WARNING: Autostart was not configured; continuing bootstrap")
+        else:
+            bootstrap_log(f"Autostart configured via {autostart_method}")
+
+        persist_snapshot(
+            InstallState.STARTING,
+            detail="Ensuring background server",
+            install_dir=install_dir,
+            metadata=bootstrap_metadata,
+        )
+        bootstrap_log("install_state set to STARTING")
+
+        persist_snapshot(
+            InstallState.WAITING_HEALTH,
+            detail="Waiting for /api/health",
+            install_dir=install_dir,
+            metadata=bootstrap_metadata,
+        )
+        bootstrap_log("install_state set to WAITING_HEALTH")
+
+        port = ensure_packaged_server_running()
+        if port is None:
+            persist_snapshot(
+                InstallState.FAILED,
+                detail="/api/health did not return OK",
+                install_dir=install_dir,
+            )
+            bootstrap_log("Bootstrap failed: health check did not pass")
+            return 1
+
+        runtime_pid, runtime_port = _read_runtime_pid_port()
+        if runtime_port is None:
+            runtime_port = port
+        persist_snapshot(
+            InstallState.READY,
+            detail="Bootstrap completed",
+            install_dir=install_dir,
+            runtime_port=runtime_port,
+            runtime_pid=runtime_pid,
+            metadata=bootstrap_metadata,
+        )
+        bootstrap_log("install_state written as READY")
+
+        bootstrap_log("Opening dashboard")
+        open_dashboard(port)
+        bootstrap_log("Bootstrap completed successfully")
+        return 0
+    except Exception as exc:
+        bootstrap_log(f"Bootstrap failed: {exc}")
+        if persist_snapshot is not None and InstallState is not None:
+            try:
+                persist_snapshot(
+                    InstallState.FAILED,
+                    detail=f"Bootstrap failed: {exc}",
+                    install_dir=install_dir,
+                )
+            except Exception:
+                pass
+        return 1
 
 
 def get_dashboard_url(port: int) -> str:
@@ -437,6 +838,9 @@ def main():
         server_args = [arg for arg in sys.argv[1:] if arg != "--server"]
         run_server_mode(server_args)
         return
+
+    if "--bootstrap" in sys.argv:
+        raise SystemExit(run_bootstrap())
 
     if "--menubar" in sys.argv or "-m" in sys.argv:
         run_menubar_app()

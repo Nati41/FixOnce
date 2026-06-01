@@ -59,7 +59,6 @@ Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startupicon"; Description: "Start FixOnce with Windows (Recommended)"; GroupDescription: "Startup:"; Flags: checkedonce
 
 [Files]
 ; Main application (from PyInstaller dist folder)
@@ -76,12 +75,12 @@ Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFile
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\FixOnce.ico"; Tasks: desktopicon
 
 [Registry]
-; Startup entry (if user selected)
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "FixOnce"; ValueData: """{app}\{#MyAppExeName}"" --minimized"; Flags: uninsdeletevalue; Tasks: startupicon
-
 ; App registration for uninstall info
 Root: HKCU; Subkey: "Software\FixOnce"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\FixOnce"; ValueType: string; ValueName: "DataPath"; ValueData: "{userappdata}\FixOnce"; Flags: uninsdeletekey
+
+; Remove legacy HKCU Run autostart from older installers (do not recreate)
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "FixOnce"; Flags: uninsdeletevalue dontcreatekey
 
 [Dirs]
 ; Create AppData folder with proper permissions
@@ -91,8 +90,9 @@ Name: "{userappdata}\FixOnce\global"; Permissions: users-full
 Name: "{userappdata}\FixOnce\extension"; Permissions: users-full
 
 [Run]
-; Run after install (optional)
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch FixOnce"; Flags: nowait postinstall skipifsilent
+; First-run setup: server, FixOnceServer scheduled task, health check, dashboard.
+; Setup waits for bootstrap and fails if it returns a non-zero exit code.
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--bootstrap"; StatusMsg: "Setting up FixOnce (server, autostart, dashboard)..."; Description: "Running FixOnce setup"; Flags: waituntilterminated postinstall skipifdoesntexist
 
 [UninstallRun]
 ; Stop FixOnce before uninstall
@@ -105,13 +105,9 @@ Filename: "taskkill"; Parameters: "/F /IM {#MyAppExeName}"; Flags: runhidden; Ru
 [Code]
 // Pascal Script for custom logic
 
-var
-  KeepDataPage: TInputOptionWizardPage;
-
-procedure InitializeWizard;
+procedure RemoveLegacyRunKey();
 begin
-  // Add a page asking about keeping data on uninstall
-  // (This is shown during install to inform the user)
+  RegDeleteValue(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Run', 'FixOnce');
 end;
 
 function InitializeUninstall: Boolean;
@@ -137,19 +133,22 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-var
-  ResultCode: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
-    // Post-install: Show welcome message with extension instructions
+    RemoveLegacyRunKey();
+  end;
+
+  if CurStep = ssDone then
+  begin
     MsgBox(
-      'FixOnce installed successfully!' + #13#10 + #13#10 +
+      'FixOnce is ready!' + #13#10 + #13#10 +
+      'Background startup uses the FixOnceServer scheduled task.' + #13#10 + #13#10 +
       'To install the Chrome Extension:' + #13#10 +
       '1. Open Chrome and go to chrome://extensions' + #13#10 +
       '2. Enable "Developer mode"' + #13#10 +
       '3. Click "Load unpacked"' + #13#10 +
-      '4. Select: ' + ExpandConstant('{userappdata}') + '\FixOnce\extension' + #13#10 + #13#10 +
+      '4. Select: ' + ExpandConstant('{app}\extension') + #13#10 + #13#10 +
       'Or click "Install Extension" in the FixOnce dashboard.',
       mbInformation, MB_OK);
   end;
