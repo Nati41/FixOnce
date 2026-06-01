@@ -41,6 +41,26 @@ class TestInstalledState(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"<!DOCTYPE html>", response.data)
 
+    def test_packaged_windows_current_server_counts_as_installed_for_fresh_user(self):
+        with patch.object(install_state_module, "get_runtime_state", return_value=None), \
+             patch.object(server_module.sys, "platform", "win32"), \
+             patch.object(server_module.sys, "frozen", True, create=True), \
+             patch.object(server_module, "ACTUAL_PORT", 5000):
+            response = self.client.get("/", headers={"Host": "localhost:5000"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"<!DOCTYPE html>", response.data)
+
+    def test_packaged_windows_other_port_does_not_count_as_installed_for_fresh_user(self):
+        with patch.object(install_state_module, "get_runtime_state", return_value=None), \
+             patch.object(server_module.sys, "platform", "win32"), \
+             patch.object(server_module.sys, "frozen", True, create=True), \
+             patch.object(server_module, "ACTUAL_PORT", 5000):
+            response = self.client.get("/", headers={"Host": "localhost:5001"}, follow_redirects=False)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/install")
+
     def test_dashboard_allows_degraded_extension_case_via_runtime(self):
         with patch.object(install_state_module, "get_runtime_state", return_value={"port": 5001, "pid": 123}):
             response = self.client.get("/", headers={"Host": "localhost:5001"})

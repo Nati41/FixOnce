@@ -241,6 +241,12 @@ def _is_installed() -> bool:
         request_port = None
 
     result = is_fixonce_installed(request_port=request_port)
+    if not result and sys.platform == "win32" and getattr(sys, "frozen", False):
+        # Windows packaged installs are shared across local users, while
+        # install_state.json/runtime.json are per-user. If this frozen server is
+        # already serving the requested port, the installed app is usable for a
+        # fresh Windows account without requiring a reinstall.
+        result = request_port == ACTUAL_PORT
     _startup_log(f"install state check: ok installed={result}")
     _write_server_log(
         f"_is_installed install_state_exists={install_state.exists()} "
