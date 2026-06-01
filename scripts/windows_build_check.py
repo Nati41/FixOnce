@@ -140,6 +140,8 @@ def main() -> int:
     check(hidden_ok, "pywebview hidden imports", ", ".join(required_hidden_imports), failures)
 
     check("--server" in launcher_text, "launcher server mode", "app launcher exposes packaged --server dispatch", failures)
+    check("--bootstrap" in launcher_text, "launcher bootstrap mode", "app launcher exposes packaged --bootstrap dispatch", failures)
+    check("bootstrap.log" in launcher_text, "bootstrap log file", "bootstrap steps logged to ~/.fixonce/logs/bootstrap.log", failures)
     check("FixOnce could not open its app window." in launcher_text, "friendly startup failure", "friendly error path present", failures)
 
     for build_dir in BUILD_DIRS:

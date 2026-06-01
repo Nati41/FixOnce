@@ -28,9 +28,12 @@ CONFIG_FILE = USER_DATA_DIR / "config.json"
 LOCK_FILE = USER_DATA_DIR / "server.lock"
 LOG_DIR = USER_DATA_DIR / "logs"
 LAUNCHER_LOG = LOG_DIR / "app_launcher.log"
+BOOTSTRAP_LOG = LOG_DIR / "bootstrap.log"
+BOOTSTRAP_TASK_NAME = "FixOnceServer"
 DEFAULT_PORT = 5000
 PORT_RANGE = range(DEFAULT_PORT, DEFAULT_PORT + 10)
 START_TIMEOUT_SECONDS = 12.0
+BOOTSTRAP_HEALTH_TIMEOUT_SECONDS = 45.0
 
 
 def is_frozen() -> bool:
@@ -55,6 +58,17 @@ def log_event(message: str):
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         with LAUNCHER_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
+
+
+def bootstrap_log(message: str):
+    """Append first-run bootstrap diagnostics to ~/.fixonce/logs/bootstrap.log."""
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with BOOTSTRAP_LOG.open("a", encoding="utf-8") as handle:
             handle.write(f"[{timestamp}] {message}\n")
     except Exception:
         pass
@@ -199,6 +213,219 @@ def wait_for_server(timeout: float = START_TIMEOUT_SECONDS) -> int | None:
             return port
         time.sleep(0.5)
     return None
+
+
+def wait_for_health(timeout: float = BOOTSTRAP_HEALTH_TIMEOUT_SECONDS, log_fn: Callable[[str], None] | None = None) -> int | None:
+    """Wait until /api/health returns OK on a FixOnce server owned by this install."""
+    write_log = log_fn or bootstrap_log
+    deadline = time.time() + timeout
+    attempt = 0
+    while time.time() < deadline:
+        attempt += 1
+        port = discover_running_port()
+        if port is not None and endpoint_responds(port, "/api/health", timeout=1.5):
+            write_log(f"Health OK on port {port} (attempt {attempt})")
+            return port
+        write_log(f"Waiting for /api/health (attempt {attempt})")
+        time.sleep(0.5)
+    write_log("Timed out waiting for /api/health")
+    return None
+
+
+def get_packaged_install_dir() -> Path:
+    """Directory containing the packaged FixOnce.exe."""
+    return Path(sys.executable).resolve().parent
+
+
+def get_packaged_server_command() -> list[str]:
+    """Command line used for background server and scheduled-task autostart."""
+    return [sys.executable, "--server"]
+
+
+def _import_install_state_helpers():
+    if is_frozen():
+        from core.install_state_machine import InstallState, persist_snapshot
+    else:
+        sys.path.insert(0, str(PROJECT_DIR / "src"))
+        from core.install_state_machine import InstallState, persist_snapshot
+    return InstallState, persist_snapshot
+
+
+def _read_runtime_pid_port() -> tuple[int | None, int | None]:
+    runtime = read_json(RUNTIME_FILE)
+    runtime_pid = runtime.get("pid")
+    runtime_port = runtime.get("port")
+    try:
+        runtime_pid = int(runtime_pid) if runtime_pid is not None else None
+    except (TypeError, ValueError):
+        runtime_pid = None
+    try:
+        runtime_port = int(runtime_port) if runtime_port is not None else None
+    except (TypeError, ValueError):
+        runtime_port = None
+    return runtime_pid, runtime_port
+
+
+def windows_scheduled_task_exists(task_name: str = BOOTSTRAP_TASK_NAME) -> bool:
+    if sys.platform != "win32":
+        return False
+    result = subprocess.run(
+        ["schtasks", "/query", "/tn", task_name],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
+def ensure_windows_scheduled_task(log_fn: Callable[[str], None] | None = None) -> bool:
+    """Create or update the FixOnceServer logon scheduled task (idempotent)."""
+    write_log = log_fn or bootstrap_log
+    if sys.platform != "win32":
+        write_log("Scheduled task setup skipped: not Windows")
+        return False
+
+    command = get_packaged_server_command()
+    write_log(f"Configuring scheduled task {BOOTSTRAP_TASK_NAME}: {command!r}")
+
+    if windows_scheduled_task_exists():
+        write_log(f"Scheduled task {BOOTSTRAP_TASK_NAME} already exists; updating")
+    else:
+        write_log(f"Creating scheduled task {BOOTSTRAP_TASK_NAME}")
+
+    result = subprocess.run(
+        [
+            "schtasks",
+            "/create",
+            "/tn",
+            BOOTSTRAP_TASK_NAME,
+            "/tr",
+            subprocess.list2cmdline(command),
+            "/sc",
+            "onlogon",
+            "/rl",
+            "limited",
+            "/f",
+            "/it",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        write_log(f"Scheduled task setup failed: {detail or 'unknown error'}")
+        return False
+
+    write_log(f"Scheduled task {BOOTSTRAP_TASK_NAME} ready")
+    return True
+
+
+def ensure_packaged_server_running(log_fn: Callable[[str], None] | None = None) -> int | None:
+    """Start or reuse the background server; return port when /api/health is OK."""
+    write_log = log_fn or bootstrap_log
+    clear_stale_state()
+
+    port = discover_running_port()
+    if port is not None and endpoint_responds(port, "/api/health", timeout=1.5):
+        write_log(f"Reusing running server on port {port}")
+        return port
+
+    write_log("Starting background server via FixOnce.exe --server")
+    start_server()
+    return wait_for_health(log_fn=write_log)
+
+
+def run_bootstrap() -> int:
+    """
+    Windows packaged first-run setup: autostart task, server health, READY state, dashboard.
+    Idempotent when run multiple times.
+    """
+    if sys.platform != "win32":
+        bootstrap_log("Bootstrap is only supported on Windows")
+        return 1
+
+    if not is_frozen():
+        bootstrap_log("Bootstrap requires a packaged FixOnce.exe build")
+        return 1
+
+    bootstrap_log("Bootstrap started")
+    install_dir = str(get_packaged_install_dir())
+    InstallState = None
+    persist_snapshot = None
+
+    try:
+        InstallState, persist_snapshot = _import_install_state_helpers()
+        persist_snapshot(
+            InstallState.INSTALLING,
+            detail="Bootstrap started",
+            install_dir=install_dir,
+            metadata={"bootstrap": True},
+        )
+        bootstrap_log("install_state set to INSTALLING")
+
+        if not ensure_windows_scheduled_task():
+            persist_snapshot(
+                InstallState.FAILED,
+                detail="Could not create FixOnceServer scheduled task",
+                install_dir=install_dir,
+            )
+            bootstrap_log("Bootstrap failed during scheduled task setup")
+            return 1
+
+        persist_snapshot(
+            InstallState.STARTING,
+            detail="Ensuring background server",
+            install_dir=install_dir,
+            metadata={"bootstrap": True},
+        )
+        bootstrap_log("install_state set to STARTING")
+
+        persist_snapshot(
+            InstallState.WAITING_HEALTH,
+            detail="Waiting for /api/health",
+            install_dir=install_dir,
+            metadata={"bootstrap": True},
+        )
+        bootstrap_log("install_state set to WAITING_HEALTH")
+
+        port = ensure_packaged_server_running()
+        if port is None:
+            persist_snapshot(
+                InstallState.FAILED,
+                detail="/api/health did not return OK",
+                install_dir=install_dir,
+            )
+            bootstrap_log("Bootstrap failed: health check did not pass")
+            return 1
+
+        runtime_pid, runtime_port = _read_runtime_pid_port()
+        if runtime_port is None:
+            runtime_port = port
+        persist_snapshot(
+            InstallState.READY,
+            detail="Bootstrap completed",
+            install_dir=install_dir,
+            runtime_port=runtime_port,
+            runtime_pid=runtime_pid,
+            metadata={"bootstrap": True},
+        )
+        bootstrap_log("install_state written as READY")
+
+        bootstrap_log("Opening dashboard")
+        open_dashboard(port)
+        bootstrap_log("Bootstrap completed successfully")
+        return 0
+    except Exception as exc:
+        bootstrap_log(f"Bootstrap failed: {exc}")
+        if persist_snapshot is not None and InstallState is not None:
+            try:
+                persist_snapshot(
+                    InstallState.FAILED,
+                    detail=f"Bootstrap failed: {exc}",
+                    install_dir=install_dir,
+                )
+            except Exception:
+                pass
+        return 1
 
 
 def get_dashboard_url(port: int) -> str:
@@ -437,6 +664,9 @@ def main():
         server_args = [arg for arg in sys.argv[1:] if arg != "--server"]
         run_server_mode(server_args)
         return
+
+    if "--bootstrap" in sys.argv:
+        raise SystemExit(run_bootstrap())
 
     if "--menubar" in sys.argv or "-m" in sys.argv:
         run_menubar_app()
