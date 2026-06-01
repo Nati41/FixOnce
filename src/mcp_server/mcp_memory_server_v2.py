@@ -19,6 +19,7 @@ import time
 import requests
 import contextlib
 import functools
+import builtins
 import tempfile
 import traceback
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
@@ -76,6 +77,8 @@ def _fo_init_trace(message: str, include_stack: bool = False) -> None:
 
     global _FO_INIT_TRACE_STEP
     try:
+        previous_io_disabled = bool(getattr(_fo_init_trace_local, "io_disabled", False))
+        _fo_init_trace_local.io_disabled = True
         with _FO_INIT_TRACE_LOCK:
             _FO_INIT_TRACE_STEP += 1
             step = _FO_INIT_TRACE_STEP
@@ -93,10 +96,17 @@ def _fo_init_trace(message: str, include_stack: bool = False) -> None:
                 handle.write("\n")
     except Exception:
         pass
+    finally:
+        try:
+            _fo_init_trace_local.io_disabled = previous_io_disabled
+        except Exception:
+            pass
 
 
 def _fo_init_trace_raw(message: str, include_stack: bool = False) -> None:
     try:
+        previous_io_disabled = bool(getattr(_fo_init_trace_local, "io_disabled", False))
+        _fo_init_trace_local.io_disabled = True
         line = (
             f"[{datetime.now().isoformat()}] "
             f"pid={os.getpid()} thread={threading.get_ident()} {message}"
@@ -108,6 +118,174 @@ def _fo_init_trace_raw(message: str, include_stack: bool = False) -> None:
                 handle.write("\n")
     except Exception:
         pass
+    finally:
+        try:
+            _fo_init_trace_local.io_disabled = previous_io_disabled
+        except Exception:
+            pass
+
+
+def _fo_init_io_path(value) -> str:
+    try:
+        return os.fspath(value)
+    except Exception:
+        return repr(value)
+
+
+def _fo_init_should_trace_io(path: str) -> bool:
+    if not _fo_init_trace_enabled():
+        return False
+    if bool(getattr(_fo_init_trace_local, "io_disabled", False)):
+        return False
+    lowered = str(path).lower()
+    return "fo_init_trace.log" not in lowered
+
+
+class _FoInitIOTraceScope:
+    def __init__(self):
+        self._orig_open = None
+        self._orig_path_open = None
+        self._orig_path_read_text = None
+        self._orig_path_write_text = None
+        self._orig_path_read_bytes = None
+        self._orig_path_write_bytes = None
+        self._orig_path_exists = None
+        self._orig_path_mkdir = None
+        self._sqlite3 = None
+        self._orig_sqlite_connect = None
+
+    def __enter__(self):
+        _fo_init_trace("IO_TRACE_ENABLE_BEFORE builtins.open pathlib sqlite3")
+        self._orig_open = builtins.open
+        self._orig_path_open = Path.open
+        self._orig_path_read_text = Path.read_text
+        self._orig_path_write_text = Path.write_text
+        self._orig_path_read_bytes = Path.read_bytes
+        self._orig_path_write_bytes = Path.write_bytes
+        self._orig_path_exists = Path.exists
+        self._orig_path_mkdir = Path.mkdir
+
+        def traced_open(file, mode="r", *args, **kwargs):
+            path = _fo_init_io_path(file)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_OPEN_BEFORE builtins.open path={path!r} mode={mode!r}")
+            handle = self._orig_open(file, mode, *args, **kwargs)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_OPEN_AFTER builtins.open path={path!r} mode={mode!r}")
+            return handle
+
+        def traced_path_open(path_self, *args, **kwargs):
+            path = _fo_init_io_path(path_self)
+            mode = args[0] if args else kwargs.get("mode", "r")
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_OPEN_BEFORE Path.open path={path!r} mode={mode!r}")
+            handle = self._orig_path_open(path_self, *args, **kwargs)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_OPEN_AFTER Path.open path={path!r} mode={mode!r}")
+            return handle
+
+        def traced_read_text(path_self, *args, **kwargs):
+            path = _fo_init_io_path(path_self)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_READ_TEXT_BEFORE path={path!r}")
+            value = self._orig_path_read_text(path_self, *args, **kwargs)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_READ_TEXT_AFTER path={path!r} length={len(value)}")
+            return value
+
+        def traced_write_text(path_self, data, *args, **kwargs):
+            path = _fo_init_io_path(path_self)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_WRITE_TEXT_BEFORE path={path!r} length={len(data) if hasattr(data, '__len__') else 'unknown'}")
+            result = self._orig_path_write_text(path_self, data, *args, **kwargs)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_WRITE_TEXT_AFTER path={path!r} result={result}")
+            return result
+
+        def traced_read_bytes(path_self, *args, **kwargs):
+            path = _fo_init_io_path(path_self)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_READ_BYTES_BEFORE path={path!r}")
+            value = self._orig_path_read_bytes(path_self, *args, **kwargs)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_READ_BYTES_AFTER path={path!r} length={len(value)}")
+            return value
+
+        def traced_write_bytes(path_self, data, *args, **kwargs):
+            path = _fo_init_io_path(path_self)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_WRITE_BYTES_BEFORE path={path!r} length={len(data) if hasattr(data, '__len__') else 'unknown'}")
+            result = self._orig_path_write_bytes(path_self, data, *args, **kwargs)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_WRITE_BYTES_AFTER path={path!r} result={result}")
+            return result
+
+        def traced_exists(path_self):
+            path = _fo_init_io_path(path_self)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_EXISTS_BEFORE path={path!r}")
+            result = self._orig_path_exists(path_self)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_EXISTS_AFTER path={path!r} result={result}")
+            return result
+
+        def traced_mkdir(path_self, *args, **kwargs):
+            path = _fo_init_io_path(path_self)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_MKDIR_BEFORE path={path!r} args={args!r} kwargs={kwargs!r}")
+            result = self._orig_path_mkdir(path_self, *args, **kwargs)
+            if _fo_init_should_trace_io(path):
+                _fo_init_trace(f"FS_MKDIR_AFTER path={path!r}")
+            return result
+
+        builtins.open = traced_open
+        Path.open = traced_path_open
+        Path.read_text = traced_read_text
+        Path.write_text = traced_write_text
+        Path.read_bytes = traced_read_bytes
+        Path.write_bytes = traced_write_bytes
+        Path.exists = traced_exists
+        Path.mkdir = traced_mkdir
+
+        try:
+            import sqlite3
+            self._sqlite3 = sqlite3
+            self._orig_sqlite_connect = sqlite3.connect
+
+            def traced_sqlite_connect(database, *args, **kwargs):
+                path = _fo_init_io_path(database)
+                _fo_init_trace(
+                    f"SQLITE_CONNECT_BEFORE database={path!r} "
+                    f"timeout={kwargs.get('timeout', args[0] if args else 'default')!r}"
+                )
+                conn = self._orig_sqlite_connect(database, *args, **kwargs)
+                _fo_init_trace(f"SQLITE_CONNECT_AFTER database={path!r}")
+                return conn
+
+            sqlite3.connect = traced_sqlite_connect
+            _fo_init_trace("VECTOR_DB_TRACE_ENABLED sqlite3.connect patched")
+        except Exception as exc:
+            _fo_init_trace(f"VECTOR_DB_TRACE_ENABLE_ERROR {type(exc).__name__}: {exc}", include_stack=True)
+
+        _fo_init_trace("IO_TRACE_ENABLE_AFTER")
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            builtins.open = self._orig_open
+            Path.open = self._orig_path_open
+            Path.read_text = self._orig_path_read_text
+            Path.write_text = self._orig_path_write_text
+            Path.read_bytes = self._orig_path_read_bytes
+            Path.write_bytes = self._orig_path_write_bytes
+            Path.exists = self._orig_path_exists
+            Path.mkdir = self._orig_path_mkdir
+            if self._sqlite3 is not None and self._orig_sqlite_connect is not None:
+                self._sqlite3.connect = self._orig_sqlite_connect
+            _fo_init_trace("IO_TRACE_DISABLE_AFTER")
+        except Exception as restore_exc:
+            _fo_init_trace(f"IO_TRACE_DISABLE_ERROR {type(restore_exc).__name__}: {restore_exc}", include_stack=True)
+        return False
 
 
 class _FoInitTraceScope:
@@ -119,6 +297,7 @@ class _FoInitTraceScope:
         self.request_id = f"{os.getpid()}-{int(time.time() * 1000)}-{threading.get_ident()}"
         self.thread_id = threading.get_ident()
         self.done = threading.Event()
+        self.io_scope = None
 
     def __enter__(self):
         self.previous_enabled = bool(getattr(_fo_init_trace_local, "enabled", False))
@@ -129,6 +308,8 @@ class _FoInitTraceScope:
         _fo_init_trace_local.request_id = self.request_id
         _fo_init_trace_local.started_at = self.started_at
         _fo_init_trace(f"FO_INIT_REQUEST_RECEIVED cwd={self.cwd!r}", include_stack=True)
+        self.io_scope = _FoInitIOTraceScope()
+        self.io_scope.__enter__()
         watchdog = threading.Thread(
             target=self._watchdog,
             name="fo-init-trace-watchdog",
@@ -142,6 +323,8 @@ class _FoInitTraceScope:
             _fo_init_trace("FO_INIT_SCOPE_EXIT_OK")
         else:
             _fo_init_trace(f"FO_INIT_SCOPE_EXIT_ERROR {exc_type.__name__}: {exc}", include_stack=True)
+        if self.io_scope is not None:
+            self.io_scope.__exit__(exc_type, exc, tb)
         self.done.set()
         _fo_init_trace_local.enabled = self.previous_enabled
         _fo_init_trace_local.request_id = self.previous_request_id
@@ -1015,6 +1198,7 @@ def _auto_create_session() -> bool:
 def _get_live_errors() -> list:
     """Get unacknowledged browser errors."""
     try:
+        _fo_init_trace("BROWSER_STATE_LOAD_BEFORE source=/api/live-errors")
         url = f'{_get_api_url()}/api/live-errors?since=600'
         _fo_init_trace(f"HTTP_GET_BEFORE _get_live_errors url={url} timeout=2")
         res = requests.get(url, timeout=2)
@@ -1022,24 +1206,30 @@ def _get_live_errors() -> list:
         if res.status_code == 200:
             data = res.json()
             _fo_init_trace(f"_get_live_errors json_after count={len(data.get('errors', []))}")
+            _fo_init_trace("BROWSER_STATE_LOAD_AFTER source=/api/live-errors")
             return data.get('errors', [])[:5]  # Max 5
+        _fo_init_trace("BROWSER_STATE_LOAD_AFTER non_200")
         return []
     except Exception as exc:
         _fo_init_trace(f"_get_live_errors error {type(exc).__name__}: {exc}", include_stack=True)
+        _fo_init_trace("BROWSER_STATE_LOAD_AFTER error")
         return []
 
 
 def _get_auto_fixes() -> list:
     """Get current auto-fixes, or empty list if pending fixes are unavailable."""
     try:
+        _fo_init_trace("PENDING_FIXES_LOAD_BEFORE")
         _fo_init_trace("_get_auto_fixes import_before")
         from core.pending_fixes import get_auto_fixes
         _fo_init_trace("_get_auto_fixes import_after call_before")
         fixes = get_auto_fixes()
         _fo_init_trace(f"_get_auto_fixes call_after count={len(fixes)}")
+        _fo_init_trace("PENDING_FIXES_LOAD_AFTER")
         return fixes
     except Exception as exc:
         _fo_init_trace(f"_get_auto_fixes error {type(exc).__name__}: {exc}", include_stack=True)
+        _fo_init_trace("PENDING_FIXES_LOAD_AFTER error")
         return []
 
 
@@ -1049,25 +1239,36 @@ def _evaluate_current_error_gate(
     auto_fix_ready: bool = False,
 ):
     """Evaluate the Stage 7 error gate without changing existing UX strings."""
+    _fo_init_trace(
+        f"ERROR_GATE_EVALUATE_ENTER tool_name={tool_name!r} "
+        f"live_errors={live_errors} auto_fix_ready={auto_fix_ready}"
+    )
     ctx = InterventionContext(
         tool_name=tool_name,
         live_errors=live_errors,
         auto_fix_ready=auto_fix_ready,
     )
     if _intervention_policy_available:
+        _fo_init_trace("ERROR_GATE_POLICY_BEFORE evaluate_error_gate")
         gate_result = evaluate_error_gate(ctx)
+        _fo_init_trace(f"ERROR_GATE_POLICY_AFTER level={gate_result.level!r}")
+        _fo_init_trace("AGENT_INTERVENTION_RECORD_BEFORE error_gate")
         _record_agent_intervention(
             tool_name,
             ctx,
             gate_results=[gate_result],
             flow_classification="migrated",
         )
+        _fo_init_trace("AGENT_INTERVENTION_RECORD_AFTER error_gate")
         return gate_result
 
     if auto_fix_ready and tool_name != "fo_apply":
+        _fo_init_trace("ERROR_GATE_RETURN fallback_block")
         return type("FallbackGateResult", (), {"level": "block"})()
     if live_errors > 0:
+        _fo_init_trace("ERROR_GATE_RETURN fallback_warn")
         return type("FallbackGateResult", (), {"level": "warn"})()
+    _fo_init_trace("ERROR_GATE_RETURN fallback_silent")
     return type("FallbackGateResult", (), {"level": "silent"})()
 
 
@@ -1219,30 +1420,43 @@ def build_agent_context(
     This is Stage 8 runtime wiring only. It does not change UX or enforce
     any new behavior.
     """
+    _fo_init_trace(f"AGENT_CONTEXT_BUILD_ENTER tool_name={tool_name!r}")
+    _fo_init_trace("AGENT_CONTEXT_GET_SESSION_BEFORE")
     session = _get_session()
+    _fo_init_trace(f"AGENT_CONTEXT_GET_SESSION_AFTER active={session.is_active() if session else False}")
+    _fo_init_trace("AGENT_CONTEXT_ACTOR_IDENTITY_BEFORE")
     actor_identity = _resolve_actor_identity()
+    _fo_init_trace(f"AGENT_CONTEXT_ACTOR_IDENTITY_AFTER editor={actor_identity.get('editor', 'unknown')!r}")
 
     project_id = session.project_id or "unknown-project"
+    _fo_init_trace("AGENT_CONTEXT_SESSION_ID_BEFORE")
     session_id = _get_runtime_session_id(session)
+    _fo_init_trace(f"AGENT_CONTEXT_SESSION_ID_AFTER session_id={session_id!r}")
 
     resolved_intent_detail = intent or ""
     if not resolved_intent_detail and session.is_active():
         try:
+            _fo_init_trace("AGENT_CONTEXT_PROJECT_LOAD_BEFORE")
             memory = _load_project(session.project_id)
+            _fo_init_trace("AGENT_CONTEXT_PROJECT_LOAD_AFTER")
             resolved_intent_detail = (
                 memory.get("live_record", {})
                 .get("intent", {})
                 .get("current_goal", "")
             )
-        except Exception:
+        except Exception as exc:
+            _fo_init_trace(f"AGENT_CONTEXT_PROJECT_LOAD_ERROR {type(exc).__name__}: {exc}", include_stack=True)
             resolved_intent_detail = ""
 
+    _fo_init_trace("AGENT_CONTEXT_CLASSIFY_INTENT_BEFORE")
     resolved_intent, resolved_intent_detail = classify_agent_intent(
         tool_name,
         explicit_intent=resolved_intent_detail,
         intervention_ctx=intervention_ctx,
     )
+    _fo_init_trace(f"AGENT_CONTEXT_CLASSIFY_INTENT_AFTER intent={resolved_intent!r}")
 
+    _fo_init_trace("AGENT_CONTEXT_BUILD_RETURN")
     return AgentContext(
         actor_name=actor_identity.get("editor", "unknown") or "unknown",
         actor_source=actor_identity.get("source", "none") or "none",
@@ -1269,23 +1483,31 @@ def _record_agent_intervention(
     This is audit-only. It must not change runtime UX or enforce behavior.
     """
     if not _agent_intervention_available:
+        _fo_init_trace("AGENT_INTERVENTION_UNAVAILABLE")
         return "silent"
 
     try:
+        _fo_init_trace("AGENT_INTERVENTION_CONTEXT_BEFORE")
         agent_ctx = build_agent_context(
             tool_name,
             intent=intent,
             intervention_ctx=intervention_ctx,
             flow_classification=flow_classification,
         )
+        _fo_init_trace("AGENT_INTERVENTION_CONTEXT_AFTER")
         ctx = intervention_ctx
         if gate_results is not None:
+            _fo_init_trace("AGENT_INTERVENTION_REPLACE_CONTEXT_BEFORE")
             ctx = replace(
                 intervention_ctx,
                 extra={**intervention_ctx.extra, "gate_results": list(gate_results)},
             )
+            _fo_init_trace("AGENT_INTERVENTION_REPLACE_CONTEXT_AFTER")
 
+        _fo_init_trace("AGENT_INTERVENTION_EVALUATE_BEFORE")
         verdict = evaluate_agent_intervention(agent_ctx, ctx)
+        _fo_init_trace(f"AGENT_INTERVENTION_EVALUATE_AFTER verdict={verdict!r}")
+        _fo_init_trace("AGENT_INTERVENTION_COMPLIANCE_STATE_BEFORE")
         _compliance_state["last_agent_intervention"] = {
             "tool_name": tool_name,
             "verdict": verdict,
@@ -1299,9 +1521,12 @@ def _record_agent_intervention(
             "session_id": agent_ctx.session_id,
             "timestamp": datetime.now().isoformat(),
         }
+        _fo_init_trace("AGENT_INTERVENTION_PERSIST_COMPLIANCE_BEFORE")
         _persist_compliance()
+        _fo_init_trace("AGENT_INTERVENTION_PERSIST_COMPLIANCE_AFTER")
         return verdict
     except Exception as e:
+        _fo_init_trace(f"AGENT_INTERVENTION_ERROR {type(e).__name__}: {e}", include_stack=True)
         _log(f"[FixOnce] Agent intervention audit failed: {e}")
         return "silent"
 
@@ -2616,9 +2841,11 @@ def _get_project_id(working_dir: str) -> str:
     IMPORTANT: This now delegates to ProjectContext.from_path()
     which is the SINGLE SOURCE OF TRUTH for project ID generation.
     """
+    _fo_init_trace(f"PROJECT_METADATA_LOAD_BEFORE ProjectContext.from_path working_dir={working_dir!r}")
     _fo_init_trace(f"PROJECT_ID_BEFORE ProjectContext.from_path working_dir={working_dir!r}")
     project_id = ProjectContext.from_path(working_dir)
     _fo_init_trace(f"PROJECT_ID_AFTER project_id={project_id!r}")
+    _fo_init_trace(f"PROJECT_METADATA_LOAD_AFTER project_id={project_id!r}")
     return project_id
 
 
@@ -7523,11 +7750,14 @@ def _format_minimal_init(working_dir: str) -> str:
     resume_state = None
     if _resume_state_available:
         try:
+            _fo_init_trace("RESUME_STATE_LOAD_BEFORE")
             _fo_init_trace("FORMAT_INIT_RESUME_STATE_BEFORE")
             resume_state = _get_resume_state(project_id)
             _fo_init_trace(f"FORMAT_INIT_RESUME_STATE_AFTER exists={bool(resume_state)}")
+            _fo_init_trace(f"RESUME_STATE_LOAD_AFTER exists={bool(resume_state)}")
         except Exception as exc:
             _fo_init_trace(f"FORMAT_INIT_RESUME_STATE_ERROR {type(exc).__name__}: {exc}", include_stack=True)
+            _fo_init_trace("RESUME_STATE_LOAD_AFTER error")
             pass
 
     intent = data.get("live_record", {}).get("intent", {}) if data else {}
@@ -7697,6 +7927,7 @@ def fo_init(cwd: str = "") -> str:
             _fo_init_trace("FO_INIT_ACTIVE_PROJECT_IMPORT_BEFORE")
             from managers.multi_project_manager import set_active_project
             _fo_init_trace("FO_INIT_ACTIVE_PROJECT_IMPORT_AFTER")
+            _fo_init_trace("ACTIVE_PROJECT_LOAD_OR_WRITE_BEFORE set_active_project")
             _fo_init_trace("FO_INIT_ACTIVE_PROJECT_SET_BEFORE")
             set_active_project(
                 project_id=project_id,
@@ -7705,6 +7936,7 @@ def fo_init(cwd: str = "") -> str:
                 working_dir=working_dir
             )
             _fo_init_trace("FO_INIT_ACTIVE_PROJECT_SET_AFTER")
+            _fo_init_trace("ACTIVE_PROJECT_LOAD_OR_WRITE_AFTER set_active_project")
         except Exception as exc:
             _fo_init_trace(f"FO_INIT_ACTIVE_PROJECT_ERROR {type(exc).__name__}: {exc}", include_stack=True)
             pass
