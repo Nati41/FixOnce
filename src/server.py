@@ -267,9 +267,9 @@ def _is_installed() -> bool:
 
     result = is_fixonce_installed(request_port=request_port)
     _startup_log(f"install state check: ok installed={result}")
-    print(
-        f"[DEBUG] _is_installed: install_state={install_state.exists()} "
-        f"request_port={request_port} -> installed={result}"
+    _write_server_log(
+        f"_is_installed install_state_exists={install_state.exists()} "
+        f"request_port={request_port} installed={result}"
     )
     return result
 
