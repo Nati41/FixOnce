@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,6 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SPEC_PATH = PROJECT_ROOT / "fixonce.spec"
 BUILD_SCRIPT = PROJECT_ROOT / "build_windows.bat"
 APP_LAUNCHER = PROJECT_ROOT / "scripts" / "app_launcher.py"
+INSTALL_SCRIPT = PROJECT_ROOT / "install.ps1"
 PACKAGING_AUDIT = PROJECT_ROOT / "scripts" / "windows_packaging_audit.py"
 DASHBOARD_HTML = PROJECT_ROOT / "data" / "dashboard.html"
 SERVER_SCRIPT = PROJECT_ROOT / "src" / "server.py"
@@ -54,6 +57,40 @@ def dir_writable(path: Path) -> bool:
         return False
 
 
+def is_ascii(path: Path) -> bool:
+    try:
+        path.read_text(encoding="ascii")
+        return True
+    except UnicodeDecodeError:
+        return False
+
+
+def powershell_syntax_ok(path: Path) -> bool:
+    powershell = shutil.which("powershell") or shutil.which("powershell.exe") or shutil.which("pwsh")
+    if not powershell:
+        return True
+
+    command = "$null = [scriptblock]::Create((Get-Content -Raw $args[0])); 'install.ps1 syntax OK'"
+    result = subprocess.run(
+        [
+            powershell,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        details = (result.stderr or result.stdout).strip()
+        if details:
+            print(details)
+    return result.returncode == 0
+
+
 def main() -> int:
     failures: list[str] = []
 
@@ -70,6 +107,9 @@ def main() -> int:
 
     check(APP_LAUNCHER.exists(), "app_launcher.py", str(APP_LAUNCHER), failures)
     check(BUILD_SCRIPT.exists(), "build_windows.bat", str(BUILD_SCRIPT), failures)
+    check(INSTALL_SCRIPT.exists(), "install.ps1", str(INSTALL_SCRIPT), failures)
+    check(is_ascii(INSTALL_SCRIPT), "install.ps1 ASCII", "safe for Windows PowerShell 5.1 legacy decoding", failures)
+    check(powershell_syntax_ok(INSTALL_SCRIPT), "install.ps1 syntax", "PowerShell parser accepts script when PowerShell is available", failures)
     check(PACKAGING_AUDIT.exists(), "packaging audit", str(PACKAGING_AUDIT), failures)
     check(DASHBOARD_HTML.exists(), "dashboard.html", str(DASHBOARD_HTML), failures)
     check(SERVER_SCRIPT.exists(), "server.py", str(SERVER_SCRIPT), failures)
@@ -85,6 +125,7 @@ def main() -> int:
     check("copy /Y install.ps1 dist\\FixOnce\\install.ps1" in build_text, "install.ps1 package root", "copied after PyInstaller", failures)
     check("copy /Y uninstall.ps1 dist\\FixOnce\\uninstall.ps1" in build_text, "uninstall.ps1 package root", "copied after PyInstaller", failures)
     check("copy /Y install.bat dist\\FixOnce\\install.bat" in build_text, "install.bat package root", "copied after PyInstaller", failures)
+    check("[scriptblock]::Create((Get-Content -Raw install.ps1))" in build_text, "install.ps1 build syntax gate", "build_windows.bat parses installer before packaging", failures)
 
     required_hidden_imports = [
         "webview.platforms.edgechromium",

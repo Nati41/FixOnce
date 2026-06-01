@@ -1,18 +1,18 @@
 # FixOnce Installer for Windows
-# Usage: Right-click → Run with PowerShell
+# Usage: Right-click and choose Run with PowerShell
 # Or: powershell -ExecutionPolicy Bypass -File install.ps1
 
 $ErrorActionPreference = "Stop"
 
 function Write-Step { param($msg) Write-Host "`n[$script:step/8] $msg" -ForegroundColor Cyan; $script:step++ }
-function Write-OK { param($msg) Write-Host "  ✓ $msg" -ForegroundColor Green }
-function Write-Warn { param($msg) Write-Host "  ⚠ $msg" -ForegroundColor Yellow }
-function Write-Err { param($msg) Write-Host "  ✗ $msg" -ForegroundColor Red }
+function Write-OK { param($msg) Write-Host "  OK  $msg" -ForegroundColor Green }
+function Write-Warn { param($msg) Write-Host "  WARN  $msg" -ForegroundColor Yellow }
+function Write-Err { param($msg) Write-Host "  ERROR  $msg" -ForegroundColor Red }
 
 $script:step = 1
 
 Write-Host ""
-Write-Host "🧠 FixOnce Installer for Windows" -ForegroundColor Cyan
+Write-Host "FixOnce Installer for Windows" -ForegroundColor Cyan
 Write-Host "=================================" -ForegroundColor Cyan
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -582,7 +582,7 @@ try {
 }
 
 # ============ Launch App ============
-Write-Host "`n[✓] Launching FixOnce..." -ForegroundColor Cyan
+Write-Host "`n[OK] Launching FixOnce..." -ForegroundColor Cyan
 
 try {
     $appLaunch = Get-LauncherCommand
@@ -595,7 +595,7 @@ try {
 # ============ Done ============
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "  ✓ Installation Complete!" -ForegroundColor Green
+Write-Host "  Installation Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  FixOnce will start automatically on login." -ForegroundColor White

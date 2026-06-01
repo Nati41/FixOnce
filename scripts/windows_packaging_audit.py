@@ -9,6 +9,8 @@ state is created fresh under %USERPROFILE%\\.fixonce at runtime.
 from __future__ import annotations
 
 import fnmatch
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -135,12 +137,39 @@ def is_forbidden(relative_path: Path) -> bool:
     return any(fnmatch.fnmatch(normalized, pattern) for pattern in FORBIDDEN_PATTERNS)
 
 
+def powershell_syntax_errors(script_path: Path) -> list[str]:
+    powershell = shutil.which("powershell") or shutil.which("powershell.exe") or shutil.which("pwsh")
+    if not powershell:
+        return []
+
+    command = "$null = [scriptblock]::Create((Get-Content -Raw $args[0])); 'install.ps1 syntax OK'"
+    result = subprocess.run(
+        [
+            powershell,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+            str(script_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return []
+
+    details = (result.stderr or result.stdout or "PowerShell parser failed").strip()
+    return details.splitlines()
+
+
 def write_report(
     package_dir: Path,
     report_path: Path,
     files: list[Path],
     forbidden: list[Path],
     missing_required: list[str],
+    syntax_errors: list[str],
 ) -> None:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = [
@@ -157,10 +186,17 @@ def write_report(
     for item in REQUIRED_ROOT_FILES:
         status = "MISSING" if item in missing_required else "PRESENT"
         lines.append(f"{status} {item}")
+    lines.extend(["", "POWERSHELL_SYNTAX"])
+    if syntax_errors:
+        lines.append("INSTALL_PS1_SYNTAX_FAILED")
+        lines.extend(f"SYNTAX_ERROR {line}" for line in syntax_errors)
+    else:
+        lines.append("INSTALL_PS1_SYNTAX_OK")
     lines.extend(["", "FORBIDDEN_ARTIFACT_SCAN"])
-    if forbidden or missing_required:
+    if forbidden or missing_required or syntax_errors:
         lines.append("AUDIT_FAILED")
         lines.extend(f"MISSING_REQUIRED {item}" for item in missing_required)
+        lines.extend(f"SYNTAX_ERROR {line}" for line in syntax_errors)
         lines.extend(f"FORBIDDEN {path.as_posix()}" for path in forbidden)
     else:
         lines.append("AUDIT_OK")
@@ -180,7 +216,11 @@ def main(argv: list[str]) -> int:
     forbidden = [path for path in files if is_forbidden(path)]
     file_names = {path.as_posix() for path in files}
     missing_required = [item for item in REQUIRED_ROOT_FILES if item not in file_names]
-    write_report(package_dir, report_path, files, forbidden, missing_required)
+    syntax_errors = []
+    install_script = package_dir / "install.ps1"
+    if install_script.exists():
+        syntax_errors = powershell_syntax_errors(install_script)
+    write_report(package_dir, report_path, files, forbidden, missing_required, syntax_errors)
 
     print(f"Audit report: {report_path}")
     print(f"Included files: {len(files)}")
@@ -193,7 +233,11 @@ def main(argv: list[str]) -> int:
         print("Forbidden artifacts found:")
         for path in forbidden:
             print(f"  {path.as_posix()}")
-    if missing_required or forbidden:
+    if syntax_errors:
+        print("install.ps1 PowerShell syntax errors:")
+        for line in syntax_errors:
+            print(f"  {line}")
+    if missing_required or forbidden or syntax_errors:
         return 1
 
     print("Forbidden artifact scan: AUDIT_OK")

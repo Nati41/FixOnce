@@ -43,6 +43,16 @@ if not exist "FixOnce.ico" (
 
 REM Build
 echo.
+echo Checking installer PowerShell syntax...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$null = [scriptblock]::Create((Get-Content -Raw install.ps1)); 'install.ps1 syntax OK'"
+if errorlevel 1 (
+    echo.
+    echo INSTALLER SYNTAX CHECK FAILED!
+    pause
+    exit /b 1
+)
+
+echo.
 echo Building FixOnce...
 echo This may take a few minutes...
 echo.
