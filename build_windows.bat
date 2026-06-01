@@ -58,6 +58,27 @@ if errorlevel 1 (
 )
 
 echo.
+echo Copying installer entrypoints to package root...
+copy /Y install.ps1 dist\FixOnce\install.ps1 >nul
+if errorlevel 1 (
+    echo ERROR: Failed to copy install.ps1
+    pause
+    exit /b 1
+)
+copy /Y uninstall.ps1 dist\FixOnce\uninstall.ps1 >nul
+if errorlevel 1 (
+    echo ERROR: Failed to copy uninstall.ps1
+    pause
+    exit /b 1
+)
+copy /Y install.bat dist\FixOnce\install.bat >nul
+if errorlevel 1 (
+    echo ERROR: Failed to copy install.bat
+    pause
+    exit /b 1
+)
+
+echo.
 echo Running packaging audit...
 %PYTHON% scripts\windows_packaging_audit.py dist\FixOnce dist\FixOnce\packaging_audit.txt
 

@@ -13,6 +13,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SPEC_PATH = PROJECT_ROOT / "fixonce.spec"
+BUILD_SCRIPT = PROJECT_ROOT / "build_windows.bat"
 APP_LAUNCHER = PROJECT_ROOT / "scripts" / "app_launcher.py"
 PACKAGING_AUDIT = PROJECT_ROOT / "scripts" / "windows_packaging_audit.py"
 DASHBOARD_HTML = PROJECT_ROOT / "data" / "dashboard.html"
@@ -61,12 +62,14 @@ def main() -> int:
         return 1
 
     spec_text = read_text(SPEC_PATH)
+    build_text = read_text(BUILD_SCRIPT) if BUILD_SCRIPT.exists() else ""
     launcher_text = read_text(APP_LAUNCHER) if APP_LAUNCHER.exists() else ""
 
     print("FixOnce Windows Build Check")
     print("==========================")
 
     check(APP_LAUNCHER.exists(), "app_launcher.py", str(APP_LAUNCHER), failures)
+    check(BUILD_SCRIPT.exists(), "build_windows.bat", str(BUILD_SCRIPT), failures)
     check(PACKAGING_AUDIT.exists(), "packaging audit", str(PACKAGING_AUDIT), failures)
     check(DASHBOARD_HTML.exists(), "dashboard.html", str(DASHBOARD_HTML), failures)
     check(SERVER_SCRIPT.exists(), "server.py", str(SERVER_SCRIPT), failures)
@@ -79,6 +82,9 @@ def main() -> int:
     check("data/test_error.html" not in spec_text, "test pages excluded", "test_error.html not packaged", failures)
     check('"extension"), "extension"' not in spec_text, "extension allowlist", "no whole extension directory", failures)
     check('"server"' in spec_text, "server hidden import", "internal server import declared", failures)
+    check("copy /Y install.ps1 dist\\FixOnce\\install.ps1" in build_text, "install.ps1 package root", "copied after PyInstaller", failures)
+    check("copy /Y uninstall.ps1 dist\\FixOnce\\uninstall.ps1" in build_text, "uninstall.ps1 package root", "copied after PyInstaller", failures)
+    check("copy /Y install.bat dist\\FixOnce\\install.bat" in build_text, "install.bat package root", "copied after PyInstaller", failures)
 
     required_hidden_imports = [
         "webview.platforms.edgechromium",

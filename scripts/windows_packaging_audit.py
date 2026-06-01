@@ -17,6 +17,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PACKAGE_DIR = PROJECT_ROOT / "dist" / "FixOnce"
 DEFAULT_REPORT = DEFAULT_PACKAGE_DIR / "packaging_audit.txt"
 
+REQUIRED_ROOT_FILES = [
+    "FixOnce.exe",
+    "install.ps1",
+    "uninstall.ps1",
+    "install.bat",
+]
+
 FORBIDDEN_PATTERNS = [
     ".git/*",
     ".codex/*",
@@ -128,7 +135,13 @@ def is_forbidden(relative_path: Path) -> bool:
     return any(fnmatch.fnmatch(normalized, pattern) for pattern in FORBIDDEN_PATTERNS)
 
 
-def write_report(package_dir: Path, report_path: Path, files: list[Path], forbidden: list[Path]) -> None:
+def write_report(
+    package_dir: Path,
+    report_path: Path,
+    files: list[Path],
+    forbidden: list[Path],
+    missing_required: list[str],
+) -> None:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = [
         "FixOnce Windows packaging audit",
@@ -140,9 +153,14 @@ def write_report(package_dir: Path, report_path: Path, files: list[Path], forbid
     lines.extend(f"INCLUDED {path.as_posix()}" for path in files)
     lines.extend(["", "EXCLUDED_FILES"])
     lines.extend(f"EXCLUDED {item}" for item in EXPECTED_EXCLUDED)
+    lines.extend(["", "REQUIRED_ROOT_FILES"])
+    for item in REQUIRED_ROOT_FILES:
+        status = "MISSING" if item in missing_required else "PRESENT"
+        lines.append(f"{status} {item}")
     lines.extend(["", "FORBIDDEN_ARTIFACT_SCAN"])
-    if forbidden:
+    if forbidden or missing_required:
         lines.append("AUDIT_FAILED")
+        lines.extend(f"MISSING_REQUIRED {item}" for item in missing_required)
         lines.extend(f"FORBIDDEN {path.as_posix()}" for path in forbidden)
     else:
         lines.append("AUDIT_OK")
@@ -160,15 +178,22 @@ def main(argv: list[str]) -> int:
 
     files = relative_files(package_dir)
     forbidden = [path for path in files if is_forbidden(path)]
-    write_report(package_dir, report_path, files, forbidden)
+    file_names = {path.as_posix() for path in files}
+    missing_required = [item for item in REQUIRED_ROOT_FILES if item not in file_names]
+    write_report(package_dir, report_path, files, forbidden, missing_required)
 
     print(f"Audit report: {report_path}")
     print(f"Included files: {len(files)}")
     print(f"Final package size: {human_size(package_size(package_dir))}")
+    if missing_required:
+        print("Required root files missing:")
+        for item in missing_required:
+            print(f"  {item}")
     if forbidden:
         print("Forbidden artifacts found:")
         for path in forbidden:
             print(f"  {path.as_posix()}")
+    if missing_required or forbidden:
         return 1
 
     print("Forbidden artifact scan: AUDIT_OK")
