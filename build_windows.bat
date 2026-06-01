@@ -53,6 +53,16 @@ if errorlevel 1 (
 )
 
 echo.
+echo Checking Windows-safe runtime output...
+%PYTHON% scripts\windows_runtime_output_check.py
+if errorlevel 1 (
+    echo.
+    echo WINDOWS RUNTIME OUTPUT CHECK FAILED!
+    pause
+    exit /b 1
+)
+
+echo.
 echo Building FixOnce...
 echo This may take a few minutes...
 echo.

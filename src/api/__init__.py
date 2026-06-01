@@ -17,6 +17,8 @@ _SRC_DIR = Path(__file__).parent.parent
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
+from core.runtime_log import log_runtime_event
+
 
 def get_project_from_request() -> Tuple[Optional[str], Optional[str]]:
     """
@@ -67,8 +69,10 @@ def get_project_from_request() -> Tuple[Optional[str], Optional[str]]:
         project_id = get_active_project_id()
         if project_id:
             # Log deprecation warning
-            print("[WARN] API called without X-Project-Root header. "
-                  "This fallback will be removed. Add X-Project-Root header.")
+            log_runtime_event(
+                "[WARN] API called without X-Project-Root header. "
+                "This fallback will be removed. Add X-Project-Root header."
+            )
             return (project_id, None)
     except Exception:
         pass

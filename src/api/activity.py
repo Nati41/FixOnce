@@ -21,6 +21,7 @@ import json
 import os
 import subprocess
 import hashlib
+from core.runtime_log import log_runtime_event
 
 # Boundary detection imports
 try:
@@ -32,10 +33,10 @@ try:
             handle_boundary_transition
         )
         BOUNDARY_DETECTION_ENABLED = True
-        print("[Activity] Boundary detection ENABLED")
+        log_runtime_event("[Activity] Boundary detection enabled")
 except ImportError as e:
     BOUNDARY_DETECTION_ENABLED = False
-    print(f"[Activity] Boundary detection not available: {e}")
+    log_runtime_event(f"[Activity] Boundary detection not available: {e}", e)
 
 # Session registry for updating Active AI
 try:
@@ -150,7 +151,7 @@ def _get_git_diff_stats(file_path: str, cwd: str = None) -> dict:
                 return {"added": added, "removed": removed}
 
     except Exception as e:
-        print(f"[Activity] Git diff error: {e}")
+        log_runtime_event(f"[Activity] Git diff error: {e}", e)
 
     return {}
 
@@ -307,7 +308,7 @@ def _update_session_registry(editor: str, project_id: str, project_path: str, to
             if tool:
                 session.log_tool_call(f"hook:{tool}")
     except Exception as e:
-        print(f"[Activity] Session registry update failed: {e}")
+        log_runtime_event(f"[Activity] Session registry update failed: {e}", e)
 
 
 @activity_bp.route("/log", methods=["POST"])
@@ -409,7 +410,7 @@ def log_activity():
         # Update session registry so Active AI updates in dashboard
         _update_session_registry(current_editor, project_id, cwd, data.get("tool"))
 
-        print(f"[Activity] {activity['type']}: {activity.get('file') or (activity.get('command') or '')[:50] or activity.get('human_name', '')}")
+        log_runtime_event(f"[Activity] {activity['type']}: {activity.get('file') or (activity.get('command') or '')[:50] or activity.get('human_name', '')}")
 
         return jsonify({"status": "ok", "activity": activity})
 

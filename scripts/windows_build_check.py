@@ -19,6 +19,7 @@ BUILD_SCRIPT = PROJECT_ROOT / "build_windows.bat"
 APP_LAUNCHER = PROJECT_ROOT / "scripts" / "app_launcher.py"
 INSTALL_SCRIPT = PROJECT_ROOT / "install.ps1"
 PACKAGING_AUDIT = PROJECT_ROOT / "scripts" / "windows_packaging_audit.py"
+RUNTIME_OUTPUT_CHECK = PROJECT_ROOT / "scripts" / "windows_runtime_output_check.py"
 DASHBOARD_HTML = PROJECT_ROOT / "data" / "dashboard.html"
 SERVER_SCRIPT = PROJECT_ROOT / "src" / "server.py"
 BUILD_DIRS = [
@@ -111,6 +112,7 @@ def main() -> int:
     check(is_ascii(INSTALL_SCRIPT), "install.ps1 ASCII", "safe for Windows PowerShell 5.1 legacy decoding", failures)
     check(powershell_syntax_ok(INSTALL_SCRIPT), "install.ps1 syntax", "PowerShell parser accepts script when PowerShell is available", failures)
     check(PACKAGING_AUDIT.exists(), "packaging audit", str(PACKAGING_AUDIT), failures)
+    check(RUNTIME_OUTPUT_CHECK.exists(), "runtime output check", str(RUNTIME_OUTPUT_CHECK), failures)
     check(DASHBOARD_HTML.exists(), "dashboard.html", str(DASHBOARD_HTML), failures)
     check(SERVER_SCRIPT.exists(), "server.py", str(SERVER_SCRIPT), failures)
     check(import_exists("PyInstaller"), "PyInstaller", "importable in current Python", failures)
@@ -127,6 +129,7 @@ def main() -> int:
     check("copy /Y install.bat dist\\FixOnce\\install.bat" in build_text, "install.bat package root", "copied after PyInstaller", failures)
     check("copy /Y requirements.txt dist\\FixOnce\\requirements.txt" in build_text, "requirements.txt package root", "copied after PyInstaller", failures)
     check("[scriptblock]::Create((Get-Content -Raw install.ps1))" in build_text, "install.ps1 build syntax gate", "build_windows.bat parses installer before packaging", failures)
+    check("scripts\\windows_runtime_output_check.py" in build_text, "runtime output build gate", "blocks unsafe Flask/API output before packaging", failures)
 
     required_hidden_imports = [
         "webview.platforms.edgechromium",

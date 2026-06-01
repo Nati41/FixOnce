@@ -82,6 +82,7 @@ from core.port_manager import (
     get_canonical_port
 )
 from core.install_state import is_fixonce_installed
+from core.runtime_log import log_runtime_event
 _startup_log("import config/core/api modules: ok")
 
 
@@ -90,16 +91,7 @@ SERVER_LOG_FILE = DATA_DIR / "logs" / "server.log"
 
 def _write_server_log(message: str, exc=None):
     """Append diagnostics directly; do not rely only on Flask logging handlers."""
-    try:
-        SERVER_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        with SERVER_LOG_FILE.open("a", encoding="utf-8") as handle:
-            handle.write(f"[{timestamp}] {message}\n")
-            if exc is not None:
-                handle.write("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
-            handle.flush()
-    except Exception as log_exc:
-        print(f"[WARNING] Could not write server log: {log_exc}", file=sys.stderr, flush=True)
+    log_runtime_event(message, exc)
 
 
 def _configure_server_error_logging():
@@ -210,16 +202,6 @@ def _send_dashboard_file(path):
             f"executable={sys.executable} cwd={Path.cwd()})"
         )
         _write_server_log(message)
-        flask_app.logger.error(
-            "Dashboard asset missing: %s (INSTALL_DATA_DIR=%s resolved=%s frozen=%s meipass=%s executable=%s cwd=%s)",
-            path,
-            INSTALL_DATA_DIR,
-            _install_data_dir(),
-            getattr(sys, "frozen", False),
-            getattr(sys, "_MEIPASS", None),
-            sys.executable,
-            Path.cwd(),
-        )
         return make_response(f"Dashboard asset not found: {path.name}", 404)
 
     response = make_response(send_file(path))
@@ -240,13 +222,6 @@ def log_unhandled_exception(exc):
         f"method={getattr(request, 'method', 'unknown')} "
         f"install_data_dir={INSTALL_DATA_DIR} resolved={_install_data_dir()}",
         exc,
-    )
-    flask_app.logger.exception(
-        "Unhandled request error path=%s method=%s install_data_dir=%s resolved=%s",
-        getattr(request, "path", "unknown"),
-        getattr(request, "method", "unknown"),
-        INSTALL_DATA_DIR,
-        _install_data_dir(),
     )
     return jsonify({
         "error": "internal_server_error",

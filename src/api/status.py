@@ -17,6 +17,7 @@ import getpass
 
 from . import status_bp, get_project_from_request
 from config import PROJECT_ROOT, USER_DATA_DIR, VERSION
+from core.runtime_log import log_runtime_event
 from core.system_mode import get_system_mode, set_system_mode, VALID_MODES
 
 # Global state (will be set by main app)
@@ -203,7 +204,7 @@ def api_handshake():
         mark_install_state(InstallState.READY, detail="Extension handshake completed")
     except Exception:
         pass
-    print(f"🤝 Extension handshake received at {EXTENSION_LAST_SEEN}")
+    log_runtime_event(f"Extension handshake received at {EXTENSION_LAST_SEEN}")
     return jsonify({"status": "connected", "timestamp": EXTENSION_LAST_SEEN})
 
 
@@ -1018,7 +1019,7 @@ def api_dashboard_snapshot():
                     with _log_lock:
                         browser_errors = list(_error_log)  # Copy the list
                 except Exception as e:
-                    print(f"[Dashboard] Error getting browser errors: {e}")
+                    log_runtime_event(f"[Dashboard] Error getting browser errors: {e}", e)
                     browser_errors = []
 
                 # Calculate unified health

@@ -12,6 +12,7 @@ from datetime import datetime
 from . import errors_bp, get_project_from_request
 from core.notifications import send_desktop_notification
 from core.error_store import get_error_log, get_log_lock, add_error, get_errors, clear_errors
+from core.runtime_log import log_runtime_event
 
 # Get references to shared state (legacy compatibility)
 error_log = get_error_log()
@@ -63,8 +64,8 @@ def receive_log():
     project_id = _get_active_project_id()
     add_error(entry, project_id=project_id)
 
-    print(
-        f"\n🔥 [{entry['type']}] {entry['timestamp']}\n"
+    log_runtime_event(
+        f"[{entry['type']}] {entry['timestamp']}\n"
         f"   URL:     {entry['url']}\n"
         f"   Message: {entry['message']}"
     )
@@ -80,7 +81,7 @@ def api_log_error():
     # Anti-loop guard: Skip errors from FixOnce hooks to prevent infinite loops
     if request.headers.get('X-FixOnce-Origin'):
         origin = request.headers.get('X-FixOnce-Origin')
-        print(f"[FixOnce] Received error from hook: {origin}")
+        log_runtime_event(f"[FixOnce] Received error from hook: {origin}")
 
     data = request.get_json(silent=True)
     if not data:
@@ -138,13 +139,13 @@ def api_log_error():
                         )
 
                         if result["action"] == "auto":
-                            print(f"[AUTO-APPLY] 🔧 Ready to auto-fix: {entry['message'][:50]}...")
+                            log_runtime_event(f"[AUTO-APPLY] Ready to auto-fix: {entry['message'][:50]}...")
                         elif result["action"] == "suggest":
-                            print(f"[SUGGEST] 💡 Solution found: {entry['message'][:50]}...")
+                            log_runtime_event(f"[SUGGEST] Solution found: {entry['message'][:50]}...")
                     except Exception as pf_err:
-                        print(f"[PendingFix] Error: {pf_err}")
+                        log_runtime_event(f"[PendingFix] Error: {pf_err}", pf_err)
     except Exception as e:
-        print(f"[V3.1] Match error: {e}")
+        log_runtime_event(f"[V3.1] Match error: {e}", e)
 
     # Check for committed solutions in .fixonce/solutions.json
     if not entry.get("matched_solution"):
@@ -176,7 +177,7 @@ def api_log_error():
                             "files_changed": sol.get("files_changed", []),
                             "source": "repo"
                         }
-                        print(f"[CommittedSolution] Found match: {sol.get('problem', '')[:50]}")
+                        log_runtime_event(f"[CommittedSolution] Found match: {sol.get('problem', '')[:50]}")
 
                         # 🔥 AUTO-APPLY: Committed solutions have high confidence
                         try:
@@ -191,13 +192,13 @@ def api_log_error():
                                 error_id=f"committed_{datetime.now().timestamp()}"
                             )
                             if result["action"] == "auto":
-                                print(f"[AUTO-APPLY] 🔧 Committed fix ready: {entry['message'][:50]}...")
+                                log_runtime_event(f"[AUTO-APPLY] Committed fix ready: {entry['message'][:50]}...")
                         except Exception as pf_err:
-                            print(f"[PendingFix] Error: {pf_err}")
+                            log_runtime_event(f"[PendingFix] Error: {pf_err}", pf_err)
 
                         break
         except Exception as e:
-            print(f"[CommittedSolution] Error: {e}")
+            log_runtime_event(f"[CommittedSolution] Error: {e}", e)
 
     # Phase 0: Add error with project_id tagging
     project_id = _get_active_project_id()
@@ -225,15 +226,15 @@ def api_log_error():
             stack=stack_trace,
             extra_data={"matched_solution": entry.get("matched_solution")}
         )
-        print(f"[ProjectMemory] {memory_result['status']}: {memory_result['issue_id']} (count: {memory_result['count']})")
+        log_runtime_event(f"[ProjectMemory] {memory_result['status']}: {memory_result['issue_id']} (count: {memory_result['count']})")
 
         # Desktop notifications disabled - errors show in dashboard
         # if memory_result['status'] == 'new':
         #     send_desktop_notification(...)
     except Exception as e:
-        print(f"[ProjectMemory] Error: {e}")
+        log_runtime_event(f"[ProjectMemory] Error: {e}", e)
 
-    print(f"[V3.1] {entry['severity'].upper()}: {entry['message'][:80]}")
+    log_runtime_event(f"[V3.1] {entry['severity'].upper()}: {entry['message'][:80]}")
 
     return jsonify({
         "status": "ok",
@@ -295,13 +296,13 @@ def api_log_errors_batch():
 
                 # Desktop notifications disabled - errors show in dashboard
             except Exception as e:
-                print(f"[ProjectMemory] Batch error: {e}")
+                log_runtime_event(f"[ProjectMemory] Batch error: {e}", e)
 
             processed += 1
         except Exception as e:
-            print(f"[Batch] Error processing item: {e}")
+            log_runtime_event(f"[Batch] Error processing item: {e}", e)
 
-    print(f"[V3.2] Batch processed: {processed}/{len(errors)} errors")
+    log_runtime_event(f"[V3.2] Batch processed: {processed}/{len(errors)} errors")
 
     return jsonify({
         "status": "ok",
@@ -417,12 +418,11 @@ def api_page_load_success():
         error_log.extend(to_keep)
 
     if cleared_count > 0:
-        print(f"[PageLoadSuccess] Cleared {cleared_count} old errors (page: {url[:50]})")
+        log_runtime_event(f"[PageLoadSuccess] Cleared {cleared_count} old errors (page: {url[:50]})")
 
     return jsonify({
         "status": "ok",
         "cleared": cleared_count,
         "remaining": len(error_log)
     })
-
 
