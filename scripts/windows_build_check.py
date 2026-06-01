@@ -18,6 +18,7 @@ SPEC_PATH = PROJECT_ROOT / "fixonce.spec"
 BUILD_SCRIPT = PROJECT_ROOT / "build_windows.bat"
 APP_LAUNCHER = PROJECT_ROOT / "scripts" / "app_launcher.py"
 INSTALL_SCRIPT = PROJECT_ROOT / "install.ps1"
+INNO_SETUP = PROJECT_ROOT / "installer" / "fixonce_setup.iss"
 PACKAGING_AUDIT = PROJECT_ROOT / "scripts" / "windows_packaging_audit.py"
 RUNTIME_OUTPUT_CHECK = PROJECT_ROOT / "scripts" / "windows_runtime_output_check.py"
 DASHBOARD_HTML = PROJECT_ROOT / "data" / "dashboard.html"
@@ -143,6 +144,40 @@ def main() -> int:
     check("--bootstrap" in launcher_text, "launcher bootstrap mode", "app launcher exposes packaged --bootstrap dispatch", failures)
     check("bootstrap.log" in launcher_text, "bootstrap log file", "bootstrap steps logged to ~/.fixonce/logs/bootstrap.log", failures)
     check("FixOnce could not open its app window." in launcher_text, "friendly startup failure", "friendly error path present", failures)
+
+    if INNO_SETUP.exists():
+        inno_text = read_text(INNO_SETUP)
+        inno_flat = inno_text.replace("\r", "").replace("\n", " ")
+        check('Parameters: "--bootstrap"' in inno_text, "inno bootstrap run", "post-install runs FixOnce.exe --bootstrap", failures)
+        check(
+            "waituntilterminated" in inno_flat and "postinstall" in inno_flat,
+            "inno bootstrap wait",
+            "installer waits for bootstrap to finish",
+            failures,
+        )
+        check("--minimized" not in inno_text, "inno no minimized autostart", "HKCU Run --minimized removed", failures)
+        check("dontcreatekey" in inno_text, "inno legacy run cleanup", "legacy HKCU Run key uses dontcreatekey", failures)
+        bootstrap_run_line = next((line for line in inno_text.splitlines() if "--bootstrap" in line and "[Run]" not in line), "")
+        check(
+            "nowait" not in bootstrap_run_line.lower(),
+            "inno bootstrap not fire-and-forget",
+            "bootstrap [Run] entry does not use nowait",
+            failures,
+        )
+        check(
+            "ssDone" in inno_text and "FixOnce is ready" in inno_text,
+            "inno success after bootstrap",
+            "success message shown on ssDone after bootstrap [Run]",
+            failures,
+        )
+        check(
+            "installed successfully" not in inno_text.lower() or "ssDone" in inno_text,
+            "inno no early success dialog",
+            "success is not announced before bootstrap completes",
+            failures,
+        )
+    else:
+        check(False, "fixonce_setup.iss", str(INNO_SETUP), failures)
 
     for build_dir in BUILD_DIRS:
         check(dir_writable(build_dir), f"build dir writable", str(build_dir), failures)

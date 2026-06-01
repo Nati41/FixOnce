@@ -32,11 +32,11 @@ Build a professional Windows installer using Inno Setup.
 
 ### Install
 - Copies FixOnce to `C:\Users\<user>\AppData\Local\Programs\FixOnce`
-- Creates data folder at `C:\Users\<user>\AppData\Roaming\FixOnce`
+- Runs `FixOnce.exe --bootstrap` and **waits** for setup to finish (server health, scheduled task, dashboard)
+- Registers background autostart via the **FixOnceServer** Task Scheduler task (not an HKCU Run key)
 - Adds Start Menu shortcut
 - Adds Desktop shortcut (optional)
-- Adds to Windows Startup (optional, recommended)
-- Shows Chrome Extension installation instructions
+- Shows Chrome Extension installation instructions after bootstrap succeeds
 
 ### Uninstall
 - Removes program files
@@ -49,7 +49,8 @@ Build a professional Windows installer using Inno Setup.
 | Feature | Status |
 |---------|--------|
 | Per-user install (no admin) | ✅ |
-| Start with Windows | ✅ |
+| Bootstrap on install (wait) | ✅ |
+| Start with Windows (scheduled task) | ✅ |
 | Desktop shortcut | ✅ |
 | Start Menu shortcut | ✅ |
 | Hebrew language support | ✅ |
