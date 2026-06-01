@@ -18,9 +18,33 @@ from pathlib import Path
 SRC_DIR = Path(__file__).parent
 PROJECT_ROOT = SRC_DIR.parent
 
+def get_install_data_dir() -> Path:
+    """Get installation assets directory for source and PyInstaller layouts."""
+    candidates = []
+
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass) / "data")
+
+        executable_dir = Path(sys.executable).resolve().parent
+        candidates.extend([
+            executable_dir / "_internal" / "data",
+            executable_dir / "data",
+        ])
+
+    candidates.append(PROJECT_ROOT / "data")
+
+    for candidate in candidates:
+        if (candidate / "dashboard.html").exists():
+            return candidate
+
+    return candidates[0]
+
+
 # Installation data directory (templates, dashboard, static files)
 # This is shared across users - READ ONLY
-INSTALL_DATA_DIR = PROJECT_ROOT / "data"
+INSTALL_DATA_DIR = get_install_data_dir()
 
 # User-specific data directory (~/.fixonce/)
 # This is private per user - READ/WRITE

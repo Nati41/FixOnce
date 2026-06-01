@@ -9,11 +9,13 @@ import threading
 import time
 import traceback
 import os
+import logging
 from pathlib import Path
 from datetime import datetime
 
 from flask import Flask, send_file, jsonify, request, make_response
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 _STARTUP_T0 = time.monotonic()
 
@@ -73,6 +75,24 @@ from core.port_manager import (
 from core.install_state import is_fixonce_installed
 _startup_log("import config/core/api modules: ok")
 
+
+SERVER_LOG_FILE = DATA_DIR / "logs" / "server.log"
+
+
+def _configure_server_error_logging():
+    """Write packaged runtime tracebacks to the per-user FixOnce log folder."""
+    try:
+        SERVER_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(SERVER_LOG_FILE, encoding="utf-8")
+        handler.setLevel(logging.ERROR)
+        handler.setFormatter(logging.Formatter(
+            "[%(asctime)s] %(levelname)s %(name)s: %(message)s"
+        ))
+        flask_app.logger.addHandler(handler)
+        flask_app.logger.setLevel(logging.INFO)
+    except Exception as exc:
+        print(f"[WARNING] Could not configure server log file: {exc}", file=sys.stderr, flush=True)
+
 # ---------------------------------------------------------------------------
 # Port Management (uses core.port_manager for multi-user support)
 # ---------------------------------------------------------------------------
@@ -125,6 +145,7 @@ flask_app = Flask(__name__,
                   template_folder=str(INSTALL_DATA_DIR),
                   static_folder=str(INSTALL_DATA_DIR))
 CORS(flask_app)
+_configure_server_error_logging()
 _startup_log("flask app creation: ok")
 
 # Register all route blueprints
@@ -144,11 +165,42 @@ def minimal_alive():
 
 def _send_dashboard_file(path):
     """Serve dashboard HTML without browser caching."""
+    path = Path(path)
+    if not path.exists():
+        flask_app.logger.error(
+            "Dashboard asset missing: %s (INSTALL_DATA_DIR=%s frozen=%s meipass=%s executable=%s)",
+            path,
+            INSTALL_DATA_DIR,
+            getattr(sys, "frozen", False),
+            getattr(sys, "_MEIPASS", None),
+            sys.executable,
+        )
+        return make_response(f"Dashboard asset not found: {path.name}", 404)
+
     response = make_response(send_file(path))
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
+
+
+@flask_app.errorhandler(Exception)
+def log_unhandled_exception(exc):
+    """Persist unhandled Flask errors for packaged Windows diagnostics."""
+    if isinstance(exc, HTTPException):
+        return exc
+
+    flask_app.logger.exception(
+        "Unhandled request error path=%s method=%s install_data_dir=%s",
+        getattr(request, "path", "unknown"),
+        getattr(request, "method", "unknown"),
+        INSTALL_DATA_DIR,
+    )
+    return jsonify({
+        "error": "internal_server_error",
+        "message": "FixOnce hit an internal server error.",
+        "log": str(SERVER_LOG_FILE),
+    }), 500
 
 
 def _is_installed() -> bool:
