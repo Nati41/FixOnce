@@ -1,16 +1,25 @@
-// This script is injected directly into the page context
-// to intercept console.error and other errors
-
 (function() {
-  const SERVER_URL = "http://localhost:5000/log";
+  let errorOccurred = false;
 
   function sendLog(payload) {
     try {
-      fetch(SERVER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }).catch(function() {});
+      errorOccurred = true;
+      window.postMessage({
+        source: "FIXONCE",
+        payload: payload
+      }, "*");
+    } catch(e) {}
+  }
+
+  function sendPageLoadSuccess() {
+    try {
+      window.postMessage({
+        source: "FIXONCE",
+        payload: {
+          type: "page_load_success",
+          url: location.href
+        }
+      }, "*");
     } catch(e) {}
   }
 
@@ -75,6 +84,14 @@
       url: location.href,
       timestamp: new Date().toISOString()
     });
+  });
+
+  window.addEventListener("load", function() {
+    setTimeout(function() {
+      if (!errorOccurred) {
+        sendPageLoadSuccess();
+      }
+    }, 5000);
   });
 
   console.log("%c[FixOnce] Active", "color: #56d364; font-weight: bold;");

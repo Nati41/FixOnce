@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
+import runpy
 import subprocess
 import sys
 import time
@@ -273,15 +273,6 @@ def _packaged_mcp_server_path() -> Path | None:
     return None
 
 
-def _external_python_command() -> str | None:
-    """Resolve a user Python command for stdio MCP config."""
-    for command in ("python", "python3", "py"):
-        resolved = shutil.which(command)
-        if resolved:
-            return resolved
-    return None
-
-
 def configure_packaged_windows_mcp(log_fn: Callable[[str], None] | None = None) -> bool:
     """Register per-user MCP config for packaged Windows installs."""
     write_log = log_fn or bootstrap_log
@@ -294,17 +285,15 @@ def configure_packaged_windows_mcp(log_fn: Callable[[str], None] | None = None) 
         write_log("MCP registration skipped: mcp_memory_server_v2.py not found")
         return False
 
-    python_command = _external_python_command()
-    if python_command is None:
-        write_log("MCP registration skipped: Python command not found")
-        return False
-
     try:
-        from core.mcp_config import build_stdio_mcp_config, write_codex_config
+        from core.mcp_config import write_codex_config
 
         src_path = str(mcp_server.parent.parent)
-        stdio_config = build_stdio_mcp_config(mcp_server, src_path)
-        stdio_config["command"] = python_command
+        stdio_config = {
+            "command": sys.executable,
+            "args": ["--mcp"],
+            "env": {"PYTHONPATH": src_path},
+        }
         codex_config = Path.home() / ".codex" / "config.toml"
         write_codex_config(codex_config, "fixonce", stdio_config)
         write_log(f"MCP registration ready: Codex config {codex_config}")
@@ -897,7 +886,19 @@ def run_server_mode(argv: list[str]):
     server_main(argv)
 
 
+def run_mcp_mode():
+    """Run the bundled FixOnce MCP stdio server."""
+    if not is_frozen():
+        sys.path.insert(0, str(PROJECT_DIR / "src"))
+
+    runpy.run_module("mcp_server.mcp_memory_server_v2", run_name="__main__")
+
+
 def main():
+    if "--mcp" in sys.argv:
+        run_mcp_mode()
+        return
+
     if "--server" in sys.argv:
         server_args = [arg for arg in sys.argv[1:] if arg != "--server"]
         run_server_mode(server_args)

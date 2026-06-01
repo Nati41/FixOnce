@@ -276,7 +276,7 @@ class TestBootstrap(unittest.TestCase):
             encoding="utf-8",
         )
 
-        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(app_launcher, "is_frozen", return_value=True), patch.object(
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(app_launcher.sys, "executable", str(install_dir / "FixOnce.exe")), patch.object(app_launcher, "is_frozen", return_value=True), patch.object(
             app_launcher,
             "get_packaged_install_dir",
             return_value=install_dir,
@@ -288,10 +288,6 @@ class TestBootstrap(unittest.TestCase):
             app_launcher,
             "ensure_packaged_server_running",
             return_value=5000,
-        ), patch.object(
-            app_launcher,
-            "_external_python_command",
-            return_value=r"C:\Python313\python.exe",
         ), patch("pathlib.Path.home", return_value=home_dir), patch.object(app_launcher, "open_dashboard"):
             first = app_launcher.run_bootstrap()
             second = app_launcher.run_bootstrap()
@@ -303,8 +299,8 @@ class TestBootstrap(unittest.TestCase):
         text = codex_config.read_text(encoding="utf-8")
         self.assertEqual(text.count("[mcp_servers.fixonce]"), 1)
         self.assertEqual(text.count("[mcp_servers.fixonce.env]"), 1)
-        self.assertIn(r'command = "C:\\Python313\\python.exe"', text)
-        self.assertIn("mcp_memory_server_v2.py", text)
+        self.assertIn("FixOnce.exe", text)
+        self.assertIn('args = ["--mcp"]', text)
         self.assertIn('FIXONCE_ACTOR = "codex"', text)
         self.assertTrue(any("MCP registration completed" in line for line in self._log_lines()))
 
@@ -385,6 +381,11 @@ class TestBootstrap(unittest.TestCase):
                 app_launcher.main()
             self.assertEqual(ctx.exception.code, 0)
         run_bootstrap.assert_called_once()
+
+    def test_main_dispatches_mcp_mode(self):
+        with patch.object(app_launcher, "run_mcp_mode") as run_mcp_mode, patch.object(sys, "argv", ["FixOnce.exe", "--mcp"]):
+            app_launcher.main()
+        run_mcp_mode.assert_called_once()
 
 
 if __name__ == "__main__":
