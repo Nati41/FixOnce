@@ -40,11 +40,38 @@ class TestInstallStateMachine(unittest.TestCase):
         self.assertEqual(snapshot.runtime_port, 5003)
         self.assertTrue(snapshot.installed)
 
-    def test_ready_without_runtime_drops_back_to_starting(self):
+    def test_ready_without_runtime_stays_installed(self):
         state_machine.persist_snapshot(
             state_machine.InstallState.READY,
             data_dir=self.data_dir,
             detail="Install completed",
+        )
+
+        with patch.object(state_machine, "get_runtime_state", return_value=None):
+            snapshot = state_machine.resolve_install_snapshot(request_port=5003, data_dir=self.data_dir)
+
+        self.assertEqual(snapshot.state, state_machine.InstallState.READY)
+        self.assertTrue(snapshot.installed)
+
+    def test_ready_with_stale_runtime_stays_installed(self):
+        state_machine.persist_snapshot(
+            state_machine.InstallState.READY,
+            data_dir=self.data_dir,
+            detail="Install completed",
+        )
+
+        with patch.object(state_machine, "get_runtime_state", return_value=None):
+            snapshot = state_machine.resolve_install_snapshot(request_port=5000, data_dir=self.data_dir)
+
+        self.assertEqual(snapshot.state, state_machine.InstallState.READY)
+        self.assertTrue(snapshot.installed)
+
+    def test_active_install_flow_can_drop_back_to_starting_without_runtime(self):
+        state_machine.persist_snapshot(
+            state_machine.InstallState.READY,
+            data_dir=self.data_dir,
+            detail="Install is starting runtime",
+            metadata={"active_install_flow": True},
         )
 
         with patch.object(state_machine, "get_runtime_state", return_value=None):

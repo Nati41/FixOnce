@@ -151,7 +151,7 @@ def resolve_install_snapshot(request_port: Optional[int] = None, data_dir: Optio
             snapshot.detail = "Canonical runtime is healthy"
         return snapshot
 
-    if snapshot.state == InstallState.READY and not snapshot.metadata.get("legacy_installed"):
+    if snapshot.state == InstallState.READY and snapshot.metadata.get("active_install_flow"):
         snapshot.state = InstallState.STARTING
         if not snapshot.detail:
             snapshot.detail = "Runtime not available yet"

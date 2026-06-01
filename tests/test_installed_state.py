@@ -87,11 +87,25 @@ class TestInstalledState(unittest.TestCase):
         self.assertEqual(response.get_json()["installed"], False)
         self.assertEqual(response.get_json()["state"], "NOT_INSTALLED")
 
-    def test_ready_install_state_transitions_to_starting_without_runtime(self):
+    def test_ready_install_state_stays_installed_without_runtime(self):
         install_state_module.mark_install_state(
             InstallState.READY,
             data_dir=self.data_dir,
             detail="Previous install finished",
+        )
+
+        with patch.object(install_state_module, "get_runtime_state", return_value=None):
+            snapshot = install_state_module.get_install_snapshot(request_port=5001, data_dir=self.data_dir)
+
+        self.assertEqual(snapshot.state, InstallState.READY)
+        self.assertTrue(snapshot.installed)
+
+    def test_active_install_flow_can_show_starting_without_runtime(self):
+        install_state_module.mark_install_state(
+            InstallState.READY,
+            data_dir=self.data_dir,
+            detail="Runtime startup in progress",
+            metadata={"active_install_flow": True},
         )
 
         with patch.object(install_state_module, "get_runtime_state", return_value=None):
