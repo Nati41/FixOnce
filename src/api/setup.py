@@ -223,8 +223,17 @@ def repair_mcp_connection():
     try:
         install = _load_install_module()
         fixonce_dir = install.get_fixonce_dir()
-        editors = install.detect_editors()
-        stdio_config = install.build_install_stdio_config(fixonce_dir)
+        stdio_config = install.build_install_stdio_config(fixonce_dir, probe_fastmcp=False)
+        # Dashboard reconnect runs inside the packaged GUI on Windows. Avoid
+        # external editor probes/CLI commands here because short-lived console
+        # subprocesses can flash a window. The repair action only needs to
+        # rewrite known config/rules files.
+        editors = {
+            "claude_code": False,
+            "cursor": False,
+            "codex": False,
+            "windsurf": False,
+        }
 
         targets = [actor] if actor in {"claude", "cursor", "codex", "windsurf"} else ["claude", "cursor", "codex", "windsurf"]
         config_results = []

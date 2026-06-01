@@ -866,13 +866,13 @@ def _find_fastmcp_path() -> str | None:
     return None
 
 
-def build_install_stdio_config(fixonce_dir: Path | None = None) -> dict:
+def build_install_stdio_config(fixonce_dir: Path | None = None, probe_fastmcp: bool = True) -> dict:
     """Build the shared stdio config used by installer and dashboard retry actions."""
     fixonce_dir = fixonce_dir or get_fixonce_dir()
     mcp_server_path = fixonce_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py"
     src_path = str(fixonce_dir / "src")
     python_path = sys.executable
-    fastmcp_path = _find_fastmcp_path()
+    fastmcp_path = _find_fastmcp_path() if probe_fastmcp else None
     return _build_stdio_mcp_config(
         python_path,
         str(mcp_server_path),

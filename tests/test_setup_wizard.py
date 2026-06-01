@@ -155,6 +155,55 @@ class TestSetupWizard(unittest.TestCase):
         self.assertEqual(payload["client"]["client"], "cursor")
         self.assertEqual(payload["client"]["status"], "needs_restart")
 
+    def test_repair_mcp_endpoint_avoids_external_editor_probes(self):
+        calls = {
+            "build_probe_fastmcp": None,
+            "editors": [],
+            "configured": [],
+            "rules": [],
+        }
+
+        def detect_editors():
+            raise AssertionError("repair-mcp should not run editor discovery probes")
+
+        def build_install_stdio_config(fixonce_dir=None, probe_fastmcp=True):
+            calls["build_probe_fastmcp"] = probe_fastmcp
+            return {"command": "python", "args": ["server.py"]}
+
+        def configure_client_mcp(client, stdio_config=None, editors=None):
+            calls["configured"].append(client)
+            calls["editors"].append(editors)
+            return True
+
+        def sync_client_rules(client, fixonce_dir=None):
+            calls["rules"].append(client)
+            return True
+
+        fake_install = SimpleNamespace(
+            get_fixonce_dir=lambda: PROJECT_ROOT,
+            detect_editors=detect_editors,
+            build_install_stdio_config=build_install_stdio_config,
+            configure_client_mcp=configure_client_mcp,
+            sync_client_rules=sync_client_rules,
+        )
+
+        with patch.object(setup_api, "_load_install_module", return_value=fake_install), \
+             patch("core.mcp_health.get_mcp_health_for_dashboard", return_value={"state": "configured", "session": {"state": "unknown"}}), \
+             patch("core.mcp_session_health.mark_recovery_attempt"), \
+             patch("core.mcp_session_health.record_mcp_success"):
+            response = self.client.post("/api/setup/repair-mcp", headers={"Accept-Language": "en"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["success"])
+        self.assertFalse(calls["build_probe_fastmcp"])
+        self.assertEqual(calls["configured"], ["claude", "cursor", "codex", "windsurf"])
+        self.assertEqual(calls["rules"], ["claude", "cursor", "codex", "windsurf"])
+        for editors in calls["editors"]:
+            self.assertEqual(editors["claude_code"], False)
+            self.assertEqual(editors["cursor"], False)
+            self.assertEqual(editors["codex"], False)
+            self.assertEqual(editors["windsurf"], False)
+
 
 if __name__ == "__main__":
     unittest.main()
