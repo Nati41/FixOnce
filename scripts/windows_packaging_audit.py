@@ -24,6 +24,7 @@ REQUIRED_ROOT_FILES = [
     "install.ps1",
     "uninstall.ps1",
     "install.bat",
+    "requirements.txt",
 ]
 
 FORBIDDEN_PATTERNS = [
@@ -142,7 +143,12 @@ def powershell_syntax_errors(script_path: Path) -> list[str]:
     if not powershell:
         return []
 
-    command = "$null = [scriptblock]::Create((Get-Content -Raw $args[0])); 'install.ps1 syntax OK'"
+    literal_path = str(script_path).replace("'", "''")
+    command = (
+        "$null = [scriptblock]::Create("
+        f"(Get-Content -Raw -LiteralPath '{literal_path}')"
+        "); 'install.ps1 syntax OK'"
+    )
     result = subprocess.run(
         [
             powershell,
@@ -151,7 +157,6 @@ def powershell_syntax_errors(script_path: Path) -> list[str]:
             "Bypass",
             "-Command",
             command,
-            str(script_path),
         ],
         capture_output=True,
         text=True,

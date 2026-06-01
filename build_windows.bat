@@ -87,6 +87,12 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+copy /Y requirements.txt dist\FixOnce\requirements.txt >nul
+if errorlevel 1 (
+    echo ERROR: Failed to copy requirements.txt
+    pause
+    exit /b 1
+)
 
 echo.
 echo Running packaging audit...

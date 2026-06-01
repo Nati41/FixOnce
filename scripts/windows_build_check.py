@@ -125,6 +125,7 @@ def main() -> int:
     check("copy /Y install.ps1 dist\\FixOnce\\install.ps1" in build_text, "install.ps1 package root", "copied after PyInstaller", failures)
     check("copy /Y uninstall.ps1 dist\\FixOnce\\uninstall.ps1" in build_text, "uninstall.ps1 package root", "copied after PyInstaller", failures)
     check("copy /Y install.bat dist\\FixOnce\\install.bat" in build_text, "install.bat package root", "copied after PyInstaller", failures)
+    check("copy /Y requirements.txt dist\\FixOnce\\requirements.txt" in build_text, "requirements.txt package root", "copied after PyInstaller", failures)
     check("[scriptblock]::Create((Get-Content -Raw install.ps1))" in build_text, "install.ps1 build syntax gate", "build_windows.bat parses installer before packaging", failures)
 
     required_hidden_imports = [
