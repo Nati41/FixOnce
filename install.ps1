@@ -4,7 +4,7 @@
 
 $ErrorActionPreference = "Stop"
 
-function Write-Step { param($msg) Write-Host "`n[$script:step/7] $msg" -ForegroundColor Cyan; $script:step++ }
+function Write-Step { param($msg) Write-Host "`n[$script:step/8] $msg" -ForegroundColor Cyan; $script:step++ }
 function Write-OK { param($msg) Write-Host "  ✓ $msg" -ForegroundColor Green }
 function Write-Warn { param($msg) Write-Host "  ⚠ $msg" -ForegroundColor Yellow }
 function Write-Err { param($msg) Write-Host "  ✗ $msg" -ForegroundColor Red }
@@ -16,11 +16,77 @@ Write-Host "🧠 FixOnce Installer for Windows" -ForegroundColor Cyan
 Write-Host "=================================" -ForegroundColor Cyan
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$InstallDir = Join-Path $env:LOCALAPPDATA "Programs\FixOnce"
+$InstalledExe = Join-Path $InstallDir "FixOnce.exe"
+$UserDataDir = Join-Path $env:USERPROFILE ".fixonce"
+$RepairMode = $false
 $LauncherScript = Join-Path $ScriptDir "scripts\app_launcher.py"
 $PackagedExe = Join-Path $ScriptDir "FixOnce.exe"
 if (-not (Test-Path $PackagedExe)) {
     $DistExe = Join-Path $ScriptDir "dist\FixOnce\FixOnce.exe"
     if (Test-Path $DistExe) { $PackagedExe = $DistExe }
+}
+
+function Test-FixOnceInstalled {
+    if (Test-Path $InstalledExe) { return $true }
+
+    $installState = Join-Path $UserDataDir "install_state.json"
+    if (Test-Path $installState) {
+        try {
+            $state = Get-Content $installState -Raw | ConvertFrom-Json
+            if ($state.installed -eq $true -and $state.install_dir -and (Test-Path (Join-Path $state.install_dir "FixOnce.exe"))) {
+                $script:InstalledExe = Join-Path $state.install_dir "FixOnce.exe"
+                $script:InstallDir = $state.install_dir
+                return $true
+            }
+        } catch {
+            return $false
+        }
+    }
+
+    return $false
+}
+
+function Show-AlreadyInstalledMenu {
+    Write-Host ""
+    Write-Host "FixOnce is already installed." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  [1] Open FixOnce"
+    Write-Host "  [2] Repair Installation"
+    Write-Host "  [3] Uninstall"
+    Write-Host "  [4] Close"
+    Write-Host ""
+
+    $choice = Read-Host "Choose an option"
+    switch ($choice) {
+        "1" {
+            Start-Process -FilePath $InstalledExe -WorkingDirectory (Split-Path -Parent $InstalledExe)
+            exit 0
+        }
+        "2" {
+            $script:RepairMode = $true
+            Write-Host ""
+            Write-Host "Repairing existing installation..." -ForegroundColor Cyan
+        }
+        "3" {
+            $uninstaller = Join-Path $InstallDir "uninstall.ps1"
+            if (-not (Test-Path $uninstaller)) { $uninstaller = Join-Path $ScriptDir "uninstall.ps1" }
+            if (Test-Path $uninstaller) {
+                Start-Process -FilePath "powershell.exe" -ArgumentList @("-ExecutionPolicy", "Bypass", "-File", "`"$uninstaller`"") -Wait
+            } else {
+                Write-Warn "Uninstaller not found."
+                Read-Host "Press Enter to close"
+            }
+            exit 0
+        }
+        default {
+            exit 0
+        }
+    }
+}
+
+if (Test-FixOnceInstalled) {
+    Show-AlreadyInstalledMenu
 }
 
 function Get-LauncherCommand {
@@ -50,6 +116,113 @@ function Get-LauncherCommand {
         Arguments = $args
         WorkingDirectory = $ScriptDir
         DisplayName = "app launcher"
+    }
+}
+
+function Get-SourceAppDir {
+    if (Test-Path $PackagedExe) {
+        return Split-Path -Parent $PackagedExe
+    }
+    return $ScriptDir
+}
+
+function Copy-SupportFile {
+    param(
+        [string]$FileName,
+        [string]$SourceRoot,
+        [string]$DestinationRoot
+    )
+
+    $source = Join-Path $SourceRoot $FileName
+    $destination = Join-Path $DestinationRoot $FileName
+    if ((Test-Path $source) -and (-not (Test-Path $destination))) {
+        Copy-Item -Path $source -Destination $destination -Force
+    }
+}
+
+function Install-ApplicationFiles {
+    $sourceAppDir = Get-SourceAppDir
+    if (-not (Test-Path (Join-Path $sourceAppDir "FixOnce.exe"))) {
+        Write-Err "FixOnce.exe was not found in the installer package."
+        Write-Host "  Expected: $sourceAppDir\FixOnce.exe" -ForegroundColor Yellow
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
+
+    if (-not (Test-Path $InstallDir)) {
+        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    }
+
+    $resolvedSource = (Resolve-Path $sourceAppDir).Path
+    $resolvedInstall = (Resolve-Path $InstallDir).Path
+    if ($resolvedSource -ne $resolvedInstall) {
+        Copy-Item -Path (Join-Path $sourceAppDir "*") -Destination $InstallDir -Recurse -Force
+    }
+
+    Copy-SupportFile "install.ps1" $ScriptDir $InstallDir
+    Copy-SupportFile "install.bat" $ScriptDir $InstallDir
+    Copy-SupportFile "uninstall.ps1" $ScriptDir $InstallDir
+    Copy-SupportFile "requirements.txt" $ScriptDir $InstallDir
+
+    $script:ScriptDir = $InstallDir
+    $script:LauncherScript = Join-Path $ScriptDir "scripts\app_launcher.py"
+    $script:PackagedExe = Join-Path $ScriptDir "FixOnce.exe"
+    $script:InstalledExe = $PackagedExe
+
+    Write-OK "Application files installed to $InstallDir"
+}
+
+function New-FixOnceShortcut {
+    param(
+        [string]$ShortcutPath,
+        [string]$TargetPath,
+        [string]$Arguments = "",
+        [string]$WorkingDirectory = ""
+    )
+
+    $parent = Split-Path -Parent $ShortcutPath
+    if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($ShortcutPath)
+    $shortcut.TargetPath = $TargetPath
+    $shortcut.Arguments = $Arguments
+    $shortcut.WorkingDirectory = if ($WorkingDirectory) { $WorkingDirectory } else { Split-Path -Parent $TargetPath }
+    $iconPath = Join-Path $InstallDir "FixOnce.exe"
+    if (Test-Path $iconPath) { $shortcut.IconLocation = "$iconPath,0" }
+    $shortcut.Save()
+}
+
+function Install-Shortcuts {
+    $desktop = [Environment]::GetFolderPath("Desktop")
+    $startMenu = [Environment]::GetFolderPath("StartMenu")
+    $programsDir = Join-Path $startMenu "Programs\FixOnce"
+    $exe = Join-Path $InstallDir "FixOnce.exe"
+    $uninstaller = Join-Path $InstallDir "uninstall.ps1"
+
+    New-FixOnceShortcut `
+        -ShortcutPath (Join-Path $desktop "FixOnce.lnk") `
+        -TargetPath $exe `
+        -WorkingDirectory $InstallDir
+
+    New-FixOnceShortcut `
+        -ShortcutPath (Join-Path $programsDir "FixOnce.lnk") `
+        -TargetPath $exe `
+        -WorkingDirectory $InstallDir
+
+    if (Test-Path $uninstaller) {
+        New-FixOnceShortcut `
+            -ShortcutPath (Join-Path $programsDir "Uninstall FixOnce.lnk") `
+            -TargetPath "powershell.exe" `
+            -Arguments "-ExecutionPolicy Bypass -File `"$uninstaller`"" `
+            -WorkingDirectory $InstallDir
+    }
+
+    Write-OK "Shortcuts created"
+    Write-Host "    Desktop FixOnce -> $exe" -ForegroundColor DarkGray
+    Write-Host "    Start Menu FixOnce -> $exe" -ForegroundColor DarkGray
+    if (Test-Path $uninstaller) {
+        Write-Host "    Start Menu Uninstall FixOnce -> $uninstaller" -ForegroundColor DarkGray
     }
 }
 
@@ -148,33 +321,31 @@ try {
     Write-Host "  Try running manually: pip install -r requirements.txt"
 }
 
-# ============ Step 4: Check Write Permissions ============
-Write-Step "Checking permissions..."
+# ============ Step 4: Install Application Files ============
+Write-Step "Installing application files..."
 
-$dataDir = Join-Path $ScriptDir "data"
-if (-not (Test-Path $dataDir)) {
-    try {
-        New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
-    } catch {
-        Write-Err "Cannot create data directory. Run as Administrator or check folder permissions."
-        Read-Host "Press Enter to exit"
-        exit 1
-    }
+Install-ApplicationFiles
+
+# ============ Step 5: Check Write Permissions ============
+Write-Step "Checking runtime permissions..."
+
+if (-not (Test-Path $UserDataDir)) {
+    New-Item -ItemType Directory -Path $UserDataDir -Force | Out-Null
 }
 
-$testFile = Join-Path $dataDir "test_write.tmp"
+$testFile = Join-Path $UserDataDir "test_write.tmp"
 try {
     "test" | Out-File $testFile -Force
     Remove-Item $testFile -Force
     Write-OK "Write permissions OK"
 } catch {
-    Write-Err "Cannot write to data directory: $dataDir"
-    Write-Host "  Run installer as Administrator or check folder permissions"
+    Write-Err "Cannot write to runtime directory: $UserDataDir"
+    Write-Host "  Check folder permissions and try again"
     Read-Host "Press Enter to exit"
     exit 1
 }
 
-# ============ Step 5: Configure MCP ============
+# ============ Step 6: Configure MCP ============
 Write-Step "Configuring MCP for AI editors..."
 
 $mcpServerPath = Join-Path $ScriptDir "src\mcp_server\mcp_memory_server_v2.py"
@@ -228,8 +399,6 @@ try {
 # Codex config
 $codexDir = Join-Path $env:USERPROFILE ".codex"
 $codexConfig = Join-Path $codexDir "config.toml"
-$codexProjectDir = Join-Path $ScriptDir ".codex"
-$codexProjectConfig = Join-Path $codexProjectDir "config.toml"
 $codexBlock = @"
 [mcp_servers.fixonce]
 command = "$pythonCmd"
@@ -256,15 +425,7 @@ try {
     Write-Warn "Could not configure Codex: $_"
 }
 
-try {
-    if (-not (Test-Path $codexProjectDir)) { New-Item -ItemType Directory -Path $codexProjectDir -Force | Out-Null }
-    $codexBlock | Out-File $codexProjectConfig -Encoding UTF8
-    Write-OK "Project Codex config created"
-} catch {
-    Write-Warn "Could not create project Codex config: $_"
-}
-
-# ============ Step 5b: Configure Claude Code Hooks ============
+# ============ Step 6b: Configure Claude Code Hooks ============
 Write-Host ""
 Write-Host "  Configuring Claude Code hooks..." -ForegroundColor Cyan
 
@@ -339,7 +500,7 @@ try {
     Write-Warn "Could not configure Claude Code hooks: $_"
 }
 
-# ============ Step 6: Configure Auto-Start ============
+# ============ Step 7: Configure Auto-Start ============
 Write-Step "Configuring auto-start..."
 
 $taskName = "FixOnceServer"
@@ -366,7 +527,7 @@ if ($existingTask) {
     }
 }
 
-# ============ Step 7: Chrome Extension ============
+# ============ Step 8: Chrome Extension ============
 Write-Step "Chrome Extension setup..."
 
 $extensionDir = Join-Path $ScriptDir "extension"
@@ -388,20 +549,31 @@ Write-Host "  2. Click 'Load unpacked'" -ForegroundColor White
 Write-Host "  3. Select folder: $extensionDir" -ForegroundColor Cyan
 Write-Host ""
 
-# ============ Step 7b: Mark Installation Complete ============
+# ============ Shortcuts ============
+Write-Host ""
+Write-Host "  Creating shortcuts..." -ForegroundColor Cyan
+
+try {
+    Install-Shortcuts
+} catch {
+    Write-Warn "Could not create shortcuts: $_"
+}
+
+# ============ Step 8b: Mark Installation Complete ============
 Write-Host ""
 Write-Host "  Marking installation complete..." -ForegroundColor Cyan
 
-$userDataDir = Join-Path $env:USERPROFILE ".fixonce"
 try {
-    if (-not (Test-Path $userDataDir)) { New-Item -ItemType Directory -Path $userDataDir -Force | Out-Null }
+    if (-not (Test-Path $UserDataDir)) { New-Item -ItemType Directory -Path $UserDataDir -Force | Out-Null }
 
-    $installState = Join-Path $userDataDir "install_state.json"
+    $installState = Join-Path $UserDataDir "install_state.json"
     $state = @{
         "installed" = $true
         "installed_at" = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
         "version" = "1.0.12"
         "installer" = "powershell"
+        "install_dir" = $InstallDir
+        "app_exe" = (Join-Path $InstallDir "FixOnce.exe")
     }
     $state | ConvertTo-Json | Out-File $installState -Encoding UTF8
     Write-OK "Installation state saved"

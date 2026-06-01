@@ -58,11 +58,24 @@ if errorlevel 1 (
 )
 
 echo.
+echo Running packaging audit...
+%PYTHON% scripts\windows_packaging_audit.py dist\FixOnce dist\FixOnce\packaging_audit.txt
+
+if errorlevel 1 (
+    echo.
+    echo PACKAGING AUDIT FAILED!
+    echo See dist\FixOnce\packaging_audit.txt
+    pause
+    exit /b 1
+)
+
+echo.
 echo ======================================
 echo   BUILD SUCCESSFUL!
 echo ======================================
 echo.
 echo Output: dist\FixOnce\FixOnce.exe
+echo Audit: dist\FixOnce\packaging_audit.txt
 echo Entry point: scripts\app_launcher.py
 echo Windowed mode: enabled
 echo.

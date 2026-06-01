@@ -14,6 +14,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SPEC_PATH = PROJECT_ROOT / "fixonce.spec"
 APP_LAUNCHER = PROJECT_ROOT / "scripts" / "app_launcher.py"
+PACKAGING_AUDIT = PROJECT_ROOT / "scripts" / "windows_packaging_audit.py"
 DASHBOARD_HTML = PROJECT_ROOT / "data" / "dashboard.html"
 SERVER_SCRIPT = PROJECT_ROOT / "src" / "server.py"
 BUILD_DIRS = [
@@ -66,6 +67,7 @@ def main() -> int:
     print("==========================")
 
     check(APP_LAUNCHER.exists(), "app_launcher.py", str(APP_LAUNCHER), failures)
+    check(PACKAGING_AUDIT.exists(), "packaging audit", str(PACKAGING_AUDIT), failures)
     check(DASHBOARD_HTML.exists(), "dashboard.html", str(DASHBOARD_HTML), failures)
     check(SERVER_SCRIPT.exists(), "server.py", str(SERVER_SCRIPT), failures)
     check(import_exists("PyInstaller"), "PyInstaller", "importable in current Python", failures)
@@ -74,6 +76,8 @@ def main() -> int:
     check('scripts" / "app_launcher.py' in spec_text, "spec entrypoint", "uses scripts/app_launcher.py", failures)
     check("console=False" in spec_text, "spec console mode", "windowed EXE configured", failures)
     check("data/dashboard.html" in spec_text, "dashboard asset", "dashboard packaged", failures)
+    check("data/test_error.html" not in spec_text, "test pages excluded", "test_error.html not packaged", failures)
+    check('"extension"), "extension"' not in spec_text, "extension allowlist", "no whole extension directory", failures)
     check('"server"' in spec_text, "server hidden import", "internal server import declared", failures)
 
     required_hidden_imports = [

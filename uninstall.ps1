@@ -12,16 +12,22 @@ Write-Host "======================" -ForegroundColor Cyan
 Write-Host ""
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$InstallDir = Join-Path $env:LOCALAPPDATA "Programs\FixOnce"
+if ((Test-Path (Join-Path $ScriptDir "FixOnce.exe")) -and ($ScriptDir -match "\\Programs\\FixOnce$")) {
+    $InstallDir = $ScriptDir
+}
+$UserDataDir = Join-Path $env:USERPROFILE ".fixonce"
 
 Write-Host "This will remove FixOnce from your system." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "What will be removed:"
 Write-Host "  - Scheduled Task (auto-start)"
 Write-Host "  - MCP configuration from Codex/Claude/Cursor"
-Write-Host "  - Desktop shortcuts"
+Write-Host "  - Desktop and Start Menu shortcuts"
+Write-Host "  - Installed app files"
 Write-Host ""
 Write-Host "What will NOT be removed:"
-Write-Host "  - FixOnce folder (your data is safe)"
+Write-Host "  - Runtime data in $UserDataDir"
 Write-Host "  - Chrome extension (remove manually)"
 Write-Host ""
 
@@ -112,7 +118,7 @@ if (Test-Path $codexConfig) {
     Write-Warn "Codex config not found"
 }
 
-# Remove desktop shortcut
+# Remove shortcuts and installed files
 Write-Host "[5/5] Cleaning up..."
 $desktop = [Environment]::GetFolderPath("Desktop")
 $shortcut = Join-Path $desktop "FixOnce.lnk"
@@ -123,13 +129,40 @@ if (Test-Path $shortcut) {
     Write-Warn "Desktop shortcut not found"
 }
 
+$startMenu = [Environment]::GetFolderPath("StartMenu")
+$programsDir = Join-Path $startMenu "Programs\FixOnce"
+foreach ($shortcutName in @("FixOnce.lnk", "Uninstall FixOnce.lnk")) {
+    $startShortcut = Join-Path $programsDir $shortcutName
+    if (Test-Path $startShortcut) {
+        Remove-Item $startShortcut -Force
+        Write-OK "Start Menu shortcut removed: $shortcutName"
+    }
+}
+if (Test-Path $programsDir) {
+    Remove-Item $programsDir -Force -ErrorAction SilentlyContinue
+}
+
+$installState = Join-Path $UserDataDir "install_state.json"
+if (Test-Path $installState) {
+    Remove-Item $installState -Force -ErrorAction SilentlyContinue
+    Write-OK "Installation state removed"
+}
+
+if ((Test-Path $InstallDir) -and ($InstallDir -ne $UserDataDir)) {
+    try {
+        Remove-Item $InstallDir -Recurse -Force -ErrorAction Stop
+        Write-OK "Installed app files removed"
+    } catch {
+        Write-Warn "Could not remove installed app files now. Close FixOnce and delete: $InstallDir"
+    }
+}
+
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  ✓ Uninstall Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Your data in $ScriptDir\data is preserved."
-Write-Host "To completely remove FixOnce, delete the folder."
+Write-Host "Your runtime data in $UserDataDir is preserved."
 Write-Host ""
 Write-Host "To remove Chrome extension:"
 Write-Host "  chrome://extensions/ → Find FixOnce → Remove"

@@ -16,32 +16,105 @@ from pathlib import Path
 PROJECT_ROOT = Path(SPECPATH)
 
 
-def data_entry(relative_path: str):
+def data_entry(relative_path, target_root=None):
     path = PROJECT_ROOT / relative_path
-    return (str(path), str(Path(relative_path).parent))
+    target = Path(relative_path).parent if target_root is None else Path(target_root) / Path(relative_path).parent.name
+    return (str(path), str(target))
 
 
-datas = [
-    data_entry("data/dashboard.html"),
-    data_entry("data/dashboard_app.html"),
-    data_entry("data/installer.html"),
-    data_entry("data/privacy.html"),
-    data_entry("data/terms.html"),
-    data_entry("data/security.html"),
-    data_entry("data/test_error.html"),
-    data_entry("data/logo.png"),
-    data_entry("data/app-icon.png"),
-    data_entry("data/fixonce_logo.svg"),
-    data_entry("data/project_memory.template.json"),
-    data_entry("data/active_project.template.json"),
-    data_entry("data/activity_log.template.json"),
-    data_entry("data/session_registry.template.json"),
-    data_entry("data/global-claude-md.md"),
-    data_entry("data/global-cursor-rules.md"),
-    data_entry("data/global-agent-rules.md"),
-    (str(PROJECT_ROOT / "extension"), "extension"),
-    (str(PROJECT_ROOT / "assets"), "assets"),
+DATA_ALLOWLIST = [
+    "data/dashboard.html",
+    "data/dashboard_app.html",
+    "data/dashboard_minimal.html",
+    "data/installer.html",
+    "data/privacy.html",
+    "data/terms.html",
+    "data/security.html",
+    "data/logo.png",
+    "data/app-icon.png",
+    "data/fixonce_icon_1024.png",
+    "data/fixonce_logo.svg",
+    "data/project_memory.template.json",
+    "data/active_project.template.json",
+    "data/activity_log.template.json",
+    "data/session_registry.template.json",
+    "data/global-claude-md.md",
+    "data/global-cursor-rules.md",
+    "data/global-agent-rules.md",
 ]
+
+EXTENSION_ALLOWLIST = [
+    "extension/manifest.json",
+    "extension/background.js",
+    "extension/bridge.js",
+    "extension/content.js",
+    "extension/element-picker.js",
+    "extension/icon128.png",
+    "extension/icon16.png",
+    "extension/icon48.png",
+    "extension/injected.js",
+    "extension/logger.js",
+    "extension/picker-bridge.js",
+    "extension/popup.html",
+    "extension/popup.js",
+]
+
+ASSET_ALLOWLIST = [
+    "assets/FixOnce.ico",
+    "assets/FixOnce.png",
+    "assets/logo.svg",
+]
+
+HOOK_ALLOWLIST = [
+    "hooks/session_start.ps1",
+    "hooks/session_end.ps1",
+    "hooks/post_tool_use.ps1",
+]
+
+ROOT_INSTALLER_FILES = [
+    "install.ps1",
+    "install.bat",
+    "uninstall.ps1",
+    "requirements.txt",
+]
+
+
+def existing_entries(paths):
+    entries = []
+    for relative_path in paths:
+        path = PROJECT_ROOT / relative_path
+        if path.exists():
+            entries.append(data_entry(relative_path))
+    return entries
+
+
+def tree_entries(root_relative_path, excluded_dirs=()):
+    root = PROJECT_ROOT / root_relative_path
+    entries = []
+    if not root.exists():
+        return entries
+
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(PROJECT_ROOT)
+        parts = set(relative.parts)
+        if "__pycache__" in parts or any(excluded in parts for excluded in excluded_dirs):
+            continue
+        if path.suffix in {".pyc", ".pyo"}:
+            continue
+        entries.append((str(path), str(relative.parent)))
+    return entries
+
+
+datas = (
+    existing_entries(DATA_ALLOWLIST)
+    + existing_entries(EXTENSION_ALLOWLIST)
+    + existing_entries(ASSET_ALLOWLIST)
+    + existing_entries(HOOK_ALLOWLIST)
+    + tree_entries("src", excluded_dirs=(".fixonce",))
+    + [(str(PROJECT_ROOT / file), ".") for file in ROOT_INSTALLER_FILES if (PROJECT_ROOT / file).exists()]
+)
 
 
 hiddenimports = [

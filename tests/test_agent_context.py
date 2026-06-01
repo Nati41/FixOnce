@@ -2,6 +2,12 @@
 """Tests for the Stage 8 agent identity model."""
 
 import sys
+import os
+import json
+import tempfile
+import contextlib
+import io
+import time
 import types
 import unittest
 from pathlib import Path
@@ -25,10 +31,122 @@ class _FakeFastMCP:
 sys.modules.setdefault("fastmcp", types.SimpleNamespace(FastMCP=_FakeFastMCP))
 
 from core.agent_context import AgentContext
+import core.mcp_session_health as session_health
 import mcp_memory_server_v2 as server
 
 
 class TestAgentContext(unittest.TestCase):
+    def test_fixonce_actor_env_resolves_codex_client_actor(self):
+        with patch.dict(os.environ, {"FIXONCE_ACTOR": "codex"}, clear=True):
+            identity = server._resolve_actor_identity()
+
+        self.assertEqual(identity["editor"], "codex")
+        self.assertEqual(identity["source"], "client_actor")
+        self.assertEqual(identity["confidence"], 1.0)
+
+    def test_windows_like_no_env_no_parent_probe_resolves_unknown(self):
+        with tempfile.TemporaryDirectory() as temp_home:
+            with patch.dict(os.environ, {}, clear=True), \
+                 patch.object(server, "_get_parent_process_command", return_value=""), \
+                 patch.object(server.Path, "home", return_value=Path(temp_home)):
+                identity = server._resolve_actor_identity()
+
+        self.assertEqual(identity["editor"], "unknown")
+        self.assertEqual(identity["source"], "none")
+        self.assertEqual(identity["confidence"], 0.0)
+
+    def test_unknown_actor_connection_does_not_fallback_to_claude(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            connections_file = Path(temp_dir) / "ai_connections.json"
+
+            with patch.object(server, "AI_CONNECTIONS_FILE", connections_file):
+                server._persist_ai_connection({
+                    "editor": "unknown",
+                    "source": "none",
+                    "confidence": 0.0,
+                }, project_id="proj-unknown")
+
+            data = json.loads(connections_file.read_text(encoding="utf-8"))
+
+        self.assertIn("unknown", data["clients"])
+        self.assertNotIn("claude", data["clients"])
+        self.assertEqual(data["clients"]["unknown"]["actor_source"], "none")
+
+    def test_safe_tool_handler_returns_error_instead_of_raising(self):
+        def boom():
+            raise RuntimeError("transport should stay open")
+
+        result = server._run_tool_body("boom_tool", boom)
+
+        self.assertIn("FixOnce MCP tool error in boom_tool", result)
+        self.assertIn("RuntimeError", result)
+
+    def test_safe_tool_handler_returns_friendly_text_after_transport_loss_threshold(self):
+        def transport_closed():
+            raise RuntimeError("Transport closed")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "mcp_session_health.json"
+            log_file = Path(temp_dir) / "logs" / "mcp_session_health.jsonl"
+            with patch.object(session_health, "STATE_FILE", state_file), \
+                 patch.object(session_health, "LOG_FILE", log_file), \
+                 patch.object(server, "_mcp_actor_for_health", return_value={"editor": "unknown", "source": "none"}):
+                server._run_tool_body("lost_tool", transport_closed)
+                result = server._run_tool_body("lost_tool", transport_closed)
+
+        self.assertIn("FixOnce lost the MCP connection", result)
+        self.assertNotEqual(result, "Transport closed")
+
+    def test_safe_tool_handler_redirects_stdout_to_stderr(self):
+        def noisy():
+            print("stdout pollution")
+            return "ok"
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            result = server._run_tool_body("noisy_tool", noisy)
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(stdout.getvalue(), "")
+
+    def test_tool_timeout_returns_structured_error_quickly(self):
+        def slow():
+            time.sleep(0.2)
+            return "late"
+
+        started = time.monotonic()
+        result = server._run_tool_with_timeout("slow_tool", slow, 0.01)
+        elapsed = time.monotonic() - started
+
+        self.assertIn("FixOnce MCP tool timeout in slow_tool", result)
+        self.assertLess(elapsed, 0.15)
+
+    def test_fo_sync_lightweight_updates_project_memory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            projects_dir = temp_root / "projects_v2"
+            projects_dir.mkdir()
+            project_id = "proj_sync"
+            project_file = projects_dir / f"{project_id}.json"
+            project_file.write_text(json.dumps({"live_record": {"intent": {}}}), encoding="utf-8")
+            session_file = temp_root / "mcp_session.json"
+            compliance_file = temp_root / "mcp_compliance.json"
+
+            with patch.object(server, "DATA_DIR", projects_dir), \
+                 patch.object(server, "SESSION_FILE", session_file), \
+                 patch.object(server, "COMPLIANCE_FILE", compliance_file):
+                server._set_session(project_id, temp_dir)
+                server._persist_session(project_id, temp_dir)
+                server._mark_session_initialized()
+
+                result = server.fo_sync(goal="בדיקת סנכרון", next_step="המשך בדיקה")
+
+            data = json.loads(project_file.read_text(encoding="utf-8"))
+
+        self.assertEqual(result, "Synced.")
+        self.assertEqual(data["live_record"]["intent"]["current_goal"], "בדיקת סנכרון")
+        self.assertEqual(data["live_record"]["intent"]["next_step"], "המשך בדיקה")
+
     def test_agent_context_fields_are_preserved(self):
         ctx = AgentContext(
             actor_name="codex",
