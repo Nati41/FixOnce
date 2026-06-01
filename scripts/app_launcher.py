@@ -30,6 +30,10 @@ LOG_DIR = USER_DATA_DIR / "logs"
 LAUNCHER_LOG = LOG_DIR / "app_launcher.log"
 BOOTSTRAP_LOG = LOG_DIR / "bootstrap.log"
 BOOTSTRAP_TASK_NAME = "FixOnceServer"
+BOOTSTRAP_STARTUP_SHORTCUT_NAME = "FixOnceServer.lnk"
+AUTOSTART_METHOD_SCHEDULED_TASK = "scheduled_task"
+AUTOSTART_METHOD_STARTUP_SHORTCUT = "startup_shortcut"
+AUTOSTART_METHOD_NONE = "none"
 DEFAULT_PORT = 5000
 PORT_RANGE = range(DEFAULT_PORT, DEFAULT_PORT + 10)
 START_TIMEOUT_SECONDS = 12.0
@@ -412,6 +416,85 @@ def ensure_windows_scheduled_task(log_fn: Callable[[str], None] | None = None) -
     return False
 
 
+def get_windows_startup_folder() -> Path:
+    """Per-user Startup folder used for logon autostart shortcuts."""
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    return Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+
+
+def get_windows_startup_shortcut_path() -> Path:
+    return get_windows_startup_folder() / BOOTSTRAP_STARTUP_SHORTCUT_NAME
+
+
+def ensure_windows_startup_shortcut(log_fn: Callable[[str], None] | None = None) -> bool:
+    """Create or update the FixOnceServer Startup folder shortcut (idempotent)."""
+    write_log = log_fn or bootstrap_log
+    if sys.platform != "win32":
+        write_log("Startup shortcut setup skipped: not Windows")
+        return False
+
+    command = get_packaged_server_command()
+    executable = command[0]
+    argument_string = subprocess.list2cmdline(command[1:]) if len(command) > 1 else ""
+    working_directory = str(get_packaged_install_dir())
+    shortcut_path = get_windows_startup_shortcut_path()
+
+    write_log(
+        f"Configuring Startup shortcut {shortcut_path}: "
+        f"target={executable!r} args={argument_string!r} cwd={working_directory!r}"
+    )
+
+    shortcut_path.parent.mkdir(parents=True, exist_ok=True)
+    ps_script = f"""
+$ErrorActionPreference = 'Stop'
+$shell = New-Object -ComObject WScript.Shell
+$shortcut = $shell.CreateShortcut({_powershell_single_quote(str(shortcut_path))})
+$shortcut.TargetPath = {_powershell_single_quote(executable)}
+$shortcut.Arguments = {_powershell_single_quote(argument_string)}
+$shortcut.WorkingDirectory = {_powershell_single_quote(working_directory)}
+$shortcut.WindowStyle = 7
+$iconPath = Join-Path {_powershell_single_quote(working_directory)} 'FixOnce.exe'
+if (Test-Path $iconPath) {{ $shortcut.IconLocation = "$iconPath,0" }}
+$shortcut.Save()
+"""
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0 and shortcut_path.exists():
+        write_log(f"Startup shortcut ready: {shortcut_path}")
+        return True
+
+    detail = (result.stderr or result.stdout or "").strip()
+    write_log(f"Startup shortcut setup failed: {detail or 'unknown error'}")
+    return False
+
+
+def configure_windows_autostart(log_fn: Callable[[str], None] | None = None) -> str:
+    """
+    Configure Windows logon autostart (tiered).
+
+    Returns autostart_method: scheduled_task, startup_shortcut, or none.
+    """
+    write_log = log_fn or bootstrap_log
+    if sys.platform != "win32":
+        write_log("Autostart setup skipped: not Windows")
+        return AUTOSTART_METHOD_NONE
+
+    if ensure_windows_scheduled_task(log_fn=write_log):
+        return AUTOSTART_METHOD_SCHEDULED_TASK
+
+    write_log("Scheduled task unavailable; trying Startup folder shortcut fallback")
+    if ensure_windows_startup_shortcut(log_fn=write_log):
+        return AUTOSTART_METHOD_STARTUP_SHORTCUT
+
+    write_log("WARNING: No autostart method configured (non-fatal)")
+    return AUTOSTART_METHOD_NONE
+
+
 def ensure_packaged_server_running(log_fn: Callable[[str], None] | None = None) -> int | None:
     """Start or reuse the background server; return port when /api/health is OK."""
     write_log = log_fn or bootstrap_log
@@ -455,12 +538,12 @@ def run_bootstrap() -> int:
         )
         bootstrap_log("install_state set to INSTALLING")
 
-        autostart_ok = ensure_windows_scheduled_task()
-        bootstrap_metadata = {"bootstrap": True, "autostart_task": autostart_ok}
-        if not autostart_ok:
-            bootstrap_log(
-                "WARNING: FixOnceServer autostart was not configured; continuing bootstrap"
-            )
+        autostart_method = configure_windows_autostart()
+        bootstrap_metadata = {"bootstrap": True, "autostart_method": autostart_method}
+        if autostart_method == AUTOSTART_METHOD_NONE:
+            bootstrap_log("WARNING: Autostart was not configured; continuing bootstrap")
+        else:
+            bootstrap_log(f"Autostart configured via {autostart_method}")
 
         persist_snapshot(
             InstallState.STARTING,

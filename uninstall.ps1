@@ -142,6 +142,15 @@ if (Test-Path $programsDir) {
     Remove-Item $programsDir -Force -ErrorAction SilentlyContinue
 }
 
+$startupDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
+$startupShortcut = Join-Path $startupDir "FixOnceServer.lnk"
+if (Test-Path $startupShortcut) {
+    Remove-Item $startupShortcut -Force
+    Write-OK "Startup autostart shortcut removed"
+} else {
+    Write-Warn "Startup autostart shortcut not found"
+}
+
 $installState = Join-Path $UserDataDir "install_state.json"
 if (Test-Path $installState) {
     Remove-Item $installState -Force -ErrorAction SilentlyContinue

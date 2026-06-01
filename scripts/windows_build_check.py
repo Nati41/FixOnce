@@ -143,6 +143,18 @@ def main() -> int:
     check("--server" in launcher_text, "launcher server mode", "app launcher exposes packaged --server dispatch", failures)
     check("--bootstrap" in launcher_text, "launcher bootstrap mode", "app launcher exposes packaged --bootstrap dispatch", failures)
     check("bootstrap.log" in launcher_text, "bootstrap log file", "bootstrap steps logged to ~/.fixonce/logs/bootstrap.log", failures)
+    check(
+        "configure_windows_autostart" in launcher_text and "startup_shortcut" in launcher_text,
+        "bootstrap startup fallback",
+        "tiered autostart includes Startup folder shortcut fallback",
+        failures,
+    )
+    check(
+        "FixOnceServer.lnk" in launcher_text,
+        "bootstrap startup shortcut name",
+        "Startup shortcut uses FixOnceServer.lnk",
+        failures,
+    )
     check("FixOnce could not open its app window." in launcher_text, "friendly startup failure", "friendly error path present", failures)
 
     if INNO_SETUP.exists():

@@ -119,7 +119,60 @@ class TestBootstrap(unittest.TestCase):
         self.assertEqual(args[0], "schtasks")
         self.assertNotIn("/it", args)
 
-    def test_run_bootstrap_continues_when_scheduled_task_fails(self):
+    def test_configure_autostart_prefers_scheduled_task(self):
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
+            app_launcher, "ensure_windows_scheduled_task", return_value=True
+        ) as ensure_task, patch.object(app_launcher, "ensure_windows_startup_shortcut") as ensure_shortcut:
+            method = app_launcher.configure_windows_autostart()
+
+        self.assertEqual(method, app_launcher.AUTOSTART_METHOD_SCHEDULED_TASK)
+        ensure_task.assert_called_once()
+        ensure_shortcut.assert_not_called()
+
+    def test_configure_autostart_uses_startup_shortcut_when_task_fails(self):
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
+            app_launcher, "ensure_windows_scheduled_task", return_value=False
+        ), patch.object(app_launcher, "ensure_windows_startup_shortcut", return_value=True) as ensure_shortcut:
+            method = app_launcher.configure_windows_autostart()
+
+        self.assertEqual(method, app_launcher.AUTOSTART_METHOD_STARTUP_SHORTCUT)
+        ensure_shortcut.assert_called_once()
+
+    def test_configure_autostart_none_when_all_methods_fail(self):
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
+            app_launcher, "ensure_windows_scheduled_task", return_value=False
+        ), patch.object(app_launcher, "ensure_windows_startup_shortcut", return_value=False):
+            method = app_launcher.configure_windows_autostart()
+
+        self.assertEqual(method, app_launcher.AUTOSTART_METHOD_NONE)
+
+    def test_ensure_windows_startup_shortcut_uses_server_command(self):
+        startup_dir = Path(self.temp_dir.name) / "Startup"
+        shortcut_path = startup_dir / "FixOnceServer.lnk"
+
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
+            app_launcher,
+            "get_packaged_server_command",
+            return_value=[r"C:\Apps\FixOnce\FixOnce.exe", "--server"],
+        ), patch.object(
+            app_launcher,
+            "get_packaged_install_dir",
+            return_value=Path(r"C:\Apps\FixOnce"),
+        ), patch.object(app_launcher, "get_windows_startup_shortcut_path", return_value=shortcut_path):
+            def fake_run(*_args, **_kwargs):
+                shortcut_path.parent.mkdir(parents=True, exist_ok=True)
+                shortcut_path.touch()
+                return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+            with patch.object(app_launcher.subprocess, "run", side_effect=fake_run) as run_ps:
+                self.assertTrue(app_launcher.ensure_windows_startup_shortcut())
+
+        script = run_ps.call_args[0][0][-1]
+        self.assertIn("WScript.Shell", script)
+        self.assertIn("--server", script)
+        self.assertIn(r"C:\Apps\FixOnce\FixOnce.exe", script)
+
+    def test_run_bootstrap_uses_startup_shortcut_when_scheduled_task_fails(self):
         self.runtime_file.write_text(
             json.dumps({"port": 5000, "pid": 4242}),
             encoding="utf-8",
@@ -129,7 +182,11 @@ class TestBootstrap(unittest.TestCase):
             app_launcher,
             "get_packaged_install_dir",
             return_value=Path(r"C:\Apps\FixOnce"),
-        ), patch.object(app_launcher, "ensure_windows_scheduled_task", return_value=False), patch.object(
+        ), patch.object(
+            app_launcher,
+            "configure_windows_autostart",
+            return_value=app_launcher.AUTOSTART_METHOD_STARTUP_SHORTCUT,
+        ), patch.object(
             app_launcher,
             "ensure_packaged_server_running",
             return_value=5000,
@@ -140,11 +197,35 @@ class TestBootstrap(unittest.TestCase):
         open_dashboard.assert_called_once_with(5000)
         snapshot = load_snapshot(data_dir=self.data_dir)
         self.assertEqual(snapshot.state, InstallState.READY)
-        self.assertFalse(snapshot.metadata.get("autostart_task"))
-        self.assertTrue(
-            any("continuing bootstrap" in line.lower() for line in self._log_lines())
-            or any("non-fatal" in line.lower() for line in self._log_lines())
+        self.assertEqual(snapshot.metadata.get("autostart_method"), "startup_shortcut")
+
+    def test_run_bootstrap_continues_when_autostart_unavailable(self):
+        self.runtime_file.write_text(
+            json.dumps({"port": 5000, "pid": 4242}),
+            encoding="utf-8",
         )
+
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(app_launcher, "is_frozen", return_value=True), patch.object(
+            app_launcher,
+            "get_packaged_install_dir",
+            return_value=Path(r"C:\Apps\FixOnce"),
+        ), patch.object(
+            app_launcher,
+            "configure_windows_autostart",
+            return_value=app_launcher.AUTOSTART_METHOD_NONE,
+        ), patch.object(
+            app_launcher,
+            "ensure_packaged_server_running",
+            return_value=5000,
+        ), patch.object(app_launcher, "open_dashboard") as open_dashboard:
+            code = app_launcher.run_bootstrap()
+
+        self.assertEqual(code, 0)
+        open_dashboard.assert_called_once_with(5000)
+        snapshot = load_snapshot(data_dir=self.data_dir)
+        self.assertEqual(snapshot.state, InstallState.READY)
+        self.assertEqual(snapshot.metadata.get("autostart_method"), "none")
+        self.assertTrue(any("continuing bootstrap" in line.lower() for line in self._log_lines()))
 
     def test_run_bootstrap_success_writes_ready_and_opens_dashboard(self):
         self.runtime_file.write_text(
@@ -161,7 +242,11 @@ class TestBootstrap(unittest.TestCase):
             app_launcher,
             "get_packaged_install_dir",
             return_value=Path(r"C:\Apps\FixOnce"),
-        ), patch.object(app_launcher, "ensure_windows_scheduled_task", return_value=True) as ensure_task, patch.object(
+        ), patch.object(
+            app_launcher,
+            "configure_windows_autostart",
+            return_value=app_launcher.AUTOSTART_METHOD_SCHEDULED_TASK,
+        ) as configure_autostart, patch.object(
             app_launcher,
             "ensure_packaged_server_running",
             return_value=5000,
@@ -169,7 +254,7 @@ class TestBootstrap(unittest.TestCase):
             code = app_launcher.run_bootstrap()
 
         self.assertEqual(code, 0)
-        ensure_task.assert_called_once()
+        configure_autostart.assert_called_once()
         ensure_server.assert_called_once()
         open_dashboard.assert_called_once_with(5000)
 
@@ -204,7 +289,11 @@ class TestBootstrap(unittest.TestCase):
             app_launcher,
             "get_packaged_install_dir",
             return_value=Path(r"C:\Apps\FixOnce"),
-        ), patch.object(app_launcher, "ensure_windows_scheduled_task", return_value=True) as ensure_task, patch.object(
+        ), patch.object(
+            app_launcher,
+            "configure_windows_autostart",
+            return_value=app_launcher.AUTOSTART_METHOD_SCHEDULED_TASK,
+        ) as configure_autostart, patch.object(
             app_launcher,
             "ensure_packaged_server_running",
             return_value=5000,
@@ -214,7 +303,7 @@ class TestBootstrap(unittest.TestCase):
 
         self.assertEqual(first, 0)
         self.assertEqual(second, 0)
-        self.assertEqual(ensure_task.call_count, 2)
+        self.assertEqual(configure_autostart.call_count, 2)
         self.assertEqual(ensure_server.call_count, 2)
         self.assertEqual(open_dashboard.call_count, 2)
         snapshot = load_snapshot(data_dir=self.data_dir)
@@ -225,7 +314,11 @@ class TestBootstrap(unittest.TestCase):
             app_launcher,
             "get_packaged_install_dir",
             return_value=Path(r"C:\Apps\FixOnce"),
-        ), patch.object(app_launcher, "ensure_windows_scheduled_task", return_value=True), patch.object(
+        ), patch.object(
+            app_launcher,
+            "configure_windows_autostart",
+            return_value=app_launcher.AUTOSTART_METHOD_SCHEDULED_TASK,
+        ), patch.object(
             app_launcher,
             "ensure_packaged_server_running",
             return_value=None,
@@ -237,6 +330,11 @@ class TestBootstrap(unittest.TestCase):
         snapshot = load_snapshot(data_dir=self.data_dir)
         self.assertEqual(snapshot.state, InstallState.FAILED)
         self.assertIn("health", snapshot.detail.lower())
+
+    def test_uninstall_script_removes_startup_shortcut(self):
+        uninstall_text = (PROJECT_ROOT / "uninstall.ps1").read_text(encoding="utf-8")
+        self.assertIn("FixOnceServer.lnk", uninstall_text)
+        self.assertIn("Programs\\Startup", uninstall_text)
 
     def test_main_dispatches_bootstrap(self):
         with patch.object(app_launcher, "run_bootstrap", return_value=0) as run_bootstrap, patch.object(sys, "argv", ["FixOnce.exe", "--bootstrap"]):
