@@ -266,57 +266,150 @@ def _read_runtime_pid_port() -> tuple[int | None, int | None]:
     return runtime_pid, runtime_port
 
 
+def _powershell_single_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
 def windows_scheduled_task_exists(task_name: str = BOOTSTRAP_TASK_NAME) -> bool:
+    """Return True when the current user already has the logon task registered."""
     if sys.platform != "win32":
         return False
+
+    ps_script = (
+        f"$task = Get-ScheduledTask -TaskName {_powershell_single_quote(task_name)} "
+        "-ErrorAction SilentlyContinue; "
+        "if ($null -eq $task) { exit 1 } else { exit 0 }"
+    )
     result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return True
+
+    fallback = subprocess.run(
         ["schtasks", "/query", "/tn", task_name],
         capture_output=True,
         text=True,
     )
-    return result.returncode == 0
+    return fallback.returncode == 0
+
+
+def _register_user_logon_task_powershell(
+    task_name: str,
+    executable: str,
+    argument_string: str,
+    working_directory: str,
+) -> tuple[bool, str]:
+    """Register a per-user logon task for the current interactive account (no admin)."""
+    ps_script = f"""
+$ErrorActionPreference = 'Stop'
+$action = New-ScheduledTaskAction `
+  -Execute {_powershell_single_quote(executable)} `
+  -Argument {_powershell_single_quote(argument_string)} `
+  -WorkingDirectory {_powershell_single_quote(working_directory)}
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+$settings = New-ScheduledTaskSettingsSet `
+  -AllowStartIfOnBatteries `
+  -DontStopIfGoingOnBatteries `
+  -StartWhenAvailable `
+  -RestartCount 3 `
+  -RestartInterval (New-TimeSpan -Minutes 1)
+$principal = New-ScheduledTaskPrincipal `
+  -UserId $env:USERNAME `
+  -LogonType Interactive `
+  -RunLevel Limited
+Register-ScheduledTask `
+  -TaskName {_powershell_single_quote(task_name)} `
+  -Action $action `
+  -Trigger $trigger `
+  -Settings $settings `
+  -Principal $principal `
+  -Force | Out-Null
+"""
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return True, ""
+    detail = (result.stderr or result.stdout or "").strip()
+    return False, detail or "unknown PowerShell error"
+
+
+def _register_user_logon_task_schtasks(
+    task_name: str,
+    command: list[str],
+) -> tuple[bool, str]:
+    """Fallback per-user task registration without /IT (avoids elevation quirks)."""
+    result = subprocess.run(
+        [
+            "schtasks",
+            "/create",
+            "/tn",
+            task_name,
+            "/tr",
+            subprocess.list2cmdline(command),
+            "/sc",
+            "onlogon",
+            "/rl",
+            "LIMITED",
+            "/f",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return True, ""
+    detail = (result.stderr or result.stdout or "").strip()
+    return False, detail or "unknown schtasks error"
 
 
 def ensure_windows_scheduled_task(log_fn: Callable[[str], None] | None = None) -> bool:
-    """Create or update the FixOnceServer logon scheduled task (idempotent)."""
+    """
+    Create or update the FixOnceServer per-user logon task (idempotent).
+
+    Returns False when autostart could not be configured; callers may continue setup.
+    """
     write_log = log_fn or bootstrap_log
     if sys.platform != "win32":
         write_log("Scheduled task setup skipped: not Windows")
         return False
 
     command = get_packaged_server_command()
-    write_log(f"Configuring scheduled task {BOOTSTRAP_TASK_NAME}: {command!r}")
+    executable = command[0]
+    argument_string = subprocess.list2cmdline(command[1:]) if len(command) > 1 else ""
+    working_directory = str(get_packaged_install_dir())
+
+    write_log(
+        f"Configuring per-user scheduled task {BOOTSTRAP_TASK_NAME}: "
+        f"execute={executable!r} args={argument_string!r} cwd={working_directory!r}"
+    )
 
     if windows_scheduled_task_exists():
         write_log(f"Scheduled task {BOOTSTRAP_TASK_NAME} already exists; updating")
-    else:
-        write_log(f"Creating scheduled task {BOOTSTRAP_TASK_NAME}")
 
-    result = subprocess.run(
-        [
-            "schtasks",
-            "/create",
-            "/tn",
-            BOOTSTRAP_TASK_NAME,
-            "/tr",
-            subprocess.list2cmdline(command),
-            "/sc",
-            "onlogon",
-            "/rl",
-            "limited",
-            "/f",
-            "/it",
-        ],
-        capture_output=True,
-        text=True,
+    ok, detail = _register_user_logon_task_powershell(
+        BOOTSTRAP_TASK_NAME,
+        executable,
+        argument_string,
+        working_directory,
     )
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "").strip()
-        write_log(f"Scheduled task setup failed: {detail or 'unknown error'}")
-        return False
+    if ok:
+        write_log(f"Scheduled task {BOOTSTRAP_TASK_NAME} ready (Register-ScheduledTask)")
+        return True
 
-    write_log(f"Scheduled task {BOOTSTRAP_TASK_NAME} ready")
-    return True
+    write_log(f"Register-ScheduledTask failed: {detail}")
+
+    ok, detail = _register_user_logon_task_schtasks(BOOTSTRAP_TASK_NAME, command)
+    if ok:
+        write_log(f"Scheduled task {BOOTSTRAP_TASK_NAME} ready (schtasks fallback)")
+        return True
+
+    write_log(f"WARNING: Scheduled task setup failed (non-fatal): {detail}")
+    return False
 
 
 def ensure_packaged_server_running(log_fn: Callable[[str], None] | None = None) -> int | None:
@@ -362,20 +455,18 @@ def run_bootstrap() -> int:
         )
         bootstrap_log("install_state set to INSTALLING")
 
-        if not ensure_windows_scheduled_task():
-            persist_snapshot(
-                InstallState.FAILED,
-                detail="Could not create FixOnceServer scheduled task",
-                install_dir=install_dir,
+        autostart_ok = ensure_windows_scheduled_task()
+        bootstrap_metadata = {"bootstrap": True, "autostart_task": autostart_ok}
+        if not autostart_ok:
+            bootstrap_log(
+                "WARNING: FixOnceServer autostart was not configured; continuing bootstrap"
             )
-            bootstrap_log("Bootstrap failed during scheduled task setup")
-            return 1
 
         persist_snapshot(
             InstallState.STARTING,
             detail="Ensuring background server",
             install_dir=install_dir,
-            metadata={"bootstrap": True},
+            metadata=bootstrap_metadata,
         )
         bootstrap_log("install_state set to STARTING")
 
@@ -383,7 +474,7 @@ def run_bootstrap() -> int:
             InstallState.WAITING_HEALTH,
             detail="Waiting for /api/health",
             install_dir=install_dir,
-            metadata={"bootstrap": True},
+            metadata=bootstrap_metadata,
         )
         bootstrap_log("install_state set to WAITING_HEALTH")
 
@@ -406,7 +497,7 @@ def run_bootstrap() -> int:
             install_dir=install_dir,
             runtime_port=runtime_port,
             runtime_pid=runtime_pid,
-            metadata={"bootstrap": True},
+            metadata=bootstrap_metadata,
         )
         bootstrap_log("install_state written as READY")
 

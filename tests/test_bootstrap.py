@@ -62,23 +62,89 @@ class TestBootstrap(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertTrue(any("packaged FixOnce.exe" in line for line in self._log_lines()))
 
-    def test_ensure_windows_scheduled_task_uses_server_command(self):
+    def test_ensure_windows_scheduled_task_uses_powershell_register(self):
         with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
             app_launcher,
             "get_packaged_server_command",
             return_value=[r"C:\Apps\FixOnce\FixOnce.exe", "--server"],
+        ), patch.object(
+            app_launcher,
+            "get_packaged_install_dir",
+            return_value=Path(r"C:\Apps\FixOnce"),
         ), patch.object(app_launcher, "windows_scheduled_task_exists", return_value=False), patch.object(
-            app_launcher.subprocess,
-            "run",
-            return_value=type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})(),
-        ) as run_task:
+            app_launcher,
+            "_register_user_logon_task_powershell",
+            return_value=(True, ""),
+        ) as register_task:
             self.assertTrue(app_launcher.ensure_windows_scheduled_task())
 
-        args = run_task.call_args[0][0]
+        register_task.assert_called_once_with(
+            "FixOnceServer",
+            r"C:\Apps\FixOnce\FixOnce.exe",
+            "--server",
+            r"C:\Apps\FixOnce",
+        )
+
+    def test_ensure_windows_scheduled_task_falls_back_to_schtasks_without_it(self):
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
+            app_launcher,
+            "get_packaged_server_command",
+            return_value=[r"C:\Apps\FixOnce\FixOnce.exe", "--server"],
+        ), patch.object(
+            app_launcher,
+            "get_packaged_install_dir",
+            return_value=Path(r"C:\Apps\FixOnce"),
+        ), patch.object(app_launcher, "windows_scheduled_task_exists", return_value=False), patch.object(
+            app_launcher,
+            "_register_user_logon_task_powershell",
+            return_value=(False, "Access is denied."),
+        ), patch.object(
+            app_launcher,
+            "_register_user_logon_task_schtasks",
+            return_value=(True, ""),
+        ) as schtasks_register:
+            self.assertTrue(app_launcher.ensure_windows_scheduled_task())
+
+        schtasks_register.assert_called_once()
+
+    def test_schtasks_fallback_does_not_use_interactive_only_flag(self):
+        with patch.object(app_launcher.subprocess, "run", return_value=type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()) as run_task:
+            ok, _ = app_launcher._register_user_logon_task_schtasks(
+                "FixOnceServer",
+                [r"C:\Apps\FixOnce\FixOnce.exe", "--server"],
+            )
+
+        self.assertTrue(ok)
+        args = [part.lower() for part in run_task.call_args[0][0]]
         self.assertEqual(args[0], "schtasks")
-        self.assertEqual(args[2], "/tn")
-        self.assertEqual(args[3], "FixOnceServer")
-        self.assertIn("--server", args[5])
+        self.assertNotIn("/it", args)
+
+    def test_run_bootstrap_continues_when_scheduled_task_fails(self):
+        self.runtime_file.write_text(
+            json.dumps({"port": 5000, "pid": 4242}),
+            encoding="utf-8",
+        )
+
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(app_launcher, "is_frozen", return_value=True), patch.object(
+            app_launcher,
+            "get_packaged_install_dir",
+            return_value=Path(r"C:\Apps\FixOnce"),
+        ), patch.object(app_launcher, "ensure_windows_scheduled_task", return_value=False), patch.object(
+            app_launcher,
+            "ensure_packaged_server_running",
+            return_value=5000,
+        ), patch.object(app_launcher, "open_dashboard") as open_dashboard:
+            code = app_launcher.run_bootstrap()
+
+        self.assertEqual(code, 0)
+        open_dashboard.assert_called_once_with(5000)
+        snapshot = load_snapshot(data_dir=self.data_dir)
+        self.assertEqual(snapshot.state, InstallState.READY)
+        self.assertFalse(snapshot.metadata.get("autostart_task"))
+        self.assertTrue(
+            any("continuing bootstrap" in line.lower() for line in self._log_lines())
+            or any("non-fatal" in line.lower() for line in self._log_lines())
+        )
 
     def test_run_bootstrap_success_writes_ready_and_opens_dashboard(self):
         self.runtime_file.write_text(
