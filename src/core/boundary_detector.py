@@ -231,9 +231,8 @@ def find_project_root(file_path: str) -> tuple[Optional[str], str, str]:
             return None, "", "low"
 
     home = Path.home()
-    root = Path('/')
 
-    while current != root and current != home:
+    while current != home:
         # Check for strong markers in priority order
         for marker in STRONG_MARKERS:
             marker_path = current / marker
@@ -241,7 +240,10 @@ def find_project_root(file_path: str) -> tuple[Optional[str], str, str]:
                 confidence = "high" if marker == '.git' else "medium"
                 return str(current), marker, confidence
 
-        current = current.parent
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
 
     # No strong marker found
     return None, "", "low"
