@@ -55,7 +55,16 @@ else:
 sys.path.insert(0, str(Path(__file__).parent))
 
 _startup_log("import config/core/api modules: start")
-from config import VERSION, APP_NAME, DEFAULT_PORT, MAX_PORT_ATTEMPTS, DATA_DIR, INSTALL_DATA_DIR, PROJECT_ROOT as PROJECT_DIR
+from config import (
+    VERSION,
+    APP_NAME,
+    DEFAULT_PORT,
+    MAX_PORT_ATTEMPTS,
+    DATA_DIR,
+    INSTALL_DATA_DIR,
+    PROJECT_ROOT as PROJECT_DIR,
+    get_install_data_dir,
+)
 from core.db_solutions import init_all_databases, find_solution_hybrid
 from api import register_blueprints, errors_bp
 from core.error_store import get_error_log, get_log_lock
@@ -79,6 +88,20 @@ _startup_log("import config/core/api modules: ok")
 SERVER_LOG_FILE = DATA_DIR / "logs" / "server.log"
 
 
+def _write_server_log(message: str, exc=None):
+    """Append diagnostics directly; do not rely only on Flask logging handlers."""
+    try:
+        SERVER_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        with SERVER_LOG_FILE.open("a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+            if exc is not None:
+                handle.write("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+            handle.flush()
+    except Exception as log_exc:
+        print(f"[WARNING] Could not write server log: {log_exc}", file=sys.stderr, flush=True)
+
+
 def _configure_server_error_logging():
     """Write packaged runtime tracebacks to the per-user FixOnce log folder."""
     try:
@@ -92,6 +115,14 @@ def _configure_server_error_logging():
         flask_app.logger.setLevel(logging.INFO)
     except Exception as exc:
         print(f"[WARNING] Could not configure server log file: {exc}", file=sys.stderr, flush=True)
+
+
+def _install_data_dir() -> Path:
+    return get_install_data_dir()
+
+
+def _asset_path(filename: str) -> Path:
+    return _install_data_dir() / filename
 
 # ---------------------------------------------------------------------------
 # Port Management (uses core.port_manager for multi-user support)
@@ -167,13 +198,27 @@ def _send_dashboard_file(path):
     """Serve dashboard HTML without browser caching."""
     path = Path(path)
     if not path.exists():
+        current_install_data_dir = _install_data_dir()
+        path = current_install_data_dir / path.name
+
+    if not path.exists():
+        message = (
+            f"Dashboard asset missing: {path} "
+            f"(INSTALL_DATA_DIR={INSTALL_DATA_DIR} resolved={_install_data_dir()} "
+            f"frozen={getattr(sys, 'frozen', False)} "
+            f"meipass={getattr(sys, '_MEIPASS', None)} "
+            f"executable={sys.executable} cwd={Path.cwd()})"
+        )
+        _write_server_log(message)
         flask_app.logger.error(
-            "Dashboard asset missing: %s (INSTALL_DATA_DIR=%s frozen=%s meipass=%s executable=%s)",
+            "Dashboard asset missing: %s (INSTALL_DATA_DIR=%s resolved=%s frozen=%s meipass=%s executable=%s cwd=%s)",
             path,
             INSTALL_DATA_DIR,
+            _install_data_dir(),
             getattr(sys, "frozen", False),
             getattr(sys, "_MEIPASS", None),
             sys.executable,
+            Path.cwd(),
         )
         return make_response(f"Dashboard asset not found: {path.name}", 404)
 
@@ -190,11 +235,18 @@ def log_unhandled_exception(exc):
     if isinstance(exc, HTTPException):
         return exc
 
+    _write_server_log(
+        f"Unhandled request error path={getattr(request, 'path', 'unknown')} "
+        f"method={getattr(request, 'method', 'unknown')} "
+        f"install_data_dir={INSTALL_DATA_DIR} resolved={_install_data_dir()}",
+        exc,
+    )
     flask_app.logger.exception(
-        "Unhandled request error path=%s method=%s install_data_dir=%s",
+        "Unhandled request error path=%s method=%s install_data_dir=%s resolved=%s",
         getattr(request, "path", "unknown"),
         getattr(request, "method", "unknown"),
         INSTALL_DATA_DIR,
+        _install_data_dir(),
     )
     return jsonify({
         "error": "internal_server_error",
@@ -217,7 +269,7 @@ def _is_installed() -> bool:
     _startup_log(f"install state check: ok installed={result}")
     print(
         f"[DEBUG] _is_installed: install_state={install_state.exists()} "
-        f"request_port={request_port} → installed={result}"
+        f"request_port={request_port} -> installed={result}"
     )
     return result
 
@@ -231,55 +283,53 @@ def dashboard():
     if not _is_installed():
         return redirect("/install")
 
-    dashboard_path = INSTALL_DATA_DIR / "dashboard.html"
+    dashboard_path = _asset_path("dashboard.html")
     return _send_dashboard_file(dashboard_path)
 
 
 @flask_app.route("/install")
 def install_wizard():
     """Serve the installer wizard."""
-    installer_path = INSTALL_DATA_DIR / "installer.html"
-    if installer_path.exists():
-        return _send_dashboard_file(installer_path)
-    return "Installer not found", 404
+    return _send_dashboard_file(_asset_path("installer.html"))
 
 
 @flask_app.route("/setup-debug")
 def setup_debug():
     """Debug route to manually access setup wizard (for troubleshooting)."""
-    installer_path = INSTALL_DATA_DIR / "installer.html"
-    if installer_path.exists():
-        return _send_dashboard_file(installer_path)
-    return "Installer not found", 404
+    return _send_dashboard_file(_asset_path("installer.html"))
 
 
 @flask_app.route("/next")
 @flask_app.route("/vnext")
+def dashboard_next():
+    """Serve the current main dashboard for legacy vNext links."""
+    return _send_dashboard_file(_asset_path("dashboard.html"))
+
+
 @flask_app.route("/lite")
-def dashboard_legacy_redirects():
-    """Redirect legacy routes to main dashboard."""
-    from flask import redirect
-    return redirect("/")
+def dashboard_lite():
+    """Serve the compact/minimal dashboard route."""
+    return _send_dashboard_file(_asset_path("dashboard_minimal.html"))
 
 
 @flask_app.route("/app")
 def dashboard_app():
     """Serve the compact app dashboard (for native window)."""
-    app_path = INSTALL_DATA_DIR / "dashboard_app.html"
+    app_path = _asset_path("dashboard_app.html")
     return _send_dashboard_file(app_path)
 
 
 @flask_app.route("/test-error")
 def test_error_page():
     """Serve test error page for debugging error capture."""
-    test_path = INSTALL_DATA_DIR / "test_error.html"
+    test_path = _asset_path("test_error.html")
     return _send_dashboard_file(test_path)
 
 
 @flask_app.route("/logo.png")
 def serve_logo():
     """Serve the FixOnce logo."""
-    logo_path = INSTALL_DATA_DIR / "logo.png"
+    logo_path = _asset_path("logo.png")
     if logo_path.exists():
         return send_file(logo_path, mimetype='image/png')
     # Fallback - return 404
@@ -289,7 +339,7 @@ def serve_logo():
 @flask_app.route("/app-icon.png")
 def serve_app_icon():
     """Serve the FixOnce app icon."""
-    icon_path = INSTALL_DATA_DIR / "app-icon.png"
+    icon_path = _asset_path("app-icon.png")
     if icon_path.exists():
         return send_file(icon_path, mimetype='image/png')
     return "App icon not found", 404
@@ -298,7 +348,7 @@ def serve_app_icon():
 @flask_app.route("/fixonce-logo.svg")
 def serve_fixonce_logo():
     """Serve the FixOnce SVG logo."""
-    logo_path = INSTALL_DATA_DIR / "fixonce_logo.svg"
+    logo_path = _asset_path("fixonce_logo.svg")
     if logo_path.exists():
         return send_file(logo_path, mimetype='image/svg+xml')
     return "FixOnce logo not found", 404
@@ -307,19 +357,19 @@ def serve_fixonce_logo():
 @flask_app.route("/privacy.html")
 def serve_privacy():
     """Serve the privacy policy page."""
-    return _send_dashboard_file(INSTALL_DATA_DIR / "privacy.html")
+    return _send_dashboard_file(_asset_path("privacy.html"))
 
 
 @flask_app.route("/terms.html")
 def serve_terms():
     """Serve the terms of use page."""
-    return _send_dashboard_file(INSTALL_DATA_DIR / "terms.html")
+    return _send_dashboard_file(_asset_path("terms.html"))
 
 
 @flask_app.route("/security.html")
 def serve_security():
     """Serve the security overview page."""
-    return _send_dashboard_file(INSTALL_DATA_DIR / "security.html")
+    return _send_dashboard_file(_asset_path("security.html"))
 
 
 @flask_app.route("/api/canonical-runtime")
@@ -623,7 +673,7 @@ def _run_flask(strict_port: bool = False):
     # Try to acquire server lock
     if not acquire_server_lock(current_pid):
         print()
-        print("\033[1;31m❌ Another FixOnce server is already running.\033[0m")
+        print("\033[1;31mERROR: Another FixOnce server is already running.\033[0m")
         print("   Use 'kill <pid>' to stop it, or check ~/.fixonce/runtime.json")
         print()
         _startup_log("_run_flask returning: server lock unavailable")
@@ -645,7 +695,7 @@ def _run_flask(strict_port: bool = False):
 
     if ACTUAL_PORT != DEFAULT_PORT:
         print()
-        print(f"\033[1;33m⚠️  Port {DEFAULT_PORT} busy. FixOnce is live on http://localhost:{ACTUAL_PORT}\033[0m")
+        print(f"\033[1;33mWARNING: Port {DEFAULT_PORT} busy. FixOnce is live on http://localhost:{ACTUAL_PORT}\033[0m")
         print()
 
     # Publish the discovered port before entering the blocking Flask run loop.
@@ -654,7 +704,7 @@ def _run_flask(strict_port: bool = False):
     # Write canonical runtime state (SINGLE SOURCE OF TRUTH)
     if not set_runtime_state(ACTUAL_PORT, current_pid):
         print()
-        print("\033[1;31m❌ Failed to set runtime state - another server may be running.\033[0m")
+        print("\033[1;31mERROR: Failed to set runtime state - another server may be running.\033[0m")
         print()
         release_server_lock()
         _startup_log("_run_flask returning: runtime state rejected")

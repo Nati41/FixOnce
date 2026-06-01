@@ -20,26 +20,42 @@ PROJECT_ROOT = SRC_DIR.parent
 
 def get_install_data_dir() -> Path:
     """Get installation assets directory for source and PyInstaller layouts."""
-    candidates = []
+    candidates: list[Path] = []
 
-    if getattr(sys, "frozen", False):
-        meipass = getattr(sys, "_MEIPASS", None)
-        if meipass:
-            candidates.append(Path(meipass) / "data")
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(Path(meipass) / "data")
 
-        executable_dir = Path(sys.executable).resolve().parent
+    executable_dir = Path(sys.executable).resolve().parent
+    candidates.extend([
+        executable_dir / "_internal" / "data",
+        executable_dir / "data",
+        Path.cwd() / "_internal" / "data",
+        Path.cwd() / "data",
+    ])
+
+    for parent in [SRC_DIR, *SRC_DIR.parents]:
         candidates.extend([
-            executable_dir / "_internal" / "data",
-            executable_dir / "data",
+            parent / "data",
+            parent / "_internal" / "data",
         ])
 
-    candidates.append(PROJECT_ROOT / "data")
-
+    seen = set()
+    unique_candidates = []
     for candidate in candidates:
+        try:
+            key = str(candidate.resolve())
+        except OSError:
+            key = str(candidate)
+        if key not in seen:
+            seen.add(key)
+            unique_candidates.append(candidate)
+
+    for candidate in unique_candidates:
         if (candidate / "dashboard.html").exists():
             return candidate
 
-    return candidates[0]
+    return unique_candidates[0]
 
 
 # Installation data directory (templates, dashboard, static files)
