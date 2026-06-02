@@ -21,8 +21,10 @@ class TestInnoSetupWiring(unittest.TestCase):
         ]
         self.assertEqual(len(bootstrap_lines), 1)
         self.assertIn("waituntilterminated", bootstrap_lines[0])
-        self.assertIn("postinstall", bootstrap_lines[0])
+        self.assertIn("skipifdoesntexist", bootstrap_lines[0])
         self.assertNotIn("nowait", bootstrap_lines[0].lower())
+        self.assertNotIn("postinstall", bootstrap_lines[0].lower())
+        self.assertNotIn("Description:", bootstrap_lines[0])
 
     def test_no_minimized_hkcu_run_autostart(self):
         self.assertNotIn("--minimized", self.inno_text)
@@ -46,14 +48,13 @@ class TestInnoSetupWiring(unittest.TestCase):
             self.inno_text.lower().split("ssdone")[0],
         )
 
-    def test_no_optional_nowait_launch_replaces_bootstrap(self):
+    def test_bootstrap_is_not_optional_postinstall_action(self):
         postinstall_runs = [
             line
             for line in self.inno_text.splitlines()
             if "postinstall" in line.lower() and "filename:" in line.lower()
         ]
-        self.assertEqual(len(postinstall_runs), 1)
-        self.assertIn("--bootstrap", postinstall_runs[0])
+        self.assertFalse(postinstall_runs)
 
 
 if __name__ == "__main__":

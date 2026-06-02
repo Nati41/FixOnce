@@ -160,9 +160,9 @@ def main() -> int:
     if INNO_SETUP.exists():
         inno_text = read_text(INNO_SETUP)
         inno_flat = inno_text.replace("\r", "").replace("\n", " ")
-        check('Parameters: "--bootstrap"' in inno_text, "inno bootstrap run", "post-install runs FixOnce.exe --bootstrap", failures)
+        check('Parameters: "--bootstrap"' in inno_text, "inno bootstrap run", "installer runs FixOnce.exe --bootstrap", failures)
         check(
-            "waituntilterminated" in inno_flat and "postinstall" in inno_flat,
+            "waituntilterminated" in inno_flat,
             "inno bootstrap wait",
             "installer waits for bootstrap to finish",
             failures,
@@ -174,6 +174,12 @@ def main() -> int:
             "nowait" not in bootstrap_run_line.lower(),
             "inno bootstrap not fire-and-forget",
             "bootstrap [Run] entry does not use nowait",
+            failures,
+        )
+        check(
+            "postinstall" not in bootstrap_run_line.lower(),
+            "inno bootstrap mandatory",
+            "bootstrap [Run] entry is not an optional postinstall checkbox",
             failures,
         )
         check(

@@ -92,7 +92,7 @@ Name: "{userappdata}\FixOnce\extension"; Permissions: users-full
 [Run]
 ; First-run setup: server, FixOnceServer scheduled task, health check, dashboard.
 ; Setup waits for bootstrap and fails if it returns a non-zero exit code.
-Filename: "{app}\{#MyAppExeName}"; Parameters: "--bootstrap"; StatusMsg: "Setting up FixOnce (server, autostart, dashboard)..."; Description: "Running FixOnce setup"; Flags: waituntilterminated postinstall skipifdoesntexist
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--bootstrap"; StatusMsg: "Setting up FixOnce (server, autostart, dashboard)..."; Flags: waituntilterminated skipifdoesntexist
 
 [UninstallRun]
 ; Stop FixOnce before uninstall
