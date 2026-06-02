@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import datetime
 
 from flask import Flask, send_file, jsonify, request, make_response
+from core.windows_subprocess import no_window_creationflags
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
@@ -596,6 +597,7 @@ def _describe_port_owner(port: int) -> str:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                creationflags=no_window_creationflags(),
             )
             if result.returncode == 0:
                 needle = f":{port}"
@@ -621,6 +623,7 @@ def _windows_process_name(pid: str) -> str:
             capture_output=True,
             text=True,
             timeout=5,
+            creationflags=no_window_creationflags(),
         )
         if result.returncode != 0:
             return ""

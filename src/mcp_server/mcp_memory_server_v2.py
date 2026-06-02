@@ -572,15 +572,42 @@ except ImportError:
     pass  # Safe file not available, will use regular json
 
 # Semantic Search Integration
-_semantic_available = False
-try:
-    from core.project_semantic import (
-        index_insight, index_decision, index_avoid,
-        search_project, rebuild_project_index
-    )
+_semantic_available: Optional[bool] = None
+_semantic_imports: Dict[str, Any] = {}
+
+
+def _load_project_semantic(allow_cold_start: bool = True) -> Optional[Dict[str, Any]]:
+    """Load semantic search only when a semantic operation is requested."""
+    global _semantic_available, _semantic_imports
+    if _semantic_available is False:
+        return None
+    if _semantic_available is True:
+        return _semantic_imports
+    if not allow_cold_start:
+        return None
+
+    try:
+        from core.project_semantic import (
+            index_insight,
+            index_decision,
+            index_avoid,
+            search_project,
+            rebuild_project_index,
+        )
+    except ImportError:
+        _semantic_available = False
+        _semantic_imports = {}
+        return None
+
+    _semantic_imports = {
+        "index_insight": index_insight,
+        "index_decision": index_decision,
+        "index_avoid": index_avoid,
+        "search_project": search_project,
+        "rebuild_project_index": rebuild_project_index,
+    }
     _semantic_available = True
-except ImportError:
-    pass  # Semantic search not available, will use fallback
+    return _semantic_imports
 
 # Session Registry for Multi-AI Isolation - imported later after sys.path is set
 _session_registry_available = False
@@ -2517,7 +2544,8 @@ def _get_git_commit_hash(working_dir: str) -> Optional[str]:
             cwd=working_dir,
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            creationflags=no_window_creationflags(),
         )
         if result.returncode == 0:
             return result.stdout.strip()[:12]  # Short hash
@@ -4030,7 +4058,8 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
                     cwd=working_dir,
                     capture_output=True,
                     text=True,
-                    timeout=2
+                    timeout=2,
+                    creationflags=no_window_creationflags(),
                 )
                 if result.returncode == 0:
                     git_hash = result.stdout.strip()
@@ -4634,9 +4663,10 @@ def update_live_record(section: str, data: str) -> str:
             lr['lessons']['insights'].append(new_insight)
 
             # Auto-index for semantic search
-            if _semantic_available:
+            semantic = _load_project_semantic()
+            if semantic:
                 try:
-                    index_insight(project_id, update_data['insight'])
+                    semantic["index_insight"](project_id, update_data['insight'])
                 except Exception as e:
                     _log(f"[SemanticIndex] Failed to index insight: {e}")
 
@@ -4859,7 +4889,7 @@ def _update_work_context_impl(
     return "Synced."
 
 
-def _lightweight_tool_gate(tool_name: str) -> Optional[str]:
+def _lightweight_tool_gate(tool_name: str, sync_compliance: bool = True) -> Optional[str]:
     """Minimal session gate for hot-path tools that must not block on context assembly."""
     current_mode = _get_fixonce_mode()
     if current_mode == MODE_OFF:
@@ -4876,7 +4906,8 @@ def _lightweight_tool_gate(tool_name: str) -> Optional[str]:
     session = _get_session()
     try:
         session.log_tool_call(tool_name)
-        _sync_compliance()
+        if sync_compliance:
+            _sync_compliance()
     except Exception as exc:
         _log(f"[FixOnce] Lightweight gate compliance update failed: {exc}")
 
@@ -5141,9 +5172,10 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
     })
 
     # Auto-index for semantic search
-    if _semantic_available:
+    semantic = _load_project_semantic()
+    if semantic:
         try:
-            index_decision(session.project_id, decision, reason)
+            semantic["index_decision"](session.project_id, decision, reason)
         except Exception as e:
             _log(f"[SemanticIndex] Failed to index decision: {e}")
 
@@ -5180,9 +5212,10 @@ def log_avoid(what: str, reason: str) -> str:
     })
 
     # Auto-index for semantic search
-    if _semantic_available:
+    semantic = _load_project_semantic()
+    if semantic:
         try:
-            index_avoid(session.project_id, what, reason)
+            semantic["index_avoid"](session.project_id, what, reason)
         except Exception as e:
             _log(f"[SemanticIndex] Failed to index avoid: {e}")
 
@@ -5878,7 +5911,8 @@ def get_latest_changes() -> str:
                 cwd=working_dir,
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
+                creationflags=no_window_creationflags(),
             )
             if git_result.returncode == 0 and git_result.stdout.strip():
                 parts = git_result.stdout.strip().split("|")
@@ -6323,12 +6357,13 @@ def _format_smart_override(insight: dict, query: str) -> dict:
 @mcp.tool()
 def search_past_solutions(query: str) -> str:
     """Search for past solutions matching the query."""
-    error, context = _universal_gate("search_past_solutions")
+    error = _lightweight_tool_gate("search_past_solutions", sync_compliance=False)
     if error:
         return error
+    context = ""
 
     session = _get_session()
-    memory = _load_project(session.project_id)
+    memory = _load_project_lightweight(session.project_id)
 
     # Search in lessons
     lessons = memory.get('live_record', {}).get('lessons', {})
@@ -6342,12 +6377,11 @@ def search_past_solutions(query: str) -> str:
 
     # === SEMANTIC SEARCH (if available) ===
     semantic_results = []
-    if _semantic_available:
+    semantic = _load_project_semantic(allow_cold_start=False)
+    if semantic:
         try:
             future = _tool_executor.submit(
-                _run_tool_body,
-                "semantic_search",
-                search_project,
+                semantic["search_project"],
                 session.project_id,
                 query,
                 k=5,
@@ -6494,20 +6528,9 @@ def search_past_solutions(query: str) -> str:
 
     # Save updated use counts
     if matched_indices:
-        _save_project(session.project_id, memory)
+        _save_project_lightweight(session.project_id, memory)
 
-    # Log MCP activity for dashboard
-    _log_mcp_activity("search_past_solutions", {
-        "query": query[:30],
-        "found": len(matched_insights) + len(matches)
-    })
-
-    gate_result = _evaluate_current_repeat_bug_gate(
-        tool_name="search_past_solutions",
-        similar_past_solution_found=bool(matched_insights)
-    )
-
-    if matched_insights and gate_result.level == "warn":
+    if matched_insights:
         _track_roi_event("solution_reused")
 
         # Minimal output - just the best match
@@ -6607,13 +6630,14 @@ def rebuild_semantic_index() -> str:
     if error:
         return error
 
-    if not _semantic_available:
+    semantic = _load_project_semantic()
+    if not semantic:
         return context + "❌ Semantic search not available. Install fastembed: pip install fastembed"
 
     session = _get_session()
 
     try:
-        result = rebuild_project_index(session.project_id)
+        result = semantic["rebuild_project_index"](session.project_id)
         if result.get('status') == 'ok':
             return context + f"""## ✅ Semantic Index Rebuilt
 
@@ -6643,7 +6667,7 @@ def get_browser_errors(limit: int = 10) -> str:
     Returns:
         Recent browser errors with messages, sources, and timestamps
     """
-    error, _ = _universal_gate("get_browser_errors")
+    error = _lightweight_tool_gate("get_browser_errors", sync_compliance=False)
     if error:
         return error
 
@@ -6671,13 +6695,8 @@ def get_browser_errors(limit: int = 10) -> str:
 
         real_errors = [e for e in errors if not is_test_error(e)]
         test_errors = [e for e in errors if is_test_error(e)]
-        gate_result = _evaluate_current_error_gate(
-            tool_name="get_browser_errors",
-            live_errors=len(real_errors),
-            auto_fix_ready=False,
-        )
 
-        if gate_result.level == "silent":
+        if not real_errors:
             if test_errors:
                 return f"{len(test_errors)} test/noise error(s) only. Safe to ignore or clear."
             return "No browser errors captured."
@@ -8084,24 +8103,14 @@ def fo_errors(limit: int = 5) -> str:
 
         auto_fixes = get_auto_fixes()
         suggested_fixes = get_suggested_fixes()
-        gate_result = _evaluate_current_error_gate(
-            tool_name="fo_errors",
-            live_errors=0,
-            auto_fix_ready=bool(auto_fixes),
-        )
 
-        if gate_result.level == "block":
+        if auto_fixes:
             lines.append(f"**AUTO-FIX READY** — call `fo_apply()` now (mandatory)")
             for fix in auto_fixes[:3]:
                 lines.append(f"• {fix['error_message'][:50]}...")
             lines.append("")
 
-        repeat_gate_result = _evaluate_current_repeat_bug_gate(
-            tool_name="fo_errors",
-            similar_past_solution_found=bool(suggested_fixes or auto_fixes)
-        )
-
-        if suggested_fixes and repeat_gate_result.level == "warn":
+        if suggested_fixes:
             lines.append(f"**{len(suggested_fixes)} suggested fix(es):**")
             for fix in suggested_fixes[:3]:
                 lines.append(f"• {fix['error_message'][:60]} ({fix['confidence']}%)")

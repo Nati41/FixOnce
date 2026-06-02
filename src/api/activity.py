@@ -22,6 +22,7 @@ import os
 import subprocess
 import hashlib
 from core.runtime_log import log_runtime_event
+from core.windows_subprocess import no_window_creationflags
 
 # Boundary detection imports
 try:
@@ -124,7 +125,8 @@ def _get_git_diff_stats(file_path: str, cwd: str = None) -> dict:
             capture_output=True,
             text=True,
             cwd=work_dir,
-            timeout=5
+            timeout=5,
+            creationflags=no_window_creationflags(),
         )
 
         if result.returncode == 0 and result.stdout.strip():
@@ -140,7 +142,8 @@ def _get_git_diff_stats(file_path: str, cwd: str = None) -> dict:
             capture_output=True,
             text=True,
             cwd=work_dir,
-            timeout=5
+            timeout=5,
+            creationflags=no_window_creationflags(),
         )
 
         if result.returncode == 0 and result.stdout.strip():

@@ -344,6 +344,7 @@ def _handle_init_session(args: dict) -> dict:
     )
     from core.boundary_detector import find_project_root
     from core.project_context import ProjectContext
+    from core.windows_subprocess import no_window_creationflags
     import subprocess
 
     working_dir = args.get('working_dir', '')
@@ -364,7 +365,8 @@ def _handle_init_session(args: dict) -> dict:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, cwd=root, timeout=5
+            capture_output=True, text=True, cwd=root, timeout=5,
+            creationflags=no_window_creationflags(),
         )
         if result.returncode == 0:
             git_hash = result.stdout.strip()[:12]

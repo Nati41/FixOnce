@@ -16,6 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
+from core.windows_subprocess import no_window_creationflags
+
 # Valid statuses for components
 VALID_STATUSES = ["stable", "building", "broken"]
 
@@ -48,7 +50,8 @@ def check_uncommitted_changes(repo_path: str) -> Dict[str, Any]:
             cwd=repo_path,
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            creationflags=no_window_creationflags(),
         )
         if result.returncode != 0:
             return {"has_changes": False, "error": "Not a git repo"}
@@ -119,7 +122,8 @@ def create_safety_commit(repo_path: str, message: str = None, stage_all: bool = 
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
+                creationflags=no_window_creationflags(),
             )
             if stage_result.returncode != 0:
                 return {"success": False, "error": f"Failed to stage: {stage_result.stderr}"}
@@ -130,7 +134,8 @@ def create_safety_commit(repo_path: str, message: str = None, stage_all: bool = 
             cwd=repo_path,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            creationflags=no_window_creationflags(),
         )
 
         if commit_result.returncode != 0:
@@ -167,7 +172,8 @@ def get_current_commit(repo_path: str) -> Optional[Dict[str, str]]:
             cwd=repo_path,
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            creationflags=no_window_creationflags(),
         )
         if result.returncode != 0:
             return None
@@ -180,7 +186,8 @@ def get_current_commit(repo_path: str) -> Optional[Dict[str, str]]:
             cwd=repo_path,
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            creationflags=no_window_creationflags(),
         )
         commit_date = date_result.stdout.strip() if date_result.returncode == 0 else None
 
@@ -190,7 +197,8 @@ def get_current_commit(repo_path: str) -> Optional[Dict[str, str]]:
             cwd=repo_path,
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            creationflags=no_window_creationflags(),
         )
         commit_msg = msg_result.stdout.strip() if msg_result.returncode == 0 else ""
 
@@ -212,7 +220,8 @@ def get_changed_files_since(repo_path: str, since_commit: str) -> List[str]:
             cwd=repo_path,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            creationflags=no_window_creationflags(),
         )
         if result.returncode == 0:
             return [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
@@ -229,7 +238,8 @@ def get_files_in_commit(repo_path: str, commit_hash: str) -> List[str]:
             cwd=repo_path,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            creationflags=no_window_creationflags(),
         )
         if result.returncode == 0:
             return [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
@@ -260,7 +270,8 @@ def rollback_files(repo_path: str, commit_hash: str, files: List[str]) -> Dict[s
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
+                creationflags=no_window_creationflags(),
             )
             if result.returncode == 0:
                 restored.append(file_path)
@@ -300,7 +311,8 @@ def create_rollback_branch(repo_path: str, commit_hash: str, branch_name: str = 
             cwd=repo_path,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            creationflags=no_window_creationflags(),
         )
 
         if result.returncode == 0:
