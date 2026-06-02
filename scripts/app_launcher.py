@@ -256,23 +256,6 @@ def _import_install_state_helpers():
     return InstallState, persist_snapshot
 
 
-def _packaged_mcp_server_path() -> Path | None:
-    """Return the packaged MCP server source path used by stdio clients."""
-    install_dir = get_packaged_install_dir()
-    candidates = [
-        install_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py",
-        install_dir / "_internal" / "src" / "mcp_server" / "mcp_memory_server_v2.py",
-    ]
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass:
-        candidates.insert(0, Path(meipass) / "src" / "mcp_server" / "mcp_memory_server_v2.py")
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
-
-
 def configure_packaged_windows_mcp(log_fn: Callable[[str], None] | None = None) -> bool:
     """Register per-user MCP config for packaged Windows installs."""
     write_log = log_fn or bootstrap_log
@@ -280,23 +263,11 @@ def configure_packaged_windows_mcp(log_fn: Callable[[str], None] | None = None) 
         write_log("MCP registration skipped: not Windows")
         return False
 
-    mcp_server = _packaged_mcp_server_path()
-    if mcp_server is None:
-        write_log("MCP registration skipped: mcp_memory_server_v2.py not found")
-        return False
-
     try:
-        from core.mcp_config import write_codex_config
+        from core.agent_mcp_registration import register_windows_mcp_clients
 
-        src_path = str(mcp_server.parent.parent)
-        stdio_config = {
-            "command": sys.executable,
-            "args": ["--mcp"],
-            "env": {"PYTHONPATH": src_path},
-        }
-        codex_config = Path.home() / ".codex" / "config.toml"
-        write_codex_config(codex_config, "fixonce", stdio_config)
-        write_log(f"MCP registration ready: Codex config {codex_config}")
+        config_paths = register_windows_mcp_clients(Path.home(), Path(sys.executable))
+        write_log(f"MCP registration ready: {', '.join(str(path) for path in config_paths)}")
         return True
     except Exception as exc:
         write_log(f"MCP registration failed: {type(exc).__name__}: {exc}")

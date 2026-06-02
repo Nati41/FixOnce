@@ -36,8 +36,8 @@ def toml_quote(value: str) -> str:
 
 def remove_codex_server_blocks(content: str, server_name: str) -> str:
     patterns = [
-        rf'(?ms)^\[mcp_servers\.{re.escape(server_name)}\]\n(?:.*\n)*?(?=^\[|\Z)',
-        rf'(?ms)^\[mcp_servers\.{re.escape(server_name)}\.env\]\n(?:.*\n)*?(?=^\[|\Z)',
+        rf'(?m)^\[mcp_servers\.{re.escape(server_name)}\]\r?\n(?:^[^\[\r\n].*\r?\n?)*',
+        rf'(?m)^\[mcp_servers\.{re.escape(server_name)}\.env\]\r?\n(?:^[^\[\r\n].*\r?\n?)*',
     ]
 
     updated = content
@@ -46,7 +46,7 @@ def remove_codex_server_blocks(content: str, server_name: str) -> str:
     return updated.strip()
 
 
-def write_codex_config(path: Path, server_name: str, config: dict):
+def write_codex_config(path: Path, server_name: str, config: dict, include_actor_env: bool = True):
     """Write or update a Codex MCP server entry."""
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
     existing = remove_codex_server_blocks(existing, server_name)
@@ -58,7 +58,8 @@ def write_codex_config(path: Path, server_name: str, config: dict):
     ]
 
     env = dict(config.get("env", {}))
-    env.setdefault("FIXONCE_ACTOR", "codex")
+    if include_actor_env:
+        env.setdefault("FIXONCE_ACTOR", "codex")
     if env:
         lines.append("")
         lines.append(f"[mcp_servers.{server_name}.env]")
