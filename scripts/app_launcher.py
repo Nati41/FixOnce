@@ -23,6 +23,12 @@ from typing import Callable
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
 SERVER_SCRIPT = PROJECT_DIR / "src" / "server.py"
+SRC_DIR = PROJECT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from core.windows_subprocess import no_window_creationflags
+
 USER_DATA_DIR = Path.home() / ".fixonce"
 RUNTIME_FILE = USER_DATA_DIR / "runtime.json"
 CONFIG_FILE = USER_DATA_DIR / "config.json"
@@ -50,10 +56,9 @@ def windows_process_creationflags(detached: bool = True) -> int:
     if sys.platform != "win32":
         return 0
 
-    flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    flags = no_window_creationflags()
     if detached:
         flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
-        flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
     return flags
 
 
@@ -307,6 +312,7 @@ def windows_scheduled_task_exists(task_name: str = BOOTSTRAP_TASK_NAME) -> bool:
         ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
         capture_output=True,
         text=True,
+        creationflags=no_window_creationflags(),
     )
     if result.returncode == 0:
         return True
@@ -315,6 +321,7 @@ def windows_scheduled_task_exists(task_name: str = BOOTSTRAP_TASK_NAME) -> bool:
         ["schtasks", "/query", "/tn", task_name],
         capture_output=True,
         text=True,
+        creationflags=no_window_creationflags(),
     )
     return fallback.returncode == 0
 
@@ -355,6 +362,7 @@ Register-ScheduledTask `
         ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
         capture_output=True,
         text=True,
+        creationflags=no_window_creationflags(),
     )
     if result.returncode == 0:
         return True, ""
@@ -383,6 +391,7 @@ def _register_user_logon_task_schtasks(
         ],
         capture_output=True,
         text=True,
+        creationflags=no_window_creationflags(),
     )
     if result.returncode == 0:
         return True, ""
@@ -482,6 +491,7 @@ $shortcut.Save()
         ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
         capture_output=True,
         text=True,
+        creationflags=no_window_creationflags(),
     )
     if result.returncode == 0 and shortcut_path.exists():
         write_log(f"Startup shortcut ready: {shortcut_path}")

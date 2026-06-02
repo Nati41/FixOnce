@@ -28,6 +28,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+from core.windows_subprocess import no_window_creationflags
+
 _MCP_WINDOWS_CTRL_HANDLER = None
 _fo_init_trace_local = threading.local()
 _FO_INIT_TRACE_STEP = 0
@@ -409,7 +411,13 @@ def _get_windows_parent_command_line(ppid: int) -> str:
             "-Command",
             f"(Get-CimInstance Win32_Process -Filter \"ProcessId={int(ppid)}\").CommandLine",
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            creationflags=no_window_creationflags(),
+        )
         if result.returncode == 0:
             return (result.stdout or "").strip()
         return f"<parent lookup failed rc={result.returncode}: {(result.stderr or '').strip()}>"
@@ -2608,6 +2616,7 @@ _MCP_TOOL_TIMEOUT_SECONDS = 20
 _FO_SYNC_TIMEOUT_SECONDS = 8
 _SEMANTIC_SEARCH_TIMEOUT_SECONDS = 5
 _tool_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="fixonce-mcp-tool")
+_mcp_health_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="fixonce-mcp-health")
 _original_mcp_tool = mcp.tool
 
 
@@ -2649,10 +2658,25 @@ def _mcp_actor_for_health() -> Dict[str, Any]:
         return {"editor": "unknown", "source": "none", "confidence": 0.0}
 
 
-def _record_mcp_tool_success(tool_name: str) -> None:
+def _record_mcp_tool_success(
+    tool_name: str,
+    *,
+    resolve_actor: bool = True,
+    wait_seconds: float = 0.2,
+) -> None:
+    def record_success():
+        try:
+            from core.mcp_session_health import record_mcp_success
+
+            actor_identity = _mcp_actor_for_health() if resolve_actor else {}
+            record_mcp_success(tool_name=tool_name, actor_identity=actor_identity)
+        except Exception:
+            pass
+
     try:
-        from core.mcp_session_health import record_mcp_success
-        record_mcp_success(tool_name=tool_name, actor_identity=_mcp_actor_for_health())
+        future = _mcp_health_executor.submit(record_success)
+        if wait_seconds > 0:
+            future.result(timeout=wait_seconds)
     except Exception:
         pass
 
@@ -2687,7 +2711,10 @@ def _run_tool_body(mcp_tool_name: str, func, *args, **kwargs):
                     f"MCP_HANDLER_RESULT_READY type={type(result).__name__} "
                     f"length={len(result) if isinstance(result, str) else 'non-str'}"
                 )
-                _fo_init_trace_raw("MCP_RECORD_SUCCESS_BEFORE")
+                _fo_init_trace_raw("MCP_RECORD_SUCCESS_SCHEDULE_BEFORE")
+                _record_mcp_tool_success(mcp_tool_name, resolve_actor=False, wait_seconds=0)
+                _fo_init_trace_raw("MCP_RECORD_SUCCESS_SCHEDULE_AFTER")
+                return result
             _record_mcp_tool_success(mcp_tool_name)
             if mcp_tool_name == "fo_init":
                 _fo_init_trace_raw("MCP_RECORD_SUCCESS_AFTER")
@@ -2774,7 +2801,8 @@ def _safe_tool_handler(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         tool_name = getattr(func, "__name__", "unknown_tool")
-        return _run_tool_body(tool_name, func, *args, **kwargs)
+        timeout_seconds = _FO_SYNC_TIMEOUT_SECONDS if tool_name == "fo_sync" else _MCP_TOOL_TIMEOUT_SECONDS
+        return _run_tool_with_timeout(tool_name, func, timeout_seconds, *args, **kwargs)
     return wrapper
 
 

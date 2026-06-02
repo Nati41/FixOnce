@@ -12,6 +12,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 import install
 import core.first_launch as first_launch
+from core import windows_subprocess
 
 
 class TestWindowsStartupFlow(unittest.TestCase):
@@ -57,6 +58,16 @@ class TestWindowsStartupFlow(unittest.TestCase):
              patch.object(install.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, create=True), \
              patch.object(install.subprocess, "CREATE_NO_WINDOW", 0x8000000, create=True):
             self.assertEqual(install.get_detached_creationflags(), 0x8000208)
+
+    def test_runtime_windows_creationflags_hide_console(self):
+        with patch.object(windows_subprocess.sys, "platform", "win32"), \
+             patch.object(windows_subprocess.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, create=True), \
+             patch.object(windows_subprocess.subprocess, "CREATE_NO_WINDOW", 0x8000000, create=True):
+            self.assertEqual(windows_subprocess.no_window_creationflags(), 0x8000200)
+
+    def test_runtime_creationflags_noop_off_windows(self):
+        with patch.object(windows_subprocess.sys, "platform", "linux"):
+            self.assertEqual(windows_subprocess.no_window_creationflags(), 0)
 
     def test_first_launch_uses_install_templates_and_user_data_dir(self):
         with tempfile.TemporaryDirectory(prefix="fixonce-first-launch-") as temp_dir:

@@ -27,6 +27,13 @@ class _FakeFastMCP:
 sys.modules.setdefault("fastmcp", types.SimpleNamespace(FastMCP=_FakeFastMCP))
 
 import mcp_memory_server_v2 as server
+import core
+
+pending_fixes_stub = types.ModuleType("core.pending_fixes")
+pending_fixes_stub.get_auto_fixes = lambda: []
+pending_fixes_stub.mark_fix_applied = lambda *_args, **_kwargs: None
+sys.modules.setdefault("core.pending_fixes", pending_fixes_stub)
+setattr(core, "pending_fixes", sys.modules["core.pending_fixes"])
 
 
 class TestInitOpening(unittest.TestCase):

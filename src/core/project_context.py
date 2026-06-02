@@ -25,6 +25,8 @@ import uuid
 from typing import Optional, Tuple
 from dataclasses import dataclass
 
+from core.windows_subprocess import no_window_creationflags
+
 
 # Enable verbose logging for debugging
 _VERBOSE_LOGGING = True
@@ -87,7 +89,8 @@ class ProjectContext:
             result = subprocess.run(
                 ['git', 'rev-parse', '--show-toplevel'],
                 cwd=str(root_path),
-                capture_output=True, text=True, timeout=5
+                capture_output=True, text=True, timeout=5,
+                creationflags=no_window_creationflags()
             )
 
             if result.returncode != 0:
@@ -100,7 +103,8 @@ class ProjectContext:
             result = subprocess.run(
                 ['git', 'remote', 'get-url', 'origin'],
                 cwd=str(root_path),
-                capture_output=True, text=True, timeout=5
+                capture_output=True, text=True, timeout=5,
+                creationflags=no_window_creationflags()
             )
 
             if result.returncode == 0 and result.stdout.strip():
@@ -113,7 +117,8 @@ class ProjectContext:
             result = subprocess.run(
                 ['git', 'remote'],
                 cwd=str(root_path),
-                capture_output=True, text=True, timeout=5
+                capture_output=True, text=True, timeout=5,
+                creationflags=no_window_creationflags()
             )
 
             if result.returncode == 0 and result.stdout.strip():
@@ -121,7 +126,8 @@ class ProjectContext:
                 result = subprocess.run(
                     ['git', 'remote', 'get-url', first_remote],
                     cwd=str(root_path),
-                    capture_output=True, text=True, timeout=5
+                    capture_output=True, text=True, timeout=5,
+                    creationflags=no_window_creationflags()
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     remote_url = cls._normalize_git_url(result.stdout.strip())
