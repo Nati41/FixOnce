@@ -825,8 +825,7 @@ def run_bootstrap() -> int:
 
         bootstrap_log("Opening dashboard")
         if not launch_dashboard_detached():
-            bootstrap_log("Detached dashboard launch failed; opening dashboard URL")
-            open_external_url(get_dashboard_url(port))
+            bootstrap_log("Detached dashboard launch failed; dashboard will open on next app launch")
         bootstrap_log("Bootstrap completed successfully")
         return 0
     except Exception as exc:

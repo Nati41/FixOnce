@@ -274,6 +274,38 @@ class TestBootstrap(unittest.TestCase):
         self.assertEqual(snapshot.install_dir, r"C:\Apps\FixOnce")
         self.assertTrue(any("Bootstrap completed successfully" in line for line in self._log_lines()))
 
+    def test_run_bootstrap_does_not_open_browser_when_detached_app_launch_fails(self):
+        self.runtime_file.write_text(
+            json.dumps({"port": 5000, "pid": 4242, "install_path": r"C:\Apps\FixOnce"}),
+            encoding="utf-8",
+        )
+
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(app_launcher, "is_frozen", return_value=True), patch.object(
+            app_launcher,
+            "get_packaged_install_dir",
+            return_value=Path(r"C:\Apps\FixOnce"),
+        ), patch.object(
+            app_launcher,
+            "configure_windows_autostart",
+            return_value=app_launcher.AUTOSTART_METHOD_SCHEDULED_TASK,
+        ), patch.object(
+            app_launcher,
+            "ensure_packaged_server_running",
+            return_value=5000,
+        ), patch.object(
+            app_launcher,
+            "launch_dashboard_detached",
+            return_value=False,
+        ), patch.object(app_launcher, "open_external_url") as open_external_url, patch.object(
+            app_launcher, "open_dashboard"
+        ) as open_dashboard:
+            code = app_launcher.run_bootstrap()
+
+        self.assertEqual(code, 0)
+        open_external_url.assert_not_called()
+        open_dashboard.assert_not_called()
+        self.assertTrue(any("dashboard will open on next app launch" in line for line in self._log_lines()))
+
     def test_run_bootstrap_registers_mcp_clients_for_fresh_windows_user(self):
         home_dir = Path(self.temp_dir.name) / "home"
         install_dir = Path(self.temp_dir.name) / "FixOnce"
