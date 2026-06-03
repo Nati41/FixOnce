@@ -13,6 +13,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 import server as server_module
 import api.status as status_module
+import core.mcp_health as mcp_health
 import core.mcp_session_health as session_health
 
 
@@ -78,6 +79,56 @@ class TestDashboardSnapshotMcpImport(unittest.TestCase):
             snapshot = response.get_json()["snapshot"]
             self.assertEqual(snapshot["mcp_health"]["session"]["state"], "session_lost")
             self.assertIn("FixOnce is running", snapshot["mcp_health"]["session"]["message"])
+
+    def test_dashboard_snapshot_uses_last_intervention_as_agent_context(self):
+        with tempfile.TemporaryDirectory(prefix="fixonce-agent-context-") as temp_dir:
+            user_data_dir = Path(temp_dir)
+            (user_data_dir / "mcp_compliance.json").write_text(json.dumps({
+                "session_active": True,
+                "project_id": "FixOnce_34592c5b",
+                "agent_context": {},
+                "last_agent_intervention": {
+                    "tool_name": "fo_init",
+                    "actor_name": "codex",
+                    "actor_source": "client_actor",
+                    "actor_confidence": 1.0,
+                    "project_id": "FixOnce_34592c5b",
+                    "session_id": "abc123",
+                },
+            }), encoding="utf-8")
+
+            client = server_module.flask_app.test_client()
+            with patch.object(status_module, "USER_DATA_DIR", user_data_dir), \
+                 patch.object(session_health, "STATE_FILE", user_data_dir / "mcp_session_health.json"), \
+                 patch.object(session_health, "LOG_FILE", user_data_dir / "logs" / "mcp_session_health.jsonl"):
+                response = client.get("/api/dashboard_snapshot")
+
+            self.assertEqual(response.status_code, 200)
+            snapshot = response.get_json()["snapshot"]
+            self.assertEqual(snapshot["agent_context"]["actor_name"], "codex")
+            self.assertEqual(snapshot["agent_context"]["tool_name"], "fo_init")
+
+    def test_recent_session_success_marks_mcp_health_active(self):
+        with patch.object(mcp_health, "check_mcp_health", return_value=mcp_health.MCPHealthResult(
+            state="configured",
+            reason="MCP configured but inactive",
+            last_tool_call="2026-06-02T19:20:27",
+            config_path="C:\\Users\\nati3\\.codex\\config.toml",
+        )), patch.object(session_health, "get_session_health", return_value={
+            "state": "connected",
+            "last_success_at": "2026-06-03T13:17:04",
+            "last_actor": "codex",
+            "last_actor_source": "client_actor",
+        }), patch.object(mcp_health, "datetime") as fake_datetime:
+            from datetime import datetime
+            fake_datetime.now.return_value = datetime(2026, 6, 3, 13, 17, 14)
+            fake_datetime.fromisoformat.side_effect = datetime.fromisoformat
+
+            health = mcp_health.get_mcp_health_for_dashboard()
+
+            self.assertEqual(health["state"], "active")
+            self.assertEqual(health["status"], "active")
+            self.assertEqual(health["session"]["last_actor"], "codex")
 
 
 if __name__ == "__main__":

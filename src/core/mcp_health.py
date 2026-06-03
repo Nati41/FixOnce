@@ -326,6 +326,27 @@ def get_mcp_health_for_dashboard() -> Dict[str, Any]:
             "error": str(e),
         }
 
+    session_last_success = None
+    try:
+        last_success = session_health.get("last_success_at")
+        if last_success:
+            session_last_success = datetime.fromisoformat(last_success.replace('Z', '+00:00'))
+            if session_last_success.tzinfo:
+                session_last_success = session_last_success.replace(tzinfo=None)
+    except Exception:
+        session_last_success = None
+
+    if session_health.get("state") == "connected" and session_last_success:
+        session_age = (datetime.now() - session_last_success).total_seconds()
+        if session_age <= ACTIVE_THRESHOLD_SECONDS:
+            result = MCPHealthResult(
+                state="active",
+                reason=f"MCP session succeeded {int(session_age)}s ago",
+                last_tool_call=session_last_success.isoformat(),
+                config_path=result.config_path,
+                config_errors=result.config_errors,
+            )
+
     # Map state to UI status
     status_map = {
         "active": "active",

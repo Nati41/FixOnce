@@ -37,6 +37,21 @@ def _get_mcp_compliance_for_api() -> dict:
     except Exception:
         state = {}
 
+    agent_context = state.get("agent_context") or {}
+    last_agent_intervention = state.get("last_agent_intervention") or {}
+    if not agent_context and last_agent_intervention.get("actor_name"):
+        agent_context = {
+            "actor_name": last_agent_intervention.get("actor_name"),
+            "actor_source": last_agent_intervention.get("actor_source"),
+            "actor_confidence": last_agent_intervention.get("actor_confidence", 0.0),
+            "tool_name": last_agent_intervention.get("tool_name"),
+            "intent": last_agent_intervention.get("intent"),
+            "intent_detail": last_agent_intervention.get("intent_detail"),
+            "session_id": last_agent_intervention.get("session_id"),
+            "project_id": last_agent_intervention.get("project_id"),
+            "flow_classification": last_agent_intervention.get("flow_classification"),
+        }
+
     return {
         "session_initialized": state.get("session_active", False),
         "initialized_at": state.get("initialized_at"),
@@ -52,8 +67,8 @@ def _get_mcp_compliance_for_api() -> dict:
         "violations": state.get("violations", [])[-5:],
         "editor": state.get("editor"),
         "project_id": state.get("project_id"),
-        "agent_context": state.get("agent_context") or {},
-        "last_agent_intervention": state.get("last_agent_intervention") or {},
+        "agent_context": agent_context,
+        "last_agent_intervention": last_agent_intervention,
     }
 
 
