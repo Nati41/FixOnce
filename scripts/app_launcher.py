@@ -16,8 +16,9 @@ import subprocess
 import sys
 import time
 import webbrowser
+from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 # Get the directory where this script is located
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -45,6 +46,11 @@ DEFAULT_PORT = 5000
 PORT_RANGE = range(DEFAULT_PORT, DEFAULT_PORT + 10)
 START_TIMEOUT_SECONDS = 12.0
 BOOTSTRAP_HEALTH_TIMEOUT_SECONDS = 45.0
+DEFENDER_BLOCKED_DETAIL = (
+    "Windows Defender appears to have blocked FixOnce.exe. "
+    "Open Windows Security > Virus & threat protection > Protection history, "
+    "then allow or restore FixOnce if you trust this installer."
+)
 
 
 def is_frozen() -> bool:
@@ -82,6 +88,155 @@ def bootstrap_log(message: str):
             handle.write(f"[{timestamp}] {message}\n")
     except Exception:
         pass
+
+
+def _run_windows_powershell_json(script: str, timeout: float = 4.0) -> tuple[Any, str]:
+    if sys.platform != "win32":
+        return None, "not Windows"
+
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            creationflags=no_window_creationflags(),
+        )
+    except Exception as exc:
+        return None, f"{type(exc).__name__}: {exc}"
+
+    output = (result.stdout or "").strip()
+    if result.returncode != 0:
+        return None, (result.stderr or output or f"PowerShell exited {result.returncode}").strip()
+    if not output:
+        return None, ""
+    try:
+        return json.loads(output), ""
+    except json.JSONDecodeError as exc:
+        return None, f"Invalid PowerShell JSON: {exc}"
+
+
+def _as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _stringify_resources(value: Any) -> str:
+    if isinstance(value, list):
+        return " ".join(str(item) for item in value)
+    return str(value or "")
+
+
+def _detect_windows_server_processes() -> list[dict[str, Any]]:
+    if sys.platform != "win32":
+        return []
+
+    script = """
+$ErrorActionPreference = 'SilentlyContinue'
+Get-CimInstance Win32_Process |
+  Where-Object { $_.Name -ieq 'FixOnce.exe' -and $_.CommandLine -like '*--server*' } |
+  Select-Object ProcessId, Name, CommandLine |
+  ConvertTo-Json -Compress
+"""
+    payload, error = _run_windows_powershell_json(script)
+    if error:
+        bootstrap_log(f"Defender diagnostic process probe failed: {error}")
+        return []
+    return [item for item in _as_list(payload) if isinstance(item, dict)]
+
+
+def _get_windows_defender_diagnostics(executable: Path | None = None) -> dict[str, Any]:
+    """
+    Best-effort Defender signal for startup failures.
+
+    This is diagnostic only: it does not alter Defender policy, restore files,
+    or add exclusions.
+    """
+    if sys.platform != "win32":
+        return {"available": False, "reason": "not_windows"}
+
+    exe_path = executable or Path(sys.executable)
+    install_dir = exe_path.resolve().parent if exe_path else get_packaged_install_dir()
+    exe_exists = exe_path.exists()
+    server_processes = _detect_windows_server_processes()
+
+    status_script = """
+$ErrorActionPreference = 'SilentlyContinue'
+Get-MpComputerStatus |
+  Select-Object AMRunningMode, AMServiceEnabled, AntivirusEnabled, RealTimeProtectionEnabled, AntivirusSignatureVersion |
+  ConvertTo-Json -Compress
+"""
+    status_payload, status_error = _run_windows_powershell_json(status_script)
+
+    detections_script = """
+$ErrorActionPreference = 'SilentlyContinue'
+$threats = @(Get-MpThreat | Select-Object ThreatName, ThreatID, SeverityID, DidThreatExecute, IsActive, Resources)
+$detections = @(Get-MpThreatDetection | Select-Object ThreatName, ThreatID, ActionSuccess, InitialDetectionTime, LastThreatStatusChangeTime, Resources)
+[PSCustomObject]@{
+  Threats = $threats
+  Detections = $detections
+} | ConvertTo-Json -Compress -Depth 5
+"""
+    detections_payload, detections_error = _run_windows_powershell_json(detections_script)
+
+    needle_paths = {
+        str(exe_path).lower(),
+        str(install_dir).lower(),
+        "fixonce.exe",
+        "fixonce",
+    }
+
+    relevant: list[dict[str, Any]] = []
+    for source_name, items in (
+        ("Get-MpThreat", _as_list((detections_payload or {}).get("Threats") if isinstance(detections_payload, dict) else None)),
+        ("Get-MpThreatDetection", _as_list((detections_payload or {}).get("Detections") if isinstance(detections_payload, dict) else None)),
+    ):
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            haystack = " ".join(
+                [
+                    str(item.get("ThreatName") or ""),
+                    _stringify_resources(item.get("Resources")),
+                ]
+            ).lower()
+            if any(needle in haystack for needle in needle_paths):
+                relevant.append({"source": source_name, **item})
+
+    blocked = bool(relevant) and (not exe_exists or not server_processes)
+    if blocked:
+        disposition = "quarantined_or_deleted" if not exe_exists else "terminated_or_blocked"
+    elif relevant:
+        disposition = "defender_detection_present"
+    else:
+        disposition = "not_detected"
+
+    return {
+        "available": True,
+        "executable": str(exe_path),
+        "install_dir": str(install_dir),
+        "executable_exists": exe_exists,
+        "server_process_count": len(server_processes),
+        "server_processes": server_processes[:5],
+        "defender_status": status_payload if isinstance(status_payload, dict) else {},
+        "defender_status_error": status_error,
+        "defender_detection_error": detections_error,
+        "relevant_detections": relevant[:10],
+        "blocked_likely": blocked,
+        "disposition": disposition,
+    }
+
+
+def log_windows_defender_diagnostics(reason: str, executable: Path | None = None) -> dict[str, Any]:
+    diagnostics = _get_windows_defender_diagnostics(executable)
+    try:
+        bootstrap_log(f"Defender diagnostics ({reason}): {json.dumps(diagnostics, default=str)}")
+    except Exception:
+        bootstrap_log(f"Defender diagnostics ({reason}): unavailable")
+    return diagnostics
 
 
 def set_dock_icon():
@@ -535,8 +690,17 @@ def ensure_packaged_server_running(log_fn: Callable[[str], None] | None = None) 
         return port
 
     write_log("Starting background server via FixOnce.exe --server")
-    start_server()
-    return wait_for_health(log_fn=write_log)
+    try:
+        start_server()
+    except Exception as exc:
+        write_log(f"Background server start failed: {type(exc).__name__}: {exc}")
+        log_windows_defender_diagnostics("start_server_failed")
+        raise
+
+    port = wait_for_health(log_fn=write_log)
+    if port is None:
+        log_windows_defender_diagnostics("health_timeout")
+    return port
 
 
 def run_bootstrap() -> int:
@@ -597,12 +761,20 @@ def run_bootstrap() -> int:
 
         port = ensure_packaged_server_running()
         if port is None:
+            defender_diagnostics = log_windows_defender_diagnostics("bootstrap_health_failed")
+            defender_blocked = bool(defender_diagnostics.get("blocked_likely"))
+            detail = DEFENDER_BLOCKED_DETAIL if defender_blocked else "/api/health did not return OK"
+            metadata = {**bootstrap_metadata, "defender_diagnostics": defender_diagnostics}
             persist_snapshot(
                 InstallState.FAILED,
-                detail="/api/health did not return OK",
+                detail=detail,
                 install_dir=install_dir,
+                metadata=metadata,
             )
-            bootstrap_log("Bootstrap failed: health check did not pass")
+            if defender_blocked:
+                bootstrap_log(f"Bootstrap failed: Defender likely blocked startup ({defender_diagnostics.get('disposition')})")
+            else:
+                bootstrap_log("Bootstrap failed: health check did not pass")
             return 1
 
         runtime_pid, runtime_port = _read_runtime_pid_port()
@@ -670,22 +842,23 @@ def start_server():
             python_cmd = get_windows_pythonw(sys.executable)
             command = [python_cmd, str(SERVER_SCRIPT), "--flask-only", "--quiet", "--strict-port"]
 
-        subprocess.Popen(
+        process = subprocess.Popen(
             command,
             cwd=str(PROJECT_DIR),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=windows_process_creationflags(detached=True),
         )
+        log_event(f"Requested background server start: pid={process.pid} command={subprocess.list2cmdline(command)}")
     else:
-        subprocess.Popen(
+        process = subprocess.Popen(
             [sys.executable, str(SERVER_SCRIPT), "--flask-only", "--quiet"],
             cwd=str(PROJECT_DIR),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-    log_event("Requested background server start")
+        log_event(f"Requested background server start: pid={process.pid}")
 
 
 def open_external_url(url: str):
@@ -762,10 +935,19 @@ def run_repair_action() -> bool:
 
 def show_failure_window(retry_callback: Callable[[], bool], repair_callback: Callable[[], bool]):
     """Show a friendly no-terminal failure window."""
-    message = (
-        "FixOnce couldn't open right now.\n\n"
-        "You can try again, run a quick repair, or open diagnostics."
-    )
+    defender_diagnostics = log_windows_defender_diagnostics("launch_failure_window")
+    if defender_diagnostics.get("blocked_likely"):
+        disposition = defender_diagnostics.get("disposition") or "blocked"
+        message = (
+            "FixOnce couldn't open because Windows Defender appears to have blocked FixOnce.exe.\n\n"
+            "Open Windows Security > Virus & threat protection > Protection history, then allow or restore FixOnce if you trust this installer.\n\n"
+            f"Diagnostic result: {disposition}."
+        )
+    else:
+        message = (
+            "FixOnce couldn't open right now.\n\n"
+            "You can try again, run a quick repair, or open diagnostics."
+        )
 
     try:
         import tkinter as tk
@@ -867,11 +1049,32 @@ def run_server_mode(argv: list[str]):
     server_main(argv)
 
 
+def get_mcp_startup_log_path() -> Path:
+    userprofile = os.environ.get("USERPROFILE")
+    base = Path(userprofile) if userprofile else Path.home()
+    return base / ".fixonce" / "logs" / "mcp_startup.log"
+
+
+def write_mcp_startup_diagnostics(message: str):
+    try:
+        log_file = get_mcp_startup_log_path()
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with log_file.open("a", encoding="utf-8") as handle:
+            handle.write(f"[{datetime.now().isoformat()}] {message}\n")
+    except Exception:
+        pass
+
+
 def run_mcp_mode():
     """Run the bundled FixOnce MCP stdio server."""
+    write_mcp_startup_diagnostics("--mcp startup started")
+    write_mcp_startup_diagnostics(f"sys.executable={sys.executable}")
+    write_mcp_startup_diagnostics(f"cwd={os.getcwd()}")
+    write_mcp_startup_diagnostics(f"userprofile={os.environ.get('USERPROFILE', '')} home={Path.home()}")
     if not is_frozen():
         sys.path.insert(0, str(PROJECT_DIR / "src"))
 
+    write_mcp_startup_diagnostics("--mcp entering mcp_server.mcp_memory_server_v2")
     runpy.run_module("mcp_server.mcp_memory_server_v2", run_name="__main__")
 
 

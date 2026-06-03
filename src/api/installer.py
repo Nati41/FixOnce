@@ -8,7 +8,7 @@ import subprocess
 import sys
 import os
 from pathlib import Path
-from flask import Blueprint, jsonify, send_file, request
+from flask import Blueprint, Response, jsonify, request
 
 from config import DATA_DIR, INSTALL_DATA_DIR, get_install_data_dir  # compatibility for tests that patch installer data dir
 from core.mcp_config import build_stdio_mcp_config, write_codex_config
@@ -135,6 +135,11 @@ def _write_installer_discovery_diagnostics(html_candidates: list[Path]):
         pass
 
 
+def _serve_installer_html(path: Path):
+    """Return installer HTML without holding a Windows file handle open."""
+    return Response(path.read_bytes(), mimetype="text/html")
+
+
 @installer_bp.route('/install')
 def serve_installer():
     """Serve the installer HTML page."""
@@ -142,14 +147,14 @@ def serve_installer():
     _write_installer_discovery_diagnostics(html_candidates)
     for installer_path in html_candidates:
         if os.path.exists(installer_path):
-            return send_file(installer_path)
+            return _serve_installer_html(installer_path)
 
     if html_candidates:
         installer_path = html_candidates[0]
     else:
         installer_path = Path("installer.html")
     if os.path.exists(installer_path):
-        return send_file(installer_path)
+        return _serve_installer_html(installer_path)
     return "Installer not found", 404
 
 
@@ -162,6 +167,8 @@ def installer_status():
         "state": snapshot.state.value,
         "detail": snapshot.detail,
         "runtime_port": snapshot.runtime_port,
+        "runtime_pid": snapshot.runtime_pid,
+        "metadata": snapshot.metadata,
     })
 
 

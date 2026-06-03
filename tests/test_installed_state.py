@@ -130,8 +130,37 @@ class TestInstalledState(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.get_json(),
-            {"installed": True, "state": "READY", "detail": "Canonical runtime is healthy", "runtime_port": 5001},
+            {
+                "installed": True,
+                "state": "READY",
+                "detail": "Canonical runtime is healthy",
+                "runtime_port": 5001,
+                "runtime_pid": 123,
+                "metadata": {},
+            },
         )
+
+    def test_installer_status_includes_defender_failure_metadata(self):
+        install_state_module.mark_install_state(
+            InstallState.FAILED,
+            data_dir=self.data_dir,
+            detail="Windows Defender appears to have blocked FixOnce.exe.",
+            metadata={
+                "defender_diagnostics": {
+                    "blocked_likely": True,
+                    "disposition": "quarantined_or_deleted",
+                }
+            },
+        )
+
+        with patch.object(install_state_module, "get_runtime_state", return_value=None):
+            response = self.client.get("/api/installer/status", headers={"Host": "localhost:5001"})
+
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["state"], "FAILED")
+        self.assertTrue(payload["metadata"]["defender_diagnostics"]["blocked_likely"])
+        self.assertEqual(payload["metadata"]["defender_diagnostics"]["disposition"], "quarantined_or_deleted")
 
     def test_installer_status_rejects_runtime_from_other_port(self):
         with patch.object(install_state_module, "get_runtime_state", return_value={"port": 5002, "pid": 123}):

@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -124,6 +125,26 @@ class TestAppLauncher(unittest.TestCase):
         with patch.object(app_launcher, "run_server_mode") as run_server_mode, patch.object(sys, "argv", ["app_launcher.py", "--server", "--flask-only", "--quiet"]):
             app_launcher.main()
             run_server_mode.assert_called_once_with(["--flask-only", "--quiet"])
+
+    def test_mcp_mode_writes_startup_diagnostics_before_import(self):
+        with tempfile.TemporaryDirectory(prefix="fixonce-mcp-startup-") as temp_dir:
+            temp_home = Path(temp_dir)
+            log_file = temp_home / ".fixonce" / "logs" / "mcp_startup.log"
+
+            def assert_log_exists_before_import(*args, **kwargs):
+                text = log_file.read_text(encoding="utf-8")
+                self.assertIn("--mcp startup started", text)
+                self.assertIn("sys.executable=", text)
+                self.assertIn("cwd=", text)
+                self.assertIn("userprofile=", text)
+                self.assertIn("home=", text)
+                self.assertIn("--mcp entering mcp_server.mcp_memory_server_v2", text)
+                raise RuntimeError("stop before MCP import")
+
+            with patch.dict(os.environ, {"USERPROFILE": str(temp_home)}), \
+                 patch.object(app_launcher.runpy, "run_module", side_effect=assert_log_exists_before_import):
+                with self.assertRaisesRegex(RuntimeError, "stop before MCP import"):
+                    app_launcher.run_mcp_mode()
 
 
 if __name__ == "__main__":

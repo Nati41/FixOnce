@@ -12,6 +12,8 @@ Output:
 
 from pathlib import Path
 
+from PyInstaller.utils.hooks import copy_metadata
+
 
 PROJECT_ROOT = Path(SPECPATH)
 
@@ -113,6 +115,7 @@ datas = (
     + existing_entries(ASSET_ALLOWLIST)
     + existing_entries(HOOK_ALLOWLIST)
     + tree_entries("src", excluded_dirs=(".fixonce",))
+    + copy_metadata("fastmcp")
     + [(str(PROJECT_ROOT / file), ".") for file in ROOT_INSTALLER_FILES if (PROJECT_ROOT / file).exists()]
 )
 
@@ -154,9 +157,12 @@ hiddenimports = [
     "config",
     "windows_bootstrap",
     "core",
+    "core.agent_mcp_registration",
+    "core.mcp_config",
     "api",
     "managers",
     "mcp_server",
+    "mcp_server.mcp_memory_server_v2",
 ]
 
 

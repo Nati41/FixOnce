@@ -300,6 +300,64 @@ class TestBootstrap(unittest.TestCase):
         self.assertNotIn("PYTHONPATH", text)
         self.assertTrue(any("MCP registration completed" in line for line in self._log_lines()))
 
+    def test_run_bootstrap_repairs_legacy_codex_mcp_config(self):
+        home_dir = Path(self.temp_dir.name) / "home"
+        install_dir = Path(self.temp_dir.name) / "FixOnce"
+        codex_config = home_dir / ".codex" / "config.toml"
+        codex_config.parent.mkdir(parents=True)
+        legacy_command = str(install_dir / "FixOnce.exe").replace("\\", "\\\\")
+        legacy_mcp_server = str(install_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py").replace("\\", "\\\\")
+        legacy_src = str(install_dir / "src").replace("\\", "\\\\")
+        codex_config.write_text(
+            "\n".join(
+                [
+                    "[mcp_servers.fixonce]",
+                    f'command = "{legacy_command}"',
+                    f'args = ["{legacy_mcp_server}"]',
+                    "",
+                    "[mcp_servers.fixonce.env]",
+                    f'PYTHONPATH = "{legacy_src}"',
+                    'FIXONCE_ACTOR = "codex"',
+                    "",
+                    "[profiles.default]",
+                    'model = "gpt-5"',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        self.runtime_file.write_text(
+            json.dumps({"port": 5000, "pid": 4242, "install_path": str(install_dir)}),
+            encoding="utf-8",
+        )
+
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(app_launcher.sys, "executable", str(install_dir / "FixOnce.exe")), patch.object(app_launcher, "is_frozen", return_value=True), patch.object(
+            app_launcher,
+            "get_packaged_install_dir",
+            return_value=install_dir,
+        ), patch.object(
+            app_launcher,
+            "configure_windows_autostart",
+            return_value=app_launcher.AUTOSTART_METHOD_SCHEDULED_TASK,
+        ), patch.object(
+            app_launcher,
+            "ensure_packaged_server_running",
+            return_value=5000,
+        ), patch("pathlib.Path.home", return_value=home_dir), patch.object(app_launcher, "open_dashboard"):
+            code = app_launcher.run_bootstrap()
+
+        self.assertEqual(code, 0)
+        text = codex_config.read_text(encoding="utf-8")
+        self.assertEqual(text.count("[mcp_servers.fixonce]"), 1)
+        self.assertIn("FixOnce.exe", text)
+        self.assertIn('args = ["--mcp"]', text)
+        self.assertIn("startup_timeout_sec = 60", text)
+        self.assertNotIn("[mcp_servers.fixonce.env]", text)
+        self.assertNotIn("PYTHONPATH", text)
+        self.assertNotIn("FIXONCE_ACTOR", text)
+        self.assertNotIn("mcp_memory_server_v2.py", text)
+        self.assertIn('[profiles.default]\nmodel = "gpt-5"', text)
+
     def test_run_bootstrap_idempotent_second_run(self):
         self.install_state_file.write_text(
             json.dumps(
@@ -357,6 +415,10 @@ class TestBootstrap(unittest.TestCase):
             app_launcher,
             "ensure_packaged_server_running",
             return_value=None,
+        ), patch.object(
+            app_launcher,
+            "log_windows_defender_diagnostics",
+            return_value={"blocked_likely": False},
         ), patch.object(app_launcher, "open_dashboard") as open_dashboard:
             code = app_launcher.run_bootstrap()
 
@@ -365,6 +427,40 @@ class TestBootstrap(unittest.TestCase):
         snapshot = load_snapshot(data_dir=self.data_dir)
         self.assertEqual(snapshot.state, InstallState.FAILED)
         self.assertIn("health", snapshot.detail.lower())
+
+    def test_run_bootstrap_reports_defender_block_when_health_never_ok(self):
+        diagnostics = {
+            "blocked_likely": True,
+            "disposition": "terminated_or_blocked",
+            "executable_exists": True,
+            "relevant_detections": [{"ThreatName": "Trojan:Win32/Bearfoos.A!ml"}],
+        }
+
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(app_launcher, "is_frozen", return_value=True), patch.object(
+            app_launcher,
+            "get_packaged_install_dir",
+            return_value=Path(r"C:\Apps\FixOnce"),
+        ), patch.object(
+            app_launcher,
+            "configure_windows_autostart",
+            return_value=app_launcher.AUTOSTART_METHOD_STARTUP_SHORTCUT,
+        ), patch.object(
+            app_launcher,
+            "ensure_packaged_server_running",
+            return_value=None,
+        ), patch.object(
+            app_launcher,
+            "log_windows_defender_diagnostics",
+            return_value=diagnostics,
+        ), patch.object(app_launcher, "open_dashboard") as open_dashboard:
+            code = app_launcher.run_bootstrap()
+
+        self.assertEqual(code, 1)
+        open_dashboard.assert_not_called()
+        snapshot = load_snapshot(data_dir=self.data_dir)
+        self.assertEqual(snapshot.state, InstallState.FAILED)
+        self.assertIn("Windows Defender", snapshot.detail)
+        self.assertEqual(snapshot.metadata["defender_diagnostics"]["disposition"], "terminated_or_blocked")
 
     def test_uninstall_script_removes_startup_shortcut(self):
         uninstall_text = (PROJECT_ROOT / "uninstall.ps1").read_text(encoding="utf-8")

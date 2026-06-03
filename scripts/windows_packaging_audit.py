@@ -27,6 +27,13 @@ REQUIRED_ROOT_FILES = [
     "requirements.txt",
 ]
 
+REQUIRED_PACKAGE_METADATA = {
+    "fastmcp metadata": [
+        "fastmcp-*.dist-info/METADATA",
+        "*/fastmcp-*.dist-info/METADATA",
+    ],
+}
+
 FORBIDDEN_PATTERNS = [
     ".git/*",
     ".codex/*",
@@ -174,6 +181,7 @@ def write_report(
     files: list[Path],
     forbidden: list[Path],
     missing_required: list[str],
+    missing_metadata: list[str],
     syntax_errors: list[str],
 ) -> None:
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -191,6 +199,10 @@ def write_report(
     for item in REQUIRED_ROOT_FILES:
         status = "MISSING" if item in missing_required else "PRESENT"
         lines.append(f"{status} {item}")
+    lines.extend(["", "REQUIRED_PACKAGE_METADATA"])
+    for item in REQUIRED_PACKAGE_METADATA:
+        status = "MISSING" if item in missing_metadata else "PRESENT"
+        lines.append(f"{status} {item}")
     lines.extend(["", "POWERSHELL_SYNTAX"])
     if syntax_errors:
         lines.append("INSTALL_PS1_SYNTAX_FAILED")
@@ -198,9 +210,10 @@ def write_report(
     else:
         lines.append("INSTALL_PS1_SYNTAX_OK")
     lines.extend(["", "FORBIDDEN_ARTIFACT_SCAN"])
-    if forbidden or missing_required or syntax_errors:
+    if forbidden or missing_required or missing_metadata or syntax_errors:
         lines.append("AUDIT_FAILED")
         lines.extend(f"MISSING_REQUIRED {item}" for item in missing_required)
+        lines.extend(f"MISSING_METADATA {item}" for item in missing_metadata)
         lines.extend(f"SYNTAX_ERROR {line}" for line in syntax_errors)
         lines.extend(f"FORBIDDEN {path.as_posix()}" for path in forbidden)
     else:
@@ -221,11 +234,16 @@ def main(argv: list[str]) -> int:
     forbidden = [path for path in files if is_forbidden(path)]
     file_names = {path.as_posix() for path in files}
     missing_required = [item for item in REQUIRED_ROOT_FILES if item not in file_names]
+    missing_metadata = [
+        name
+        for name, patterns in REQUIRED_PACKAGE_METADATA.items()
+        if not any(fnmatch.fnmatch(file_name, pattern) for pattern in patterns for file_name in file_names)
+    ]
     syntax_errors = []
     install_script = package_dir / "install.ps1"
     if install_script.exists():
         syntax_errors = powershell_syntax_errors(install_script)
-    write_report(package_dir, report_path, files, forbidden, missing_required, syntax_errors)
+    write_report(package_dir, report_path, files, forbidden, missing_required, missing_metadata, syntax_errors)
 
     print(f"Audit report: {report_path}")
     print(f"Included files: {len(files)}")
@@ -233,6 +251,10 @@ def main(argv: list[str]) -> int:
     if missing_required:
         print("Required root files missing:")
         for item in missing_required:
+            print(f"  {item}")
+    if missing_metadata:
+        print("Required package metadata missing:")
+        for item in missing_metadata:
             print(f"  {item}")
     if forbidden:
         print("Forbidden artifacts found:")
@@ -242,7 +264,7 @@ def main(argv: list[str]) -> int:
         print("install.ps1 PowerShell syntax errors:")
         for line in syntax_errors:
             print(f"  {line}")
-    if missing_required or forbidden or syntax_errors:
+    if missing_required or missing_metadata or forbidden or syntax_errors:
         return 1
 
     print("Forbidden artifact scan: AUDIT_OK")

@@ -240,6 +240,22 @@ h1 {
         </div>
       </div>
     </section>
+
+    <section id="screen-failed" class="stack hidden">
+      <div class="eyebrow">Needs attention</div>
+      <h1>Startup blocked</h1>
+      <p class="lede" id="failed-copy">FixOnce finished setup, but the background service did not start.</p>
+      <div class="card">
+        <div class="status-line" id="failed-detail">Check diagnostics for the startup failure.</div>
+        <div class="advanced">
+          If Windows Security shows a FixOnce detection, open Virus & threat protection > Protection history, then allow or restore FixOnce if you trust this installer.
+        </div>
+        <div class="btn-row">
+          <a class="btn btn-primary" href="/">Retry</a>
+          <a class="btn btn-secondary" href="https://www.microsoft.com/en-us/wdsi/filesubmission">Report false positive</a>
+        </div>
+      </div>
+    </section>
   </main>
 
 <script>
@@ -247,11 +263,14 @@ const screens = {
   install: document.getElementById("screen-install"),
   progress: document.getElementById("screen-progress"),
   ready: document.getElementById("screen-ready"),
+  failed: document.getElementById("screen-failed"),
 };
 
 const progressDetail = document.getElementById("progress-detail");
 const readyCopy = document.getElementById("ready-copy");
 const dashboardLink = document.getElementById("dashboard-link");
+const failedCopy = document.getElementById("failed-copy");
+const failedDetail = document.getElementById("failed-detail");
 
 function showScreen(name) {
   Object.entries(screens).forEach(([key, el]) => {
@@ -278,6 +297,18 @@ function updateReadyState(status) {
   dashboardLink.href = "/";
 }
 
+function updateFailedState(status) {
+  const detail = status.detail || "FixOnce finished setup, but the background service did not start.";
+  const diagnostics = status.metadata?.defender_diagnostics || {};
+  failedCopy.textContent = detail;
+  if (diagnostics.blocked_likely) {
+    const disposition = diagnostics.disposition ? ` (${diagnostics.disposition})` : "";
+    failedDetail.textContent = `Windows Defender appears to have blocked FixOnce.exe${disposition}.`;
+    return;
+  }
+  failedDetail.textContent = detail;
+}
+
 async function refreshStatus() {
   try {
     const status = await fetchInstallerStatus();
@@ -290,6 +321,12 @@ async function refreshStatus() {
     if (["INSTALLING", "STARTING", "WAITING_HEALTH", "RECOVERY"].includes(status.state)) {
       updateProgressLabel(status);
       showScreen("progress");
+      return;
+    }
+
+    if (status.state === "FAILED") {
+      updateFailedState(status);
+      showScreen("failed");
       return;
     }
 

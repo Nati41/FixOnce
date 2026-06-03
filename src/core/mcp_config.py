@@ -4,7 +4,6 @@ Shared MCP configuration helpers.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 
@@ -35,15 +34,21 @@ def toml_quote(value: str) -> str:
 
 
 def remove_codex_server_blocks(content: str, server_name: str) -> str:
-    patterns = [
-        rf'(?m)^\[mcp_servers\.{re.escape(server_name)}\]\r?\n(?:^[^\[\r\n].*\r?\n?)*',
-        rf'(?m)^\[mcp_servers\.{re.escape(server_name)}\.env\]\r?\n(?:^[^\[\r\n].*\r?\n?)*',
-    ]
+    target_headers = {
+        f"[mcp_servers.{server_name}]",
+        f"[mcp_servers.{server_name}.env]",
+    }
 
-    updated = content
-    for pattern in patterns:
-        updated = re.sub(pattern, "", updated)
-    return updated.strip()
+    kept: list[str] = []
+    skip = False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            skip = stripped in target_headers
+        if not skip:
+            kept.append(line)
+
+    return "\n".join(kept).strip()
 
 
 def write_codex_config(path: Path, server_name: str, config: dict, include_actor_env: bool = True):
@@ -55,6 +60,7 @@ def write_codex_config(path: Path, server_name: str, config: dict, include_actor
         f"[mcp_servers.{server_name}]",
         f"command = {toml_quote(config['command'])}",
         f"args = [{', '.join(toml_quote(arg) for arg in config.get('args', []))}]",
+        "startup_timeout_sec = 60",
     ]
 
     env = dict(config.get("env", {}))

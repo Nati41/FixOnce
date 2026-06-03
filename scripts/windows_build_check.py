@@ -72,7 +72,12 @@ def powershell_syntax_ok(path: Path) -> bool:
     if not powershell:
         return True
 
-    command = "$null = [scriptblock]::Create((Get-Content -Raw $args[0])); 'install.ps1 syntax OK'"
+    literal_path = str(path).replace("'", "''")
+    command = (
+        "$null = [scriptblock]::Create("
+        f"(Get-Content -Raw -LiteralPath '{literal_path}')"
+        "); 'install.ps1 syntax OK'"
+    )
     result = subprocess.run(
         [
             powershell,
@@ -81,7 +86,6 @@ def powershell_syntax_ok(path: Path) -> bool:
             "Bypass",
             "-Command",
             command,
-            str(path),
         ],
         capture_output=True,
         text=True,
@@ -125,6 +129,7 @@ def main() -> int:
     check("data/test_error.html" not in spec_text, "test pages excluded", "test_error.html not packaged", failures)
     check('"extension"), "extension"' not in spec_text, "extension allowlist", "no whole extension directory", failures)
     check('"server"' in spec_text, "server hidden import", "internal server import declared", failures)
+    check('copy_metadata("fastmcp")' in spec_text, "fastmcp package metadata", "metadata copied for importlib.metadata", failures)
     check("copy /Y install.ps1 dist\\FixOnce\\install.ps1" in build_text, "install.ps1 package root", "copied after PyInstaller", failures)
     check("copy /Y uninstall.ps1 dist\\FixOnce\\uninstall.ps1" in build_text, "uninstall.ps1 package root", "copied after PyInstaller", failures)
     check("copy /Y install.bat dist\\FixOnce\\install.bat" in build_text, "install.bat package root", "copied after PyInstaller", failures)

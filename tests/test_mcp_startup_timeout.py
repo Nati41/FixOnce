@@ -12,6 +12,16 @@ if str(SRC_ROOT) not in sys.path:
 
 
 class TestMcpStartupTimeout(unittest.TestCase):
+    def test_mcp_import_does_not_import_project_semantic(self):
+        sys.modules.pop("core.project_semantic", None)
+        sys.modules.pop("core.semantic_index", None)
+
+        module = importlib.import_module("mcp_server.mcp_memory_server_v2")
+        importlib.reload(module)
+
+        self.assertNotIn("core.project_semantic", sys.modules)
+        self.assertNotIn("core.semantic_index", sys.modules)
+
     def test_safe_tool_handler_uses_timeout_runner(self):
         module = importlib.import_module("mcp_server.mcp_memory_server_v2")
 
@@ -46,3 +56,7 @@ class TestMcpStartupTimeout(unittest.TestCase):
 
         self.assertEqual(result, "opener")
         submit.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()
