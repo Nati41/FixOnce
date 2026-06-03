@@ -780,7 +780,7 @@ def _resolve_actor_identity() -> Dict[str, Any]:
     1. Explicit client-provided actor env vars (confidence: 1.0)
     2. Runtime environment detection (confidence from detector)
     """
-    allowed = {"codex", "claude", "cursor", "vscode"}
+    allowed = {"codex", "claude", "cursor", "vscode", "windsurf"}
 
     # Priority 1: Explicit client-provided actor
     explicit_actor = (

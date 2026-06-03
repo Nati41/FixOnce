@@ -265,7 +265,7 @@ class TestBootstrap(unittest.TestCase):
         self.assertEqual(snapshot.install_dir, r"C:\Apps\FixOnce")
         self.assertTrue(any("Bootstrap completed successfully" in line for line in self._log_lines()))
 
-    def test_run_bootstrap_registers_codex_mcp_for_fresh_windows_user(self):
+    def test_run_bootstrap_registers_mcp_clients_for_fresh_windows_user(self):
         home_dir = Path(self.temp_dir.name) / "home"
         install_dir = Path(self.temp_dir.name) / "FixOnce"
         self.runtime_file.write_text(
@@ -292,19 +292,37 @@ class TestBootstrap(unittest.TestCase):
         self.assertEqual(first, 0)
         self.assertEqual(second, 0)
         codex_config = home_dir / ".codex" / "config.toml"
+        claude_config = home_dir / ".claude.json"
+        cursor_config = home_dir / ".cursor" / "mcp.json"
+        windsurf_config = home_dir / ".codeium" / "windsurf" / "mcp_config.json"
         self.assertTrue(codex_config.exists())
         text = codex_config.read_text(encoding="utf-8")
         self.assertEqual(text.count("[mcp_servers.fixonce]"), 1)
         self.assertIn("FixOnce.exe", text)
         self.assertIn('args = ["--mcp"]', text)
         self.assertNotIn("PYTHONPATH", text)
+        self.assertIn('FIXONCE_ACTOR = "codex"', text)
+        for path, actor in (
+            (claude_config, "claude"),
+            (cursor_config, "cursor"),
+            (windsurf_config, "windsurf"),
+        ):
+            self.assertTrue(path.exists())
+            server = json.loads(path.read_text(encoding="utf-8"))["mcpServers"]["fixonce"]
+            self.assertEqual(server["command"], str(install_dir / "FixOnce.exe"))
+            self.assertEqual(server["args"], ["--mcp"])
+            self.assertEqual(server["env"], {"FIXONCE_ACTOR": actor})
+            self.assertNotIn("PYTHONPATH", json.dumps(server))
         self.assertTrue(any("MCP registration completed" in line for line in self._log_lines()))
 
-    def test_run_bootstrap_repairs_legacy_codex_mcp_config(self):
+    def test_run_bootstrap_repairs_legacy_mcp_configs(self):
         home_dir = Path(self.temp_dir.name) / "home"
         install_dir = Path(self.temp_dir.name) / "FixOnce"
         codex_config = home_dir / ".codex" / "config.toml"
         codex_config.parent.mkdir(parents=True)
+        claude_config = home_dir / ".claude.json"
+        cursor_config = home_dir / ".cursor" / "mcp.json"
+        windsurf_config = home_dir / ".codeium" / "windsurf" / "mcp_config.json"
         legacy_command = str(install_dir / "FixOnce.exe").replace("\\", "\\\\")
         legacy_mcp_server = str(install_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py").replace("\\", "\\\\")
         legacy_src = str(install_dir / "src").replace("\\", "\\\\")
@@ -326,6 +344,24 @@ class TestBootstrap(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        for path in (claude_config, cursor_config, windsurf_config):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "fixonce": {
+                                "command": str(install_dir / "FixOnce.exe"),
+                                "args": [str(install_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py")],
+                                "env": {"PYTHONPATH": str(install_dir / "src")},
+                            },
+                            "other": {"command": "node"},
+                        },
+                        "theme": "dark",
+                    }
+                ),
+                encoding="utf-8",
+            )
         self.runtime_file.write_text(
             json.dumps({"port": 5000, "pid": 4242, "install_path": str(install_dir)}),
             encoding="utf-8",
@@ -352,11 +388,25 @@ class TestBootstrap(unittest.TestCase):
         self.assertIn("FixOnce.exe", text)
         self.assertIn('args = ["--mcp"]', text)
         self.assertIn("startup_timeout_sec = 60", text)
-        self.assertNotIn("[mcp_servers.fixonce.env]", text)
+        self.assertIn("[mcp_servers.fixonce.env]", text)
         self.assertNotIn("PYTHONPATH", text)
-        self.assertNotIn("FIXONCE_ACTOR", text)
+        self.assertIn('FIXONCE_ACTOR = "codex"', text)
         self.assertNotIn("mcp_memory_server_v2.py", text)
         self.assertIn('[profiles.default]\nmodel = "gpt-5"', text)
+        for path, actor in (
+            (claude_config, "claude"),
+            (cursor_config, "cursor"),
+            (windsurf_config, "windsurf"),
+        ):
+            config = json.loads(path.read_text(encoding="utf-8"))
+            server = config["mcpServers"]["fixonce"]
+            self.assertEqual(server["command"], str(install_dir / "FixOnce.exe"))
+            self.assertEqual(server["args"], ["--mcp"])
+            self.assertEqual(server["env"], {"FIXONCE_ACTOR": actor})
+            self.assertEqual(config["mcpServers"]["other"], {"command": "node"})
+            self.assertEqual(config["theme"], "dark")
+            self.assertNotIn("PYTHONPATH", json.dumps(server))
+            self.assertNotIn("mcp_memory_server_v2.py", json.dumps(server))
 
     def test_run_bootstrap_idempotent_second_run(self):
         self.install_state_file.write_text(

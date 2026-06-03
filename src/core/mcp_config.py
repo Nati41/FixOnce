@@ -4,6 +4,7 @@ Shared MCP configuration helpers.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 
@@ -75,3 +76,25 @@ def write_codex_config(path: Path, server_name: str, config: dict, include_actor
     path.parent.mkdir(parents=True, exist_ok=True)
     new_block = "\n".join(lines).rstrip() + "\n"
     path.write_text((existing + "\n\n" + new_block if existing else new_block), encoding="utf-8")
+
+
+def write_json_mcp_config(path: Path, server_name: str, config: dict):
+    """Write or update an MCP server entry in JSON client configs."""
+    existing: dict = {}
+    if path.exists():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8-sig"))
+            if isinstance(loaded, dict):
+                existing = loaded
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+
+    servers = existing.get("mcpServers")
+    if not isinstance(servers, dict):
+        servers = {}
+        existing["mcpServers"] = servers
+
+    servers[server_name] = config
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")

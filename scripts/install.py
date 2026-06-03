@@ -866,9 +866,30 @@ def _find_fastmcp_path() -> str | None:
     return None
 
 
+def _find_packaged_fixonce_exe(fixonce_dir: Path) -> Path | None:
+    """Return the packaged Windows executable when this install dir has one."""
+    if get_platform() != "windows":
+        return None
+
+    for candidate in (
+        fixonce_dir / "FixOnce.exe",
+        fixonce_dir / "dist" / "FixOnce" / "FixOnce.exe",
+    ):
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def build_install_stdio_config(fixonce_dir: Path | None = None, probe_fastmcp: bool = True) -> dict:
     """Build the shared stdio config used by installer and dashboard retry actions."""
     fixonce_dir = fixonce_dir or get_fixonce_dir()
+    packaged_exe = _find_packaged_fixonce_exe(fixonce_dir)
+    if packaged_exe:
+        return {
+            "command": str(packaged_exe),
+            "args": ["--mcp"],
+        }
+
     mcp_server_path = fixonce_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py"
     src_path = str(fixonce_dir / "src")
     python_path = sys.executable
@@ -881,11 +902,21 @@ def build_install_stdio_config(fixonce_dir: Path | None = None, probe_fastmcp: b
     )
 
 
+def _config_with_client_actor(stdio_config: dict, actor: str) -> dict:
+    """Attach stable actor metadata without mutating the caller's config."""
+    config = dict(stdio_config)
+    env = dict(config.get("env", {}))
+    env.setdefault("FIXONCE_ACTOR", actor)
+    config["env"] = env
+    return config
+
+
 def configure_client_mcp(client: str, stdio_config: dict | None = None, editors: dict | None = None) -> bool:
     """Configure MCP for a single client without touching installer core flow."""
     stdio_config = stdio_config or build_install_stdio_config()
     editors = editors or detect_editors()
     client = (client or "").strip().lower()
+    actor_config = _config_with_client_actor(stdio_config, "claude" if client == "claude" else client)
 
     try:
         if client == "claude":
@@ -893,7 +924,7 @@ def configure_client_mcp(client: str, stdio_config: dict | None = None, editors:
                 try:
                     subprocess.run(['claude', 'mcp', 'remove', 'fixonce', '-s', 'user'],
                                  capture_output=True, timeout=10)
-                    mcp_json = json.dumps(stdio_config)
+                    mcp_json = json.dumps(actor_config)
                     result = subprocess.run(
                         ['claude', 'mcp', 'add-json', 'fixonce', mcp_json, '-s', 'user'],
                         capture_output=True, text=True, timeout=10
@@ -903,25 +934,25 @@ def configure_client_mcp(client: str, stdio_config: dict | None = None, editors:
                 except Exception as e:
                     print(f"  {Colors.YELLOW}[WARN]{Colors.END} Claude CLI not available: {e}")
 
-            _configure_mcp_file(Path.home() / '.claude.json', stdio_config)
+            _configure_mcp_file(Path.home() / '.claude.json', actor_config)
             print(f"  {Colors.GREEN}[OK]{Colors.END} Claude Code configured: {Path.home() / '.claude.json'}")
             return True
 
         if client == "cursor":
             cursor_path = Path.home() / '.cursor' / 'mcp.json'
-            _configure_mcp_file(cursor_path, stdio_config)
+            _configure_mcp_file(cursor_path, actor_config)
             print(f"  {Colors.GREEN}[OK]{Colors.END} Cursor configured: {cursor_path}")
             return True
 
         if client == "codex":
             codex_config = Path.home() / '.codex' / 'config.toml'
-            _configure_codex_mcp_file(codex_config, 'fixonce', stdio_config)
+            _configure_codex_mcp_file(codex_config, 'fixonce', actor_config)
             print(f"  {Colors.GREEN}[OK]{Colors.END} Codex configured: {codex_config}")
             return True
 
         if client == "windsurf":
             windsurf_config = Path.home() / '.codeium' / 'windsurf' / 'mcp_config.json'
-            _configure_windsurf_mcp_file(windsurf_config, stdio_config)
+            _configure_windsurf_mcp_file(windsurf_config, actor_config)
             print(f"  {Colors.GREEN}[OK]{Colors.END} Windsurf configured: {windsurf_config}")
             return True
     except Exception as e:
@@ -963,14 +994,16 @@ def configure_mcp(editors: dict) -> bool:
 
     fixonce_dir = get_fixonce_dir()
     mcp_server_path = fixonce_dir / "src" / "mcp_server" / "mcp_memory_server_v2.py"
+    packaged_exe = _find_packaged_fixonce_exe(fixonce_dir)
 
-    if not mcp_server_path.exists():
+    if not mcp_server_path.exists() and not packaged_exe:
         print(f"  {Colors.RED}[ERROR]{Colors.END} MCP server not found at {mcp_server_path}")
         return False
 
     # Make MCP server executable
     try:
-        os.chmod(mcp_server_path, 0o755)
+        if mcp_server_path.exists():
+            os.chmod(mcp_server_path, 0o755)
     except Exception:
         pass
 
@@ -1000,7 +1033,6 @@ def configure_mcp(editors: dict) -> bool:
     # Create project-level .mcp.json with CORRECT paths for this machine
     # This is what Claude Code reads when opening the project
     project_mcp_path = fixonce_dir / ".mcp.json"
-    project_codex_path = fixonce_dir / ".codex" / "config.toml"
     try:
         project_mcp_config = {"mcpServers": {"fixonce": stdio_config}}
 
@@ -1009,12 +1041,6 @@ def configure_mcp(editors: dict) -> bool:
         print(f"  {Colors.GREEN}[OK]{Colors.END} Created .mcp.json with correct paths")
     except Exception as e:
         print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not create .mcp.json: {e}")
-
-    try:
-        _configure_codex_mcp_file(project_codex_path, 'fixonce', stdio_config)
-        print(f"  {Colors.GREEN}[OK]{Colors.END} Created .codex/config.toml with correct paths")
-    except Exception as e:
-        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not create .codex/config.toml: {e}")
 
     return True
 

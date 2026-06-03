@@ -11,7 +11,7 @@ from pathlib import Path
 from flask import Blueprint, Response, jsonify, request
 
 from config import DATA_DIR, INSTALL_DATA_DIR, get_install_data_dir  # compatibility for tests that patch installer data dir
-from core.mcp_config import build_stdio_mcp_config, write_codex_config
+from core.mcp_config import build_stdio_mcp_config, write_codex_config, write_json_mcp_config
 from core.install_state import get_install_snapshot, is_fixonce_installed, mark_install_state
 from core.install_state_machine import InstallState
 
@@ -20,21 +20,15 @@ installer_bp = Blueprint('installer', __name__)
 
 def _configure_json_mcp_file(path: Path, server_name: str, config: dict):
     """Write or update a JSON MCP config file."""
-    existing = {}
-    if path.exists():
-        try:
-            existing = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            existing = {}
+    write_json_mcp_config(path, server_name, config)
 
-    if not isinstance(existing, dict):
-        existing = {}
 
-    existing.setdefault("mcpServers", {})
-    existing["mcpServers"][server_name] = config
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+def _config_with_client_actor(stdio_config: dict, actor: str) -> dict:
+    config = dict(stdio_config)
+    env = dict(config.get("env", {}))
+    env.setdefault("FIXONCE_ACTOR", actor)
+    config["env"] = env
+    return config
 
 def _is_installed() -> bool:
     """Check if FixOnce is installed."""
@@ -200,6 +194,10 @@ def configure_mcp():
     stdio_config = build_stdio_mcp_config(mcp_server, src_path, fastmcp_path)
     if not fastmcp_path:
         stdio_config["command"] = sys.executable
+    claude_stdio_config = _config_with_client_actor(stdio_config, "claude")
+    cursor_stdio_config = _config_with_client_actor(stdio_config, "cursor")
+    codex_stdio_config = _config_with_client_actor(stdio_config, "codex")
+    windsurf_stdio_config = _config_with_client_actor(stdio_config, "windsurf")
 
     claude_config = Path.home() / '.claude.json'
 
@@ -208,7 +206,7 @@ def configure_mcp():
         subprocess.run(['claude', 'mcp', 'remove', 'fixonce', '-s', 'user'],
                       capture_output=True, timeout=10)
 
-        mcp_json = json.dumps(stdio_config)
+        mcp_json = json.dumps(claude_stdio_config)
 
         result = subprocess.run(
             ['claude', 'mcp', 'add-json', 'fixonce', mcp_json, '-s', 'user'],
@@ -221,7 +219,7 @@ def configure_mcp():
         pass
 
     try:
-        _configure_json_mcp_file(claude_config, 'fixonce', stdio_config)
+        _configure_json_mcp_file(claude_config, 'fixonce', claude_stdio_config)
         if "Claude Code" not in configured:
             configured.append("Claude Code")
     except Exception:
@@ -230,7 +228,7 @@ def configure_mcp():
     # Configure Cursor
     try:
         cursor_config = Path.home() / '.cursor' / 'mcp.json'
-        _configure_json_mcp_file(cursor_config, 'fixonce', stdio_config)
+        _configure_json_mcp_file(cursor_config, 'fixonce', cursor_stdio_config)
         configured.append("Cursor")
     except Exception:
         pass
@@ -238,7 +236,7 @@ def configure_mcp():
     # Configure Codex
     try:
         codex_config = Path.home() / '.codex' / 'config.toml'
-        write_codex_config(codex_config, 'fixonce', stdio_config)
+        write_codex_config(codex_config, 'fixonce', codex_stdio_config)
         configured.append("Codex")
     except Exception:
         pass
@@ -246,7 +244,7 @@ def configure_mcp():
     # Configure Windsurf
     try:
         windsurf_config = Path.home() / '.codeium' / 'windsurf' / 'mcp_config.json'
-        _configure_json_mcp_file(windsurf_config, 'fixonce', stdio_config)
+        _configure_json_mcp_file(windsurf_config, 'fixonce', windsurf_stdio_config)
         configured.append("Windsurf")
     except Exception:
         pass

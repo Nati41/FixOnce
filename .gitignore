@@ -43,6 +43,7 @@ personal_solutions.db
 
 # Installation-specific (generated per user)
 .mcp.json
+.codex/config.toml
 .cursorrules
 
 # Data files (generated at runtime, keep folder structure)

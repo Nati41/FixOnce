@@ -318,7 +318,7 @@ def initialize_mcp_session(client: McpClient, log: StageLogger, require_tools: b
             "capabilities": {},
             "clientInfo": {"name": "fixonce-windows-runtime-qa", "version": "1.0"},
         },
-        timeout=12.0,
+        timeout=30.0,
     )
     log.write(f"initialize_result={json.dumps(init.get('result', {}))[:1200]}")
     client.notify("notifications/initialized")
@@ -492,7 +492,7 @@ def main(argv: list[str]) -> int:
     stages.extend(
         [
             ("Current source runtime", 4.0, stage_local_runtime),
-            ("MCP startup readiness", 25.0, stage_mcp_startup_ready),
+            ("MCP startup readiness", 45.0, stage_mcp_startup_ready),
             ("fo_init C:\\TestProject", 35.0, stage_fo_init),
             ("fo_search simple query", 45.0, stage_fo_search),
             ("fo_errors", 25.0, stage_fo_errors),

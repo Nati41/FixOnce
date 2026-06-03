@@ -60,11 +60,57 @@ class TestClientOnboarding(unittest.TestCase):
         self.assertTrue(codex_config.exists())
         self.assertTrue(windsurf_config.exists())
 
-        self.assertIn("fixonce", json.loads(claude_config.read_text(encoding="utf-8"))["mcpServers"])
-        self.assertIn("fixonce", json.loads(cursor_config.read_text(encoding="utf-8"))["mcpServers"])
+        claude_server = json.loads(claude_config.read_text(encoding="utf-8"))["mcpServers"]["fixonce"]
+        cursor_server = json.loads(cursor_config.read_text(encoding="utf-8"))["mcpServers"]["fixonce"]
+        windsurf_server = json.loads(windsurf_config.read_text(encoding="utf-8"))["mcpServers"]["fixonce"]
+        self.assertEqual(claude_server["env"]["FIXONCE_ACTOR"], "claude")
+        self.assertEqual(cursor_server["env"]["FIXONCE_ACTOR"], "cursor")
+        self.assertEqual(windsurf_server["env"]["FIXONCE_ACTOR"], "windsurf")
         self.assertIn("[mcp_servers.fixonce]", codex_config.read_text(encoding="utf-8"))
         self.assertIn('FIXONCE_ACTOR = "codex"', codex_config.read_text(encoding="utf-8"))
-        self.assertIn("fixonce", json.loads(windsurf_config.read_text(encoding="utf-8"))["mcpServers"])
+
+    def test_windows_packaged_config_uses_fixonce_exe_for_all_clients(self):
+        def fake_run(cmd, capture_output=False, text=False, timeout=None):
+            class Result:
+                returncode = 1
+                stdout = ""
+                stderr = ""
+            return Result()
+
+        install_root = self.temp_home / "PackagedFixOnce"
+        install_root.mkdir()
+        packaged_exe = install_root / "FixOnce.exe"
+        packaged_exe.write_text("", encoding="utf-8")
+
+        editors = {
+            "claude_code": False,
+            "cursor": True,
+            "codex": True,
+            "windsurf": True,
+        }
+
+        with patch.object(install.subprocess, "run", side_effect=fake_run), \
+             patch.object(install, "get_fixonce_dir", return_value=install_root), \
+             patch.object(install, "get_platform", return_value="windows"):
+            success = install.configure_mcp(editors)
+
+        self.assertTrue(success)
+        for path, actor in (
+            (self.temp_home / ".claude.json", "claude"),
+            (self.temp_home / ".cursor" / "mcp.json", "cursor"),
+            (self.temp_home / ".codeium" / "windsurf" / "mcp_config.json", "windsurf"),
+        ):
+            server = json.loads(path.read_text(encoding="utf-8"))["mcpServers"]["fixonce"]
+            self.assertEqual(server["command"], str(packaged_exe))
+            self.assertEqual(server["args"], ["--mcp"])
+            self.assertEqual(server["env"], {"FIXONCE_ACTOR": actor})
+            self.assertNotIn("PYTHONPATH", json.dumps(server))
+
+        codex_text = (self.temp_home / ".codex" / "config.toml").read_text(encoding="utf-8")
+        self.assertIn(str(packaged_exe).replace("\\", "\\\\"), codex_text)
+        self.assertIn('args = ["--mcp"]', codex_text)
+        self.assertIn('FIXONCE_ACTOR = "codex"', codex_text)
+        self.assertNotIn("PYTHONPATH", codex_text)
 
     def test_windows_installer_codex_block_sets_actor(self):
         installer_text = (PROJECT_ROOT / "install.ps1").read_text(encoding="utf-8")

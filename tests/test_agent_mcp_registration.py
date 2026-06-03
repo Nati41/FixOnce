@@ -1,10 +1,15 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from src.core.agent_mcp_registration import (
     WINDOWS_MCP_CLIENT_ADAPTERS,
+    build_packaged_stdio_config,
+    register_claude_mcp,
     register_codex_mcp,
+    register_cursor_mcp,
+    register_windsurf_mcp,
     register_windows_mcp_clients,
 )
 
@@ -20,6 +25,17 @@ class TestAgentMcpRegistration(unittest.TestCase):
 
     def _codex_config_text(self) -> str:
         return (self.home / ".codex" / "config.toml").read_text(encoding="utf-8")
+
+    def _json_config(self, path: Path) -> dict:
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def _assert_json_client_config(self, path: Path, actor: str):
+        config = self._json_config(path)
+        server = config["mcpServers"]["fixonce"]
+        self.assertEqual(server["command"], str(self.fixonce_exe))
+        self.assertEqual(server["args"], ["--mcp"])
+        self.assertEqual(server["env"], {"FIXONCE_ACTOR": actor})
+        self.assertNotIn("PYTHONPATH", json.dumps(server))
 
     def test_codex_missing_config_creates_section(self):
         path = register_codex_mcp(self.home, self.fixonce_exe)
@@ -212,16 +228,84 @@ class TestAgentMcpRegistration(unittest.TestCase):
         self.assertIn('FIXONCE_ACTOR = "codex"', text)
         self.assertIn('[profiles.default]\nmodel = "gpt-5"', text)
 
+    def test_packaged_config_rejects_python_interpreter(self):
+        with self.assertRaisesRegex(ValueError, "requires FixOnce.exe"):
+            build_packaged_stdio_config(Path(r"C:\Python314\python.exe"), "codex")
+
+    def test_json_client_missing_config_creates_section(self):
+        cases = [
+            (register_claude_mcp, self.home / ".claude.json", "claude"),
+            (register_cursor_mcp, self.home / ".cursor" / "mcp.json", "cursor"),
+            (register_windsurf_mcp, self.home / ".codeium" / "windsurf" / "mcp_config.json", "windsurf"),
+        ]
+
+        for register, path, actor in cases:
+            with self.subTest(actor=actor):
+                self.assertEqual(register(self.home, self.fixonce_exe), path)
+                self._assert_json_client_config(path, actor)
+
+    def test_json_client_existing_config_is_preserved(self):
+        config_path = self.home / ".cursor" / "mcp.json"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(
+            json.dumps({"ui": {"theme": "dark"}, "mcpServers": {"other": {"command": "node"}}}),
+            encoding="utf-8",
+        )
+
+        register_cursor_mcp(self.home, self.fixonce_exe)
+
+        config = self._json_config(config_path)
+        self.assertEqual(config["ui"], {"theme": "dark"})
+        self.assertEqual(config["mcpServers"]["other"], {"command": "node"})
+        self._assert_json_client_config(config_path, "cursor")
+
+    def test_json_client_packaged_repair_removes_legacy_env_and_script_args(self):
+        config_path = self.home / ".claude.json"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "fixonce": {
+                            "command": str(self.fixonce_exe),
+                            "args": [r"C:\Program Files\FixOnce\src\mcp_server\mcp_memory_server_v2.py"],
+                            "env": {"PYTHONPATH": r"C:\Program Files\FixOnce\src"},
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        register_claude_mcp(self.home, self.fixonce_exe)
+
+        self._assert_json_client_config(config_path, "claude")
+        self.assertNotIn("mcp_memory_server_v2.py", config_path.read_text(encoding="utf-8"))
+
     def test_windows_registration_uses_agent_adapter_layer(self):
         self.assertIn(register_codex_mcp, WINDOWS_MCP_CLIENT_ADAPTERS)
+        self.assertIn(register_claude_mcp, WINDOWS_MCP_CLIENT_ADAPTERS)
+        self.assertIn(register_cursor_mcp, WINDOWS_MCP_CLIENT_ADAPTERS)
+        self.assertIn(register_windsurf_mcp, WINDOWS_MCP_CLIENT_ADAPTERS)
 
         paths = register_windows_mcp_clients(self.home, self.fixonce_exe)
 
-        self.assertEqual(paths, [self.home / ".codex" / "config.toml"])
+        self.assertEqual(
+            paths,
+            [
+                self.home / ".codex" / "config.toml",
+                self.home / ".claude.json",
+                self.home / ".cursor" / "mcp.json",
+                self.home / ".codeium" / "windsurf" / "mcp_config.json",
+            ],
+        )
         text = self._codex_config_text()
         self.assertIn("[mcp_servers.fixonce]", text)
         self.assertNotIn("PYTHONPATH", text)
         self.assertIn('FIXONCE_ACTOR = "codex"', text)
+        self._assert_json_client_config(self.home / ".claude.json", "claude")
+        self._assert_json_client_config(self.home / ".cursor" / "mcp.json", "cursor")
+        self._assert_json_client_config(self.home / ".codeium" / "windsurf" / "mcp_config.json", "windsurf")
 
 
 if __name__ == "__main__":
