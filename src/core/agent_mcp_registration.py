@@ -26,7 +26,7 @@ def build_packaged_stdio_config(fixonce_exe: Path) -> dict:
 def register_codex_mcp(home_dir: Path, fixonce_exe: Path, server_name: str = SERVER_NAME) -> Path:
     """Create or update the per-user Codex MCP config for FixOnce."""
     config_path = home_dir / ".codex" / "config.toml"
-    write_codex_config(config_path, server_name, build_packaged_stdio_config(fixonce_exe), include_actor_env=False)
+    write_codex_config(config_path, server_name, build_packaged_stdio_config(fixonce_exe))
     return config_path
 
 
