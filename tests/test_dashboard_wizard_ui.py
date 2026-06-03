@@ -58,6 +58,12 @@ class TestDashboardWizardUI(unittest.TestCase):
         self.assertIn("getClientDisplayName(client.client)", self.html)
         self.assertIn("copy[`open_${client.client}`]", self.html)
 
+    def test_header_and_agent_card_use_shared_actor_resolver(self):
+        self.assertIn("const activeAI = getCurrentActorName(s, agentContext, primaryAI, setupFinalizing);", self.html)
+        self.assertIn("const resolvedAgentName = activeAI;", self.html)
+        self.assertIn("function isKnownActor(value)", self.html)
+        self.assertIn("text !== 'unknown'", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()

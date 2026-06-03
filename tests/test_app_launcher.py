@@ -83,13 +83,73 @@ class TestAppLauncher(unittest.TestCase):
             self.assertFalse(lock_file.exists())
 
     def test_ensure_server_ready_reuses_existing_server(self):
+        progress_steps = []
         with patch.object(app_launcher, "discover_running_port", return_value=5003), patch.object(
             app_launcher,
             "endpoint_responds",
             side_effect=lambda port, endpoint, timeout=1.0: port == 5003 and endpoint == "/api/health",
         ), patch.object(app_launcher, "start_server") as start_server:
-            self.assertEqual(app_launcher.ensure_server_ready(), 5003)
+            self.assertEqual(app_launcher.ensure_server_ready(progress_steps.append), 5003)
             start_server.assert_not_called()
+        self.assertEqual(progress_steps, ["checking"])
+
+    def test_ensure_server_ready_reports_starting_server_before_wait(self):
+        progress_steps = []
+        with patch.object(app_launcher, "discover_running_port", return_value=None), patch.object(
+            app_launcher,
+            "start_server",
+        ) as start_server, patch.object(app_launcher, "wait_for_server", return_value=5000):
+            self.assertEqual(app_launcher.ensure_server_ready(progress_steps.append), 5000)
+
+        start_server.assert_called_once()
+        self.assertEqual(progress_steps, ["checking", "connecting"])
+
+    def test_launch_app_shows_startup_splash_until_dashboard_ready(self):
+        splash = type(
+            "Splash",
+            (),
+            {
+                "__init__": lambda self: setattr(self, "steps", []),
+                "show_step": lambda self, step: self.steps.append(step),
+                "close": lambda self: self.steps.append("closed"),
+            },
+        )
+        created = []
+
+        def make_splash():
+            instance = splash()
+            created.append(instance)
+            return instance
+
+        with patch.object(app_launcher, "StartupSplash", side_effect=make_splash), patch.object(
+            app_launcher,
+            "ensure_server_ready",
+            return_value=5000,
+        ) as ensure_ready, patch.object(app_launcher, "open_dashboard") as open_dashboard:
+            self.assertTrue(app_launcher.launch_app())
+
+        ensure_ready.assert_called_once_with(created[0].show_step)
+        open_dashboard.assert_called_once_with(5000)
+        self.assertEqual(created[0].steps, ["opening", "closed"])
+
+    def test_bootstrap_detached_dashboard_launch_starts_normal_launcher(self):
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
+            app_launcher.sys,
+            "executable",
+            r"C:\Apps\FixOnce\FixOnce.exe",
+        ), patch.object(app_launcher, "is_frozen", return_value=True), patch.object(
+            app_launcher,
+            "get_packaged_install_dir",
+            return_value=Path(r"C:\Apps\FixOnce"),
+        ), patch.object(app_launcher, "windows_process_creationflags", return_value=123), patch.object(
+            app_launcher.subprocess, "Popen"
+        ) as popen:
+            self.assertTrue(app_launcher.launch_dashboard_detached())
+
+        args, kwargs = popen.call_args
+        self.assertEqual(args[0], [r"C:\Apps\FixOnce\FixOnce.exe"])
+        self.assertEqual(kwargs["cwd"], r"C:\Apps\FixOnce")
+        self.assertEqual(kwargs["creationflags"], 123)
 
     def test_windows_server_launch_uses_detached_process_group(self):
         with patch.object(app_launcher.sys, "platform", "win32"), \

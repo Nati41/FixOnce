@@ -190,11 +190,14 @@ class TestBootstrap(unittest.TestCase):
             app_launcher,
             "ensure_packaged_server_running",
             return_value=5000,
-        ), patch.object(app_launcher, "open_dashboard") as open_dashboard:
+        ), patch.object(app_launcher, "launch_dashboard_detached", return_value=True) as launch_dashboard, patch.object(
+            app_launcher, "open_dashboard"
+        ) as open_dashboard:
             code = app_launcher.run_bootstrap()
 
         self.assertEqual(code, 0)
-        open_dashboard.assert_called_once_with(5000)
+        launch_dashboard.assert_called_once()
+        open_dashboard.assert_not_called()
         snapshot = load_snapshot(data_dir=self.data_dir)
         self.assertEqual(snapshot.state, InstallState.READY)
         self.assertEqual(snapshot.metadata.get("autostart_method"), "startup_shortcut")
@@ -217,11 +220,14 @@ class TestBootstrap(unittest.TestCase):
             app_launcher,
             "ensure_packaged_server_running",
             return_value=5000,
-        ), patch.object(app_launcher, "open_dashboard") as open_dashboard:
+        ), patch.object(app_launcher, "launch_dashboard_detached", return_value=True) as launch_dashboard, patch.object(
+            app_launcher, "open_dashboard"
+        ) as open_dashboard:
             code = app_launcher.run_bootstrap()
 
         self.assertEqual(code, 0)
-        open_dashboard.assert_called_once_with(5000)
+        launch_dashboard.assert_called_once()
+        open_dashboard.assert_not_called()
         snapshot = load_snapshot(data_dir=self.data_dir)
         self.assertEqual(snapshot.state, InstallState.READY)
         self.assertEqual(snapshot.metadata.get("autostart_method"), "none")
@@ -250,13 +256,16 @@ class TestBootstrap(unittest.TestCase):
             app_launcher,
             "ensure_packaged_server_running",
             return_value=5000,
-        ) as ensure_server, patch.object(app_launcher, "open_dashboard") as open_dashboard:
+        ) as ensure_server, patch.object(app_launcher, "launch_dashboard_detached", return_value=True) as launch_dashboard, patch.object(
+            app_launcher, "open_dashboard"
+        ) as open_dashboard:
             code = app_launcher.run_bootstrap()
 
         self.assertEqual(code, 0)
         configure_autostart.assert_called_once()
         ensure_server.assert_called_once()
-        open_dashboard.assert_called_once_with(5000)
+        launch_dashboard.assert_called_once()
+        open_dashboard.assert_not_called()
 
         snapshot = load_snapshot(data_dir=self.data_dir)
         self.assertEqual(snapshot.state, InstallState.READY)
@@ -440,7 +449,9 @@ class TestBootstrap(unittest.TestCase):
             app_launcher,
             "ensure_packaged_server_running",
             return_value=5000,
-        ) as ensure_server, patch.object(app_launcher, "open_dashboard") as open_dashboard:
+        ) as ensure_server, patch.object(app_launcher, "launch_dashboard_detached", return_value=True) as launch_dashboard, patch.object(
+            app_launcher, "open_dashboard"
+        ) as open_dashboard:
             first = app_launcher.run_bootstrap()
             second = app_launcher.run_bootstrap()
 
@@ -448,7 +459,8 @@ class TestBootstrap(unittest.TestCase):
         self.assertEqual(second, 0)
         self.assertEqual(configure_autostart.call_count, 2)
         self.assertEqual(ensure_server.call_count, 2)
-        self.assertEqual(open_dashboard.call_count, 2)
+        self.assertEqual(launch_dashboard.call_count, 2)
+        open_dashboard.assert_not_called()
         snapshot = load_snapshot(data_dir=self.data_dir)
         self.assertEqual(snapshot.state, InstallState.READY)
 

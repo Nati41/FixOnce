@@ -46,6 +46,12 @@ DEFAULT_PORT = 5000
 PORT_RANGE = range(DEFAULT_PORT, DEFAULT_PORT + 10)
 START_TIMEOUT_SECONDS = 12.0
 BOOTSTRAP_HEALTH_TIMEOUT_SECONDS = 45.0
+SPLASH_STEPS = {
+    "starting": "Starting FixOnce...",
+    "checking": "Checking server...",
+    "connecting": "Starting server...",
+    "opening": "Opening dashboard...",
+}
 DEFENDER_BLOCKED_DETAIL = (
     "Windows Defender appears to have blocked FixOnce.exe. "
     "Open Windows Security > Virus & threat protection > Protection history, "
@@ -703,6 +709,33 @@ def ensure_packaged_server_running(log_fn: Callable[[str], None] | None = None) 
     return port
 
 
+def launch_dashboard_detached(log_fn: Callable[[str], None] | None = None) -> bool:
+    """Start the normal app launcher in a separate process and return immediately."""
+    write_log = log_fn or bootstrap_log
+    try:
+        if sys.platform == "win32":
+            subprocess.Popen(
+                [sys.executable],
+                cwd=str(get_packaged_install_dir() if is_frozen() else PROJECT_DIR),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=windows_process_creationflags(detached=True),
+            )
+        else:
+            subprocess.Popen(
+                [sys.executable, str(SCRIPT_DIR / "app_launcher.py")],
+                cwd=str(PROJECT_DIR),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        write_log("Dashboard launcher started detached")
+        return True
+    except Exception as exc:
+        write_log(f"Detached dashboard launcher failed: {type(exc).__name__}: {exc}")
+        return False
+
+
 def run_bootstrap() -> int:
     """
     Windows packaged first-run setup: autostart task, server health, READY state, dashboard.
@@ -791,7 +824,9 @@ def run_bootstrap() -> int:
         bootstrap_log("install_state written as READY")
 
         bootstrap_log("Opening dashboard")
-        open_dashboard(port)
+        if not launch_dashboard_detached():
+            bootstrap_log("Detached dashboard launch failed; opening dashboard URL")
+            open_external_url(get_dashboard_url(port))
         bootstrap_log("Bootstrap completed successfully")
         return 0
     except Exception as exc:
@@ -922,6 +957,64 @@ def open_logs_folder():
         log_event(f"Failed to open logs folder: {exc}")
 
 
+class StartupSplash:
+    """Lightweight progress window shown while the app waits for the server."""
+
+    def __init__(self):
+        self.root = None
+        self.message = None
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+
+            root = tk.Tk()
+            root.title("FixOnce")
+            root.resizable(False, False)
+            root.attributes("-topmost", True)
+
+            width = 340
+            height = 150
+            x = max(0, int((root.winfo_screenwidth() - width) / 2))
+            y = max(0, int((root.winfo_screenheight() - height) / 2))
+            root.geometry(f"{width}x{height}+{x}+{y}")
+
+            frame = ttk.Frame(root, padding=22)
+            frame.pack(fill="both", expand=True)
+            ttk.Label(frame, text="FixOnce", font=("Segoe UI", 16, "bold")).pack(anchor="w")
+            self.message = ttk.Label(frame, text=SPLASH_STEPS["starting"], font=("Segoe UI", 10))
+            self.message.pack(anchor="w", pady=(10, 14))
+            progress = ttk.Progressbar(frame, mode="indeterminate")
+            progress.pack(fill="x")
+            progress.start(12)
+
+            self.root = root
+            self.show_step("starting")
+        except Exception as exc:
+            log_event(f"Startup splash unavailable: {exc}")
+
+    def show_step(self, step: str):
+        if self.root is None or self.message is None:
+            return
+        try:
+            self.message.configure(text=SPLASH_STEPS.get(step, step))
+            self.root.update_idletasks()
+            self.root.update()
+        except Exception as exc:
+            log_event(f"Startup splash update failed: {exc}")
+            self.close()
+
+    def close(self):
+        if self.root is None:
+            return
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+        finally:
+            self.root = None
+            self.message = None
+
+
 def run_repair_action() -> bool:
     """Attempt a quiet self-repair by clearing stale state and restarting."""
     clear_stale_state()
@@ -994,13 +1087,17 @@ def show_failure_window(retry_callback: Callable[[], bool], repair_callback: Cal
         open_logs_folder()
 
 
-def ensure_server_ready() -> int:
+def ensure_server_ready(progress: Callable[[str], None] | None = None) -> int:
     """Reuse an existing server or start one quietly in the background."""
+    if progress:
+        progress("checking")
     port = discover_running_port()
     if port is not None and endpoint_responds(port, "/api/health", timeout=1.5):
         log_event("Reused existing server")
         return port
 
+    if progress:
+        progress("connecting")
     start_server()
     port = wait_for_server()
     if port is None:
@@ -1012,12 +1109,16 @@ def ensure_server_ready() -> int:
 
 def launch_app() -> bool:
     """Launch the user experience end-to-end."""
+    splash = StartupSplash()
     try:
-        port = ensure_server_ready()
+        port = ensure_server_ready(splash.show_step)
     except Exception as exc:
         log_event(f"Initial launch failed: {exc}")
+        splash.close()
         return False
 
+    splash.show_step("opening")
+    splash.close()
     open_dashboard(port)
     return True
 

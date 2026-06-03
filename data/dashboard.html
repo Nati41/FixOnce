@@ -779,7 +779,7 @@ function render(s) {
 
   // Active AI
   const setupFinalizing = isSetupFinalizing(s);
-  const activeAI = agentContext.actor_name || s.active_ai || s.ai_session?.editor || primaryAI.editor || (setupFinalizing ? 'checking...' : 'unknown');
+  const activeAI = getCurrentActorName(s, agentContext, primaryAI, setupFinalizing);
   document.getElementById('activeAI').textContent = capitalize(activeAI);
 
   // Status - Build status rows
@@ -882,7 +882,7 @@ function render(s) {
   }
 
   // Agent card
-  const resolvedAgentName = agentContext.actor_name || primaryAI.editor || s.active_ai || (setupFinalizing ? WIZARD_COPY.finalizing_setup : 'unknown');
+  const resolvedAgentName = activeAI;
   const resolvedConfidence = normalizeConfidence(agentContext.actor_confidence ?? primaryAI.actor_confidence);
   const resolvedLastTool = agentContext.tool_name || lastIntervention.tool_name || '—';
   const agentStatus = getAgentStatus(errorCount, intervention);
@@ -1178,6 +1178,22 @@ function wireRepairMcpButton() {
 function getPrimaryAI(snapshot) {
   const ais = Array.isArray(snapshot.active_ais) ? snapshot.active_ais : [];
   return ais.find(ai => ai?.is_primary) || ais[0] || {};
+}
+
+function isKnownActor(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return Boolean(text && text !== 'unknown' && text !== 'checking...');
+}
+
+function getCurrentActorName(snapshot, agentContext, primaryAI, setupFinalizing) {
+  const candidates = [
+    agentContext.actor_name,
+    primaryAI.editor,
+    snapshot.active_ai,
+    snapshot.ai_session?.editor,
+  ];
+  const actor = candidates.find(isKnownActor);
+  return actor || (setupFinalizing ? WIZARD_COPY.finalizing_setup : 'unknown');
 }
 
 function normalizeConfidence(value) {

@@ -358,6 +358,7 @@ def _derive_onboarding_flow_state(
 
 def build_client_onboarding_payload(status: Optional[SystemStatus] = None, language: str = "en") -> Dict[str, Any]:
     """Map low-level client health to the first-run dashboard contract."""
+    explicit_status = status is not None
     sys_status = status or get_system_status()
     home = Path.home()
     clients_payload = []
@@ -369,7 +370,7 @@ def build_client_onboarding_payload(status: Optional[SystemStatus] = None, langu
         rules_ready = _client_rules_ready(client_key, home)
         ready = config_ready and rules_ready
         mcp_connected = bool(client.connected)
-        if client_key == "codex" and ready and not mcp_connected:
+        if client_key == "codex" and ready and not mcp_connected and not explicit_status:
             try:
                 from core.mcp_session_health import get_session_health
                 session_health = get_session_health()
