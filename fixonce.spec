@@ -62,6 +62,7 @@ EXTENSION_ALLOWLIST = [
 ]
 
 ASSET_ALLOWLIST = [
+    "FixOnce.ico",
     "assets/FixOnce.ico",
     "assets/FixOnce.png",
     "assets/logo.svg",

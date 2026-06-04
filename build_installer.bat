@@ -11,10 +11,7 @@ REM Step 1: Check for .ico file
 if not exist "FixOnce.ico" (
     echo ERROR: FixOnce.ico not found!
     echo.
-    echo Please create FixOnce.ico first:
-    echo   1. Go to https://convertio.co/png-ico/
-    echo   2. Upload FixOnce-Icon.png
-    echo   3. Download and save as FixOnce.ico
+    echo Please generate FixOnce.ico from data\app-icon.png with sizes 16,32,48,256.
     echo.
     pause
     exit /b 1
@@ -73,7 +70,7 @@ echo ======================================
 echo.
 echo Outputs:
 echo   EXE:       dist\FixOnce\FixOnce.exe
-echo   Installer: installer\Output\FixOnce_Setup_3.1.exe
+echo   Installer: installer\Output\FixOnce_Setup_1.0.12.exe
 echo.
 echo Distribution options:
 echo   - Share the Installer for full experience

@@ -9,9 +9,9 @@ Build a professional Windows installer using Inno Setup.
    build_windows.bat
    ```
 
-2. **FixOnce.ico** - Convert the logo to ICO format:
-   - Use https://convertio.co/png-ico/ or similar
-   - Include sizes: 16x16, 32x32, 48x48, 256x256
+2. **FixOnce.ico** - Windows icon generated from the same artwork as the macOS app:
+   - Source artwork: `data/app-icon.png`
+   - Required ICO sizes: 16x16, 32x32, 48x48, 256x256
    - Save as `FixOnce.ico` in project root
 
 3. **Inno Setup** - Download from https://jrsoftware.org/isdl.php
@@ -21,7 +21,7 @@ Build a professional Windows installer using Inno Setup.
 ### Option 1: GUI
 1. Open `fixonce_setup.iss` in Inno Setup Compiler
 2. Click **Build > Compile** (or press F9)
-3. Output: `installer/Output/FixOnce_Setup_3.1.exe`
+3. Output: `installer/Output/FixOnce_Setup_1.0.12.exe`
 
 ### Option 2: Command Line
 ```cmd
@@ -32,11 +32,11 @@ Build a professional Windows installer using Inno Setup.
 
 ### Install
 - Copies FixOnce to `C:\Users\<user>\AppData\Local\Programs\FixOnce`
-- Runs `FixOnce.exe --bootstrap` and **waits** for setup to finish (server health, scheduled task, dashboard)
-- Registers background autostart via the **FixOnceServer** Task Scheduler task (not an HKCU Run key)
+- Runs `FixOnce.exe --bootstrap` and **waits** for setup to finish
+- Prepares FixOnce so users can open it when they start working
 - Adds Start Menu shortcut
 - Adds Desktop shortcut (optional)
-- Shows Chrome Extension installation instructions after bootstrap succeeds
+- Shows optional Chrome extension instructions after setup succeeds
 
 ### Uninstall
 - Removes program files
@@ -50,7 +50,7 @@ Build a professional Windows installer using Inno Setup.
 |---------|--------|
 | Per-user install (no admin) | ✅ |
 | Bootstrap on install (wait) | ✅ |
-| Start with Windows (scheduled task) | ✅ |
+| Open FixOnce from app shortcut | ✅ |
 | Desktop shortcut | ✅ |
 | Start Menu shortcut | ✅ |
 | Hebrew language support | ✅ |
@@ -65,7 +65,7 @@ installer/
 ├── fixonce_setup.iss    # Inno Setup script
 ├── README.md            # This file
 └── Output/              # Generated installers go here
-    └── FixOnce_Setup_3.1.exe
+    └── FixOnce_Setup_1.0.12.exe
 ```
 
 ## Customization

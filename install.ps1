@@ -345,8 +345,8 @@ try {
     exit 1
 }
 
-# ============ Step 6: Configure MCP ============
-Write-Step "Configuring MCP for AI editors..."
+# ============ Step 6: Configure AI App Connections ============
+Write-Step "Connecting FixOnce to your AI apps..."
 
 $mcpServerPath = Join-Path $ScriptDir "src\mcp_server\mcp_memory_server_v2.py"
 $srcPath = Join-Path $ScriptDir "src"
@@ -528,11 +528,11 @@ if ($existingTask) {
 }
 
 # ============ Step 8: Chrome Extension ============
-Write-Step "Chrome Extension setup..."
+Write-Step "Optional browser extension setup..."
 
 $extensionDir = Join-Path $ScriptDir "extension"
 Write-Host ""
-Write-Host "  To capture browser errors, install the Chrome extension:" -ForegroundColor Yellow
+Write-Host "  The Chrome extension is optional. To capture browser errors, connect it here:" -ForegroundColor Yellow
 Write-Host ""
 
 # Try to open Chrome extensions page
@@ -598,8 +598,9 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host "  Installation Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  FixOnce will start automatically on login." -ForegroundColor White
-Write-Host "  Open FixOnce from the app icon whenever you want the dashboard window." -ForegroundColor White
+Write-Host "  Open FixOnce when you start working." -ForegroundColor White
+Write-Host "  Restart your AI app after setup so it can connect to FixOnce." -ForegroundColor White
+Write-Host "  The Chrome extension is optional." -ForegroundColor White
 Write-Host ""
 Write-Host "  To uninstall: .\uninstall.ps1" -ForegroundColor Yellow
 Write-Host ""

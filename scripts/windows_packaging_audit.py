@@ -9,6 +9,7 @@ state is created fresh under %USERPROFILE%\\.fixonce at runtime.
 from __future__ import annotations
 
 import fnmatch
+import struct
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,7 @@ DEFAULT_REPORT = DEFAULT_PACKAGE_DIR / "packaging_audit.txt"
 
 REQUIRED_ROOT_FILES = [
     "FixOnce.exe",
+    "FixOnce.ico",
     "install.ps1",
     "uninstall.ps1",
     "install.bat",
@@ -33,6 +35,7 @@ REQUIRED_PACKAGE_METADATA = {
         "*/fastmcp-*.dist-info/METADATA",
     ],
 }
+REQUIRED_ICON_SIZES = {16, 32, 48, 256}
 
 FORBIDDEN_PATTERNS = [
     ".git/*",
@@ -175,6 +178,44 @@ def powershell_syntax_errors(script_path: Path) -> list[str]:
     return details.splitlines()
 
 
+def ico_errors(icon_path: Path) -> list[str]:
+    if not icon_path.exists():
+        return [f"missing icon: {icon_path.name}"]
+
+    data = icon_path.read_bytes()
+    if len(data) < 6:
+        return [f"{icon_path.name} is too small to be a valid ICO"]
+
+    reserved, icon_type, count = struct.unpack_from("<HHH", data, 0)
+    if reserved != 0 or icon_type != 1 or count <= 0:
+        return [f"{icon_path.name} has an invalid ICO header"]
+
+    directory_size = 6 + (16 * count)
+    if len(data) < directory_size:
+        return [f"{icon_path.name} has a truncated ICO directory"]
+
+    sizes = set()
+    non_square = []
+    for index in range(count):
+        offset = 6 + (16 * index)
+        width_raw, height_raw = struct.unpack_from("<BB", data, offset)
+        width = 256 if width_raw == 0 else width_raw
+        height = 256 if height_raw == 0 else height_raw
+        sizes.add(width)
+        if width != height:
+            non_square.append(f"{width}x{height}")
+
+    errors = []
+    if non_square:
+        errors.append(f"{icon_path.name} contains non-square sizes: {', '.join(non_square)}")
+
+    missing_sizes = sorted(REQUIRED_ICON_SIZES - sizes)
+    if missing_sizes:
+        errors.append(f"{icon_path.name} missing required sizes: {', '.join(str(size) for size in missing_sizes)}")
+
+    return errors
+
+
 def write_report(
     package_dir: Path,
     report_path: Path,
@@ -183,6 +224,7 @@ def write_report(
     missing_required: list[str],
     missing_metadata: list[str],
     syntax_errors: list[str],
+    icon_errors: list[str],
 ) -> None:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = [
@@ -209,12 +251,19 @@ def write_report(
         lines.extend(f"SYNTAX_ERROR {line}" for line in syntax_errors)
     else:
         lines.append("INSTALL_PS1_SYNTAX_OK")
+    lines.extend(["", "WINDOWS_ICON"])
+    if icon_errors:
+        lines.append("ICON_CHECK_FAILED")
+        lines.extend(f"ICON_ERROR {line}" for line in icon_errors)
+    else:
+        lines.append("ICON_CHECK_OK")
     lines.extend(["", "FORBIDDEN_ARTIFACT_SCAN"])
-    if forbidden or missing_required or missing_metadata or syntax_errors:
+    if forbidden or missing_required or missing_metadata or syntax_errors or icon_errors:
         lines.append("AUDIT_FAILED")
         lines.extend(f"MISSING_REQUIRED {item}" for item in missing_required)
         lines.extend(f"MISSING_METADATA {item}" for item in missing_metadata)
         lines.extend(f"SYNTAX_ERROR {line}" for line in syntax_errors)
+        lines.extend(f"ICON_ERROR {line}" for line in icon_errors)
         lines.extend(f"FORBIDDEN {path.as_posix()}" for path in forbidden)
     else:
         lines.append("AUDIT_OK")
@@ -243,7 +292,8 @@ def main(argv: list[str]) -> int:
     install_script = package_dir / "install.ps1"
     if install_script.exists():
         syntax_errors = powershell_syntax_errors(install_script)
-    write_report(package_dir, report_path, files, forbidden, missing_required, missing_metadata, syntax_errors)
+    icon_errors = ico_errors(package_dir / "FixOnce.ico")
+    write_report(package_dir, report_path, files, forbidden, missing_required, missing_metadata, syntax_errors, icon_errors)
 
     print(f"Audit report: {report_path}")
     print(f"Included files: {len(files)}")
@@ -264,7 +314,11 @@ def main(argv: list[str]) -> int:
         print("install.ps1 PowerShell syntax errors:")
         for line in syntax_errors:
             print(f"  {line}")
-    if missing_required or missing_metadata or forbidden or syntax_errors:
+    if icon_errors:
+        print("Windows icon errors:")
+        for line in icon_errors:
+            print(f"  {line}")
+    if missing_required or missing_metadata or forbidden or syntax_errors or icon_errors:
         return 1
 
     print("Forbidden artifact scan: AUDIT_OK")

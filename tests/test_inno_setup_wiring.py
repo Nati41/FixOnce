@@ -1,9 +1,12 @@
 import unittest
+import struct
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).parent.parent
 INNO_SETUP = PROJECT_ROOT / "installer" / "fixonce_setup.iss"
+PYINSTALLER_SPEC = PROJECT_ROOT / "fixonce.spec"
+ROOT_ICON = PROJECT_ROOT / "FixOnce.ico"
 
 
 class TestInnoSetupWiring(unittest.TestCase):
@@ -11,6 +14,7 @@ class TestInnoSetupWiring(unittest.TestCase):
     def setUpClass(cls):
         cls.inno_text = INNO_SETUP.read_text(encoding="utf-8")
         cls.inno_flat = cls.inno_text.replace("\r", "").replace("\n", " ")
+        cls.spec_text = PYINSTALLER_SPEC.read_text(encoding="utf-8")
 
     def test_bootstrap_run_entry_waits_for_completion(self):
         self.assertIn('Parameters: "--bootstrap"', self.inno_text)
@@ -65,6 +69,38 @@ class TestInnoSetupWiring(unittest.TestCase):
             if "postinstall" in line.lower() and "filename:" in line.lower()
         ]
         self.assertFalse(postinstall_runs)
+
+    def test_windows_icon_is_multi_size_square_ico(self):
+        data = ROOT_ICON.read_bytes()
+        self.assertGreaterEqual(len(data), 6)
+        reserved, icon_type, count = struct.unpack_from("<HHH", data, 0)
+        self.assertEqual(reserved, 0)
+        self.assertEqual(icon_type, 1)
+        self.assertGreaterEqual(count, 4)
+        self.assertGreaterEqual(len(data), 6 + (16 * count))
+
+        sizes = set()
+        for index in range(count):
+            width_raw, height_raw = struct.unpack_from("<BB", data, 6 + (16 * index))
+            width = 256 if width_raw == 0 else width_raw
+            height = 256 if height_raw == 0 else height_raw
+            self.assertEqual(width, height)
+            sizes.add(width)
+
+        self.assertTrue({16, 32, 48, 256}.issubset(sizes))
+
+    def test_windows_icon_wiring_uses_root_icon(self):
+        self.assertIn('icon=str(PROJECT_ROOT / "FixOnce.ico")', self.spec_text)
+        self.assertIn('"FixOnce.ico"', self.spec_text)
+        self.assertIn("SetupIconFile=..\\FixOnce.ico", self.inno_text)
+        self.assertIn('Source: "..\\FixOnce.ico"; DestDir: "{app}"', self.inno_text)
+        self.assertIn('IconFilename: "{app}\\FixOnce.ico"', self.inno_text)
+
+    def test_installer_version_matches_app_version(self):
+        version_file = PROJECT_ROOT / "src" / "version.py"
+        version_text = version_file.read_text(encoding="utf-8")
+        self.assertIn('__version__ = "1.0.12"', version_text)
+        self.assertIn('#define MyAppVersion "1.0.12"', self.inno_text)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,35 @@ from core.system_mode import get_system_mode, set_system_mode, VALID_MODES
 EXTENSION_CONNECTED = False
 EXTENSION_LAST_SEEN = None
 ACTUAL_PORT = 5000
+KNOWN_AGENT_NAMES = {"codex", "claude", "cursor", "vscode", "windsurf"}
+
+
+def _known_agent_name(value):
+    name = str(value or "").strip().lower()
+    if name in KNOWN_AGENT_NAMES:
+        return name
+    return None
+
+
+def _has_known_agent(snapshot: dict) -> bool:
+    return any(_known_agent_name(ai.get("editor")) for ai in snapshot.get("active_ais") or [])
+
+
+def _ensure_active_agent(snapshot: dict, editor=None, source: str = "mcp_session", confidence: float = 0.9) -> None:
+    known = _known_agent_name(editor)
+    if not known or _has_known_agent(snapshot):
+        return
+
+    snapshot.setdefault("active_ais", []).insert(0, {
+        "id": known,
+        "editor": known,
+        "started_at": None,
+        "last_activity": datetime.now().isoformat(),
+        "is_primary": True,
+        "actor_source": source,
+        "actor_confidence": confidence,
+        "tool_calls": 0,
+    })
 
 
 def _get_mcp_compliance_for_api() -> dict:
@@ -1086,6 +1115,12 @@ def api_dashboard_snapshot():
                 snapshot["compliance"] = compliance
                 snapshot["agent_context"] = agent_context
                 snapshot["last_agent_intervention"] = last_agent_intervention
+                _ensure_active_agent(
+                    snapshot,
+                    agent_context.get("actor_name") or compliance.get("editor"),
+                    agent_context.get("actor_source") or "mcp_compliance",
+                    float(agent_context.get("actor_confidence") or 0.9),
+                )
                 snapshot["agent_audit_active"] = bool(
                     agent_context.get("tool_name")
                     or last_agent_intervention.get("tool_name")
@@ -1096,6 +1131,22 @@ def api_dashboard_snapshot():
                 snapshot["agent_context"] = {}
                 snapshot["last_agent_intervention"] = {}
                 snapshot["agent_audit_active"] = False
+
+            try:
+                from core.mcp_session_health import get_session_health
+                session_health = get_session_health()
+                _ensure_active_agent(
+                    snapshot,
+                    session_health.get("last_actor"),
+                    session_health.get("last_actor_source") or "mcp_session_health",
+                    0.9,
+                )
+            except Exception:
+                pass
+
+            if snapshot.get("active_ais"):
+                primary = next((ai for ai in snapshot["active_ais"] if ai.get("is_primary")), snapshot["active_ais"][0])
+                snapshot["active_ai"] = primary.get("editor") or snapshot.get("active_ai")
 
         except Exception:
             pass

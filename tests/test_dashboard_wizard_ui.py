@@ -36,7 +36,7 @@ class TestDashboardWizardUI(unittest.TestCase):
     def test_repair_mcp_button_targets_repair_endpoint(self):
         self.assertIn("repairMcpBtn", self.html)
         self.assertIn("fetch(`${API}/api/setup/repair-mcp`", self.html)
-        self.assertIn("open a new AI chat or reconnect MCP", self.html)
+        self.assertIn("open a new AI chat or restart your AI app", self.html)
 
     def test_summary_card_exposes_manage_ai_integrations_entry(self):
         self.assertIn('id="aiSummaryTitle"', self.html)
@@ -59,7 +59,10 @@ class TestDashboardWizardUI(unittest.TestCase):
         self.assertIn("copy[`open_${client.client}`]", self.html)
 
     def test_header_and_agent_card_use_shared_actor_resolver(self):
-        self.assertIn("const activeAI = getCurrentActorName(s, agentContext, primaryAI, setupFinalizing);", self.html)
+        self.assertIn(
+            "const activeAI = displayAgentName(getCurrentActorName(s, agentContext, primaryAI, setupFinalizing), setupFinalizing);",
+            self.html,
+        )
         self.assertIn("const resolvedAgentName = activeAI;", self.html)
         self.assertIn("function isKnownActor(value)", self.html)
         self.assertIn("text !== 'unknown'", self.html)

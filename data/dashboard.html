@@ -593,11 +593,11 @@ body.powered-off .card {
   <div class="agent-grid">
     <div class="agent-stat">
       <div class="agent-stat-label">Agent</div>
-      <div class="agent-stat-value" id="agentName">unknown</div>
+      <div class="agent-stat-value" id="agentName">Connected agent</div>
     </div>
     <div class="agent-stat">
       <div class="agent-stat-label">Confidence</div>
-      <div class="agent-stat-value" id="agentConfidence">unknown</div>
+      <div class="agent-stat-value" id="agentConfidence">—</div>
     </div>
     <div class="agent-stat">
       <div class="agent-stat-label">Last Tool</div>
@@ -698,10 +698,10 @@ const WIZARD_COPY = {
   retry_success: 'Connection updated.',
   retry_error: 'Could not update this app right now.',
   open_error: 'Could not open this app right now.',
-  repair_mcp: 'Check MCP',
+  repair_mcp: 'Check AI connection',
   repairing_mcp: 'Checking...',
-  repair_done: 'Repair completed. If tools still fail, open a new AI chat or reconnect MCP in your client.',
-  repair_error: 'Could not run MCP repair right now.',
+  repair_done: 'Connection check completed. If tools still fail, open a new AI chat or restart your AI app.',
+  repair_error: 'Could not check the AI connection right now.',
   finalizing_setup: 'Finalizing setup...',
   checking_integrations: 'Checking integrations...'
 };
@@ -779,8 +779,8 @@ function render(s) {
 
   // Active AI
   const setupFinalizing = isSetupFinalizing(s);
-  const activeAI = getCurrentActorName(s, agentContext, primaryAI, setupFinalizing);
-  document.getElementById('activeAI').textContent = capitalize(activeAI);
+  const activeAI = displayAgentName(getCurrentActorName(s, agentContext, primaryAI, setupFinalizing), setupFinalizing);
+  document.getElementById('activeAI').textContent = activeAI;
 
   // Status - Build status rows
   const statusEl = document.getElementById('statusContent');
@@ -824,7 +824,7 @@ function render(s) {
   rows.push({
     icon: mcpState === 'session_lost' ? '!' : mcpState === 'connected' ? '✓' : mcpChecking ? '…' : '·',
     iconClass: mcpIconClass,
-    text: `MCP: ${mcpLabel}`,
+    text: `AI connection: ${mcpLabel}`,
     action: `<button class="wizard-btn" type="button" id="repairMcpBtn">${WIZARD_COPY.repair_mcp}</button>`,
     title: mcpMessage
   });
@@ -838,7 +838,7 @@ function render(s) {
     action: 'Current site monitoring is shown in the extension popup',
     title: extensionConnected
       ? 'FixOnce extension is connected to the local server. This is separate from whether the current website is monitored.'
-      : 'FixOnce extension is optional. MCP and server can still be connected.'
+      : 'FixOnce extension is optional. Your AI connection can still work without it.'
   });
 
   statusEl.innerHTML = rows.map(r => `
@@ -899,7 +899,7 @@ function render(s) {
   // Server status - if we got data, server is up
   const sysFixonce = document.getElementById('sysFixonce');
   sysFixonce.className = 'sys-item ok';
-  sysFixonce.title = 'FixOnce Server: Connected';
+  sysFixonce.title = 'FixOnce: Connected';
 
   // Extension status - from real heartbeat
   const sysExtension = document.getElementById('sysExtension');
@@ -909,7 +909,7 @@ function render(s) {
       (sys.extension.last_seen ? ' (' + relativeTime(sys.extension.last_seen) + ')' : '');
   } else {
     sysExtension.className = 'sys-item warn';
-    sysExtension.title = 'FixOnce extension: Ready to connect. This does not affect MCP or server connection.';
+    sysExtension.title = 'FixOnce extension: Optional. Your AI connection can still work without it.';
   }
 
   // Memory status - from active project
@@ -1202,6 +1202,14 @@ function normalizeConfidence(value) {
   if (num >= 0.8) return 'high';
   if (num >= 0.5) return 'medium';
   return 'observed';
+}
+
+function displayAgentName(value, setupFinalizing = false) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.toLowerCase() === 'unknown') {
+    return setupFinalizing ? WIZARD_COPY.finalizing_setup : 'Connected agent';
+  }
+  return capitalize(raw);
 }
 
 function getInterventionLevel(lastIntervention) {

@@ -56,6 +56,34 @@ class TestDashboardSnapshotMcpImport(unittest.TestCase):
             self.assertEqual(snapshot["compliance"]["editor"], "codex")
             self.assertEqual(snapshot["agent_context"]["tool_name"], "fo_sync")
             self.assertTrue(snapshot["agent_audit_active"])
+            self.assertEqual(snapshot["active_ai"], "codex")
+            self.assertEqual(snapshot["active_ais"][0]["editor"], "codex")
+
+    def test_dashboard_snapshot_uses_mcp_session_actor_when_active_ai_missing(self):
+        with tempfile.TemporaryDirectory(prefix="fixonce-mcp-session-actor-") as temp_dir:
+            user_data_dir = Path(temp_dir)
+            state_file = user_data_dir / "mcp_session_health.json"
+            state_file.write_text(json.dumps({
+                "state": "connected",
+                "consecutive_failures": 0,
+                "last_error": None,
+                "last_actor": "codex",
+                "last_actor_source": "client_actor",
+                "updated_at": "2026-05-31T10:00:00",
+            }), encoding="utf-8")
+
+            client = server_module.flask_app.test_client()
+            with patch.object(status_module, "USER_DATA_DIR", user_data_dir), \
+                 patch.object(status_module, "_detect_running_editors", return_value=[]), \
+                 patch.object(session_health, "STATE_FILE", state_file), \
+                 patch.object(session_health, "LOG_FILE", user_data_dir / "logs" / "mcp_session_health.jsonl"):
+                response = client.get("/api/dashboard_snapshot")
+
+            self.assertEqual(response.status_code, 200)
+            snapshot = response.get_json()["snapshot"]
+            self.assertEqual(snapshot["active_ai"], "codex")
+            self.assertEqual(snapshot["active_ais"][0]["editor"], "codex")
+            self.assertEqual(snapshot["system_status"]["ai"]["name"], "codex")
 
     def test_dashboard_snapshot_returns_mcp_session_status(self):
         with tempfile.TemporaryDirectory(prefix="fixonce-mcp-session-api-") as temp_dir:

@@ -8,7 +8,7 @@
 ; 4. Output: installer/Output/FixOnce_Setup.exe
 
 #define MyAppName "FixOnce"
-#define MyAppVersion "3.2"
+#define MyAppVersion "1.0.12"
 #define MyAppPublisher "FixOnce"
 #define MyAppURL "https://github.com/fixonce/fixonce"
 #define MyAppExeName "FixOnce.exe"
@@ -90,9 +90,9 @@ Name: "{userappdata}\FixOnce\global"; Permissions: users-full
 Name: "{userappdata}\FixOnce\extension"; Permissions: users-full
 
 [Run]
-; First-run setup: server, FixOnceServer scheduled task, health check, dashboard.
+; First-run setup: app startup, integration checks, dashboard.
 ; Setup waits for bootstrap and fails if it returns a non-zero exit code.
-Filename: "{app}\{#MyAppExeName}"; Parameters: "--bootstrap"; StatusMsg: "Setting up FixOnce (server, autostart, dashboard)..."; Flags: waituntilterminated skipifdoesntexist
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--bootstrap"; StatusMsg: "Setting up FixOnce..."; Flags: waituntilterminated skipifdoesntexist
 
 [InstallDelete]
 ; Remove legacy per-user Startup shortcut from older builds before bootstrap.
@@ -150,8 +150,9 @@ begin
   begin
     MsgBox(
       'FixOnce is ready!' + #13#10 + #13#10 +
-      'Background startup uses the FixOnceServer scheduled task.' + #13#10 + #13#10 +
-      'To install the Chrome Extension:' + #13#10 +
+      'Open FixOnce when you start working.' + #13#10 +
+      'Restart your AI app after setup so it can connect to FixOnce.' + #13#10 + #13#10 +
+      'The Chrome extension is optional. To connect it:' + #13#10 +
       '1. Open Chrome and go to chrome://extensions' + #13#10 +
       '2. Enable "Developer mode"' + #13#10 +
       '3. Click "Load unpacked"' + #13#10 +
