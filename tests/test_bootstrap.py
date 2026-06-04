@@ -119,32 +119,40 @@ class TestBootstrap(unittest.TestCase):
         self.assertEqual(args[0], "schtasks")
         self.assertNotIn("/it", args)
 
-    def test_configure_autostart_prefers_scheduled_task(self):
+    def test_configure_autostart_disables_windows_login_autostart(self):
         with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
-            app_launcher, "ensure_windows_scheduled_task", return_value=True
-        ) as ensure_task, patch.object(app_launcher, "ensure_windows_startup_shortcut") as ensure_shortcut:
-            method = app_launcher.configure_windows_autostart()
-
-        self.assertEqual(method, app_launcher.AUTOSTART_METHOD_SCHEDULED_TASK)
-        ensure_task.assert_called_once()
-        ensure_shortcut.assert_not_called()
-
-    def test_configure_autostart_uses_startup_shortcut_when_task_fails(self):
-        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
-            app_launcher, "ensure_windows_scheduled_task", return_value=False
-        ), patch.object(app_launcher, "ensure_windows_startup_shortcut", return_value=True) as ensure_shortcut:
-            method = app_launcher.configure_windows_autostart()
-
-        self.assertEqual(method, app_launcher.AUTOSTART_METHOD_STARTUP_SHORTCUT)
-        ensure_shortcut.assert_called_once()
-
-    def test_configure_autostart_none_when_all_methods_fail(self):
-        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
-            app_launcher, "ensure_windows_scheduled_task", return_value=False
-        ), patch.object(app_launcher, "ensure_windows_startup_shortcut", return_value=False):
+            app_launcher, "remove_windows_startup_shortcut", return_value=True
+        ) as remove_shortcut, patch.object(app_launcher, "ensure_windows_scheduled_task") as ensure_task, patch.object(
+            app_launcher, "ensure_windows_startup_shortcut"
+        ) as ensure_shortcut:
             method = app_launcher.configure_windows_autostart()
 
         self.assertEqual(method, app_launcher.AUTOSTART_METHOD_NONE)
+        remove_shortcut.assert_called_once()
+        ensure_task.assert_not_called()
+        ensure_shortcut.assert_not_called()
+
+    def test_configure_autostart_none_when_legacy_shortcut_absent(self):
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
+            app_launcher, "remove_windows_startup_shortcut", return_value=False
+        ):
+            method = app_launcher.configure_windows_autostart()
+
+        self.assertEqual(method, app_launcher.AUTOSTART_METHOD_NONE)
+
+    def test_remove_windows_startup_shortcut_removes_existing_shortcut(self):
+        startup_dir = Path(self.temp_dir.name) / "Startup"
+        shortcut_path = startup_dir / "FixOnceServer.lnk"
+        shortcut_path.parent.mkdir(parents=True, exist_ok=True)
+        shortcut_path.write_text("legacy shortcut", encoding="utf-8")
+
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
+            app_launcher, "get_windows_startup_shortcut_path", return_value=shortcut_path
+        ):
+            removed = app_launcher.remove_windows_startup_shortcut()
+
+        self.assertTrue(removed)
+        self.assertFalse(shortcut_path.exists())
 
     def test_ensure_windows_startup_shortcut_uses_server_command(self):
         startup_dir = Path(self.temp_dir.name) / "Startup"
@@ -172,7 +180,7 @@ class TestBootstrap(unittest.TestCase):
         self.assertIn("--server", script)
         self.assertIn(r"C:\Apps\FixOnce\FixOnce.exe", script)
 
-    def test_run_bootstrap_uses_startup_shortcut_when_scheduled_task_fails(self):
+    def test_run_bootstrap_continues_with_login_autostart_disabled(self):
         self.runtime_file.write_text(
             json.dumps({"port": 5000, "pid": 4242}),
             encoding="utf-8",
@@ -185,7 +193,7 @@ class TestBootstrap(unittest.TestCase):
         ), patch.object(
             app_launcher,
             "configure_windows_autostart",
-            return_value=app_launcher.AUTOSTART_METHOD_STARTUP_SHORTCUT,
+            return_value=app_launcher.AUTOSTART_METHOD_NONE,
         ), patch.object(
             app_launcher,
             "ensure_packaged_server_running",
@@ -200,7 +208,7 @@ class TestBootstrap(unittest.TestCase):
         open_dashboard.assert_not_called()
         snapshot = load_snapshot(data_dir=self.data_dir)
         self.assertEqual(snapshot.state, InstallState.READY)
-        self.assertEqual(snapshot.metadata.get("autostart_method"), "startup_shortcut")
+        self.assertEqual(snapshot.metadata.get("autostart_method"), "none")
 
     def test_run_bootstrap_continues_when_autostart_unavailable(self):
         self.runtime_file.write_text(

@@ -663,25 +663,40 @@ $shortcut.Save()
     return False
 
 
+def remove_windows_startup_shortcut(log_fn: Callable[[str], None] | None = None) -> bool:
+    """Remove legacy Startup folder autostart shortcut if present."""
+    write_log = log_fn or bootstrap_log
+    if sys.platform != "win32":
+        write_log("Startup shortcut cleanup skipped: not Windows")
+        return False
+
+    shortcut_path = get_windows_startup_shortcut_path()
+    if not shortcut_path.exists():
+        write_log(f"Startup shortcut not present: {shortcut_path}")
+        return False
+
+    try:
+        shortcut_path.unlink()
+        write_log(f"Removed Startup shortcut: {shortcut_path}")
+        return True
+    except OSError as exc:
+        write_log(f"WARNING: Could not remove Startup shortcut {shortcut_path}: {exc}")
+        return False
+
+
 def configure_windows_autostart(log_fn: Callable[[str], None] | None = None) -> str:
     """
-    Configure Windows logon autostart (tiered).
+    Keep Windows logon autostart disabled.
 
-    Returns autostart_method: scheduled_task, startup_shortcut, or none.
+    Returns autostart_method: none.
     """
     write_log = log_fn or bootstrap_log
     if sys.platform != "win32":
         write_log("Autostart setup skipped: not Windows")
         return AUTOSTART_METHOD_NONE
 
-    if ensure_windows_scheduled_task(log_fn=write_log):
-        return AUTOSTART_METHOD_SCHEDULED_TASK
-
-    write_log("Scheduled task unavailable; trying Startup folder shortcut fallback")
-    if ensure_windows_startup_shortcut(log_fn=write_log):
-        return AUTOSTART_METHOD_STARTUP_SHORTCUT
-
-    write_log("WARNING: No autostart method configured (non-fatal)")
+    remove_windows_startup_shortcut(log_fn=write_log)
+    write_log("Windows login autostart disabled")
     return AUTOSTART_METHOD_NONE
 
 
