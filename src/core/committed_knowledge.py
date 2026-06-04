@@ -251,17 +251,19 @@ def is_quality_decision(decision: Dict[str, Any]) -> bool:
         r"moved\s+\w+\s+(to|from)",       # "Moved X to Y"
         r"split\s+\w+\s+into",            # "Split X into Y"
         r"renamed\s+\w+\s+to",            # "Renamed X to Y"
-        r"(status\s+rail|tree\s+summary)", # UI component restructuring
+        r"(panel|sidebar|menu|card|widget|view)\s+(layout|position|style)",
     ]
     for pattern in ui_refactor_patterns:
         if re.search(pattern, text_lower):
             return False
 
-    # 8. Dashboard-specific incremental changes
-    is_dashboard_specific = "dashboard" in text_lower and any(w in text_lower for w in [
+    # 8. Generic incremental UI changes
+    is_incremental_ui_change = any(w in text_lower for w in [
+        "ui", "screen", "page", "view", "panel", "sidebar", "modal", "button",
+    ]) and any(w in text_lower for w in [
         " now ", "added", "removed", "updated", "changed"
     ])
-    if is_dashboard_specific:
+    if is_incremental_ui_change:
         return False
 
     # === PASSED ALL EXCLUSION RULES ===

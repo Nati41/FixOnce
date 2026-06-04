@@ -492,6 +492,91 @@ class TestMemoryClassification(unittest.TestCase):
         self.assertIn("Problem:** TestUser startup shortcut NoneType.buffer crash", first_result_line)
         self.assertIn("Root cause:** Startup shortcut launched packaged MCP", result)
 
+    def test_specific_error_ranking_uses_generic_terms_not_project_workflow(self):
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [{
+                "decision": "Run broad release validation before customer testing.",
+                "reason": "Broad validation prevents repeating costly debugging loops.",
+                "timestamp": "2026-06-02T19:53:20",
+            }],
+            "avoid": [],
+            "debug_sessions": [{
+                "problem": "Mario level loader NullPointer crash",
+                "root_cause": "The level asset manifest omitted a required spawn point.",
+                "solution": "Validate manifest fields before creating the player spawn.",
+                "lesson_learned": "Specific asset-loading failures need manifest validation before gameplay tests.",
+                "symptoms": ["NullPointer crash"],
+                "resolved_at": "2026-06-03T10:00:00",
+                "actor": "Codex",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_search("Mario level loader NullPointer crash", mode="expanded")
+
+        first_result_line = next(line for line in result.splitlines() if line.startswith("> "))
+        self.assertIn("Problem:** Mario level loader NullPointer crash", first_result_line)
+        self.assertIn("Lesson learned:** Specific asset-loading failures", result)
+
+    def test_memory_quality_audit_detects_missing_context_generically(self):
+        record = {
+            "problem": "Payment reconciliation bug",
+            "solution": "fixed bug",
+            "resolved_at": "2026-06-03T10:00:00",
+        }
+
+        audit = server._audit_memory_record("solution", record)
+
+        self.assertEqual(audit["status"], "needs_context")
+        self.assertIn("missing_root_cause", audit["issues"])
+        self.assertIn("missing_lesson_learned", audit["issues"])
+        self.assertIn("missing_actor", audit["issues"])
+
+    def test_new_solution_records_receive_actor_timestamp_and_quality_audit(self):
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_file = self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.solution_applied(
+                "CRM import TypeError on empty contact list",
+                "Guarded empty contact lists before import mapping.",
+                "src/importer.py",
+            )
+            saved = json.loads(project_file.read_text(encoding="utf-8"))
+
+        self.assertEqual(result, "Solution saved.")
+        solution = saved["debug_sessions"][0]
+        self.assertIn("resolved_at", solution)
+        self.assertIn("actor", solution)
+        self.assertEqual(solution.get("source_type"), "solution")
+        self.assertEqual(solution.get("status"), "active")
+        self.assertIn("confidence", solution)
+        self.assertIn("quality_audit", solution)
+        self.assertIn("missing_root_cause", solution["quality_audit"]["issues"])
+        self.assertIn("missing_lesson_learned", solution["quality_audit"]["issues"])
+
+    def test_handoff_quality_audit_flags_incomplete_handoff(self):
+        handoff = server._create_handoff_record("agent_a", "agent_b", "2026-06-03T10:00:00")
+
+        self.assertIn("quality_audit", handoff)
+        self.assertIn("incomplete_handoff", handoff["quality_audit"]["issues"])
+        self.assertIn("missing_next_step", handoff["quality_audit"]["issues"])
+
     def test_expanded_search_includes_provenance_for_all_matches(self):
         memory = {
             "live_record": {

@@ -1976,11 +1976,7 @@ def _update_active_ai(actor_identity: Optional[Dict[str, Any]] = None):
                 # Old editor timed out - this is a handoff
                 if "ai_handoffs" not in data:
                     data["ai_handoffs"] = []
-                data["ai_handoffs"].append({
-                    "from": old_editor,
-                    "to": detected_editor,
-                    "timestamp": now.isoformat()
-                })
+                data["ai_handoffs"].append(_create_handoff_record(old_editor, detected_editor, now.isoformat()))
                 data["ai_handoffs"] = data["ai_handoffs"][-10:]
 
                 data["ai_session"]["previous_ai"] = {
@@ -2326,9 +2322,13 @@ def _create_insight(text: str, linked_error: Optional[dict] = None) -> dict:
 
     Fix #2: Auto-Link Incidents - if there's an active error, link it to this insight.
     """
+    actor_identity = _resolve_actor_identity()
     insight = {
         "text": text,
         "timestamp": datetime.now().isoformat(),
+        "actor": actor_identity.get("editor", "unknown"),
+        "actor_source": actor_identity.get("source", "none"),
+        "actor_confidence": actor_identity.get("confidence", 0.0),
         "use_count": 0,
         "last_used": None,
         "importance": "medium"  # low/medium/high - auto-calculated
@@ -2343,7 +2343,7 @@ def _create_insight(text: str, linked_error: Optional[dict] = None) -> dict:
             "linked_at": datetime.now().isoformat()
         }
 
-    return insight
+    return _attach_memory_quality_audit("insight", insight)
 
 
 def _mark_insight_used(insight: dict) -> dict:
@@ -2386,6 +2386,91 @@ def _normalize_insight(insight) -> dict:
         return _create_insight(str(insight))
 
 
+_QUALITY_TEXT_FIELDS = {
+    "solution": ("problem", "root_cause", "solution", "lesson_learned"),
+    "solved_bug": ("problem", "root_cause", "solution", "lesson_learned"),
+    "debug_session": ("problem", "root_cause", "solution", "lesson_learned"),
+    "decision": ("decision", "reason", "expected_benefit"),
+    "avoid": ("what", "reason"),
+    "failed_attempt": ("text", "lesson_learned"),
+    "insight": ("text",),
+    "handoff": ("what_was_done", "what_remains", "current_risk", "next_step"),
+    "intent": ("current_goal", "next_step"),
+}
+
+
+def _memory_quality_text_present(record: Dict[str, Any], field: str) -> bool:
+    value = record.get(field)
+    if isinstance(value, str):
+        return len(value.strip()) >= 10 and value.strip().lower() not in {
+            "fixed bug", "solved issue", "completed task", "done", "fixed",
+        }
+    if isinstance(value, list):
+        return bool(value)
+    return value is not None
+
+
+def _audit_memory_record(record_type: str, record: Dict[str, Any]) -> Dict[str, Any]:
+    """Generic, non-blocking quality audit for newly created memory records."""
+    normalized_type = str(record_type or record.get("type") or "").lower().replace(" ", "_")
+    issues = []
+    required_fields = _QUALITY_TEXT_FIELDS.get(normalized_type, ())
+
+    for field in required_fields:
+        if not _memory_quality_text_present(record, field):
+            issues.append(f"missing_{field}")
+
+    timestamp = _coalesce_timestamp(record, "timestamp", "created_at", "resolved_at", "updated_at", "completed_at")
+    if not timestamp:
+        issues.append("missing_timestamp")
+
+    if not record.get("actor") and not record.get("updated_by") and not record.get("last_actor"):
+        issues.append("missing_actor")
+
+    if normalized_type == "handoff":
+        handoff_fields = ("what_was_done", "what_remains", "current_risk", "next_step")
+        if any(not _memory_quality_text_present(record, field) for field in handoff_fields):
+            issues.append("incomplete_handoff")
+
+    meaningful_fields = [field for field in required_fields if _memory_quality_text_present(record, field)]
+    score = 100
+    if required_fields:
+        score = int((len(meaningful_fields) / len(required_fields)) * 80) + 20
+    score = max(0, score - max(0, len(issues) - (len(required_fields) - len(meaningful_fields))) * 5)
+
+    return {
+        "source_type": normalized_type or "memory",
+        "checked_at": datetime.now().isoformat(),
+        "status": "pass" if not issues else "needs_context",
+        "confidence": "high" if not issues else "medium",
+        "score": score,
+        "issues": issues,
+    }
+
+
+def _attach_memory_quality_audit(record_type: str, record: Dict[str, Any]) -> Dict[str, Any]:
+    normalized_type = str(record_type or record.get("type") or "memory").lower().replace(" ", "_")
+    record.setdefault("source_type", normalized_type)
+    record.setdefault("status", "active")
+    record.setdefault("confidence", "medium")
+    record["quality_audit"] = _audit_memory_record(record_type, record)
+    return record
+
+
+def _create_handoff_record(from_actor: str, to_actor: str, timestamp: Optional[str] = None, **details: Any) -> Dict[str, Any]:
+    record = {
+        "from": from_actor,
+        "to": to_actor,
+        "timestamp": timestamp or datetime.now().isoformat(),
+        "actor": to_actor or "unknown",
+        "what_was_done": details.get("what_was_done", ""),
+        "what_remains": details.get("what_remains", ""),
+        "current_risk": details.get("current_risk", ""),
+        "next_step": details.get("next_step", ""),
+    }
+    return _attach_memory_quality_audit("handoff", record)
+
+
 _MEMORY_SEARCH_STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "can",
     "could", "for", "from", "has", "have", "in", "is", "it", "not", "of",
@@ -2394,8 +2479,8 @@ _MEMORY_SEARCH_STOPWORDS = {
 
 _SOLVED_BUG_PROBLEM_TERMS = {
     "bug", "broken", "crash", "crashed", "error", "exception", "fail", "failed",
-    "failure", "hang", "login", "mcp", "none", "nonetype", "reconnect", "repair",
-    "shortcut", "startup", "testuser", "timeout", "toml", "traceback",
+    "failure", "hang", "invalid", "missing", "none", "null", "regression",
+    "timeout", "traceback", "undefined",
 }
 
 _SOLVED_BUG_RESOLUTION_TERMS = {
@@ -2407,13 +2492,9 @@ _SOLVED_BUG_RESOLUTION_TERMS = {
 
 
 def _memory_tokens(text: str) -> set:
-    words = re.findall(r"[a-z0-9_]+", (text or "").lower())
-    tokens = set(words) - _MEMORY_SEARCH_STOPWORDS
-    for word in words:
-        if word == "nonetype":
-            tokens.add("none")
-            tokens.add("buffer")
-    return tokens
+    normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(text or ""))
+    words = re.findall(r"[a-z0-9_]+", normalized.lower())
+    return set(words) - _MEMORY_SEARCH_STOPWORDS
 
 
 def _memory_text_matches(query_lower: str, query_words: set, text: str) -> bool:
@@ -2468,28 +2549,39 @@ def _maybe_record_solved_bug_from_memory_event(
             if len(overlap) >= min(4, max(2, len(candidate_key) // 2)):
                 return False
 
-    debug_sessions.append({
+    actor_identity = _resolve_actor_identity()
+    record = {
         "id": f"fix_auto_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(debug_sessions) + 1}",
         "problem": problem,
         "root_cause": "",
         "solution": solution,
+        "lesson_learned": "",
         "symptoms": [problem[:120]],
         "files_changed": files_changed or [],
         "resolved_at": datetime.now().isoformat(),
+        "actor": actor_identity.get("editor", "unknown"),
+        "actor_source": actor_identity.get("source", "none"),
+        "actor_confidence": actor_identity.get("confidence", 0.0),
         "importance": "high",
         "reuse_count": 0,
         "source": source,
         "auto_classified": True,
-    })
+    }
+    debug_sessions.append(_attach_memory_quality_audit("solution", record))
     return True
 
 
 _TRUST_KEYWORDS_HIGH_VALUE = {
-    "abandoned", "avoid", "bootstrap", "codex", "costly", "crash", "critical",
-    "debugging", "defender", "failed", "failure", "install", "installer",
-    "mcp", "packaged", "packaging", "pyinstaller", "release", "repeat",
-    "startup", "testuser", "timeout", "windows",
+    "abandoned", "avoid", "blocked", "costly", "critical", "decision",
+    "failed", "failure", "handoff", "lesson", "next", "problem", "reason",
+    "repeat", "risk", "root", "solution", "success", "timeout",
 }
+
+_DO_NOT_REPEAT_TERMS = (
+    "avoid", "never", "do not", "don't", "failed", "failure", "repeat",
+    "repeated", "costly", "debugging loop", "risk", "blocked", "regression",
+    "workaround",
+)
 
 
 def _coalesce_timestamp(item: Dict[str, Any], *keys: str) -> str:
@@ -2703,7 +2795,7 @@ def _collect_core_trust_items(memory: Dict[str, Any], expanded: bool = False) ->
         )
         decisions.append(item)
         lowered = text.lower()
-        if any(term in lowered for term in ("avoid", "never", "do not", "don't", "testuser", "windows", "mcp", "packaged", "debugging loop")):
+        if any(term in lowered for term in _DO_NOT_REPEAT_TERMS):
             do_not_repeat.append({**item, "category": "decision", "score": item["score"] + 20})
 
     for av in memory.get("avoid", []):
@@ -2768,7 +2860,7 @@ def _collect_core_trust_items(memory: Dict[str, Any], expanded: bool = False) ->
             ),
             fallback_reason="Stored as a project lesson.",
         )
-        if any(term in lowered for term in ("avoid", "never", "failed", "do not", "don't", "testuser", "windows", "mcp", "packaged", "release", "debugging loop")):
+        if any(term in lowered for term in _DO_NOT_REPEAT_TERMS):
             do_not_repeat.append(candidate)
         if any(term in lowered for term in ("blocked", "remaining", "risk", "unresolved", "still", "unknown")):
             risks.append({**candidate, "status": "unresolved"})
@@ -4065,11 +4157,7 @@ def _do_init_session(working_dir: str) -> str:
             if "ai_handoffs" not in data:
                 data["ai_handoffs"] = []
             if previous_ai and previous_ai["editor"] != detected_editor:
-                data["ai_handoffs"].append({
-                    "from": previous_ai["editor"],
-                    "to": detected_editor,
-                    "timestamp": datetime.now().isoformat()
-                })
+                data["ai_handoffs"].append(_create_handoff_record(previous_ai["editor"], detected_editor))
                 data["ai_handoffs"] = data["ai_handoffs"][-10:]
 
             _save_project(project_id, data)
@@ -4119,11 +4207,7 @@ def _do_init_session(working_dir: str) -> str:
     if "ai_handoffs" not in data:
         data["ai_handoffs"] = []
     if previous_ai and previous_ai["editor"] != detected_editor:
-        data["ai_handoffs"].append({
-            "from": previous_ai["editor"],
-            "to": detected_editor,
-            "timestamp": datetime.now().isoformat()
-        })
+        data["ai_handoffs"].append(_create_handoff_record(previous_ai["editor"], detected_editor))
         # Keep last 10 handoffs
         data["ai_handoffs"] = data["ai_handoffs"][-10:]
 
@@ -5741,15 +5825,22 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
                 policy_message = f"\n⚠️ **Similar decision exists:** {existing.get('decision', '')[:60]}..."
                 break
 
+    actor_identity = _resolve_actor_identity()
+
     # Log the decision
-    memory['decisions'].append({
+    decision_record = {
         "type": "decision",
         "decision": decision,
         "reason": reason,
+        "expected_benefit": "",
         "timestamp": datetime.now().isoformat(),
+        "actor": actor_identity.get("editor", "unknown"),
+        "actor_source": actor_identity.get("source", "none"),
+        "actor_confidence": actor_identity.get("confidence", 0.0),
         "importance": "permanent",
         "forced": force if force else None
-    })
+    }
+    memory['decisions'].append(_attach_memory_quality_audit("decision", decision_record))
     _maybe_record_solved_bug_from_memory_event(
         memory,
         source="auto_classified:decision",
@@ -5790,13 +5881,18 @@ def log_avoid(what: str, reason: str) -> str:
     if 'avoid' not in memory:
         memory['avoid'] = []
 
-    memory['avoid'].append({
+    actor_identity = _resolve_actor_identity()
+    avoid_record = {
         "type": "avoid",  # Marked as avoid - will NEVER be archived
         "what": what,
         "reason": reason,
         "timestamp": datetime.now().isoformat(),
+        "actor": actor_identity.get("editor", "unknown"),
+        "actor_source": actor_identity.get("source", "none"),
+        "actor_confidence": actor_identity.get("confidence", 0.0),
         "importance": "permanent"  # Avoid patterns never decay
-    })
+    }
+    memory['avoid'].append(_attach_memory_quality_audit("avoid", avoid_record))
 
     _save_project(session.project_id, memory)
 
@@ -6589,7 +6685,8 @@ def log_debug_session(
     root_cause: str,
     solution: str,
     files_changed: str = "",
-    symptoms: str = ""
+    symptoms: str = "",
+    lesson_learned: str = "",
 ) -> str:
     """
     Log a completed debug session. Use this when:
@@ -6607,6 +6704,7 @@ def log_debug_session(
         solution: What fixed it (e.g., "Open project folder, start new chat")
         files_changed: Comma-separated list of files that were modified
         symptoms: Comma-separated list of error messages/symptoms seen
+        lesson_learned: What future agents should learn from this fix
     """
     error, context = _universal_gate("log_debug_session")
     if error:
@@ -6623,17 +6721,24 @@ def log_debug_session(
     files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
     symptoms_list = [s.strip() for s in symptoms.split(",") if s.strip()] if symptoms else []
 
+    actor_identity = _resolve_actor_identity()
+
     # Create debug session
     debug_session = {
         "id": f"debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
         "problem": problem,
         "root_cause": root_cause,
         "solution": solution,
+        "lesson_learned": lesson_learned,
         "symptoms": symptoms_list,
         "files_changed": files_list,
         "resolved_at": datetime.now().isoformat(),
+        "actor": actor_identity.get("editor", "unknown"),
+        "actor_source": actor_identity.get("source", "none"),
+        "actor_confidence": actor_identity.get("confidence", 0.0),
         "importance": "high"  # Debug sessions are always important
     }
+    _attach_memory_quality_audit("debug_session", debug_session)
 
     # Check for duplicate/similar debug sessions
     problem_lower = problem.lower()
@@ -6677,6 +6782,8 @@ def log_debug_session(
 ✅ **Solution:** {solution}
 📁 **Files:** {', '.join(files_list) if files_list else 'None specified'}
 """
+    if lesson_learned:
+        result += f"🧠 **Lesson learned:** {lesson_learned}\n"
     if consolidated_count > 0:
         result += f"\n📦 Consolidated {consolidated_count} related insights into this session."
 
@@ -6725,6 +6832,7 @@ def solution_applied(
 
     # Parse files
     files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
+    actor_identity = _resolve_actor_identity()
 
     # Create solution record (same structure as debug_session for compatibility)
     solution_record = {
@@ -6732,12 +6840,17 @@ def solution_applied(
         "problem": error_message[:200],  # Truncate long errors
         "root_cause": "",  # Not required for quick fixes
         "solution": solution,
+        "lesson_learned": "",
         "symptoms": [error_message[:100]],  # Use error as symptom for matching
         "files_changed": files_list,
         "resolved_at": datetime.now().isoformat(),
+        "actor": actor_identity.get("editor", "unknown"),
+        "actor_source": actor_identity.get("source", "none"),
+        "actor_confidence": actor_identity.get("confidence", 0.0),
         "importance": "high",  # All fixes are important
         "reuse_count": 0
     }
+    _attach_memory_quality_audit("solution", solution_record)
 
     # Check for duplicate (same error already solved)
     error_lower = error_message.lower()[:100]
@@ -6748,6 +6861,10 @@ def solution_applied(
             existing['reuse_count'] = existing.get('reuse_count', 0) + 1
             existing['solution'] = solution  # Update with latest solution
             existing['files_changed'] = files_list or existing.get('files_changed', [])
+            existing.setdefault("actor", actor_identity.get("editor", "unknown"))
+            existing.setdefault("actor_source", actor_identity.get("source", "none"))
+            existing.setdefault("actor_confidence", actor_identity.get("confidence", 0.0))
+            _attach_memory_quality_audit("solution", existing)
             _save_project(session.project_id, memory)
             # Minimal response
             return "Solution updated."
@@ -6987,16 +7104,23 @@ def _search_specificity_score(query_words: set, item: Dict[str, Any]) -> int:
     if len(overlap) == len(query_words):
         score += 80
 
-    error_terms = {
-        "buffer", "nonetype", "none", "traceback", "exception", "crash",
-        "error", "timeout", "startup", "shortcut",
+    diagnostic_terms = {
+        "bug", "broken", "crash", "error", "exception", "fail", "failure",
+        "invalid", "missing", "null", "regression", "timeout", "traceback",
+        "undefined",
     }
-    score += len(overlap & error_terms) * 25
+    score += len(overlap & diagnostic_terms) * 25
+
+    rare_specific_terms = {
+        token for token in query_words
+        if len(token) >= 6 and token not in diagnostic_terms
+    }
+    score += len(overlap & rare_specific_terms) * 15
 
     item_type = str(item.get("type", "")).lower()
-    if item_type in {"solution", "solved bug"} and overlap & error_terms:
+    if item_type in {"solution", "solved bug"} and (overlap & (diagnostic_terms | rare_specific_terms)):
         score += 60
-    if item_type in {"decision", "context_update"} and not (overlap & error_terms):
+    if item_type in {"decision", "context_update"} and not (overlap & (diagnostic_terms | rare_specific_terms)):
         score -= 20
     return score
 
@@ -7157,11 +7281,13 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
     for ds in debug_sessions:
         problem = ds.get('problem', '').lower()
         solution = ds.get('solution', '')
+        root_cause = ds.get("root_cause", "")
+        lesson_learned = ds.get("lesson_learned", "")
         symptoms = [s.lower() for s in ds.get('symptoms', [])]
-        combined = f"{problem} {solution} {' '.join(symptoms)}"
+        combined = f"{problem} {root_cause} {solution} {lesson_learned} {' '.join(symptoms)}"
 
         # Check for keyword matches
-        problem_words = set(problem.split()) - noise_words
+        problem_words = _memory_tokens(problem) - noise_words
         keyword_matches = len(query_words & problem_words)
 
         # Also check symptoms
@@ -7170,11 +7296,12 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
         # Match if enough keyword overlap or symptom match
         if keyword_matches >= 2 or symptom_match or _memory_text_matches(query_lower, query_words, combined):
             similarity = max(_calculate_similarity(query, problem), _calculate_similarity(query, solution))
-            root_cause = ds.get("root_cause", "")
             text = f"🐛 **Problem:** {ds.get('problem', '')}"
             if root_cause:
                 text += f"\n🧭 **Root cause:** {root_cause}"
             text += f"\n✅ **Solution:** {solution}"
+            if lesson_learned:
+                text += f"\n🧠 **Lesson learned:** {lesson_learned}"
             matched_insights.append(_search_match(
                 text,
                 "solution",
