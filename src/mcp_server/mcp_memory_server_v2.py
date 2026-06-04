@@ -27,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import replace
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from core.windows_subprocess import no_window_creationflags
 
@@ -2400,8 +2400,9 @@ _SOLVED_BUG_PROBLEM_TERMS = {
 
 _SOLVED_BUG_RESOLUTION_TERMS = {
     "commit", "committed", "fix", "fixed", "hardening", "no longer", "prevent",
-    "prevented", "repair", "repaired", "resolve", "resolved", "restore",
-    "restored", "success", "successful", "works", "working",
+    "prevented", "remove", "removed", "repair", "repaired", "resolve",
+    "resolved", "restore", "restored", "success", "successful", "works",
+    "working",
 }
 
 
@@ -2481,6 +2482,413 @@ def _maybe_record_solved_bug_from_memory_event(
         "auto_classified": True,
     })
     return True
+
+
+_TRUST_KEYWORDS_HIGH_VALUE = {
+    "abandoned", "avoid", "bootstrap", "codex", "costly", "crash", "critical",
+    "debugging", "defender", "failed", "failure", "install", "installer",
+    "mcp", "packaged", "packaging", "pyinstaller", "release", "repeat",
+    "startup", "testuser", "timeout", "windows",
+}
+
+
+def _coalesce_timestamp(item: Dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = item.get(key)
+        if value:
+            return str(value)
+    return ""
+
+
+def _format_trust_timestamp(timestamp: str) -> str:
+    if not timestamp:
+        return "timestamp unavailable"
+    return str(timestamp).replace("T", " ")[:19]
+
+
+def _memory_actor(item: Dict[str, Any]) -> str:
+    actor = (
+        item.get("actor")
+        or item.get("created_by")
+        or item.get("author")
+        or item.get("editor")
+        or item.get("ai")
+        or item.get("last_actor")
+        or item.get("delivered_to")
+    )
+    if not actor and isinstance(item.get("agent_context"), dict):
+        actor = item["agent_context"].get("actor_name") or item["agent_context"].get("actor")
+    return str(actor) if actor else "source unknown"
+
+
+def _trust_status(category: str, item: Dict[str, Any]) -> str:
+    if item.get("superseded"):
+        return "superseded"
+    if category == "handoff":
+        return "historical"
+    if category == "activity":
+        return "historical"
+    status = str(item.get("status") or item.get("state") or "").lower()
+    if status in {"blocked", "failed", "unresolved", "open", "pending", "in_progress"}:
+        return "unresolved"
+    if status == "done":
+        return "active"
+    return "active"
+
+
+def _trust_confidence(category: str, item: Dict[str, Any], timestamp: str = "") -> str:
+    if item.get("superseded"):
+        return "low"
+    if category in {"decision", "avoid", "solved bug"}:
+        return "high"
+    if item.get("importance") == "high" or _safe_int(item.get("reuse_count") or item.get("use_count")) > 0:
+        return "high"
+    if timestamp:
+        return "medium"
+    return "low"
+
+
+def _trust_reason(category: str, item: Dict[str, Any], fallback: str = "") -> str:
+    reason = (
+        item.get("reason")
+        or item.get("root_cause")
+        or item.get("solution")
+        or item.get("desc")
+        or item.get("detail")
+        or fallback
+    )
+    if reason:
+        return " ".join(str(reason).split())[:180]
+    return "reason unavailable"
+
+
+def _memory_item(
+    category: str,
+    title: str,
+    item: Dict[str, Any],
+    detail: str = "",
+    timestamp_keys: Optional[List[str]] = None,
+    score: int = 0,
+    fallback_reason: str = "",
+) -> Dict[str, Any]:
+    timestamp_keys = timestamp_keys or ["timestamp", "created_at", "resolved_at", "updated_at"]
+    timestamp = _coalesce_timestamp(item, *timestamp_keys)
+    title = " ".join(str(title or "").split())
+    detail = " ".join(str(detail or "").split())
+    return {
+        "category": category,
+        "title": title[:220],
+        "detail": detail[:260],
+        "timestamp": timestamp,
+        "actor": _memory_actor(item),
+        "why": _trust_reason(category, item, fallback_reason),
+        "status": _trust_status(category, item),
+        "confidence": _trust_confidence(category, item, timestamp),
+        "score": score,
+        "raw": item,
+    }
+
+
+def _memory_value_score(text: str, base: int = 0, reuse_count: int = 0, importance: str = "") -> int:
+    tokens = _memory_tokens(text)
+    score = base + reuse_count * 8
+    score += sum(6 for keyword in _TRUST_KEYWORDS_HIGH_VALUE if keyword in tokens or keyword in text.lower())
+    if importance == "high":
+        score += 30
+    elif importance == "medium":
+        score += 10
+    return score
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value or default)
+    except (TypeError, ValueError):
+        return default
+
+
+def _top_memory_items(items: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
+    return sorted(
+        [item for item in items if item.get("title")],
+        key=lambda item: (item.get("score", 0), item.get("timestamp", "")),
+        reverse=True,
+    )[:limit]
+
+
+def _format_trust_line(item: Dict[str, Any]) -> str:
+    title = item.get("title", "")
+    detail = item.get("detail", "")
+    meta = (
+        f"source={item.get('category')}; actor={item.get('actor')}; "
+        f"when={_format_trust_timestamp(item.get('timestamp', ''))}; "
+        f"status={item.get('status')}; confidence={item.get('confidence')}"
+    )
+    line = f"- {title}"
+    if detail and detail != title:
+        line += f" — {detail}"
+    line += f"\n  Trust: {meta}"
+    why = item.get("why")
+    if why and why != "reason unavailable":
+        line += f"\n  Why: {why}"
+    return line
+
+
+def _collect_core_trust_items(memory: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    live_record = memory.get("live_record", {})
+    lessons = live_record.get("lessons", {})
+    architecture = live_record.get("architecture", {})
+
+    decisions = []
+    do_not_repeat = []
+    solved_bugs = []
+    risks = []
+    recent_work = []
+    handoffs = []
+
+    for dec in memory.get("decisions", []):
+        title = dec.get("decision", "")
+        text = f"{title} {dec.get('reason', '')}"
+        item = _memory_item(
+            "decision",
+            title,
+            dec,
+            detail=dec.get("reason", ""),
+            timestamp_keys=["timestamp", "created_at", "updated_at"],
+            score=_memory_value_score(text, base=80, importance=dec.get("importance", "")),
+        )
+        decisions.append(item)
+        lowered = text.lower()
+        if any(term in lowered for term in ("avoid", "never", "do not", "don't", "testuser", "windows", "mcp", "packaged", "debugging loop")):
+            do_not_repeat.append({**item, "category": "decision", "score": item["score"] + 20})
+
+    for av in memory.get("avoid", []):
+        title = av.get("what", "")
+        text = f"{title} {av.get('reason', '')}"
+        do_not_repeat.append(_memory_item(
+            "avoid",
+            title,
+            av,
+            detail=av.get("reason", ""),
+            timestamp_keys=["timestamp", "created_at", "updated_at"],
+            score=_memory_value_score(text, base=95, importance=av.get("importance", "high")),
+        ))
+
+    for attempt in lessons.get("failed_attempts", []):
+        normalized = _normalize_insight(attempt)
+        text = normalized.get("text", "")
+        do_not_repeat.append(_memory_item(
+            "insight",
+            text,
+            normalized,
+            timestamp_keys=["timestamp", "created_at", "updated_at"],
+            score=_memory_value_score(text, base=90, importance=normalized.get("importance", "")),
+            fallback_reason="Previously recorded as a failed attempt.",
+        ))
+
+    for ds in memory.get("debug_sessions", []):
+        problem = ds.get("problem", "")
+        solution = ds.get("solution", "")
+        text = f"{problem} {solution} {' '.join(ds.get('symptoms', []))}"
+        solved = _memory_item(
+            "solved bug",
+            problem,
+            ds,
+            detail=solution,
+            timestamp_keys=["resolved_at", "timestamp", "created_at", "updated_at"],
+            score=_memory_value_score(
+                text,
+                base=85,
+                reuse_count=_safe_int(ds.get("reuse_count")),
+                importance=ds.get("importance", ""),
+            ),
+        )
+        solved_bugs.append(solved)
+        if _looks_like_solved_bug_text(problem, solution) or solved["score"] >= 110:
+            do_not_repeat.append({**solved, "score": solved["score"] + 10})
+
+    for insight in lessons.get("insights", []):
+        normalized = _normalize_insight(insight)
+        text = normalized.get("text", "")
+        lowered = text.lower()
+        candidate = _memory_item(
+            "insight",
+            text,
+            normalized,
+            timestamp_keys=["timestamp", "created_at", "updated_at", "last_used"],
+            score=_memory_value_score(
+                text,
+                base=55,
+                reuse_count=_safe_int(normalized.get("use_count")),
+                importance=normalized.get("importance", ""),
+            ),
+            fallback_reason="Stored as a project lesson.",
+        )
+        if any(term in lowered for term in ("avoid", "never", "failed", "do not", "don't", "testuser", "windows", "mcp", "packaged", "release", "debugging loop")):
+            do_not_repeat.append(candidate)
+        if any(term in lowered for term in ("blocked", "remaining", "risk", "unresolved", "still", "unknown")):
+            risks.append({**candidate, "status": "unresolved"})
+
+    intent = live_record.get("intent", {})
+    if intent:
+        for key, label in (
+            ("last_change", "Last meaningful work"),
+            ("current_goal", "Project/current goal"),
+            ("next_step", "Next step"),
+        ):
+            if intent.get(key):
+                recent_work.append(_memory_item(
+                    "activity",
+                    f"{label}: {intent.get(key)}",
+                    intent,
+                    detail=intent.get("work_area", ""),
+                    timestamp_keys=["updated_at", "timestamp"],
+                    score=70 if key == "last_change" else 60,
+                    fallback_reason="Current work context recorded by an agent.",
+                ))
+
+    for comp in architecture.get("components", []):
+        comp_text = f"{comp.get('name', '')} {comp.get('status', '')} {comp.get('desc', '')}"
+        comp_item = _memory_item(
+            "component history",
+            comp.get("name", ""),
+            comp,
+            detail=comp.get("desc", ""),
+            timestamp_keys=["updated_at", "timestamp", "created_at"],
+            score=_memory_value_score(comp_text, base=45),
+            fallback_reason="Component status/history entry.",
+        )
+        if comp.get("status") in {"blocked", "in_progress"}:
+            risks.append({**comp_item, "status": "unresolved"})
+        if _looks_like_solved_bug_text(comp.get("name", ""), comp.get("desc", "")):
+            solved_bugs.append({**comp_item, "category": "component history", "score": comp_item["score"] + 20})
+        for hist in comp.get("history", []):
+            if not isinstance(hist, dict):
+                continue
+            hist_text = f"{hist.get('action', '')} {hist.get('desc', '')}"
+            hist_item = _memory_item(
+                "component history",
+                f"{comp.get('name', '')}: {hist.get('action', '')}",
+                hist,
+                detail=hist.get("desc", ""),
+                timestamp_keys=["timestamp", "updated_at", "created_at"],
+                score=_memory_value_score(hist_text, base=50),
+                fallback_reason=f"History entry for component {comp.get('name', '')}.",
+            )
+            if _looks_like_solved_bug_text(hist.get("action", ""), hist.get("desc", "")):
+                solved_bugs.append(hist_item)
+            if any(term in hist_text.lower() for term in ("avoid", "failed", "do not", "don't", "never")):
+                do_not_repeat.append(hist_item)
+
+    ai_session = memory.get("ai_session", {})
+    previous_ai = ai_session.get("previous_ai")
+    if isinstance(previous_ai, dict) and previous_ai:
+        handoffs.append(_memory_item(
+            "handoff",
+            f"{previous_ai.get('editor', 'unknown')} handed off to {ai_session.get('editor', 'unknown')}",
+            {**previous_ai, "last_actor": previous_ai.get("editor")},
+            detail=f"ended_at={previous_ai.get('ended_at', '')}",
+            timestamp_keys=["ended_at", "started_at", "timestamp"],
+            score=80,
+            fallback_reason="Recorded as previous AI session handoff.",
+        ))
+    for handoff in memory.get("ai_handoffs", [])[-5:]:
+        if isinstance(handoff, dict):
+            handoffs.append(_memory_item(
+                "handoff",
+                f"{handoff.get('from', 'unknown')} -> {handoff.get('to', 'unknown')}",
+                {**handoff, "last_actor": handoff.get("to")},
+                timestamp_keys=["timestamp", "created_at", "updated_at"],
+                score=70,
+                fallback_reason="Recorded multi-agent handoff.",
+            ))
+
+    activity_items = []
+    if isinstance(memory.get("activity_log"), list):
+        activity_items.extend(memory.get("activity_log", []))
+    try:
+        activity_file = USER_DATA_DIR / "activity_log.json"
+        if activity_file.exists():
+            activity_items.extend(json.loads(activity_file.read_text(encoding="utf-8")).get("activities", [])[:100])
+    except Exception:
+        pass
+    for activity in activity_items[:100]:
+        if not isinstance(activity, dict):
+            continue
+        text = " ".join(str(activity.get(key, "") or "") for key in ("human_name", "tool", "file", "cwd", "command", "file_context"))
+        if not text.strip():
+            continue
+        item = _memory_item(
+            "activity",
+            activity.get("human_name") or activity.get("tool") or activity.get("command", ""),
+            activity,
+            detail=activity.get("file") or activity.get("cwd") or activity.get("file_context", ""),
+            timestamp_keys=["timestamp", "created_at", "updated_at"],
+            score=_memory_value_score(text, base=25),
+            fallback_reason="Recent project activity.",
+        )
+        if item["score"] >= 55:
+            recent_work.append(item)
+
+    return {
+        "decisions": _top_memory_items([item for item in decisions if item.get("status") == "active"], 6),
+        "do_not_repeat": _top_memory_items(do_not_repeat, 7),
+        "solved_bugs": _top_memory_items(solved_bugs, 5),
+        "risks": _top_memory_items(risks, 5),
+        "recent_work": _top_memory_items(recent_work, 5),
+        "handoffs": _top_memory_items(handoffs, 3),
+    }
+
+
+def _format_do_not_repeat_digest(memory: Dict[str, Any], limit: int = 7) -> str:
+    items = _collect_core_trust_items(memory).get("do_not_repeat", [])[:limit]
+    if not items:
+        return "No do-not-repeat items found."
+    lines = ["## Do Not Repeat"]
+    for item in items:
+        lines.append(_format_trust_line(item))
+    return "\n".join(lines)
+
+
+def _format_deep_project_brief(memory: Dict[str, Any]) -> str:
+    project_info = memory.get("project_info", {})
+    live_record = memory.get("live_record", {})
+    intent = live_record.get("intent", {})
+    architecture = live_record.get("architecture", {})
+    items = _collect_core_trust_items(memory)
+
+    project_name = project_info.get("name") or "Unknown project"
+    project_goal = intent.get("current_goal") or architecture.get("summary") or project_info.get("summary") or "project goal unavailable"
+    work_area = intent.get("work_area") or "work area unavailable"
+    last_work = intent.get("last_change") or "last meaningful work unavailable"
+    next_step = intent.get("next_step") or "next step unavailable"
+
+    lines = [
+        f"# Deep Onboarding Brief: {project_name}",
+        "",
+        "## Project Context",
+        f"- Project goal: {project_goal}",
+        f"- Current work area: {work_area}",
+        f"- Last meaningful work: {last_work}",
+        f"- Next step: {next_step}",
+    ]
+
+    sections = [
+        ("Decisions", items["decisions"]),
+        ("Do Not Repeat", items["do_not_repeat"]),
+        ("Solved Bugs", items["solved_bugs"]),
+        ("Risks", items["risks"]),
+        ("Recent Work", items["recent_work"]),
+        ("Handoffs", items["handoffs"]),
+    ]
+    for title, section_items in sections:
+        lines.extend(["", f"## {title}"])
+        if not section_items:
+            lines.append("- None recorded.")
+            continue
+        for item in section_items:
+            lines.append(_format_trust_line(item))
+
+    return "\n".join(lines)
 
 
 def _calculate_insight_score(insight: dict) -> float:
@@ -8282,6 +8690,41 @@ def fo_search(query: str) -> str:
         query: Search query (error message, topic, or keywords)
     """
     return search_past_solutions(query)
+
+
+@mcp.tool()
+def fo_brief() -> str:
+    """
+    Return a deep onboarding brief for a new agent.
+
+    This is intentionally deeper than fo_init and grouped by trust category:
+    Decisions, Do Not Repeat, Solved Bugs, Risks, Recent Work, and Handoffs.
+    """
+    error, context = _universal_gate("fo_brief")
+    if error:
+        return error
+
+    session = _get_session()
+    memory = _load_project_lightweight(session.project_id)
+    if not memory:
+        return "No project memory found."
+    return context + _format_deep_project_brief(memory)
+
+
+@mcp.tool()
+def fo_do_not_repeat() -> str:
+    """
+    Return the compact do-not-repeat digest for future agents.
+    """
+    error, context = _universal_gate("fo_do_not_repeat")
+    if error:
+        return error
+
+    session = _get_session()
+    memory = _load_project_lightweight(session.project_id)
+    if not memory:
+        return "No project memory found."
+    return context + _format_do_not_repeat_digest(memory)
 
 
 @mcp.tool()

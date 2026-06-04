@@ -206,6 +206,175 @@ class TestMemoryClassification(unittest.TestCase):
         self.assertEqual(len(memory.get("debug_sessions", [])), 1)
         self.assertEqual(memory["debug_sessions"][0]["source"], "auto_classified:component_status")
 
+    def test_deep_brief_includes_core_trust_sections(self):
+        memory = {
+            "project_info": {"name": "Trust Project", "working_dir": "/tmp/trust"},
+            "live_record": {
+                "intent": {
+                    "current_goal": "Make memory trustworthy for new agents",
+                    "work_area": "memory trust",
+                    "last_change": "Validated Windows TestUser memory recall",
+                    "next_step": "Implement deep onboarding brief",
+                    "updated_at": "2026-06-02T19:53:33",
+                    "actor": "Codex",
+                },
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [{
+                "decision": "Before every Windows build, run runtime QA before TestUser.",
+                "reason": "Avoid repeating costly Windows/TestUser debugging loops.",
+                "timestamp": "2026-06-02T19:53:20",
+                "actor": "Codex",
+            }],
+            "avoid": [{
+                "what": "Do not use TestUser as the primary debugging loop.",
+                "reason": "It previously consumed several days.",
+                "timestamp": "2026-06-02T19:54:00",
+                "actor": "Codex",
+            }],
+            "debug_sessions": [{
+                "problem": "MCP reconnect timeout during packaged Windows startup",
+                "solution": "Guarded stdio startup and added packaged --mcp diagnostics.",
+                "resolved_at": "2026-06-02T20:00:00",
+                "reuse_count": 2,
+                "actor": "Codex",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_brief()
+
+        self.assertIn("## Decisions", result)
+        self.assertIn("Before every Windows build", result)
+        self.assertIn("## Do Not Repeat", result)
+        self.assertIn("TestUser as the primary debugging loop", result)
+        self.assertIn("## Solved Bugs", result)
+        self.assertIn("MCP reconnect timeout", result)
+        self.assertIn("Next step: Implement deep onboarding brief", result)
+
+    def test_do_not_repeat_digest_includes_avoid_failed_and_solved_bug_lessons(self):
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {
+                    "insights": [],
+                    "failed_attempts": [{
+                        "text": "Tried build-install-TestUser loop first; it was too slow.",
+                        "timestamp": "2026-06-02T18:00:00",
+                        "actor": "Claude",
+                    }],
+                },
+            },
+            "decisions": [],
+            "avoid": [{
+                "what": "Do not reintroduce login auto-start.",
+                "reason": "Clean user startup crashed before health passed.",
+                "timestamp": "2026-06-02T18:30:00",
+            }],
+            "debug_sessions": [{
+                "problem": "Windows TestUser login crash",
+                "solution": "Removed login auto-start and require manual open.",
+                "resolved_at": "2026-06-02T19:00:00",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_do_not_repeat()
+
+        self.assertIn("Do not reintroduce login auto-start", result)
+        self.assertIn("build-install-TestUser loop", result)
+        self.assertIn("Windows TestUser login crash", result)
+
+    def test_provenance_uses_real_timestamp_and_actor_when_present(self):
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [{
+                "decision": "Preserve Codex TOML sections during repair.",
+                "reason": "Avoid overwriting user config.",
+                "timestamp": "2026-06-01T10:00:00",
+                "actor": "Codex",
+            }],
+            "avoid": [],
+            "debug_sessions": [],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_brief()
+
+        self.assertIn("when=2026-06-01 10:00:00", result)
+        self.assertIn("actor=Codex", result)
+        self.assertIn("source=decision", result)
+
+    def test_missing_timestamp_and_actor_are_reported_honestly(self):
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [{
+                "decision": "Keep regular fo_init short.",
+                "reason": "Deep context belongs in fo_brief.",
+            }],
+            "avoid": [],
+            "debug_sessions": [],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_brief()
+
+        self.assertIn("when=timestamp unavailable", result)
+        self.assertIn("actor=source unknown", result)
+
+    def test_regular_fo_init_remains_short(self):
+        memory = {
+            "project_info": {"name": "Short Init", "working_dir": "/tmp/short"},
+            "live_record": {
+                "intent": {
+                    "current_goal": "Keep opener short",
+                    "work_area": "session opening",
+                    "last_change": "Added deep brief separately",
+                    "next_step": "Run tests",
+                    "updated_at": "2026-06-02T19:53:33",
+                },
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [{
+                "decision": "Decision that should only appear in fo_brief.",
+                "reason": "fo_init must remain minimal.",
+            }],
+            "avoid": [{
+                "what": "Avoid noisy init dumps.",
+                "reason": "Agents need a concise opener.",
+            }],
+            "debug_sessions": [{
+                "problem": "Solved bug that should not appear in fo_init",
+                "solution": "Use fo_brief for deep context.",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+            with patch.object(server, "_get_project_id", return_value="proj-memory-classification"), \
+                 patch.object(server, "_get_live_errors", return_value=[]), \
+                 patch.object(server, "_get_auto_fixes", return_value=[]), \
+                 patch.object(server, "_resume_state_available", False):
+                result = server._format_minimal_init(str(Path(temp_dir)))
+
+        self.assertLessEqual(len(result.splitlines()), 12)
+        self.assertNotIn("## Decisions", result)
+        self.assertNotIn("Solved bug that should not appear", result)
+
 
 if __name__ == "__main__":
     unittest.main()
