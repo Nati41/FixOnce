@@ -16,7 +16,8 @@ SERVER_NAME = "fixonce"
 
 
 def _looks_like_python_interpreter(path: Path) -> bool:
-    return path.name.lower() in {"python.exe", "pythonw.exe", "python", "pythonw"}
+    name = str(path).replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return name in {"python.exe", "pythonw.exe", "python", "pythonw"}
 
 
 def build_packaged_stdio_config(fixonce_exe: Path, actor: str | None = None) -> dict:
@@ -27,6 +28,7 @@ def build_packaged_stdio_config(fixonce_exe: Path, actor: str | None = None) -> 
     config = {
         "command": str(fixonce_exe),
         "args": ["--mcp"],
+        "startup_timeout_sec": 60,
     }
     if actor:
         config["env"] = {"FIXONCE_ACTOR": actor}

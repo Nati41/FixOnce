@@ -141,13 +141,33 @@ def main() -> int:
         "webview.platforms.edgechromium",
         "webview.platforms.mshtml",
         "webview.platforms.winforms",
+        "core.agent_mcp_registration",
+        "core.mcp_config",
+        "mcp_server.mcp_memory_server_v2",
     ]
     hidden_ok = all(module in spec_text for module in required_hidden_imports)
-    check(hidden_ok, "pywebview hidden imports", ", ".join(required_hidden_imports), failures)
+    check(hidden_ok, "required hidden imports", ", ".join(required_hidden_imports), failures)
 
     check("--server" in launcher_text, "launcher server mode", "app launcher exposes packaged --server dispatch", failures)
     check("--bootstrap" in launcher_text, "launcher bootstrap mode", "app launcher exposes packaged --bootstrap dispatch", failures)
+    check(
+        "MCP_STARTUP_LOG" in launcher_text
+        and "--mcp startup started" in launcher_text
+        and "--mcp entering mcp_server.mcp_memory_server_v2" in launcher_text,
+        "launcher MCP startup diagnostics",
+        "FixOnce.exe --mcp logs startup before importing the MCP server module",
+        failures,
+    )
     check("bootstrap.log" in launcher_text, "bootstrap log file", "bootstrap steps logged to ~/.fixonce/logs/bootstrap.log", failures)
+    check(
+        "MCP registration started" in launcher_text
+        and "MCP registration Codex config path" in launcher_text
+        and "MCP registration installed exe path" in launcher_text
+        and "MCP registration result" in launcher_text,
+        "bootstrap MCP diagnostics",
+        "bootstrap logs registration start, paths, installed exe, and result",
+        failures,
+    )
     check(
         "configure_windows_autostart" in launcher_text and "startup_shortcut" in launcher_text,
         "bootstrap startup fallback",

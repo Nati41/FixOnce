@@ -1,5 +1,6 @@
 import json
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -89,6 +90,7 @@ class TestAgentMcpRegistration(unittest.TestCase):
         self.assertNotIn("PYTHONPATH", text)
         self.assertIn('command = "C:\\\\Program Files\\\\FixOnce\\\\FixOnce.exe"', text)
         self.assertIn('args = ["--mcp"]', text)
+        self.assertIn("startup_timeout_sec = 60", text)
         self.assertIn("[mcp_servers.fixonce.env]", text)
         self.assertIn('FIXONCE_ACTOR = "codex"', text)
         self.assertIn('[profiles.default]\nmodel = "gpt-5"', text)
@@ -128,6 +130,50 @@ class TestAgentMcpRegistration(unittest.TestCase):
         self.assertNotIn("mcp_memory_server_v2.py", text)
         self.assertIn('[profiles.default]\nmodel = "gpt-5"', text)
 
+    def test_codex_real_qa_config_shape_remains_valid_toml(self):
+        config_path = self.home / ".codex" / "config.toml"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(
+            "\n".join(
+                [
+                    "[projects.'c:\\users\\testuser']",
+                    'trust_level = "trusted"',
+                    "",
+                    "[projects.'c:\\testproject']",
+                    'trust_level = "trusted"',
+                    "",
+                    "[tui.model_availability_nux]",
+                    '"gpt-5.5" = 4',
+                    "",
+                    "[windows]",
+                    'sandbox = "elevated"',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        register_codex_mcp(self.home, self.fixonce_exe)
+
+        text = self._codex_config_text()
+        self.assertIn("[projects.'c:\\users\\testuser']\ntrust_level = \"trusted\"", text)
+        self.assertIn("[projects.'c:\\testproject']\ntrust_level = \"trusted\"", text)
+        self.assertIn('[tui.model_availability_nux]\n"gpt-5.5" = 4', text)
+        self.assertIn('[windows]\nsandbox = "elevated"', text)
+        self.assertEqual(text.count('trust_level = "trusted"'), 2)
+        self.assertEqual(text.count('sandbox = "elevated"'), 1)
+        self.assertIn("[mcp_servers.fixonce]", text)
+        self.assertIn('command = "C:\\\\Program Files\\\\FixOnce\\\\FixOnce.exe"', text)
+        self.assertIn('args = ["--mcp"]', text)
+        self.assertIn("startup_timeout_sec = 60", text)
+
+        parsed = tomllib.loads(text)
+        self.assertEqual(parsed["projects"]["c:\\users\\testuser"]["trust_level"], "trusted")
+        self.assertEqual(parsed["projects"]["c:\\testproject"]["trust_level"], "trusted")
+        self.assertEqual(parsed["windows"]["sandbox"], "elevated")
+        self.assertEqual(parsed["mcp_servers"]["fixonce"]["args"], ["--mcp"])
+        self.assertEqual(parsed["mcp_servers"]["fixonce"]["startup_timeout_sec"], 60)
+
     def test_codex_packaged_repair_replaces_legacy_python_mcp_command(self):
         config_path = self.home / ".codex" / "config.toml"
         config_path.parent.mkdir(parents=True)
@@ -154,6 +200,7 @@ class TestAgentMcpRegistration(unittest.TestCase):
         self.assertNotIn("pythoncore-3.14-64", text)
         self.assertIn('command = "C:\\\\Program Files\\\\FixOnce\\\\FixOnce.exe"', text)
         self.assertIn('args = ["--mcp"]', text)
+        self.assertIn("startup_timeout_sec = 60", text)
         self.assertIn('FIXONCE_ACTOR = "codex"', text)
         self.assertIn('[desktop]\nconversationDetailMode = "STEPS_COMMANDS"', text)
 
@@ -225,6 +272,7 @@ class TestAgentMcpRegistration(unittest.TestCase):
         self.assertNotIn("C:\\Users\\nati3", text)
         self.assertNotIn("mcp_memory_server_v2.py", text)
         self.assertIn('command = "C:\\\\Program Files\\\\FixOnce\\\\FixOnce.exe"', text)
+        self.assertIn("startup_timeout_sec = 60", text)
         self.assertIn('FIXONCE_ACTOR = "codex"', text)
         self.assertIn('[profiles.default]\nmodel = "gpt-5"', text)
 
@@ -301,6 +349,7 @@ class TestAgentMcpRegistration(unittest.TestCase):
         )
         text = self._codex_config_text()
         self.assertIn("[mcp_servers.fixonce]", text)
+        self.assertIn("startup_timeout_sec = 60", text)
         self.assertNotIn("PYTHONPATH", text)
         self.assertIn('FIXONCE_ACTOR = "codex"', text)
         self._assert_json_client_config(self.home / ".claude.json", "claude")

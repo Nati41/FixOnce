@@ -37,6 +37,7 @@ LOCK_FILE = USER_DATA_DIR / "server.lock"
 LOG_DIR = USER_DATA_DIR / "logs"
 LAUNCHER_LOG = LOG_DIR / "app_launcher.log"
 BOOTSTRAP_LOG = LOG_DIR / "bootstrap.log"
+MCP_STARTUP_LOG = LOG_DIR / "mcp_startup.log"
 BOOTSTRAP_TASK_NAME = "FixOnceServer"
 BOOTSTRAP_STARTUP_SHORTCUT_NAME = "FixOnceServer.lnk"
 AUTOSTART_METHOD_SCHEDULED_TASK = "scheduled_task"
@@ -245,6 +246,18 @@ def log_windows_defender_diagnostics(reason: str, executable: Path | None = None
     return diagnostics
 
 
+def mcp_startup_log(message: str):
+    """Append packaged MCP startup diagnostics without touching stdout."""
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with MCP_STARTUP_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+        print(f"[FixOnce MCP] {message}", file=sys.stderr, flush=True)
+    except Exception:
+        pass
+
+
 def set_dock_icon():
     """Set the Dock icon on macOS."""
     try:
@@ -429,14 +442,24 @@ def configure_packaged_windows_mcp(log_fn: Callable[[str], None] | None = None) 
         write_log("MCP registration skipped: not Windows")
         return False
 
+    home_dir = Path.home()
+    fixonce_exe = Path(sys.executable)
+    user_name = os.environ.get("USERNAME") or os.environ.get("USER") or "unknown"
+    user_profile = os.environ.get("USERPROFILE") or str(home_dir)
+    codex_config = home_dir / ".codex" / "config.toml"
+    write_log("MCP registration started")
+    write_log(f"MCP registration user/profile: user={user_name}; home={home_dir}; USERPROFILE={user_profile}")
+    write_log(f"MCP registration Codex config path: {codex_config}")
+    write_log(f"MCP registration installed exe path: {fixonce_exe}")
+
     try:
         from core.agent_mcp_registration import register_windows_mcp_clients
 
-        config_paths = register_windows_mcp_clients(Path.home(), Path(sys.executable))
-        write_log(f"MCP registration ready: {', '.join(str(path) for path in config_paths)}")
+        config_paths = register_windows_mcp_clients(home_dir, fixonce_exe)
+        write_log(f"MCP registration result: success; paths={', '.join(str(path) for path in config_paths)}")
         return True
     except Exception as exc:
-        write_log(f"MCP registration failed: {type(exc).__name__}: {exc}")
+        write_log(f"MCP registration result: failed; error={type(exc).__name__}: {exc}")
         return False
 
 
@@ -1164,33 +1187,25 @@ def run_server_mode(argv: list[str]):
     server_main(argv)
 
 
-def get_mcp_startup_log_path() -> Path:
-    userprofile = os.environ.get("USERPROFILE")
-    base = Path(userprofile) if userprofile else Path.home()
-    return base / ".fixonce" / "logs" / "mcp_startup.log"
-
-
-def write_mcp_startup_diagnostics(message: str):
-    try:
-        log_file = get_mcp_startup_log_path()
-        log_file.parent.mkdir(parents=True, exist_ok=True)
-        with log_file.open("a", encoding="utf-8") as handle:
-            handle.write(f"[{datetime.now().isoformat()}] {message}\n")
-    except Exception:
-        pass
-
-
 def run_mcp_mode():
     """Run the bundled FixOnce MCP stdio server."""
-    write_mcp_startup_diagnostics("--mcp startup started")
-    write_mcp_startup_diagnostics(f"sys.executable={sys.executable}")
-    write_mcp_startup_diagnostics(f"cwd={os.getcwd()}")
-    write_mcp_startup_diagnostics(f"userprofile={os.environ.get('USERPROFILE', '')} home={Path.home()}")
+    started_at = time.monotonic()
+    mcp_startup_log(
+        f"--mcp startup started; frozen={is_frozen()}; executable={sys.executable}; "
+        f"argv={sys.argv}; cwd={os.getcwd()}; userprofile={os.environ.get('USERPROFILE', '')}; home={Path.home()}"
+    )
     if not is_frozen():
         sys.path.insert(0, str(PROJECT_DIR / "src"))
 
-    write_mcp_startup_diagnostics("--mcp entering mcp_server.mcp_memory_server_v2")
-    runpy.run_module("mcp_server.mcp_memory_server_v2", run_name="__main__")
+    try:
+        mcp_startup_log("--mcp entering mcp_server.mcp_memory_server_v2")
+        runpy.run_module("mcp_server.mcp_memory_server_v2", run_name="__main__")
+        elapsed = time.monotonic() - started_at
+        mcp_startup_log(f"--mcp run_module returned after {elapsed:.3f}s")
+    except BaseException as exc:
+        elapsed = time.monotonic() - started_at
+        mcp_startup_log(f"--mcp startup failed after {elapsed:.3f}s: {type(exc).__name__}: {exc}")
+        raise
 
 
 def main():

@@ -194,7 +194,7 @@ class TestAppLauncher(unittest.TestCase):
             def assert_log_exists_before_import(*args, **kwargs):
                 text = log_file.read_text(encoding="utf-8")
                 self.assertIn("--mcp startup started", text)
-                self.assertIn("sys.executable=", text)
+                self.assertIn("executable=", text)
                 self.assertIn("cwd=", text)
                 self.assertIn("userprofile=", text)
                 self.assertIn("home=", text)
@@ -202,9 +202,43 @@ class TestAppLauncher(unittest.TestCase):
                 raise RuntimeError("stop before MCP import")
 
             with patch.dict(os.environ, {"USERPROFILE": str(temp_home)}), \
+                 patch.object(app_launcher, "LOG_DIR", log_file.parent), \
+                 patch.object(app_launcher, "MCP_STARTUP_LOG", log_file), \
                  patch.object(app_launcher.runpy, "run_module", side_effect=assert_log_exists_before_import):
                 with self.assertRaisesRegex(RuntimeError, "stop before MCP import"):
                     app_launcher.run_mcp_mode()
+
+    def test_mcp_mode_runs_stdio_module_without_dashboard_or_server(self):
+        with patch.object(app_launcher, "is_frozen", return_value=True), \
+             patch.object(app_launcher.runpy, "run_module") as run_module, \
+             patch.object(app_launcher, "open_dashboard") as open_dashboard, \
+             patch.object(app_launcher, "run_server_mode") as run_server_mode, \
+             patch.object(app_launcher, "mcp_startup_log") as startup_log:
+            app_launcher.run_mcp_mode()
+
+        run_module.assert_called_once_with("mcp_server.mcp_memory_server_v2", run_name="__main__")
+        open_dashboard.assert_not_called()
+        run_server_mode.assert_not_called()
+        startup_messages = [call.args[0] for call in startup_log.call_args_list]
+        self.assertTrue(any("--mcp startup started" in message for message in startup_messages))
+        self.assertTrue(any("--mcp entering mcp_server.mcp_memory_server_v2" in message for message in startup_messages))
+
+    def test_main_dispatches_mcp_mode_first(self):
+        with patch.object(app_launcher, "run_mcp_mode") as run_mcp_mode, \
+             patch.object(app_launcher, "run_server_mode") as run_server_mode, \
+             patch.object(sys, "argv", ["FixOnce.exe", "--mcp", "--server"]):
+            app_launcher.main()
+
+        run_mcp_mode.assert_called_once()
+        run_server_mode.assert_not_called()
+
+    def test_mcp_server_semantic_stack_is_lazy_loaded(self):
+        source = (PROJECT_ROOT / "src" / "mcp_server" / "mcp_memory_server_v2.py").read_text(encoding="utf-8")
+        before_lazy_loader = source.split("def _load_project_semantic", 1)[0]
+
+        self.assertNotIn("from core.project_semantic import", before_lazy_loader)
+        self.assertIn("def _load_project_semantic", source)
+        self.assertIn("from core.project_semantic import", source)
 
 
 if __name__ == "__main__":

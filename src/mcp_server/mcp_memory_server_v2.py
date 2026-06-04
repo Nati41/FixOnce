@@ -577,7 +577,7 @@ _semantic_imports: Dict[str, Any] = {}
 
 
 def _load_project_semantic(allow_cold_start: bool = True) -> Optional[Dict[str, Any]]:
-    """Load semantic search only when a semantic operation is requested."""
+    """Load semantic search lazily so MCP stdio startup stays lightweight."""
     global _semantic_available, _semantic_imports
     if _semantic_available is False:
         return None
@@ -597,6 +597,7 @@ def _load_project_semantic(allow_cold_start: bool = True) -> Optional[Dict[str, 
     except ImportError:
         _semantic_available = False
         _semantic_imports = {}
+        _log("[FixOnce] Semantic search not available")
         return None
 
     _semantic_imports = {
@@ -607,6 +608,7 @@ def _load_project_semantic(allow_cold_start: bool = True) -> Optional[Dict[str, 
         "rebuild_project_index": rebuild_project_index,
     }
     _semantic_available = True
+    _log("[FixOnce] Semantic search loaded lazily")
     return _semantic_imports
 
 # Session Registry for Multi-AI Isolation - imported later after sys.path is set

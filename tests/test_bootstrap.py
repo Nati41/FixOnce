@@ -349,6 +349,7 @@ class TestBootstrap(unittest.TestCase):
         self.assertEqual(text.count("[mcp_servers.fixonce]"), 1)
         self.assertIn("FixOnce.exe", text)
         self.assertIn('args = ["--mcp"]', text)
+        self.assertIn("startup_timeout_sec = 60", text)
         self.assertNotIn("PYTHONPATH", text)
         self.assertIn('FIXONCE_ACTOR = "codex"', text)
         for path, actor in (
@@ -411,6 +412,7 @@ class TestBootstrap(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+
         self.runtime_file.write_text(
             json.dumps({"port": 5000, "pid": 4242, "install_path": str(install_dir)}),
             encoding="utf-8",
@@ -456,6 +458,50 @@ class TestBootstrap(unittest.TestCase):
             self.assertEqual(config["theme"], "dark")
             self.assertNotIn("PYTHONPATH", json.dumps(server))
             self.assertNotIn("mcp_memory_server_v2.py", json.dumps(server))
+
+    def test_frozen_bootstrap_calls_mcp_registration_adapter_and_logs_paths(self):
+        home_dir = Path(self.temp_dir.name) / "home"
+        install_dir = Path(self.temp_dir.name) / "FixOnce"
+        exe_path = install_dir / "FixOnce.exe"
+        codex_config = home_dir / ".codex" / "config.toml"
+        self.runtime_file.write_text(
+            json.dumps({"port": 5000, "pid": 4242, "install_path": str(install_dir)}),
+            encoding="utf-8",
+        )
+
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(app_launcher.sys, "executable", str(exe_path)), patch.object(app_launcher, "is_frozen", return_value=True), patch.object(
+            app_launcher,
+            "get_packaged_install_dir",
+            return_value=install_dir,
+        ), patch.object(
+            app_launcher,
+            "configure_windows_autostart",
+            return_value=app_launcher.AUTOSTART_METHOD_SCHEDULED_TASK,
+        ), patch.object(
+            app_launcher,
+            "ensure_packaged_server_running",
+            return_value=5000,
+        ), patch("pathlib.Path.home", return_value=home_dir), patch.dict(
+            app_launcher.os.environ,
+            {"USERNAME": "TestUser", "USERPROFILE": str(home_dir)},
+            clear=False,
+        ), patch(
+            "core.agent_mcp_registration.register_windows_mcp_clients",
+            return_value=[codex_config],
+        ) as register_clients, patch.object(
+            app_launcher,
+            "open_dashboard",
+        ):
+            code = app_launcher.run_bootstrap()
+
+        self.assertEqual(code, 0)
+        register_clients.assert_called_once_with(home_dir, exe_path)
+        log_text = "\n".join(self._log_lines())
+        self.assertIn("MCP registration started", log_text)
+        self.assertIn(f"MCP registration user/profile: user=TestUser; home={home_dir}; USERPROFILE={home_dir}", log_text)
+        self.assertIn(f"MCP registration Codex config path: {codex_config}", log_text)
+        self.assertIn(f"MCP registration installed exe path: {exe_path}", log_text)
+        self.assertIn("MCP registration result: success", log_text)
 
     def test_run_bootstrap_idempotent_second_run(self):
         self.install_state_file.write_text(

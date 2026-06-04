@@ -35,21 +35,23 @@ def toml_quote(value: str) -> str:
 
 
 def remove_codex_server_blocks(content: str, server_name: str) -> str:
-    target_headers = {
-        f"[mcp_servers.{server_name}]",
-        f"[mcp_servers.{server_name}.env]",
+    target_sections = {
+        f"mcp_servers.{server_name}",
+        f"mcp_servers.{server_name}.env",
     }
+    kept_lines = []
+    skipping = False
 
-    kept: list[str] = []
-    skip = False
-    for line in content.splitlines():
+    for line in content.splitlines(keepends=True):
         stripped = line.strip()
         if stripped.startswith("[") and stripped.endswith("]"):
-            skip = stripped in target_headers
-        if not skip:
-            kept.append(line)
+            section_name = stripped[1:-1].strip()
+            skipping = section_name in target_sections
 
-    return "\n".join(kept).strip()
+        if not skipping:
+            kept_lines.append(line)
+
+    return "".join(kept_lines).rstrip()
 
 
 def write_codex_config(path: Path, server_name: str, config: dict, include_actor_env: bool = True):
@@ -61,8 +63,9 @@ def write_codex_config(path: Path, server_name: str, config: dict, include_actor
         f"[mcp_servers.{server_name}]",
         f"command = {toml_quote(config['command'])}",
         f"args = [{', '.join(toml_quote(arg) for arg in config.get('args', []))}]",
-        "startup_timeout_sec = 60",
     ]
+    if "startup_timeout_sec" in config:
+        lines.append(f"startup_timeout_sec = {int(config['startup_timeout_sec'])}")
 
     env = dict(config.get("env", {}))
     if include_actor_env:
