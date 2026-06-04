@@ -2740,7 +2740,7 @@ def _run_tool_body(mcp_tool_name: str, func, *args, **kwargs):
                     f"length={len(result) if isinstance(result, str) else 'non-str'}"
                 )
                 _fo_init_trace_raw("MCP_RECORD_SUCCESS_SCHEDULE_BEFORE")
-                _record_mcp_tool_success(mcp_tool_name, resolve_actor=False, wait_seconds=0)
+                _record_mcp_tool_success(mcp_tool_name, resolve_actor=True, wait_seconds=0)
                 _fo_init_trace_raw("MCP_RECORD_SUCCESS_SCHEDULE_AFTER")
                 return result
             _record_mcp_tool_success(mcp_tool_name)

@@ -114,6 +114,7 @@ ONBOARDING_TRANSLATIONS = {
     "en": {
         "connected_reason": "Ready to use",
         "needs_restart_reason": "Close and reopen this app to finish connecting it.",
+        "codex_restart_reason": "Restart Codex Desktop to establish a new MCP session.",
         "not_installed_reason": "Install this app first if you want to use FixOnce with it.",
         "failed_reason": "FixOnce could not finish this app connection yet.",
     },
@@ -163,6 +164,34 @@ def _load_runtime_ai_status() -> Dict[str, Dict[str, Any]]:
         with open(path, 'r', encoding='utf-8') as f:
             payload = json.load(f)
         return payload.get("clients", {})
+    except Exception:
+        return {}
+
+
+def _load_live_mcp_session_status() -> Dict[str, Any]:
+    """Load recent MCP session health written by successful tool calls."""
+    try:
+        from core.mcp_health import ACTIVE_THRESHOLD_SECONDS
+        from core.mcp_session_health import get_session_health
+
+        health = get_session_health()
+        if health.get("state") != "connected":
+            return {}
+
+        last_success = health.get("last_success_at")
+        if not _is_recent(last_success, ACTIVE_THRESHOLD_SECONDS):
+            return {}
+
+        actor = (health.get("last_actor") or "").strip().lower()
+        if actor not in SUPPORTED_ONBOARDING_CLIENTS:
+            return {}
+
+        return {
+            "actor": actor,
+            "last_seen": last_success,
+            "actor_source": health.get("last_actor_source") or "mcp_session_health",
+            "actor_confidence": 1.0 if health.get("last_actor_source") else 0.0,
+        }
     except Exception:
         return {}
 
@@ -390,7 +419,11 @@ def build_client_onboarding_payload(status: Optional[SystemStatus] = None, langu
             needs_restart = False
         elif ready:
             state = "needs_restart"
-            reason = _tr(language, "needs_restart_reason")
+            reason = (
+                _tr(language, "codex_restart_reason")
+                if client_key == "codex"
+                else _tr(language, "needs_restart_reason")
+            )
             retry_available = False
             needs_restart = True
         else:
@@ -474,6 +507,7 @@ def _check_mcp() -> MCPStatus:
     status = MCPStatus()
     home = Path.home()
     runtime_clients = _load_runtime_ai_status()
+    live_session = _load_live_mcp_session_status()
     installed_clients = _detect_installed_clients()
 
     clients = {
@@ -489,6 +523,14 @@ def _check_mcp() -> MCPStatus:
         client.actor_source = runtime.get("actor_source")
         client.actor_confidence = float(runtime.get("actor_confidence", 0.0) or 0.0)
         client.connected = _is_recent(client.last_seen)
+
+    live_actor = live_session.get("actor")
+    if live_actor in clients:
+        client = clients[live_actor]
+        client.connected = True
+        client.last_seen = live_session.get("last_seen")
+        client.actor_source = live_session.get("actor_source")
+        client.actor_confidence = float(live_session.get("actor_confidence", 0.0) or 0.0)
 
     # Check Codex config (~/.codex/config.toml)
     codex_config = home / ".codex" / "config.toml"
