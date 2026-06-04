@@ -2579,6 +2579,20 @@ def _compact_text(text: Any, max_chars: int = 360) -> str:
     return window.rstrip() + "..."
 
 
+def _stored_text_appears_incomplete(text: Any) -> bool:
+    """Detect historical records that were already persisted with cut-off text."""
+    clean = " ".join(str(text or "").split())
+    if not clean:
+        return False
+    incomplete_patterns = [
+        r"\([^)]*$",      # unclosed parenthesis
+        r"\s(done|in)$",  # known historical mid-token status truncation
+        r"\.\.\.$",       # explicit old truncation
+        r":\s*$",         # label without content
+    ]
+    return any(re.search(pattern, clean) for pattern in incomplete_patterns)
+
+
 def _memory_item(
     category: str,
     title: str,
@@ -2659,6 +2673,8 @@ def _format_memory_item(item: Dict[str, Any], mode: str = "compact") -> str:
     line += f"\n  Trust: {meta}"
     if why and why != "reason unavailable":
         line += f"\n  Why: {why}"
+    if not compact and any(_stored_text_appears_incomplete(value) for value in (title, detail, why)):
+        line += "\n  Note: stored text appears incomplete."
     return line
 
 
@@ -6787,8 +6803,8 @@ def solution_applied(
 
 def _calculate_similarity(query: str, text: str) -> int:
     """Calculate simple word-based similarity percentage."""
-    query_words = set(query.lower().split())
-    text_words = set(text.lower().split())
+    query_words = _memory_tokens(query)
+    text_words = _memory_tokens(text)
     if not query_words:
         return 0
     matches = len(query_words & text_words)
@@ -6935,8 +6951,12 @@ def _format_smart_override(insight: dict, query: str) -> dict:
         "text": text,
         "confidence": confidence,
         "similarity": similarity,
+        "timestamp": timestamp,
         "date": date_str,
-        "use_count": use_count
+        "use_count": use_count,
+        "type": "insight",
+        "actor": _memory_actor(insight),
+        "status": _trust_status("insight", insight),
     }
 
 
@@ -6953,6 +6973,69 @@ def _search_result_priority(item: Dict[str, Any]) -> int:
         "context_update": 100,
         "activity": 50,
     }.get(item_type, 150)
+
+
+def _search_specificity_score(query_words: set, item: Dict[str, Any]) -> int:
+    """Prefer records that match specific query terms over generic process memories."""
+    text = str(item.get("text", ""))
+    text_words = _memory_tokens(text)
+    if not query_words or not text_words:
+        return 0
+
+    overlap = query_words & text_words
+    score = len(overlap) * 20
+    if len(overlap) == len(query_words):
+        score += 80
+
+    error_terms = {
+        "buffer", "nonetype", "none", "traceback", "exception", "crash",
+        "error", "timeout", "startup", "shortcut",
+    }
+    score += len(overlap & error_terms) * 25
+
+    item_type = str(item.get("type", "")).lower()
+    if item_type in {"solution", "solved bug"} and overlap & error_terms:
+        score += 60
+    if item_type in {"decision", "context_update"} and not (overlap & error_terms):
+        score -= 20
+    return score
+
+
+def _search_match(
+    text: str,
+    match_type: str,
+    similarity: int,
+    confidence: Any,
+    source: Optional[Dict[str, Any]] = None,
+    timestamp_keys: Optional[List[str]] = None,
+    **extra: Any,
+) -> Dict[str, Any]:
+    source = source or {}
+    timestamp_keys = timestamp_keys or ["timestamp", "created_at", "resolved_at", "updated_at"]
+    timestamp = _coalesce_timestamp(source, *timestamp_keys)
+    item = {
+        "text": text,
+        "confidence": confidence,
+        "similarity": similarity,
+        "timestamp": timestamp,
+        "date": timestamp[:10] if timestamp else "unknown",
+        "actor": _memory_actor(source),
+        "status": _trust_status(match_type, source),
+        "type": match_type,
+    }
+    item.update(extra)
+    return item
+
+
+def _format_search_provenance(item: Dict[str, Any]) -> str:
+    return (
+        "Trust: "
+        f"source_type={item.get('type', 'memory')}; "
+        f"actor={item.get('actor', 'source unknown')}; "
+        f"timestamp={_format_trust_timestamp(item.get('timestamp') or item.get('date', ''))}; "
+        f"status={item.get('status', 'active')}; "
+        f"confidence={item.get('confidence', 'unknown')}"
+    )
 
 
 def _format_search_result_text(item: Dict[str, Any], mode: str = "compact") -> str:
@@ -7025,14 +7108,15 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
                     break
             else:
                 # Result from index but not in current insights (decision/avoid)
-                matched_insights.append({
-                    'text': result.text,
-                    'confidence': 80,
-                    'similarity': int(result.score * 100),
-                    'date': result.metadata.get('created_at', 'unknown')[:10],
-                    'use_count': 0,
-                    'type': result.metadata.get('doc_type', 'insight')
-                })
+                matched_insights.append(_search_match(
+                    result.text,
+                    result.metadata.get('doc_type', 'insight'),
+                    int(result.score * 100),
+                    80,
+                    result.metadata,
+                    timestamp_keys=["created_at", "timestamp", "updated_at"],
+                    use_count=0,
+                ))
 
     # === FALLBACK: String matching (if no semantic results) ===
     if not matched_insights:
@@ -7054,14 +7138,14 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
 
         if _memory_text_matches(query_lower, query_words, attempt_text):
             # Exact substring match = high similarity (beats semantic guesses)
-            matched_insights.append({
-                'text': f"❌ **Failed attempt:** {attempt_text}",
-                'confidence': 90,
-                'similarity': 85,  # Exact match beats semantic
-                'date': normalized.get('timestamp', '')[:10] if normalized.get('timestamp') else 'unknown',
-                'use_count': normalized.get('use_count', 0),
-                'type': 'failed_attempt'
-            })
+            matched_insights.append(_search_match(
+                f"❌ **Failed attempt:** {attempt_text}",
+                "failed_attempt",
+                85,  # Exact match beats semantic
+                90,
+                normalized,
+                use_count=normalized.get('use_count', 0),
+            ))
 
     # === CRITICAL: Search debug_sessions (solutions from solution_applied) ===
     debug_sessions = memory.get('debug_sessions', [])
@@ -7086,15 +7170,21 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
         # Match if enough keyword overlap or symptom match
         if keyword_matches >= 2 or symptom_match or _memory_text_matches(query_lower, query_words, combined):
             similarity = max(_calculate_similarity(query, problem), _calculate_similarity(query, solution))
-            matched_insights.append({
-                'text': f"🐛 **Problem:** {ds.get('problem', '')}\n✅ **Solution:** {solution}",
-                'confidence': 90,
-                'similarity': max(similarity, 70 if symptom_match else 50),
-                'date': ds.get('resolved_at', '')[:10] if ds.get('resolved_at') else 'unknown',
-                'use_count': ds.get('reuse_count', 1),
-                'type': 'solution',
-                'files_changed': ds.get('files_changed', [])
-            })
+            root_cause = ds.get("root_cause", "")
+            text = f"🐛 **Problem:** {ds.get('problem', '')}"
+            if root_cause:
+                text += f"\n🧭 **Root cause:** {root_cause}"
+            text += f"\n✅ **Solution:** {solution}"
+            matched_insights.append(_search_match(
+                text,
+                "solution",
+                max(similarity, 70 if symptom_match else 50),
+                90,
+                ds,
+                timestamp_keys=["resolved_at", "timestamp", "created_at", "updated_at"],
+                use_count=ds.get('reuse_count', 1),
+                files_changed=ds.get('files_changed', []),
+            ))
             # Update reuse count
             ds['reuse_count'] = ds.get('reuse_count', 0) + 1
             memory_changed = True
@@ -7112,14 +7202,14 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
         # Check for keyword matches in decision or reason
         if _memory_text_matches(query_lower, query_words, combined):
             # Exact substring match = high similarity (beats semantic guesses)
-            matched_insights.append({
-                'text': f"🔒 **Decision:** {dec.get('decision', '')}\n📝 **Reason:** {dec.get('reason', '')}",
-                'confidence': 95,
-                'similarity': max(70, _calculate_similarity(query, combined)),
-                'date': dec.get('timestamp', '')[:10] if dec.get('timestamp') else 'permanent',
-                'use_count': 0,
-                'type': 'decision'
-            })
+            matched_insights.append(_search_match(
+                f"🔒 **Decision:** {dec.get('decision', '')}\n📝 **Reason:** {dec.get('reason', '')}",
+                "decision",
+                max(70, _calculate_similarity(query, combined)),
+                95,
+                dec,
+                use_count=0,
+            ))
 
     # === Search AVOID patterns ===
     avoids = memory.get('avoid', [])
@@ -7130,14 +7220,14 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
 
         if _memory_text_matches(query_lower, query_words, combined):
             # Exact substring match = high similarity (beats semantic guesses)
-            matched_insights.append({
-                'text': f"⛔ **Avoid:** {av.get('what', '')}\n📝 **Reason:** {av.get('reason', '')}",
-                'confidence': 95,
-                'similarity': max(70, _calculate_similarity(query, combined)),
-                'date': av.get('timestamp', '')[:10] if av.get('timestamp') else 'permanent',
-                'use_count': 0,
-                'type': 'avoid'
-            })
+            matched_insights.append(_search_match(
+                f"⛔ **Avoid:** {av.get('what', '')}\n📝 **Reason:** {av.get('reason', '')}",
+                "avoid",
+                max(70, _calculate_similarity(query, combined)),
+                95,
+                av,
+                use_count=0,
+            ))
 
     # === Search current intent and goal history ===
     intent = memory.get('live_record', {}).get('intent', {})
@@ -7154,14 +7244,15 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
             intent_parts.append(item.get('goal', ''))
     intent_text = " ".join(str(part or "") for part in intent_parts)
     if _memory_text_matches(query_lower, query_words, intent_text):
-        matched_insights.append({
-            'text': f"🎯 **Context update:** {intent_text[:300]}",
-            'confidence': 75,
-            'similarity': max(55, _calculate_similarity(query, intent_text)),
-            'date': intent.get('updated_at', '')[:10] if intent.get('updated_at') else 'current',
-            'use_count': 0,
-            'type': 'context_update'
-        })
+        matched_insights.append(_search_match(
+            f"🎯 **Context update:** {intent_text[:300]}",
+            "context_update",
+            max(55, _calculate_similarity(query, intent_text)),
+            75,
+            intent,
+            timestamp_keys=["updated_at", "timestamp", "created_at"],
+            use_count=0,
+        ))
 
     # === Search component history ===
     components = memory.get('live_record', {}).get('architecture', {}).get('components', [])
@@ -7172,14 +7263,15 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
                 comp_parts.extend([hist.get('action', ''), hist.get('desc', '')])
         comp_text = " ".join(str(part or "") for part in comp_parts)
         if _memory_text_matches(query_lower, query_words, comp_text):
-            matched_insights.append({
-                'text': f"🧩 **Component history:** {comp.get('name', '')}\n{comp.get('desc', '')}",
-                'confidence': 80,
-                'similarity': max(60, _calculate_similarity(query, comp_text)),
-                'date': comp.get('updated_at', '')[:10] if comp.get('updated_at') else 'unknown',
-                'use_count': 0,
-                'type': 'component_history'
-            })
+            matched_insights.append(_search_match(
+                f"🧩 **Component history:** {comp.get('name', '')}\n{comp.get('desc', '')}",
+                "component_history",
+                max(60, _calculate_similarity(query, comp_text)),
+                80,
+                comp,
+                timestamp_keys=["updated_at", "timestamp", "created_at"],
+                use_count=0,
+            ))
 
     # === Search recent activity without converting it into solved bugs ===
     activity_items = memory.get('activity_log', [])
@@ -7198,14 +7290,14 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
             for key in ("human_name", "tool", "file", "cwd", "command", "file_context")
         )
         if _memory_text_matches(query_lower, query_words, activity_text):
-            matched_insights.append({
-                'text': f"📌 **Activity:** {activity_text[:300]}",
-                'confidence': 65,
-                'similarity': max(50, _calculate_similarity(query, activity_text)),
-                'date': str(activity.get('timestamp', ''))[:10] if activity.get('timestamp') else 'recent',
-                'use_count': 0,
-                'type': 'activity'
-            })
+            matched_insights.append(_search_match(
+                f"📌 **Activity:** {activity_text[:300]}",
+                "activity",
+                max(50, _calculate_similarity(query, activity_text)),
+                65,
+                activity,
+                use_count=0,
+            ))
 
     # Save updated use counts
     if matched_indices or memory_changed:
@@ -7218,6 +7310,7 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
         matched_insights.sort(
             key=lambda item: (
                 _search_result_priority(item),
+                _search_specificity_score(query_words, item),
                 item.get('similarity', 0),
                 item.get('confidence', 0),
             ),
@@ -7227,17 +7320,13 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
         expanded = (mode or "compact").lower() == "expanded"
         lines = [f"Found {len(matched_insights)} match(es). Best ({best['similarity']}%, {best.get('type', 'memory')}):"]
         lines.append(f"> {_format_search_result_text(best, mode)}")
-        lines.append(
-            "Trust: "
-            f"source_type={best.get('type', 'memory')}; "
-            f"timestamp={best.get('date', 'unknown')}; "
-            f"confidence={best.get('confidence', 'unknown')}"
-        )
+        lines.append(_format_search_provenance(best))
         if expanded and len(matched_insights) > 1:
             lines.append("")
             lines.append("## Additional Matches")
             for item in matched_insights[1:5]:
                 lines.append(f"- ({item.get('type', 'memory')}, {item.get('similarity', 0)}%) {_format_search_result_text(item, mode)}")
+                lines.append(f"  {_format_search_provenance(item)}")
         return '\n'.join(lines)
 
     else:

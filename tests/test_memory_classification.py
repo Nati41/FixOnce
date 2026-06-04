@@ -438,6 +438,100 @@ class TestMemoryClassification(unittest.TestCase):
         self.assertIn("timestamp=2026-06-03 10:00:00", result)
         self.assertIn("confidence=high", result)
 
+    def test_expanded_brief_marks_historically_incomplete_stored_text(self):
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [{
+                "decision": "update_component_status MCP tool for AI-managed component statuses",
+                "reason": "Allows AI to update component statuses (done/in",
+                "timestamp": "2026-03-01T10:00:00",
+            }],
+            "avoid": [],
+            "debug_sessions": [],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_brief(mode="expanded")
+
+        self.assertIn("Allows AI to update component statuses (done/in", result)
+        self.assertIn("Note: stored text appears incomplete.", result)
+
+    def test_specific_error_query_ranks_root_cause_solution_above_generic_decision(self):
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [{
+                "decision": "Before every Windows build, run runtime QA before TestUser.",
+                "reason": "Avoid repeating costly Windows/TestUser debugging loops.",
+                "timestamp": "2026-06-02T19:53:20",
+            }],
+            "avoid": [],
+            "debug_sessions": [{
+                "problem": "TestUser startup shortcut NoneType.buffer crash",
+                "root_cause": "Startup shortcut launched packaged MCP before stdio stream buffering existed.",
+                "solution": "Guarded NoneType.buffer access and regenerated the startup shortcut.",
+                "symptoms": ["NoneType.buffer"],
+                "resolved_at": "2026-06-03T10:00:00",
+                "actor": "Codex",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_search("TestUser startup shortcut NoneType.buffer", mode="expanded")
+
+        first_result_line = next(line for line in result.splitlines() if line.startswith("> "))
+        self.assertIn("Problem:** TestUser startup shortcut NoneType.buffer crash", first_result_line)
+        self.assertIn("Root cause:** Startup shortcut launched packaged MCP", result)
+
+    def test_expanded_search_includes_provenance_for_all_matches(self):
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [{
+                "decision": "Keep startup shortcut QA before release.",
+                "reason": "Startup shortcut failures are user-visible.",
+                "timestamp": "2026-06-02T19:53:20",
+                "actor": "Claude",
+            }],
+            "avoid": [{
+                "what": "Do not trust startup shortcut telemetry alone.",
+                "reason": "Manual MCP launch can work while shortcut launch is broken.",
+                "timestamp": "2026-06-02T20:00:00",
+                "actor": "Codex",
+            }],
+            "debug_sessions": [{
+                "problem": "Startup shortcut reconnect issue",
+                "solution": "Regenerated startup shortcut and validated MCP launch.",
+                "resolved_at": "2026-06-03T10:00:00",
+                "actor": "Codex",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_search("startup shortcut", mode="expanded")
+
+        trust_lines = [line for line in result.splitlines() if "Trust: source_type=" in line]
+        self.assertGreaterEqual(len(trust_lines), 3)
+        for line in trust_lines:
+            self.assertIn("source_type=", line)
+            self.assertIn("actor=", line)
+            self.assertIn("timestamp=", line)
+            self.assertIn("status=", line)
+            self.assertIn("confidence=", line)
+
     def test_compact_mode_remains_concise(self):
         memory = {
             "live_record": {
