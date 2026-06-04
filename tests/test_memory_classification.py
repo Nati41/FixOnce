@@ -375,6 +375,128 @@ class TestMemoryClassification(unittest.TestCase):
         self.assertNotIn("## Decisions", result)
         self.assertNotIn("Solved bug that should not appear", result)
 
+    def test_compact_brief_does_not_cut_long_solved_bug_mid_sentence(self):
+        long_solution = (
+            "Root cause was startup stdio probing reading NoneType.buffer before the packaged MCP stream existed. "
+            "Final fix guarded stream access, fell back to safe stderr logging, and kept reconnect diagnostics available. "
+            "Avoid lesson is to validate packaged MCP startup before assuming dashboard telemetry is the source of truth."
+        )
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [{
+                "problem": "NoneType.buffer startup crash during MCP reconnect",
+                "solution": long_solution,
+                "resolved_at": "2026-06-03T10:00:00",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_brief()
+
+        solved_line = next(line for line in result.splitlines() if "NoneType.buffer startup crash" in line)
+        self.assertFalse(solved_line.endswith("tru..."))
+        self.assertTrue(solved_line.endswith(".") or solved_line.endswith("..."))
+
+    def test_expanded_brief_returns_complete_long_solved_bug(self):
+        final_sentence = "Next action is to keep this regression covered in packaged MCP startup tests."
+        long_solution = (
+            "Root cause was startup stdio probing reading NoneType.buffer before the packaged MCP stream existed. "
+            "Final fix guarded stream access, fell back to safe stderr logging, and kept reconnect diagnostics available. "
+            "Avoid lesson is to validate packaged MCP startup before assuming dashboard telemetry is the source of truth. "
+            f"{final_sentence}"
+        )
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [{
+                "problem": "NoneType.buffer startup crash during MCP reconnect",
+                "solution": long_solution,
+                "resolved_at": "2026-06-03T10:00:00",
+                "actor": "Codex",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_brief(mode="expanded")
+
+        self.assertIn(final_sentence, result)
+        self.assertIn("source_type=solved bug", result)
+        self.assertIn("actor=Codex", result)
+        self.assertIn("timestamp=2026-06-03 10:00:00", result)
+        self.assertIn("confidence=high", result)
+
+    def test_compact_mode_remains_concise(self):
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [{
+                "problem": "Startup shortcut reconnect issue",
+                "solution": (
+                    "Root cause was a stale shortcut target. "
+                    "Final fix regenerated the shortcut and validated launch. "
+                    "Avoid lesson is to avoid treating dashboard agent detection as proof that the startup shortcut is valid. "
+                    "Next action is to keep shortcut validation in the reconnect QA path. "
+                    "The full expanded recall should preserve the operational detail that a user-visible shortcut can be stale "
+                    "even when the MCP server and dashboard both appear healthy, because the launch path is a separate surface."
+                ),
+                "resolved_at": "2026-06-03T10:00:00",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            compact = server.fo_search("startup shortcut")
+            expanded = server.fo_search("startup shortcut", mode="expanded")
+
+        self.assertLess(len(compact), len(expanded))
+        self.assertIn("Trust: source_type=solution", compact)
+
+    def test_high_value_solved_bug_ranks_above_generic_activity(self):
+        memory = {
+            "live_record": {
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [{
+                "problem": "MCP reconnect failed after startup shortcut launch",
+                "solution": "Final fix regenerated the startup shortcut and preserved MCP config.",
+                "resolved_at": "2026-06-03T10:00:00",
+            }],
+            "activity_log": [{
+                "human_name": "Edited startup shortcut docs for MCP reconnect",
+                "timestamp": "2026-06-03T11:00:00",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_search("MCP reconnect startup shortcut", mode="expanded")
+
+        self.assertIn("Best", result)
+        first_result_line = next(line for line in result.splitlines() if line.startswith("> "))
+        self.assertIn("Problem:** MCP reconnect failed after startup shortcut launch", first_result_line)
+
 
 if __name__ == "__main__":
     unittest.main()

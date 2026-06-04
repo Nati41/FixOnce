@@ -2558,8 +2558,25 @@ def _trust_reason(category: str, item: Dict[str, Any], fallback: str = "") -> st
         or fallback
     )
     if reason:
-        return " ".join(str(reason).split())[:180]
+        return " ".join(str(reason).split())
     return "reason unavailable"
+
+
+def _compact_text(text: Any, max_chars: int = 360) -> str:
+    """Trim compact memory output without cutting in the middle of a sentence."""
+    clean = " ".join(str(text or "").split())
+    if len(clean) <= max_chars:
+        return clean
+
+    window = clean[:max_chars]
+    sentence_end = max(window.rfind("."), window.rfind("!"), window.rfind("?"))
+    if sentence_end >= max_chars // 2:
+        return window[:sentence_end + 1]
+
+    word_end = window.rfind(" ")
+    if word_end >= max_chars // 2:
+        return window[:word_end].rstrip() + "..."
+    return window.rstrip() + "..."
 
 
 def _memory_item(
@@ -2577,8 +2594,8 @@ def _memory_item(
     detail = " ".join(str(detail or "").split())
     return {
         "category": category,
-        "title": title[:220],
-        "detail": detail[:260],
+        "title": title,
+        "detail": detail,
         "timestamp": timestamp,
         "actor": _memory_actor(item),
         "why": _trust_reason(category, item, fallback_reason),
@@ -2608,18 +2625,31 @@ def _safe_int(value: Any, default: int = 0) -> int:
 
 
 def _top_memory_items(items: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
-    return sorted(
+    ranked = sorted(
         [item for item in items if item.get("title")],
         key=lambda item: (item.get("score", 0), item.get("timestamp", "")),
         reverse=True,
-    )[:limit]
+    )
+    return ranked if limit is None else ranked[:limit]
 
 
 def _format_trust_line(item: Dict[str, Any]) -> str:
+    return _format_memory_item(item, mode="compact")
+
+
+def _format_memory_item(item: Dict[str, Any], mode: str = "compact") -> str:
+    compact = (mode or "compact").lower() != "expanded"
     title = item.get("title", "")
     detail = item.get("detail", "")
+    why = item.get("why")
+    if compact:
+        title = _compact_text(title, 260)
+        detail = _compact_text(detail, 320)
+        why = _compact_text(why, 260)
     meta = (
-        f"source={item.get('category')}; actor={item.get('actor')}; "
+        f"source_type={item.get('category')}; source={item.get('category')}; "
+        f"actor={item.get('actor')}; "
+        f"timestamp={_format_trust_timestamp(item.get('timestamp', ''))}; "
         f"when={_format_trust_timestamp(item.get('timestamp', ''))}; "
         f"status={item.get('status')}; confidence={item.get('confidence')}"
     )
@@ -2627,13 +2657,12 @@ def _format_trust_line(item: Dict[str, Any]) -> str:
     if detail and detail != title:
         line += f" — {detail}"
     line += f"\n  Trust: {meta}"
-    why = item.get("why")
     if why and why != "reason unavailable":
         line += f"\n  Why: {why}"
     return line
 
 
-def _collect_core_trust_items(memory: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+def _collect_core_trust_items(memory: Dict[str, Any], expanded: bool = False) -> Dict[str, List[Dict[str, Any]]]:
     live_record = memory.get("live_record", {})
     lessons = live_record.get("lessons", {})
     architecture = live_record.get("architecture", {})
@@ -2829,32 +2858,39 @@ def _collect_core_trust_items(memory: Dict[str, Any]) -> Dict[str, List[Dict[str
         if item["score"] >= 55:
             recent_work.append(item)
 
+    def limit(value: int) -> Optional[int]:
+        return None if expanded else value
+
     return {
-        "decisions": _top_memory_items([item for item in decisions if item.get("status") == "active"], 6),
-        "do_not_repeat": _top_memory_items(do_not_repeat, 7),
-        "solved_bugs": _top_memory_items(solved_bugs, 5),
-        "risks": _top_memory_items(risks, 5),
-        "recent_work": _top_memory_items(recent_work, 5),
-        "handoffs": _top_memory_items(handoffs, 3),
+        "decisions": _top_memory_items([item for item in decisions if item.get("status") == "active"], limit(6)),
+        "do_not_repeat": _top_memory_items(do_not_repeat, limit(7)),
+        "solved_bugs": _top_memory_items(solved_bugs, limit(5)),
+        "risks": _top_memory_items(risks, limit(5)),
+        "recent_work": _top_memory_items(recent_work, limit(5)),
+        "handoffs": _top_memory_items(handoffs, limit(3)),
     }
 
 
-def _format_do_not_repeat_digest(memory: Dict[str, Any], limit: int = 7) -> str:
-    items = _collect_core_trust_items(memory).get("do_not_repeat", [])[:limit]
+def _format_do_not_repeat_digest(memory: Dict[str, Any], limit: int = 7, mode: str = "compact") -> str:
+    expanded = (mode or "compact").lower() == "expanded"
+    items = _collect_core_trust_items(memory, expanded=expanded).get("do_not_repeat", [])
+    if not expanded:
+        items = items[:limit]
     if not items:
         return "No do-not-repeat items found."
-    lines = ["## Do Not Repeat"]
+    lines = [f"## Do Not Repeat ({'Expanded' if expanded else 'Compact'})"]
     for item in items:
-        lines.append(_format_trust_line(item))
+        lines.append(_format_memory_item(item, mode=mode))
     return "\n".join(lines)
 
 
-def _format_deep_project_brief(memory: Dict[str, Any]) -> str:
+def _format_deep_project_brief(memory: Dict[str, Any], mode: str = "compact") -> str:
+    expanded = (mode or "compact").lower() == "expanded"
     project_info = memory.get("project_info", {})
     live_record = memory.get("live_record", {})
     intent = live_record.get("intent", {})
     architecture = live_record.get("architecture", {})
-    items = _collect_core_trust_items(memory)
+    items = _collect_core_trust_items(memory, expanded=expanded)
 
     project_name = project_info.get("name") or "Unknown project"
     project_goal = intent.get("current_goal") or architecture.get("summary") or project_info.get("summary") or "project goal unavailable"
@@ -2863,7 +2899,7 @@ def _format_deep_project_brief(memory: Dict[str, Any]) -> str:
     next_step = intent.get("next_step") or "next step unavailable"
 
     lines = [
-        f"# Deep Onboarding Brief: {project_name}",
+        f"# Deep Onboarding Brief: {project_name} ({'Expanded' if expanded else 'Compact'})",
         "",
         "## Project Context",
         f"- Project goal: {project_goal}",
@@ -2886,7 +2922,7 @@ def _format_deep_project_brief(memory: Dict[str, Any]) -> str:
             lines.append("- None recorded.")
             continue
         for item in section_items:
-            lines.append(_format_trust_line(item))
+            lines.append(_format_memory_item(item, mode=mode))
 
     return "\n".join(lines)
 
@@ -6904,8 +6940,30 @@ def _format_smart_override(insight: dict, query: str) -> dict:
     }
 
 
+def _search_result_priority(item: Dict[str, Any]) -> int:
+    item_type = str(item.get("type", "")).lower()
+    return {
+        "solution": 500,
+        "solved bug": 500,
+        "avoid": 450,
+        "decision": 425,
+        "failed_attempt": 400,
+        "component_history": 250,
+        "insight": 200,
+        "context_update": 100,
+        "activity": 50,
+    }.get(item_type, 150)
+
+
+def _format_search_result_text(item: Dict[str, Any], mode: str = "compact") -> str:
+    text = item.get("text", "")
+    if (mode or "compact").lower() == "expanded":
+        return str(text)
+    return _compact_text(text, 420)
+
+
 @mcp.tool()
-def search_past_solutions(query: str) -> str:
+def search_past_solutions(query: str, mode: str = "compact") -> str:
     """Search for past solutions matching the query."""
     error = _lightweight_tool_gate("search_past_solutions", sync_compliance=False)
     if error:
@@ -7157,10 +7215,29 @@ def search_past_solutions(query: str) -> str:
         _track_roi_event("solution_reused")
 
         # Minimal output - just the best match
-        matched_insights.sort(key=lambda item: item.get('similarity', 0), reverse=True)
+        matched_insights.sort(
+            key=lambda item: (
+                _search_result_priority(item),
+                item.get('similarity', 0),
+                item.get('confidence', 0),
+            ),
+            reverse=True,
+        )
         best = matched_insights[0]
-        lines = [f"Found {len(matched_insights)} match(es). Best ({best['similarity']}%):"]
-        lines.append(f"> {best['text'][:200]}")
+        expanded = (mode or "compact").lower() == "expanded"
+        lines = [f"Found {len(matched_insights)} match(es). Best ({best['similarity']}%, {best.get('type', 'memory')}):"]
+        lines.append(f"> {_format_search_result_text(best, mode)}")
+        lines.append(
+            "Trust: "
+            f"source_type={best.get('type', 'memory')}; "
+            f"timestamp={best.get('date', 'unknown')}; "
+            f"confidence={best.get('confidence', 'unknown')}"
+        )
+        if expanded and len(matched_insights) > 1:
+            lines.append("")
+            lines.append("## Additional Matches")
+            for item in matched_insights[1:5]:
+                lines.append(f"- ({item.get('type', 'memory')}, {item.get('similarity', 0)}%) {_format_search_result_text(item, mode)}")
         return '\n'.join(lines)
 
     else:
@@ -8680,7 +8757,7 @@ def fo_decide(text: str, reason: str, action: str = "add") -> str:
 
 
 @mcp.tool()
-def fo_search(query: str) -> str:
+def fo_search(query: str, mode: str = "compact") -> str:
     """
     Search FixOnce memory for past solutions, decisions, and insights.
 
@@ -8688,17 +8765,21 @@ def fo_search(query: str) -> str:
 
     Args:
         query: Search query (error message, topic, or keywords)
+        mode: "compact" for concise recall, "expanded" for complete matched records
     """
-    return search_past_solutions(query)
+    return search_past_solutions(query, mode=mode)
 
 
 @mcp.tool()
-def fo_brief() -> str:
+def fo_brief(mode: str = "compact") -> str:
     """
     Return a deep onboarding brief for a new agent.
 
     This is intentionally deeper than fo_init and grouped by trust category:
     Decisions, Do Not Repeat, Solved Bugs, Risks, Recent Work, and Handoffs.
+
+    Args:
+        mode: "compact" for concise onboarding, "expanded" for full item text and all ranked records.
     """
     error, context = _universal_gate("fo_brief")
     if error:
@@ -8708,13 +8789,16 @@ def fo_brief() -> str:
     memory = _load_project_lightweight(session.project_id)
     if not memory:
         return "No project memory found."
-    return context + _format_deep_project_brief(memory)
+    return context + _format_deep_project_brief(memory, mode=mode)
 
 
 @mcp.tool()
-def fo_do_not_repeat() -> str:
+def fo_do_not_repeat(mode: str = "compact") -> str:
     """
     Return the compact do-not-repeat digest for future agents.
+
+    Args:
+        mode: "compact" for concise digest, "expanded" for full item text and all ranked records.
     """
     error, context = _universal_gate("fo_do_not_repeat")
     if error:
@@ -8724,7 +8808,7 @@ def fo_do_not_repeat() -> str:
     memory = _load_project_lightweight(session.project_id)
     if not memory:
         return "No project memory found."
-    return context + _format_do_not_repeat_digest(memory)
+    return context + _format_do_not_repeat_digest(memory, mode=mode)
 
 
 @mcp.tool()
