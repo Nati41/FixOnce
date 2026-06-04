@@ -22,6 +22,7 @@ import functools
 import builtins
 import tempfile
 import traceback
+import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dataclasses import replace
 from pathlib import Path
@@ -2385,6 +2386,103 @@ def _normalize_insight(insight) -> dict:
         return _create_insight(str(insight))
 
 
+_MEMORY_SEARCH_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "can",
+    "could", "for", "from", "has", "have", "in", "is", "it", "not", "of",
+    "on", "or", "that", "the", "this", "to", "was", "were", "with",
+}
+
+_SOLVED_BUG_PROBLEM_TERMS = {
+    "bug", "broken", "crash", "crashed", "error", "exception", "fail", "failed",
+    "failure", "hang", "login", "mcp", "none", "nonetype", "reconnect", "repair",
+    "shortcut", "startup", "testuser", "timeout", "toml", "traceback",
+}
+
+_SOLVED_BUG_RESOLUTION_TERMS = {
+    "commit", "committed", "fix", "fixed", "hardening", "no longer", "prevent",
+    "prevented", "repair", "repaired", "resolve", "resolved", "restore",
+    "restored", "success", "successful", "works", "working",
+}
+
+
+def _memory_tokens(text: str) -> set:
+    words = re.findall(r"[a-z0-9_]+", (text or "").lower())
+    tokens = set(words) - _MEMORY_SEARCH_STOPWORDS
+    for word in words:
+        if word == "nonetype":
+            tokens.add("none")
+            tokens.add("buffer")
+    return tokens
+
+
+def _memory_text_matches(query_lower: str, query_words: set, text: str) -> bool:
+    text_lower = (text or "").lower()
+    if not text_lower:
+        return False
+    if query_lower and query_lower in text_lower:
+        return True
+    text_words = _memory_tokens(text_lower)
+    if not query_words:
+        return False
+    overlap = query_words & text_words
+    if len(query_words) <= 2:
+        return len(overlap) == len(query_words)
+    return len(overlap) >= 2
+
+
+def _looks_like_solved_bug_text(*parts: str) -> bool:
+    text = " ".join(str(part or "") for part in parts).lower()
+    if not text.strip():
+        return False
+
+    tokens = _memory_tokens(text)
+    problem_hit = bool(tokens & _SOLVED_BUG_PROBLEM_TERMS)
+    resolution_hit = bool(tokens & _SOLVED_BUG_RESOLUTION_TERMS) or any(
+        phrase in text for phrase in _SOLVED_BUG_RESOLUTION_TERMS if " " in phrase
+    )
+    return problem_hit and resolution_hit
+
+
+def _maybe_record_solved_bug_from_memory_event(
+    memory: Dict[str, Any],
+    source: str,
+    problem: str,
+    solution: str,
+    files_changed: Optional[list] = None,
+) -> bool:
+    if not _looks_like_solved_bug_text(problem, solution):
+        return False
+
+    problem = (problem or solution or "").strip()[:240]
+    solution = (solution or problem or "").strip()[:500]
+    if not problem or not solution:
+        return False
+
+    debug_sessions = memory.setdefault("debug_sessions", [])
+    candidate_key = _memory_tokens(f"{problem} {solution}")
+    for existing in debug_sessions:
+        existing_key = _memory_tokens(f"{existing.get('problem', '')} {existing.get('solution', '')}")
+        if candidate_key and existing_key:
+            overlap = candidate_key & existing_key
+            if len(overlap) >= min(4, max(2, len(candidate_key) // 2)):
+                return False
+
+    debug_sessions.append({
+        "id": f"fix_auto_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(debug_sessions) + 1}",
+        "problem": problem,
+        "root_cause": "",
+        "solution": solution,
+        "symptoms": [problem[:120]],
+        "files_changed": files_changed or [],
+        "resolved_at": datetime.now().isoformat(),
+        "importance": "high",
+        "reuse_count": 0,
+        "source": source,
+        "auto_classified": True,
+    })
+    return True
+
+
 def _calculate_insight_score(insight: dict) -> float:
     """
     Calculate a score for ranking insights.
@@ -4676,6 +4774,13 @@ def update_live_record(section: str, data: str) -> str:
             if linked_error:
                 pre_action_warning += f"\n🔗 **Auto-linked to error:** {linked_error.get('message', '')[:50]}..."
 
+            _maybe_record_solved_bug_from_memory_event(
+                memory,
+                source="auto_classified:insight",
+                problem=update_data.get('insight', ''),
+                solution=update_data.get('insight', ''),
+            )
+
         if 'failed_attempt' in update_data:
             # Failed attempts also get metadata - marked as type to prevent decay
             new_attempt = _create_insight(update_data['failed_attempt'])
@@ -4718,6 +4823,17 @@ def update_live_record(section: str, data: str) -> str:
         lr['intent'].update(update_data)
         # Always update timestamp when intent changes
         lr['intent']['updated_at'] = datetime.now().isoformat()
+        _maybe_record_solved_bug_from_memory_event(
+            memory,
+            source="auto_classified:intent",
+            problem=update_data.get('current_goal') or update_data.get('last_change', ''),
+            solution=" ".join(
+                str(update_data.get(key, ""))
+                for key in ("last_change", "why", "next_step", "last_file")
+                if update_data.get(key)
+            ),
+            files_changed=[update_data.get('last_file', '')] if update_data.get('last_file') else [],
+        )
     else:
         # REPLACE mode for other sections
         if section not in lr:
@@ -4983,6 +5099,17 @@ def _update_work_context_lightweight(
     memory['live_record']['intent'].update(update_data)
     memory['live_record']['intent']['updated_at'] = datetime.now().isoformat()
     memory['live_record']['updated_at'] = datetime.now().isoformat()
+    _maybe_record_solved_bug_from_memory_event(
+        memory,
+        source="auto_classified:fo_sync",
+        problem=update_data.get('current_goal') or update_data.get('last_change', ''),
+        solution=" ".join(
+            str(update_data.get(key, ""))
+            for key in ("last_change", "why", "next_step", "last_file")
+            if update_data.get(key)
+        ),
+        files_changed=[update_data.get('last_file', '')] if update_data.get('last_file') else [],
+    )
 
     _save_project_lightweight(session.project_id, memory)
     return "Synced."
@@ -5163,6 +5290,12 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
         "importance": "permanent",
         "forced": force if force else None
     })
+    _maybe_record_solved_bug_from_memory_event(
+        memory,
+        source="auto_classified:decision",
+        problem=decision,
+        solution=reason or decision,
+    )
 
     _save_project(session.project_id, memory)
 
@@ -5405,6 +5538,13 @@ def update_component_status(name: str, status: str, desc: str = "") -> str:
     else:
         arch['components'] = components
     arch['updated_at'] = datetime.now().isoformat()
+    if status == "done":
+        _maybe_record_solved_bug_from_memory_event(
+            memory,
+            source="auto_classified:component_status",
+            problem=name,
+            solution=desc or action,
+        )
 
     _save_project(session.project_id, memory)
 
@@ -6373,9 +6513,10 @@ def search_past_solutions(query: str) -> str:
     failed = lessons.get('failed_attempts', [])
 
     query_lower = query.lower()
-    matches = []
+    query_words = _memory_tokens(query_lower)
     matched_insights = []
     matched_indices = []
+    memory_changed = False
 
     # === SEMANTIC SEARCH (if available) ===
     semantic_results = []
@@ -6433,7 +6574,7 @@ def search_past_solutions(query: str) -> str:
             normalized = _normalize_insight(insight)
             insight_text = normalized.get('text', '')
 
-            if query_lower in insight_text.lower():
+            if _memory_text_matches(query_lower, query_words, insight_text):
                 override = _format_smart_override(normalized, query)
                 matched_insights.append(override)
                 matched_indices.append(i)
@@ -6445,7 +6586,7 @@ def search_past_solutions(query: str) -> str:
         normalized = _normalize_insight(attempt)
         attempt_text = normalized.get('text', '')
 
-        if query_lower in attempt_text.lower():
+        if _memory_text_matches(query_lower, query_words, attempt_text):
             # Exact substring match = high similarity (beats semantic guesses)
             matched_insights.append({
                 'text': f"❌ **Failed attempt:** {attempt_text}",
@@ -6461,12 +6602,13 @@ def search_past_solutions(query: str) -> str:
     noise_words = {'error', 'failed', 'cannot', 'undefined', 'null', 'is', 'not',
                    'the', 'a', 'an', 'to', 'of', 'in', 'at', 'on', 'for', 'with',
                    'file', 'found', 'could', 'was', 'been', 'has', 'have', 'from'}
-    query_words = set(query_lower.split()) - noise_words
+    query_words = query_words - noise_words
 
     for ds in debug_sessions:
         problem = ds.get('problem', '').lower()
         solution = ds.get('solution', '')
         symptoms = [s.lower() for s in ds.get('symptoms', [])]
+        combined = f"{problem} {solution} {' '.join(symptoms)}"
 
         # Check for keyword matches
         problem_words = set(problem.split()) - noise_words
@@ -6476,8 +6618,8 @@ def search_past_solutions(query: str) -> str:
         symptom_match = any(s in query_lower for s in symptoms if s)
 
         # Match if enough keyword overlap or symptom match
-        if keyword_matches >= 2 or symptom_match or query_lower in problem:
-            similarity = _calculate_similarity(query, problem)
+        if keyword_matches >= 2 or symptom_match or _memory_text_matches(query_lower, query_words, combined):
+            similarity = max(_calculate_similarity(query, problem), _calculate_similarity(query, solution))
             matched_insights.append({
                 'text': f"🐛 **Problem:** {ds.get('problem', '')}\n✅ **Solution:** {solution}",
                 'confidence': 90,
@@ -6489,6 +6631,7 @@ def search_past_solutions(query: str) -> str:
             })
             # Update reuse count
             ds['reuse_count'] = ds.get('reuse_count', 0) + 1
+            memory_changed = True
 
     # === Search DECISIONS ===
     decisions = memory.get('decisions', [])
@@ -6498,14 +6641,15 @@ def search_past_solutions(query: str) -> str:
 
         dec_text = dec.get('decision', '').lower()
         dec_reason = dec.get('reason', '').lower()
+        combined = f"{dec_text} {dec_reason}"
 
         # Check for keyword matches in decision or reason
-        if query_lower in dec_text or query_lower in dec_reason:
+        if _memory_text_matches(query_lower, query_words, combined):
             # Exact substring match = high similarity (beats semantic guesses)
             matched_insights.append({
                 'text': f"🔒 **Decision:** {dec.get('decision', '')}\n📝 **Reason:** {dec.get('reason', '')}",
                 'confidence': 95,
-                'similarity': 90,  # Exact match beats semantic
+                'similarity': max(70, _calculate_similarity(query, combined)),
                 'date': dec.get('timestamp', '')[:10] if dec.get('timestamp') else 'permanent',
                 'use_count': 0,
                 'type': 'decision'
@@ -6516,26 +6660,96 @@ def search_past_solutions(query: str) -> str:
     for av in avoids:
         av_text = av.get('what', '').lower()
         av_reason = av.get('reason', '').lower()
+        combined = f"{av_text} {av_reason}"
 
-        if query_lower in av_text or query_lower in av_reason:
+        if _memory_text_matches(query_lower, query_words, combined):
             # Exact substring match = high similarity (beats semantic guesses)
             matched_insights.append({
                 'text': f"⛔ **Avoid:** {av.get('what', '')}\n📝 **Reason:** {av.get('reason', '')}",
                 'confidence': 95,
-                'similarity': 90,  # Exact match beats semantic
+                'similarity': max(70, _calculate_similarity(query, combined)),
                 'date': av.get('timestamp', '')[:10] if av.get('timestamp') else 'permanent',
                 'use_count': 0,
                 'type': 'avoid'
             })
 
+    # === Search current intent and goal history ===
+    intent = memory.get('live_record', {}).get('intent', {})
+    intent_parts = [
+        intent.get('current_goal', ''),
+        intent.get('work_area', ''),
+        intent.get('why', ''),
+        intent.get('last_change', ''),
+        intent.get('last_file', ''),
+        intent.get('next_step', ''),
+    ]
+    for item in intent.get('goal_history', []):
+        if isinstance(item, dict):
+            intent_parts.append(item.get('goal', ''))
+    intent_text = " ".join(str(part or "") for part in intent_parts)
+    if _memory_text_matches(query_lower, query_words, intent_text):
+        matched_insights.append({
+            'text': f"🎯 **Context update:** {intent_text[:300]}",
+            'confidence': 75,
+            'similarity': max(55, _calculate_similarity(query, intent_text)),
+            'date': intent.get('updated_at', '')[:10] if intent.get('updated_at') else 'current',
+            'use_count': 0,
+            'type': 'context_update'
+        })
+
+    # === Search component history ===
+    components = memory.get('live_record', {}).get('architecture', {}).get('components', [])
+    for comp in components:
+        comp_parts = [comp.get('name', ''), comp.get('status', ''), comp.get('desc', '')]
+        for hist in comp.get('history', []):
+            if isinstance(hist, dict):
+                comp_parts.extend([hist.get('action', ''), hist.get('desc', '')])
+        comp_text = " ".join(str(part or "") for part in comp_parts)
+        if _memory_text_matches(query_lower, query_words, comp_text):
+            matched_insights.append({
+                'text': f"🧩 **Component history:** {comp.get('name', '')}\n{comp.get('desc', '')}",
+                'confidence': 80,
+                'similarity': max(60, _calculate_similarity(query, comp_text)),
+                'date': comp.get('updated_at', '')[:10] if comp.get('updated_at') else 'unknown',
+                'use_count': 0,
+                'type': 'component_history'
+            })
+
+    # === Search recent activity without converting it into solved bugs ===
+    activity_items = memory.get('activity_log', [])
+    try:
+        activity_file = USER_DATA_DIR / "activity_log.json"
+        if activity_file.exists():
+            with activity_file.open("r", encoding="utf-8") as handle:
+                activity_items.extend(json.load(handle).get("activities", [])[:100])
+    except Exception:
+        activity_items = memory.get('activity_log', [])
+    for activity in activity_items[:100]:
+        if not isinstance(activity, dict):
+            continue
+        activity_text = " ".join(
+            str(activity.get(key, "") or "")
+            for key in ("human_name", "tool", "file", "cwd", "command", "file_context")
+        )
+        if _memory_text_matches(query_lower, query_words, activity_text):
+            matched_insights.append({
+                'text': f"📌 **Activity:** {activity_text[:300]}",
+                'confidence': 65,
+                'similarity': max(50, _calculate_similarity(query, activity_text)),
+                'date': str(activity.get('timestamp', ''))[:10] if activity.get('timestamp') else 'recent',
+                'use_count': 0,
+                'type': 'activity'
+            })
+
     # Save updated use counts
-    if matched_indices:
+    if matched_indices or memory_changed:
         _save_project_lightweight(session.project_id, memory)
 
     if matched_insights:
         _track_roi_event("solution_reused")
 
         # Minimal output - just the best match
+        matched_insights.sort(key=lambda item: item.get('similarity', 0), reverse=True)
         best = matched_insights[0]
         lines = [f"Found {len(matched_insights)} match(es). Best ({best['similarity']}%):"]
         lines.append(f"> {best['text'][:200]}")
