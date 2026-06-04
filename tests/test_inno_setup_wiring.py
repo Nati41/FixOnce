@@ -40,6 +40,16 @@ class TestInnoSetupWiring(unittest.TestCase):
         self.assertIn("dontcreatekey", registry_run_lines[0])
         self.assertIn("uninsdeletevalue", registry_run_lines[0])
 
+    def test_legacy_startup_shortcut_is_removed_on_install_and_uninstall(self):
+        startup_delete_lines = [
+            line
+            for line in self.inno_text.splitlines()
+            if "{userstartup}\\FixOnceServer.lnk" in line and line.strip().startswith("Type: files;")
+        ]
+        self.assertEqual(len(startup_delete_lines), 2)
+        self.assertIn("[InstallDelete]", self.inno_text)
+        self.assertIn("[UninstallDelete]", self.inno_text)
+
     def test_success_message_happens_after_install_phase(self):
         self.assertIn("ssDone", self.inno_text)
         self.assertIn("FixOnce is ready", self.inno_text)

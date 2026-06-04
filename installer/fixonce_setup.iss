@@ -94,11 +94,18 @@ Name: "{userappdata}\FixOnce\extension"; Permissions: users-full
 ; Setup waits for bootstrap and fails if it returns a non-zero exit code.
 Filename: "{app}\{#MyAppExeName}"; Parameters: "--bootstrap"; StatusMsg: "Setting up FixOnce (server, autostart, dashboard)..."; Flags: waituntilterminated skipifdoesntexist
 
+[InstallDelete]
+; Remove legacy per-user Startup shortcut from older builds before bootstrap.
+Type: files; Name: "{userstartup}\FixOnceServer.lnk"
+
 [UninstallRun]
 ; Stop FixOnce before uninstall
 Filename: "taskkill"; Parameters: "/F /IM {#MyAppExeName}"; Flags: runhidden; RunOnceId: "StopFixOnce"
 
 [UninstallDelete]
+; Remove legacy per-user Startup shortcut from older builds.
+Type: files; Name: "{userstartup}\FixOnceServer.lnk"
+
 ; Clean up AppData on uninstall (optional - commented out to preserve user data)
 ; Type: filesandordirs; Name: "{userappdata}\FixOnce"
 
