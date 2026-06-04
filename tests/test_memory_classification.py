@@ -254,6 +254,180 @@ class TestMemoryClassification(unittest.TestCase):
         self.assertIn("MCP reconnect timeout", result)
         self.assertIn("Next step: Implement deep onboarding brief", result)
 
+    def test_project_vision_appears_before_tactical_context_in_brief(self):
+        memory = {
+            "project_info": {"name": "Mario Builder", "working_dir": "/tmp/mario"},
+            "live_record": {
+                "vision": {
+                    "mission": [{
+                        "text": "Help players create expressive platforming levels.",
+                        "reason": "The project exists to make creative level design accessible.",
+                        "created_at": "2026-06-01T10:00:00",
+                        "actor": "designer",
+                        "status": "active",
+                    }],
+                    "current_direction": [{
+                        "text": "Prioritize a polished editor loop before adding more enemies.",
+                        "reason": "The editor loop defines the core product experience.",
+                        "created_at": "2026-06-01T10:05:00",
+                        "actor": "designer",
+                        "status": "active",
+                    }],
+                    "non_negotiables": [],
+                    "success_criteria": [],
+                    "long_term_goal": [],
+                    "out_of_scope": [],
+                },
+                "intent": {"current_goal": "Implement tile palette"},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_brief(mode="expanded")
+
+        self.assertLess(result.index("## Project Vision"), result.index("## Project Context"))
+        self.assertIn("Help players create expressive platforming levels", result)
+        self.assertIn("Prioritize a polished editor loop", result)
+
+    def test_non_negotiables_appear_in_deep_brief(self):
+        memory = {
+            "live_record": {
+                "vision": {
+                    "mission": [],
+                    "current_direction": [],
+                    "non_negotiables": [{
+                        "text": "Never store customer secrets in plaintext.",
+                        "reason": "Privacy and compliance are product guardrails.",
+                        "created_at": "2026-06-01T10:00:00",
+                        "actor": "security",
+                        "status": "active",
+                    }],
+                    "success_criteria": [],
+                    "long_term_goal": [],
+                    "out_of_scope": [],
+                },
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_brief(mode="expanded")
+
+        self.assertIn("### Non-Negotiables", result)
+        self.assertIn("Never store customer secrets in plaintext", result)
+
+    def test_superseded_vision_remains_traceable_in_expanded_brief(self):
+        memory = {
+            "live_record": {
+                "vision": {},
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_file = self._activate_temp_session(Path(temp_dir), memory)
+            server.update_live_record("vision", json.dumps({
+                "mission": "Help teams understand customer health.",
+                "reason": "Initial product framing.",
+            }))
+            server.update_live_record("vision", json.dumps({
+                "mission": "Help account teams prevent customer churn.",
+                "reason": "Narrowed the mission around retention.",
+            }))
+
+            result = server.fo_brief(mode="expanded")
+            saved = json.loads(project_file.read_text(encoding="utf-8"))
+
+        mission_items = saved["live_record"]["vision"]["mission"]
+        self.assertEqual(mission_items[0]["status"], "superseded")
+        self.assertIsNotNone(mission_items[0]["superseded_by"])
+        self.assertIn("Help teams understand customer health", result)
+        self.assertIn("status=superseded", result)
+        self.assertIn("Reason for change: Narrowed the mission around retention", result)
+
+    def test_mission_and_success_criteria_are_distinguishable(self):
+        memory = {
+            "live_record": {
+                "vision": {},
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_file = self._activate_temp_session(Path(temp_dir), memory)
+
+            server.update_live_record("vision", json.dumps({
+                "mission": "Make loan approvals understandable to applicants.",
+                "success_criteria": [
+                    "Applicants can explain every approval or rejection reason.",
+                    "Support tickets about unclear decisions decrease."
+                ],
+                "reason": "Separate purpose from measurable outcomes.",
+            }))
+            saved = json.loads(project_file.read_text(encoding="utf-8"))
+
+        vision = saved["live_record"]["vision"]
+        self.assertEqual(vision["mission"][0]["text"], "Make loan approvals understandable to applicants.")
+        self.assertEqual(len(vision["success_criteria"]), 2)
+        self.assertNotEqual(vision["mission"][0]["text"], vision["success_criteria"][0]["text"])
+
+    def test_vision_audit_checks_required_project_purpose_fields(self):
+        memory = {
+            "live_record": {
+                "vision": {
+                    "mission": [{
+                        "text": "Make operations work visible across teams.",
+                        "created_at": "2026-06-01T10:00:00",
+                        "actor": "product",
+                        "status": "active",
+                    }],
+                    "success_criteria": [],
+                    "non_negotiables": [],
+                },
+                "intent": {},
+                "architecture": {"components": []},
+                "lessons": {"insights": [], "failed_attempts": []},
+            },
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+            audit = json.loads(server.fo_vision(action="audit"))
+
+        self.assertEqual(audit["status"], "needs_context")
+        self.assertIn("missing_success_criteria", audit["issues"])
+        self.assertIn("missing_non_negotiables", audit["issues"])
+
+    def test_vision_platform_logic_has_no_project_specific_content(self):
+        forbidden = {
+            "fixonce", "mcp", "codex", "claude", "cursor", "testuser",
+            "windows", "installer", "startup", "shortcut",
+        }
+        platform_terms = set(server._VISION_FIELDS) | set(server._TRUST_KEYWORDS_HIGH_VALUE)
+        self.assertFalse(platform_terms & forbidden)
+
     def test_do_not_repeat_digest_includes_avoid_failed_and_solved_bug_lessons(self):
         memory = {
             "live_record": {

@@ -2396,6 +2396,7 @@ _QUALITY_TEXT_FIELDS = {
     "insight": ("text",),
     "handoff": ("what_was_done", "what_remains", "current_risk", "next_step"),
     "intent": ("current_goal", "next_step"),
+    "vision": ("text", "reason"),
 }
 
 
@@ -2469,6 +2470,197 @@ def _create_handoff_record(from_actor: str, to_actor: str, timestamp: Optional[s
         "next_step": details.get("next_step", ""),
     }
     return _attach_memory_quality_audit("handoff", record)
+
+
+_VISION_FIELDS = {
+    "mission": "Mission",
+    "long_term_goal": "Long-Term Goal",
+    "current_direction": "Current Strategic Direction",
+    "non_negotiables": "Non-Negotiables",
+    "success_criteria": "Success Criteria",
+    "out_of_scope": "Out Of Scope",
+}
+
+
+def _normalize_vision_key(key: str) -> str:
+    normalized = str(key or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "goal": "long_term_goal",
+        "long_term": "long_term_goal",
+        "direction": "current_direction",
+        "current_strategic_direction": "current_direction",
+        "non_negotiable": "non_negotiables",
+        "guardrail": "non_negotiables",
+        "guardrails": "non_negotiables",
+        "success": "success_criteria",
+        "criteria": "success_criteria",
+        "scope_exclusions": "out_of_scope",
+    }
+    normalized = aliases.get(normalized, normalized)
+    return normalized if normalized in _VISION_FIELDS else ""
+
+
+def _ensure_vision_store(memory: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    live_record = memory.setdefault("live_record", {})
+    vision = live_record.setdefault("vision", {})
+    for key in _VISION_FIELDS:
+        current = vision.get(key, [])
+        if isinstance(current, str):
+            current = [{"text": current}]
+        elif isinstance(current, dict):
+            current = [current]
+        elif not isinstance(current, list):
+            current = []
+        normalized_items = []
+        for item in current:
+            if isinstance(item, str):
+                item = {"text": item}
+            if isinstance(item, dict):
+                item.setdefault("source_type", "vision")
+                item.setdefault("status", "active")
+                normalized_items.append(item)
+        vision[key] = normalized_items
+    return vision
+
+
+def _create_vision_record(text: str, reason: str = "", status: str = "active") -> Dict[str, Any]:
+    actor_identity = _resolve_actor_identity()
+    record = {
+        "id": f"vision_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}",
+        "text": str(text or "").strip(),
+        "reason": str(reason or "").strip(),
+        "created_at": datetime.now().isoformat(),
+        "actor": actor_identity.get("editor", "unknown"),
+        "actor_source": actor_identity.get("source", "none"),
+        "actor_confidence": actor_identity.get("confidence", 0.0),
+        "status": status,
+        "superseded_by": None,
+        "reason_for_change": "",
+    }
+    return _attach_memory_quality_audit("vision", record)
+
+
+def _active_vision_items(vision: Dict[str, Any], key: str) -> List[Dict[str, Any]]:
+    items = vision.get(key, [])
+    if not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, dict) and item.get("status", "active") == "active"]
+
+
+def _update_vision_memory(memory: Dict[str, Any], updates: Dict[str, Any], reason: str = "") -> int:
+    vision = _ensure_vision_store(memory)
+    changed = 0
+    for raw_key, raw_value in updates.items():
+        key = _normalize_vision_key(raw_key)
+        if not key:
+            continue
+        values = raw_value if isinstance(raw_value, list) else [raw_value]
+        for value in values:
+            if isinstance(value, dict):
+                text = value.get("text") or value.get("value") or value.get("mission") or ""
+                item_reason = value.get("reason", reason)
+            else:
+                text = str(value or "")
+                item_reason = reason
+            if not text.strip():
+                continue
+            new_record = _create_vision_record(text, item_reason)
+            for existing in _active_vision_items(vision, key):
+                existing["status"] = "superseded"
+                existing["superseded_by"] = new_record["id"]
+                existing["reason_for_change"] = item_reason or "Updated vision item."
+            vision[key].append(new_record)
+            changed += 1
+    memory.setdefault("live_record", {})["vision"] = vision
+    memory["live_record"]["updated_at"] = datetime.now().isoformat()
+    return changed
+
+
+def _format_vision_record(item: Dict[str, Any], mode: str = "compact") -> str:
+    compact = (mode or "compact").lower() != "expanded"
+    text = item.get("text", "")
+    reason = item.get("reason", "")
+    if compact:
+        text = _compact_text(text, 260)
+        reason = _compact_text(reason, 220)
+    line = f"- {text}"
+    if reason:
+        line += f"\n  Why: {reason}"
+    line += (
+        "\n  Trust: "
+        f"source_type=vision; actor={_memory_actor(item)}; "
+        f"timestamp={_format_trust_timestamp(_coalesce_timestamp(item, 'created_at', 'timestamp'))}; "
+        f"status={item.get('status', 'active')}; confidence={item.get('confidence', 'medium')}"
+    )
+    if item.get("superseded_by"):
+        line += f"; superseded_by={item.get('superseded_by')}"
+    if item.get("reason_for_change"):
+        line += f"\n  Reason for change: {item.get('reason_for_change')}"
+    return line
+
+
+def _format_project_vision(memory: Dict[str, Any], mode: str = "compact") -> str:
+    vision = _ensure_vision_store(memory)
+    expanded = (mode or "compact").lower() == "expanded"
+    lines = ["## Project Vision"]
+    any_items = False
+
+    for key in ("mission", "current_direction", "non_negotiables", "success_criteria", "long_term_goal", "out_of_scope"):
+        items = vision.get(key, [])
+        visible = [item for item in items if isinstance(item, dict) and (expanded or item.get("status", "active") == "active")]
+        if not visible:
+            continue
+        any_items = True
+        lines.append(f"### {_VISION_FIELDS[key]}")
+        for item in visible:
+            lines.append(_format_vision_record(item, mode=mode))
+
+    if not any_items:
+        lines.append("- No project vision recorded.")
+    return "\n".join(lines)
+
+
+def _audit_project_vision(memory: Dict[str, Any], stale_days: int = 180) -> Dict[str, Any]:
+    vision = _ensure_vision_store(memory)
+    issues = []
+    now = datetime.now()
+
+    required = ("mission", "success_criteria", "non_negotiables")
+    for key in required:
+        if not _active_vision_items(vision, key):
+            issues.append(f"missing_{key}")
+
+    for key, items in vision.items():
+        for item in items:
+            if not isinstance(item, dict) or item.get("status", "active") != "active":
+                continue
+            timestamp = _coalesce_timestamp(item, "created_at", "timestamp")
+            if not timestamp:
+                issues.append(f"{key}_missing_timestamp")
+                continue
+            try:
+                created = datetime.fromisoformat(timestamp.replace("Z", ""))
+                if (now - created).days > stale_days:
+                    issues.append(f"{key}_stale")
+            except Exception:
+                issues.append(f"{key}_invalid_timestamp")
+
+    active_non_negotiables = [item.get("text", "").lower() for item in _active_vision_items(vision, "non_negotiables")]
+    for idx, text in enumerate(active_non_negotiables):
+        for other in active_non_negotiables[idx + 1:]:
+            text_tokens = _memory_tokens(text)
+            other_tokens = _memory_tokens(other)
+            if text_tokens & other_tokens and (
+                ("must not" in text and "must " in other and "must not" not in other)
+                or ("must not" in other and "must " in text and "must not" not in text)
+            ):
+                issues.append("conflicting_non_negotiables")
+
+    return {
+        "status": "pass" if not issues else "needs_context",
+        "checked_at": datetime.now().isoformat(),
+        "issues": sorted(set(issues)),
+    }
 
 
 _MEMORY_SEARCH_STOPWORDS = {
@@ -3008,6 +3200,8 @@ def _format_deep_project_brief(memory: Dict[str, Any], mode: str = "compact") ->
 
     lines = [
         f"# Deep Onboarding Brief: {project_name} ({'Expanded' if expanded else 'Compact'})",
+        "",
+        _format_project_vision(memory, mode=mode),
         "",
         "## Project Context",
         f"- Project goal: {project_goal}",
@@ -5233,7 +5427,7 @@ def update_live_record(section: str, data: str) -> str:
     Update a section of the Live Record.
 
     Args:
-        section: One of 'gps', 'architecture', 'intent', 'lessons'
+        section: One of 'gps', 'architecture', 'intent', 'lessons', 'vision'
         data: JSON string with the data to update
 
     For 'lessons', use: {"insight": "..."} or {"failed_attempt": "..."}
@@ -5252,6 +5446,9 @@ def update_live_record(section: str, data: str) -> str:
     - last_file: Last file that was worked on
     - next_step: What should be done next
 
+    For 'vision', use project-level purpose and guardrails:
+    {"mission": "...", "current_direction": "...", "non_negotiables": ["..."], "success_criteria": ["..."], "out_of_scope": ["..."], "reason": "..."}
+
     For other sections, data REPLACES the section.
     """
     error, context = _universal_gate("update_live_record")
@@ -5268,6 +5465,8 @@ def update_live_record(section: str, data: str) -> str:
         update_data = json.loads(data) if isinstance(data, str) else data
     except json.JSONDecodeError:
         return f"Error: Invalid JSON: {data}"
+    if not isinstance(update_data, dict):
+        return "Error: data must be a JSON object."
 
     project_id = session.project_id
     memory = _load_project(project_id)
@@ -5330,6 +5529,20 @@ def update_live_record(section: str, data: str) -> str:
             new_attempt = _create_insight(update_data['failed_attempt'])
             new_attempt['type'] = 'failed_attempt'  # Will NEVER be archived
             lr['lessons']['failed_attempts'].append(new_attempt)
+    elif section == 'vision':
+        reason = update_data.get("reason", "") if isinstance(update_data, dict) else ""
+        vision_updates = {
+            key: value
+            for key, value in update_data.items()
+            if _normalize_vision_key(key)
+        }
+        changed = _update_vision_memory(memory, vision_updates, reason=reason)
+        audit = _audit_project_vision(memory)
+        pre_action_warning += f"\nVision audit: {audit['status']}"
+        if audit.get("issues"):
+            pre_action_warning += f" ({', '.join(audit['issues'])})"
+        if changed == 0:
+            pre_action_warning += "\nNo valid vision fields were provided."
     elif section == 'intent':
         # INTENT mode - track goal history
         if 'intent' not in lr:
@@ -9025,6 +9238,48 @@ def fo_do_not_repeat(mode: str = "compact") -> str:
     if not memory:
         return "No project memory found."
     return context + _format_do_not_repeat_digest(memory, mode=mode)
+
+
+@mcp.tool()
+def fo_vision(action: str = "show", field: str = "", text: str = "", reason: str = "", mode: str = "compact") -> str:
+    """
+    Manage project-level vision memory.
+
+    Args:
+        action: "show", "audit", or "set"
+        field: Vision field for set: mission, long_term_goal, current_direction,
+               non_negotiables, success_criteria, or out_of_scope
+        text: Vision text for set
+        reason: Why this vision item is being added or changed
+        mode: "compact" or "expanded"
+    """
+    error, context = _universal_gate("fo_vision")
+    if error:
+        return error
+
+    session = _get_session()
+    memory = _load_project(session.project_id)
+    normalized_action = (action or "show").strip().lower()
+
+    if normalized_action == "audit":
+        audit = _audit_project_vision(memory)
+        return context + json.dumps(audit, indent=2, ensure_ascii=False)
+
+    if normalized_action == "set":
+        key = _normalize_vision_key(field)
+        if not key:
+            return context + "Error: Unknown vision field."
+        if not str(text or "").strip():
+            return context + "Error: Vision text is required."
+        _update_vision_memory(memory, {key: text}, reason=reason)
+        _save_project(session.project_id, memory)
+        audit = _audit_project_vision(memory)
+        return context + f"Vision updated: {_VISION_FIELDS[key]}\nVision audit: {audit['status']}"
+
+    if normalized_action != "show":
+        return context + "Error: action must be show, audit, or set."
+
+    return context + _format_project_vision(memory, mode=mode)
 
 
 @mcp.tool()
