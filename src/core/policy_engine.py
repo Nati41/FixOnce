@@ -164,6 +164,8 @@ def detect_conflicts(
                 "severity": "HIGH",
                 "existing_decision": existing.get("decision", ""),
                 "existing_reason": existing.get("reason", ""),
+                "existing_actor": existing.get("actor", "unknown"),
+                "existing_actor_source": existing.get("actor_source", "none"),
                 "timestamp": existing.get("timestamp", ""),
                 "topics": list(topic_overlap),
                 "antonyms": antonyms,
@@ -179,6 +181,8 @@ def detect_conflicts(
                 "severity": "MEDIUM",
                 "existing_decision": existing.get("decision", ""),
                 "existing_reason": existing.get("reason", ""),
+                "existing_actor": existing.get("actor", "unknown"),
+                "existing_actor_source": existing.get("actor_source", "none"),
                 "timestamp": existing.get("timestamp", ""),
                 "topics": list(topic_overlap),
                 "similarity": round(similarity, 2),
@@ -225,9 +229,15 @@ def validate_decision(
 
     if gate_result.level == "block" and not force:
         conflict = top_conflict
+        provenance = (
+            f"actor={conflict.get('existing_actor', 'unknown')}; "
+            f"source={conflict.get('existing_actor_source', 'none')}; "
+            f"timestamp={conflict.get('timestamp') or 'unknown'}"
+        )
         return False, (
             f"🛑 BLOCKED: {conflict['message']}\n"
             f"Existing decision: \"{conflict['existing_decision']}\"\n"
+            f"Existing decision provenance: {provenance}\n"
             f"Use force=true to override, or supersede the existing decision first."
         ), conflicts
 
@@ -240,6 +250,9 @@ def validate_decision(
     # Warn-level conflicts are logged but surfaced for review.
     return True, (
         f"⚠️ WARNING: {conflicts[0]['message']}\n"
+        f"Existing decision actor: {conflicts[0].get('existing_actor', 'unknown')} "
+        f"({conflicts[0].get('existing_actor_source', 'none')}, "
+        f"{conflicts[0].get('timestamp') or 'unknown'})\n"
         f"Decision logged, but review for consistency."
     ), conflicts
 
@@ -283,7 +296,8 @@ def supersede_decision(
     old_decision_text: str,
     new_decision: str,
     new_reason: str,
-    supersede_reason: str
+    supersede_reason: str,
+    attribution: Optional[Dict[str, Any]] = None,
 ) -> Tuple[bool, str, List[Dict[str, Any]]]:
     """
     Mark an old decision as superseded and optionally add new one.
@@ -310,17 +324,24 @@ def supersede_decision(
     decisions[found_idx]["superseded_at"] = datetime.now().isoformat()
     decisions[found_idx]["superseded_by"] = new_decision
     decisions[found_idx]["supersede_reason"] = supersede_reason
+    if attribution:
+        decisions[found_idx]["superseded_by_actor"] = attribution.get("actor", "unknown")
+        decisions[found_idx]["superseded_by_source"] = attribution.get("actor_source", "none")
+        decisions[found_idx]["superseded_in_session"] = attribution.get("session_id", "unknown-session")
 
     # Add new decision
     if new_decision:
-        decisions.append({
+        replacement = {
             "type": "decision",
             "decision": new_decision,
             "reason": new_reason,
             "timestamp": datetime.now().isoformat(),
             "importance": "permanent",
             "supersedes": decisions[found_idx]["decision"]
-        })
+        }
+        if attribution:
+            replacement.update(attribution)
+        decisions.append(replacement)
 
     return True, f"Superseded: '{decisions[found_idx]['decision'][:50]}...'", decisions
 

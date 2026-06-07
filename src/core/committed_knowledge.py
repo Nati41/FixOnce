@@ -38,7 +38,7 @@ def _generate_project_id(working_dir: str) -> str:
 
 # Safe file operations
 try:
-    from core.safe_file import atomic_json_write, atomic_json_read
+    from core.safe_file import atomic_json_write, atomic_json_read, atomic_json_update
     SAFE_FILE_AVAILABLE = True
 except ImportError:
     SAFE_FILE_AVAILABLE = False
@@ -106,23 +106,42 @@ def sanitize_text(text: str) -> str:
     return result
 
 
+def sanitize_portable_value(value: Any) -> Any:
+    """Recursively redact secrets from portable team-memory records."""
+    if isinstance(value, str):
+        return sanitize_text(value)
+    if isinstance(value, list):
+        return [sanitize_portable_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: sanitize_portable_value(item) for key, item in value.items()}
+    return value
+
+
 def sanitize_decision(decision: Dict[str, Any]) -> Dict[str, Any]:
     """Sanitize a decision object before committing."""
-    return {
+    sanitized = {
         "decision": sanitize_text(decision.get("decision", "")),
         "reason": sanitize_text(decision.get("reason", "")),
         "timestamp": decision.get("timestamp", ""),
         "superseded": decision.get("superseded", False),
     }
+    for field in ("actor", "actor_source", "actor_confidence", "session_id", "tool_name"):
+        if field in decision:
+            sanitized[field] = decision[field]
+    return sanitized
 
 
 def sanitize_avoid(avoid: Dict[str, Any]) -> Dict[str, Any]:
     """Sanitize an avoid pattern before committing."""
-    return {
+    sanitized = {
         "what": sanitize_text(avoid.get("what", "")),
         "reason": sanitize_text(avoid.get("reason", "")),
         "timestamp": avoid.get("timestamp", ""),
     }
+    for field in ("actor", "actor_source", "actor_confidence", "session_id", "tool_name"):
+        if field in avoid:
+            sanitized[field] = avoid[field]
+    return sanitized
 
 
 # ============================================================
@@ -327,12 +346,16 @@ def is_quality_insight(insight: Dict[str, Any]) -> bool:
 
 def sanitize_insight(insight: Dict[str, Any]) -> Dict[str, Any]:
     """Sanitize an insight before committing."""
-    return {
+    sanitized = {
         "text": sanitize_text(insight.get("text", "")),
         "timestamp": insight.get("timestamp", ""),
         "importance": insight.get("importance", "medium"),
         "use_count": insight.get("use_count", 0),
     }
+    for field in ("actor", "actor_source", "actor_confidence", "session_id", "tool_name"):
+        if field in insight:
+            sanitized[field] = insight[field]
+    return sanitized
 
 
 def is_quality_solution(solution: Dict[str, Any]) -> bool:
@@ -367,7 +390,7 @@ def is_quality_solution(solution: Dict[str, Any]) -> bool:
 
 def sanitize_solution(solution: Dict[str, Any]) -> Dict[str, Any]:
     """Sanitize a solution/debug_session before committing."""
-    return {
+    sanitized = {
         "problem": sanitize_text(solution.get("problem", "")),
         "root_cause": sanitize_text(solution.get("root_cause", "")),
         "solution": sanitize_text(solution.get("solution", "")),
@@ -376,6 +399,10 @@ def sanitize_solution(solution: Dict[str, Any]) -> Dict[str, Any]:
         "timestamp": solution.get("resolved_at", solution.get("timestamp", "")),
         "reuse_count": solution.get("reuse_count", 0),
     }
+    for field in ("actor", "actor_source", "actor_confidence", "session_id", "tool_name"):
+        if field in solution:
+            sanitized[field] = solution[field]
+    return sanitized
 
 
 def _get_solution_key(s: Dict[str, Any]) -> str:
@@ -544,6 +571,8 @@ def write_committed_knowledge(
     avoid_patterns: List[Dict[str, Any]],
     insights: List[Dict[str, Any]] = None,
     solutions: List[Dict[str, Any]] = None,
+    agent_audit: List[Dict[str, Any]] = None,
+    handoffs: List[Dict[str, Any]] = None,
     project_id: str = None
 ) -> Dict[str, Any]:
     """
@@ -714,6 +743,69 @@ def write_committed_knowledge(
 
         result["stats"]["solutions"] = len(quality_solutions)
 
+        portable_audit = sanitize_portable_value(list(agent_audit or [])[-200:])
+        portable_handoffs = sanitize_portable_value(list(handoffs or [])[-50:])
+        if portable_audit or portable_handoffs:
+            team_memory_path = fixonce_dir / "team_memory.json"
+            team_memory_data = {
+                "fixonce_version": FIXONCE_VERSION,
+                "project_id": project_id or _generate_project_id(working_dir),
+                "updated_at": datetime.now().isoformat(),
+                "agent_audit": portable_audit,
+                "handoffs": portable_handoffs,
+            }
+            if SAFE_FILE_AVAILABLE:
+                def merge_team_memory(current):
+                    current = dict(current or {})
+
+                    def merge_records(existing, incoming, key_fields, limit):
+                        merged = list(existing or [])
+                        known = {
+                            tuple(item.get(field) for field in key_fields)
+                            for item in merged
+                            if isinstance(item, dict)
+                        }
+                        for item in incoming:
+                            if not isinstance(item, dict):
+                                continue
+                            key = tuple(item.get(field) for field in key_fields)
+                            if key not in known:
+                                merged.append(item)
+                                known.add(key)
+                        return merged[-limit:]
+
+                    current.update({
+                        "fixonce_version": team_memory_data["fixonce_version"],
+                        "project_id": team_memory_data["project_id"],
+                        "updated_at": team_memory_data["updated_at"],
+                    })
+                    current["agent_audit"] = merge_records(
+                        current.get("agent_audit"),
+                        portable_audit,
+                        ("timestamp", "session_id", "gate"),
+                        200,
+                    )
+                    current["handoffs"] = merge_records(
+                        current.get("handoffs"),
+                        portable_handoffs,
+                        ("timestamp", "from_actor", "to_actor", "next_action"),
+                        50,
+                    )
+                    return current
+
+                atomic_json_update(
+                    str(team_memory_path),
+                    merge_team_memory,
+                    default={},
+                    create_backup=False,
+                )
+            else:
+                with open(team_memory_path, "w", encoding="utf-8") as handle:
+                    json.dump(team_memory_data, handle, ensure_ascii=False, indent=2)
+            result["files"].append(str(team_memory_path))
+            result["stats"]["agent_audit"] = len(portable_audit)
+            result["stats"]["handoffs"] = len(portable_handoffs)
+
         return result
 
     except Exception as e:
@@ -737,6 +829,8 @@ def read_committed_knowledge(working_dir: str) -> Dict[str, Any]:
         "avoid": [],
         "insights": [],
         "solutions": [],
+        "agent_audit": [],
+        "handoffs": [],
         "found": False,
         "fixonce_version": None,
         "project_id": None
@@ -804,6 +898,20 @@ def read_committed_knowledge(working_dir: str) -> Dict[str, Any]:
                     data = json.load(f)
 
             result["solutions"] = data.get("solutions", [])
+            result["found"] = True
+        except Exception:
+            pass
+
+    team_memory_path = fixonce_dir / "team_memory.json"
+    if team_memory_path.exists():
+        try:
+            if SAFE_FILE_AVAILABLE:
+                data = atomic_json_read(str(team_memory_path), default={})
+            else:
+                with open(team_memory_path, "r", encoding="utf-8") as handle:
+                    data = json.load(handle)
+            result["agent_audit"] = data.get("agent_audit", [])
+            result["handoffs"] = data.get("handoffs", [])
             result["found"] = True
         except Exception:
             pass
@@ -883,6 +991,11 @@ def sync_from_committed(working_dir: str, memory: Dict[str, Any]) -> Dict[str, A
             memory.setdefault("debug_sessions", []).append(solution)
             merged_solutions += 1
 
+    if committed.get("agent_audit"):
+        memory["agent_audit"] = list(committed["agent_audit"])[-200:]
+    if committed.get("handoffs"):
+        memory["ai_handoffs"] = list(committed["handoffs"])[-50:]
+
     if merged_decisions > 0 or merged_avoids > 0 or merged_insights > 0 or merged_solutions > 0:
         print(f"[CommittedKnowledge] Merged {merged_decisions} decisions, {merged_avoids} avoid, {merged_insights} insights, {merged_solutions} solutions")
 
@@ -912,15 +1025,21 @@ def update_committed_on_save(project_id: str, memory: Dict[str, Any]) -> Optiona
     avoid = memory.get('avoid', [])
     insights = memory.get('live_record', {}).get('lessons', {}).get('insights', [])
     solutions = memory.get('debug_sessions', [])
+    agent_audit = memory.get("agent_audit", [])
+    handoffs = memory.get("ai_handoffs", [])
 
     # Only write if there's something to write
-    if not decisions and not avoid and not insights and not solutions:
+    if not decisions and not avoid and not insights and not solutions and not agent_audit and not handoffs:
         return None
 
     try:
         result = write_committed_knowledge(
             working_dir, decisions, avoid,
-            insights=insights, solutions=solutions, project_id=project_id
+            insights=insights,
+            solutions=solutions,
+            agent_audit=agent_audit,
+            handoffs=handoffs,
+            project_id=project_id,
         )
         if result["status"] == "ok":
             return str(get_fixonce_dir(working_dir))

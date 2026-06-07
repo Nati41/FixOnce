@@ -91,13 +91,17 @@ def evaluate_error_gate(ctx: InterventionContext) -> InterventionGateResult:
 def evaluate_decision_conflict_gate(ctx: InterventionContext) -> InterventionGateResult:
     """Block on severe decision conflicts, warn on medium conflicts."""
     severity = (ctx.decision_conflict_severity or "").lower()
+    evidence = {
+        "severity": severity,
+        "conflicts": list(ctx.extra.get("conflicts", [])),
+    }
 
     if severity in {"high", "severe", "critical"}:
         return _finalize_result(InterventionGateResult(
             gate="decision_conflict_gate",
             level="block",
             reason="A severe conflict with an existing decision was detected.",
-            evidence={"severity": severity},
+            evidence=evidence,
             suggested_action="Resolve or supersede the existing decision first.",
         ))
 
@@ -106,7 +110,7 @@ def evaluate_decision_conflict_gate(ctx: InterventionContext) -> InterventionGat
             gate="decision_conflict_gate",
             level="warn",
             reason="A potential conflict with an existing decision was detected.",
-            evidence={"severity": severity},
+            evidence=evidence,
             suggested_action="Review the existing decision for consistency.",
         ))
 

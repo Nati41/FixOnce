@@ -26,8 +26,9 @@ import json
 import tempfile
 import time
 import shutil
+import threading
 from pathlib import Path
-from typing import Any, Optional, Dict, List
+from typing import Any, Callable, Optional, Dict, List
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -35,6 +36,20 @@ from datetime import datetime
 MAX_FILE_SIZE_KB = 500  # Warn if file exceeds this size
 MAX_BACKUP_COUNT = 5    # Keep last N backups
 BACKUP_DIR_NAME = '.backups'
+
+_PROCESS_LOCKS: Dict[str, threading.RLock] = {}
+_PROCESS_LOCKS_GUARD = threading.Lock()
+
+
+def _get_process_lock(path: Path) -> threading.RLock:
+    """Return a process-local lock for a normalized file path."""
+    key = str(path.resolve())
+    with _PROCESS_LOCKS_GUARD:
+        lock = _PROCESS_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _PROCESS_LOCKS[key] = lock
+        return lock
 
 
 # Platform-specific locking
@@ -288,6 +303,8 @@ class FileLock:
         self.lock_path = self.path.with_suffix(self.path.suffix + '.lock')
         self.timeout = timeout
         self._lock_file = None
+        self._process_lock = _get_process_lock(self.path)
+        self._process_lock_acquired = False
 
     def acquire(self) -> bool:
         """
@@ -297,6 +314,10 @@ class FileLock:
             True if lock acquired, False if timeout
         """
         start_time = time.time()
+
+        if not self._process_lock.acquire(timeout=self.timeout):
+            return False
+        self._process_lock_acquired = True
 
         # Create lock file if it doesn't exist
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -325,6 +346,8 @@ class FileLock:
                     self._lock_file = None
 
                 if time.time() - start_time > self.timeout:
+                    self._process_lock.release()
+                    self._process_lock_acquired = False
                     return False
 
                 # Wait a bit before retrying
@@ -346,12 +369,11 @@ class FileLock:
             except Exception:
                 pass
 
-            try:
-                self.lock_path.unlink()
-            except Exception:
-                pass
-
             self._lock_file = None
+
+        if self._process_lock_acquired:
+            self._process_lock.release()
+            self._process_lock_acquired = False
 
     def __enter__(self):
         if not self.acquire():
@@ -414,8 +436,8 @@ def atomic_json_write(
     lock = FileLock(path) if use_lock and LOCK_AVAILABLE else None
 
     try:
-        if lock:
-            lock.acquire()
+        if lock and not lock.acquire():
+            raise FileLockError(f"Could not acquire lock for {path}")
 
         # Create backup BEFORE writing (if file exists)
         if create_backup and path.exists():
@@ -448,6 +470,53 @@ def atomic_json_write(
             print(f"[SAFE_FILE] Write error: {e}")
             return False
 
+    finally:
+        if lock:
+            lock.release()
+
+
+def atomic_json_update(
+    path: str,
+    mutator: Callable[[Any], Any],
+    default: Any = None,
+    indent: int = 2,
+    create_backup: bool = True,
+) -> Any:
+    """Read, mutate, and atomically write JSON while holding one file lock."""
+    path_obj = Path(path)
+    path_obj.parent.mkdir(parents=True, exist_ok=True)
+    lock = FileLock(path_obj) if LOCK_AVAILABLE else None
+
+    try:
+        if lock and not lock.acquire():
+            raise FileLockError(f"Could not acquire lock for {path_obj}")
+
+        if path_obj.exists():
+            try:
+                with path_obj.open("r", encoding="utf-8") as handle:
+                    current = json.load(handle)
+            except (json.JSONDecodeError, OSError):
+                current = default
+        else:
+            current = default
+
+        updated = mutator(current)
+        if updated is None:
+            updated = current
+
+        if create_backup and path_obj.exists():
+            _create_backup(path_obj)
+
+        success = atomic_json_write(
+            str(path_obj),
+            updated,
+            indent=indent,
+            use_lock=False,
+            create_backup=False,
+        )
+        if not success:
+            raise OSError(f"Atomic JSON update failed for {path_obj}")
+        return updated
     finally:
         if lock:
             lock.release()

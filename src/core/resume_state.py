@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
+from core.safe_file import atomic_json_update
+
 # Data paths
 DATA_DIR = Path(__file__).parent.parent.parent / 'data'
 PROJECTS_DIR = DATA_DIR / 'projects_v2'
@@ -46,13 +48,24 @@ def _save_project_data(project_id: str, data: Dict[str, Any]) -> bool:
         return False
 
 
+def _update_project_data(project_id: str, mutator) -> Optional[Dict[str, Any]]:
+    project_file = _get_project_file(project_id)
+    if not project_file.exists():
+        return None
+    try:
+        return atomic_json_update(str(project_file), mutator, default={})
+    except Exception:
+        return None
+
+
 def save_resume_state(
     project_id: str,
     active_task: str,
     last_completed_step: str = "",
     current_status: str = "in_progress",
     next_recommended_action: str = "",
-    short_summary: str = ""
+    short_summary: str = "",
+    attribution: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Save the current session resume state.
@@ -68,10 +81,6 @@ def save_resume_state(
     Returns:
         The saved resume state
     """
-    data = _load_project_data(project_id)
-    if not data:
-        return {"error": f"Project not found: {project_id}"}
-
     resume_state = {
         "active_task": active_task,
         "last_completed_step": last_completed_step,
@@ -81,13 +90,16 @@ def save_resume_state(
         "updated_at": datetime.now().isoformat(),
         "version": 1
     }
+    if attribution:
+        resume_state.update(attribution)
 
-    data["resume_state"] = resume_state
-
-    if _save_project_data(project_id, data):
+    updated = _update_project_data(
+        project_id,
+        lambda data: {**(data or {}), "resume_state": resume_state},
+    )
+    if updated:
         return resume_state
-    else:
-        return {"error": "Failed to save resume state"}
+    return {"error": f"Project not found or could not be updated: {project_id}"}
 
 
 def get_resume_state(project_id: str) -> Optional[Dict[str, Any]]:
@@ -107,25 +119,18 @@ def clear_resume_state(project_id: str) -> bool:
     """
     Clear the resume state (task completed, no longer relevant).
     """
-    data = _load_project_data(project_id)
-    if not data:
-        return False
-
-    if "resume_state" in data:
-        # Archive before clearing
-        if "resume_state_history" not in data:
-            data["resume_state_history"] = []
-
-        old_state = data.pop("resume_state")
+    def clear_state(data):
+        data = dict(data or {})
+        if "resume_state" not in data:
+            return data
+        history = list(data.get("resume_state_history", []))
+        old_state = dict(data.pop("resume_state"))
         old_state["cleared_at"] = datetime.now().isoformat()
-        data["resume_state_history"].append(old_state)
+        history.append(old_state)
+        data["resume_state_history"] = history[-5:]
+        return data
 
-        # Keep only last 5 states
-        data["resume_state_history"] = data["resume_state_history"][-5:]
-
-        return _save_project_data(project_id, data)
-
-    return True
+    return _update_project_data(project_id, clear_state) is not None
 
 
 def format_resume_for_init(resume_state: Dict[str, Any]) -> str:

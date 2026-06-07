@@ -8,7 +8,7 @@ It does not enforce anything by itself.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from core.intervention_policy import InterventionContext
 
@@ -96,3 +96,13 @@ class AgentContext:
     project_id: str
     intent_detail: str = ""
     flow_classification: str = "partial"
+
+    def attribution(self) -> Dict[str, Any]:
+        """Return the durable provenance fields used by new memory records."""
+        return {
+            "actor": self.actor_name or "unknown",
+            "actor_source": self.actor_source or "none",
+            "actor_confidence": float(self.actor_confidence or 0.0),
+            "session_id": self.session_id or "unknown-session",
+            "tool_name": self.tool_name or "unknown-tool",
+        }

@@ -749,7 +749,7 @@ class TestMemoryClassification(unittest.TestCase):
 
         self.assertIn("quality_audit", handoff)
         self.assertIn("incomplete_handoff", handoff["quality_audit"]["issues"])
-        self.assertIn("missing_next_step", handoff["quality_audit"]["issues"])
+        self.assertIn("missing_next_action", handoff["quality_audit"]["issues"])
 
     def test_expanded_search_includes_provenance_for_all_matches(self):
         memory = {

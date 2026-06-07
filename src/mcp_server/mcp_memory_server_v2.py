@@ -20,6 +20,7 @@ import requests
 import contextlib
 import functools
 import builtins
+import copy
 import tempfile
 import traceback
 import re
@@ -567,7 +568,7 @@ def _debug_log(message: str):
 # Safe File Operations (auto-backup, atomic writes)
 _safe_file_available = False
 try:
-    from core.safe_file import atomic_json_write, atomic_json_read
+    from core.safe_file import atomic_json_write, atomic_json_read, atomic_json_update
     _safe_file_available = True
 except ImportError:
     pass  # Safe file not available, will use regular json
@@ -825,6 +826,7 @@ from core.system_mode import get_system_mode, MODE_FULL, MODE_PASSIVE, MODE_OFF
 _agent_intervention_available = False
 try:
     from core.agent_intervention import evaluate_agent_intervention
+    from core.agent_audit import get_agent_audit
     _agent_intervention_available = True
     _log("[FixOnce] Agent intervention bridge loaded successfully")
 except ImportError as e:
@@ -1091,6 +1093,7 @@ _compliance_state = {
 SESSION_FILE = USER_DATA_DIR / "mcp_session.json"
 COMPLIANCE_FILE = USER_DATA_DIR / "mcp_compliance.json"
 AI_CONNECTIONS_FILE = USER_DATA_DIR / "ai_connections.json"
+_project_load_state = threading.local()
 
 
 def _persist_compliance():
@@ -1508,6 +1511,19 @@ def build_agent_context(
     )
 
 
+def _new_record_attribution(tool_name: str) -> Dict[str, Any]:
+    """Build the canonical attribution payload for a newly durable record."""
+    session = _get_session()
+    identity = _resolve_actor_identity()
+    return {
+        "actor": identity.get("editor", "unknown") or "unknown",
+        "actor_source": identity.get("source", "none") or "none",
+        "actor_confidence": float(identity.get("confidence", 0.0) or 0.0),
+        "session_id": _get_runtime_session_id(session),
+        "tool_name": tool_name or "unknown-tool",
+    }
+
+
 def _record_agent_intervention(
     tool_name: str,
     intervention_ctx: InterventionContext,
@@ -1542,6 +1558,7 @@ def _record_agent_intervention(
             )
             _fo_init_trace("AGENT_INTERVENTION_REPLACE_CONTEXT_AFTER")
 
+        audit_count_before = len(get_agent_audit(limit=500))
         _fo_init_trace("AGENT_INTERVENTION_EVALUATE_BEFORE")
         verdict = evaluate_agent_intervention(agent_ctx, ctx)
         _fo_init_trace(f"AGENT_INTERVENTION_EVALUATE_AFTER verdict={verdict!r}")
@@ -1562,11 +1579,50 @@ def _record_agent_intervention(
         _fo_init_trace("AGENT_INTERVENTION_PERSIST_COMPLIANCE_BEFORE")
         _persist_compliance()
         _fo_init_trace("AGENT_INTERVENTION_PERSIST_COMPLIANCE_AFTER")
+        _persist_agent_audit(
+            agent_ctx.project_id,
+            get_agent_audit(limit=500)[audit_count_before:],
+        )
         return verdict
     except Exception as e:
         _fo_init_trace(f"AGENT_INTERVENTION_ERROR {type(e).__name__}: {e}", include_stack=True)
         _log(f"[FixOnce] Agent intervention audit failed: {e}")
         return "silent"
+
+
+def _persist_agent_audit(project_id: str, entries: List[Dict[str, Any]]) -> None:
+    """Persist new audit entries in project memory and portable team memory."""
+    if not entries or not project_id or project_id == "unknown-project":
+        return
+    path = _get_project_path(project_id)
+    if not path.exists() or not _safe_file_available:
+        return
+
+    def append_entries(memory):
+        memory = dict(memory or {})
+        existing = list(memory.get("agent_audit", []))
+        known = {
+            (item.get("timestamp"), item.get("session_id"), item.get("gate"))
+            for item in existing
+            if isinstance(item, dict)
+        }
+        for entry in entries:
+            key = (entry.get("timestamp"), entry.get("session_id"), entry.get("gate"))
+            if key not in known:
+                existing.append(entry)
+                known.add(key)
+        memory["agent_audit"] = existing[-200:]
+        return memory
+
+    memory = atomic_json_update(
+        str(path),
+        append_entries,
+        default={},
+        create_backup=False,
+    )
+    session = _get_session()
+    if session.project_id == project_id and session.working_dir:
+        _persist_portable_team_memory(project_id, session.working_dir, memory)
 
 
 def get_agent_evaluation_flow_audit() -> Dict[str, Dict[str, Any]]:
@@ -1879,6 +1935,7 @@ def _update_active_ai(actor_identity: Optional[Dict[str, Any]] = None):
         detected_editor = actor_identity.get("editor", "unknown")
         actor_source = actor_identity.get("source", "fallback")
         actor_confidence = actor_identity.get("confidence", 0.0)
+        attribution = _new_record_attribution("fo_init")
         if detected_editor == "unknown":
             return
         now = datetime.now()
@@ -1928,6 +1985,9 @@ def _update_active_ai(actor_identity: Optional[Dict[str, Any]] = None):
                 "actor_source": actor_source,
                 "actor_confidence": actor_confidence,
                 "tool_calls": session_tool_calls,
+                "actor": detected_editor,
+                "session_id": attribution["session_id"],
+                "tool_name": attribution["tool_name"],
             }
             _log(f"[MCP] AI Joined (primary): {detected_editor}")
         else:
@@ -1937,6 +1997,9 @@ def _update_active_ai(actor_identity: Optional[Dict[str, Any]] = None):
             data["active_ais"][detected_editor]["actor_source"] = actor_source
             data["active_ais"][detected_editor]["actor_confidence"] = actor_confidence
             data["active_ais"][detected_editor]["tool_calls"] = session_tool_calls
+            data["active_ais"][detected_editor]["actor"] = detected_editor
+            data["active_ais"][detected_editor]["session_id"] = attribution["session_id"]
+            data["active_ais"][detected_editor]["tool_name"] = attribution["tool_name"]
 
         # Clean up old historical AIs (no activity for 1 minute AND not primary)
         remove_ais = []
@@ -1966,6 +2029,9 @@ def _update_active_ai(actor_identity: Optional[Dict[str, Any]] = None):
         data["ai_session"]["active"] = True
         data["ai_session"]["actor_source"] = actor_source
         data["ai_session"]["actor_confidence"] = actor_confidence
+        data["ai_session"]["actor"] = detected_editor
+        data["ai_session"]["session_id"] = attribution["session_id"]
+        data["ai_session"]["tool_name"] = attribution["tool_name"]
 
         # Track handoff only if this is truly a different AI taking over
         # (not just parallel work)
@@ -1976,7 +2042,12 @@ def _update_active_ai(actor_identity: Optional[Dict[str, Any]] = None):
                 # Old editor timed out - this is a handoff
                 if "ai_handoffs" not in data:
                     data["ai_handoffs"] = []
-                data["ai_handoffs"].append(_create_handoff_record(old_editor, detected_editor, now.isoformat()))
+                data["ai_handoffs"].append(_create_handoff_record(
+                    old_editor,
+                    detected_editor,
+                    now.isoformat(),
+                    **_handoff_details(data),
+                ))
                 data["ai_handoffs"] = data["ai_handoffs"][-10:]
 
                 data["ai_session"]["previous_ai"] = {
@@ -2316,23 +2387,24 @@ def _get_mcp_human_name(tool_name: str, details: dict = None) -> str:
 # MEMORY DECAY SYSTEM
 # ============================================================
 
-def _create_insight(text: str, linked_error: Optional[dict] = None) -> dict:
+def _create_insight(
+    text: str,
+    linked_error: Optional[dict] = None,
+    tool_name: str = "update_live_record",
+) -> dict:
     """
     Create a new insight with full metadata for decay tracking.
 
     Fix #2: Auto-Link Incidents - if there's an active error, link it to this insight.
     """
-    actor_identity = _resolve_actor_identity()
     insight = {
         "text": text,
         "timestamp": datetime.now().isoformat(),
-        "actor": actor_identity.get("editor", "unknown"),
-        "actor_source": actor_identity.get("source", "none"),
-        "actor_confidence": actor_identity.get("confidence", 0.0),
         "use_count": 0,
         "last_used": None,
         "importance": "medium"  # low/medium/high - auto-calculated
     }
+    insight.update(_new_record_attribution(tool_name))
 
     # Fix #2: Link to active error if provided
     if linked_error:
@@ -2394,7 +2466,7 @@ _QUALITY_TEXT_FIELDS = {
     "avoid": ("what", "reason"),
     "failed_attempt": ("text", "lesson_learned"),
     "insight": ("text",),
-    "handoff": ("what_was_done", "what_remains", "current_risk", "next_step"),
+    "handoff": ("completed_work", "remaining_work", "risks", "next_action"),
     "intent": ("current_goal", "next_step"),
     "vision": ("text", "reason"),
 }
@@ -2429,7 +2501,7 @@ def _audit_memory_record(record_type: str, record: Dict[str, Any]) -> Dict[str, 
         issues.append("missing_actor")
 
     if normalized_type == "handoff":
-        handoff_fields = ("what_was_done", "what_remains", "current_risk", "next_step")
+        handoff_fields = ("completed_work", "remaining_work", "risks", "next_action")
         if any(not _memory_quality_text_present(record, field) for field in handoff_fields):
             issues.append("incomplete_handoff")
 
@@ -2459,17 +2531,42 @@ def _attach_memory_quality_audit(record_type: str, record: Dict[str, Any]) -> Di
 
 
 def _create_handoff_record(from_actor: str, to_actor: str, timestamp: Optional[str] = None, **details: Any) -> Dict[str, Any]:
+    attribution = _new_record_attribution(details.get("tool_name", "fo_init"))
     record = {
+        "from_actor": from_actor,
+        "to_actor": to_actor,
         "from": from_actor,
         "to": to_actor,
         "timestamp": timestamp or datetime.now().isoformat(),
-        "actor": to_actor or "unknown",
-        "what_was_done": details.get("what_was_done", ""),
-        "what_remains": details.get("what_remains", ""),
-        "current_risk": details.get("current_risk", ""),
-        "next_step": details.get("next_step", ""),
+        "completed_work": details.get("completed_work", details.get("what_was_done", "")),
+        "remaining_work": details.get("remaining_work", details.get("what_remains", "")),
+        "risks": details.get("risks", details.get("current_risk", "")),
+        "next_action": details.get("next_action", details.get("next_step", "")),
     }
+    record.update(attribution)
+    record["actor"] = to_actor or attribution["actor"]
     return _attach_memory_quality_audit("handoff", record)
+
+
+def _handoff_details(memory: Dict[str, Any]) -> Dict[str, str]:
+    """Derive a structured handoff from current durable work state."""
+    intent = memory.get("live_record", {}).get("intent", {})
+    resume = memory.get("resume_state", {}) or {}
+    blockers = intent.get("blockers", [])
+    if isinstance(blockers, list):
+        risks = "; ".join(str(item) for item in blockers if item)
+    else:
+        risks = str(blockers or "")
+    return {
+        "completed_work": intent.get("last_change") or resume.get("last_completed_step", ""),
+        "remaining_work": resume.get("active_task") or intent.get("current_goal", ""),
+        "risks": risks or (
+            resume.get("short_summary", "")
+            if resume.get("current_status") == "blocked"
+            else "No unresolved risk recorded."
+        ),
+        "next_action": intent.get("next_step") or resume.get("next_recommended_action", ""),
+    }
 
 
 _VISION_FIELDS = {
@@ -2524,19 +2621,16 @@ def _ensure_vision_store(memory: Dict[str, Any]) -> Dict[str, List[Dict[str, Any
 
 
 def _create_vision_record(text: str, reason: str = "", status: str = "active") -> Dict[str, Any]:
-    actor_identity = _resolve_actor_identity()
     record = {
         "id": f"vision_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}",
         "text": str(text or "").strip(),
         "reason": str(reason or "").strip(),
         "created_at": datetime.now().isoformat(),
-        "actor": actor_identity.get("editor", "unknown"),
-        "actor_source": actor_identity.get("source", "none"),
-        "actor_confidence": actor_identity.get("confidence", 0.0),
         "status": status,
         "superseded_by": None,
         "reason_for_change": "",
     }
+    record.update(_new_record_attribution("fo_vision"))
     return _attach_memory_quality_audit("vision", record)
 
 
@@ -2741,7 +2835,6 @@ def _maybe_record_solved_bug_from_memory_event(
             if len(overlap) >= min(4, max(2, len(candidate_key) // 2)):
                 return False
 
-    actor_identity = _resolve_actor_identity()
     record = {
         "id": f"fix_auto_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(debug_sessions) + 1}",
         "problem": problem,
@@ -2751,14 +2844,12 @@ def _maybe_record_solved_bug_from_memory_event(
         "symptoms": [problem[:120]],
         "files_changed": files_changed or [],
         "resolved_at": datetime.now().isoformat(),
-        "actor": actor_identity.get("editor", "unknown"),
-        "actor_source": actor_identity.get("source", "none"),
-        "actor_confidence": actor_identity.get("confidence", 0.0),
         "importance": "high",
         "reuse_count": 0,
         "source": source,
         "auto_classified": True,
     }
+    record.update(_new_record_attribution(source))
     debug_sessions.append(_attach_memory_quality_audit("solution", record))
     return True
 
@@ -3122,10 +3213,21 @@ def _collect_core_trust_items(memory: Dict[str, Any], expanded: bool = False) ->
         ))
     for handoff in memory.get("ai_handoffs", [])[-5:]:
         if isinstance(handoff, dict):
+            from_actor = handoff.get("from_actor", handoff.get("from", "unknown"))
+            to_actor = handoff.get("to_actor", handoff.get("to", "unknown"))
+            detail = "; ".join(
+                part for part in (
+                    handoff.get("completed_work", ""),
+                    handoff.get("remaining_work", ""),
+                    handoff.get("next_action", ""),
+                )
+                if part
+            )
             handoffs.append(_memory_item(
                 "handoff",
-                f"{handoff.get('from', 'unknown')} -> {handoff.get('to', 'unknown')}",
-                {**handoff, "last_actor": handoff.get("to")},
+                f"{from_actor} -> {to_actor}",
+                {**handoff, "last_actor": to_actor},
+                detail=detail,
                 timestamp_keys=["timestamp", "created_at", "updated_at"],
                 score=70,
                 fallback_reason="Recorded multi-agent handoff.",
@@ -3208,7 +3310,71 @@ def _format_deep_project_brief(memory: Dict[str, Any], mode: str = "compact") ->
         f"- Current work area: {work_area}",
         f"- Last meaningful work: {last_work}",
         f"- Next step: {next_step}",
+        "",
+        "## Multi-Agent State",
     ]
+
+    active_agents = []
+    for name, state in memory.get("active_ais", {}).items():
+        if not isinstance(state, dict):
+            continue
+        active_agents.append(
+            f"{name} ({'primary' if state.get('is_primary') else 'active'}, "
+            f"source={state.get('actor_source', 'none')}, "
+            f"confidence={state.get('actor_confidence', 0.0)})"
+        )
+    lines.append(f"- Active agents: {', '.join(active_agents) if active_agents else 'None recorded.'}")
+
+    attributable_records = []
+    for collection in (
+        memory.get("decisions", []),
+        memory.get("avoid", []),
+        memory.get("debug_sessions", []),
+        live_record.get("lessons", {}).get("insights", []),
+    ):
+        attributable_records.extend(item for item in collection if isinstance(item, dict))
+    attributable_records.extend(
+        item for item in architecture.get("components", []) if isinstance(item, dict)
+    )
+    attributed = sum(
+        1 for item in attributable_records
+        if item.get("actor") or item.get("updated_by")
+    )
+    total = len(attributable_records)
+    coverage = int((attributed / total) * 100) if total else 100
+    lines.append(f"- Attribution coverage: {attributed}/{total} ({coverage}%)")
+
+    recent_handoffs = [
+        item for item in memory.get("ai_handoffs", [])
+        if isinstance(item, dict)
+    ][-3:]
+    lines.append(f"- Recent handoffs: {len(recent_handoffs)}")
+    for handoff in recent_handoffs:
+        lines.append(
+            f"  - {handoff.get('from_actor', handoff.get('from', 'unknown'))} -> "
+            f"{handoff.get('to_actor', handoff.get('to', 'unknown'))}: "
+            f"{handoff.get('next_action', handoff.get('next_step', 'No next action recorded.'))}"
+        )
+
+    unresolved_conflicts = [
+        entry for entry in memory.get("agent_audit", [])
+        if isinstance(entry, dict)
+        and entry.get("gate") == "decision_conflict_gate"
+        and entry.get("verdict") in {"warn", "block"}
+    ]
+    lines.append(f"- Unresolved conflicts: {len(unresolved_conflicts)}")
+    for entry in unresolved_conflicts[-3:]:
+        conflicts = entry.get("evidence", {}).get("conflicts", [])
+        competing = conflicts[0] if conflicts else {}
+        lines.append(
+            f"  - {entry.get('actor_name', 'unknown')} via "
+            f"{entry.get('tool_name', 'unknown-tool')} at "
+            f"{_format_trust_timestamp(entry.get('timestamp', ''))}: "
+            f"{entry.get('verdict')}; competing actor="
+            f"{competing.get('existing_actor', 'unknown')} "
+            f"(source={competing.get('existing_actor_source', 'none')}, "
+            f"timestamp={competing.get('timestamp') or 'unknown'})"
+        )
 
     sections = [
         ("Decisions", items["decisions"]),
@@ -3768,6 +3934,9 @@ def _load_project(project_id: str) -> Dict[str, Any]:
         # Use safe read with auto-recovery
         _fo_init_trace(f"FS_READ_BEFORE _load_project atomic_json_read path={path}")
         data = atomic_json_read(str(path), default={}, auto_recover=True)
+        bases = getattr(_project_load_state, "bases", {})
+        bases[project_id] = copy.deepcopy(data)
+        _project_load_state.bases = bases
         _fo_init_trace(f"FS_READ_AFTER _load_project atomic_json_read path={path} keys={len(data) if isinstance(data, dict) else 'non-dict'}")
         return data
 
@@ -3777,10 +3946,98 @@ def _load_project(project_id: str) -> Dict[str, Any]:
         _fo_init_trace(f"FS_READ_BEFORE _load_project open path={path}")
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
+        bases = getattr(_project_load_state, "bases", {})
+        bases[project_id] = copy.deepcopy(data)
+        _project_load_state.bases = bases
         _fo_init_trace(f"FS_READ_AFTER _load_project open path={path} keys={len(data) if isinstance(data, dict) else 'non-dict'}")
         return data
     _fo_init_trace(f"FS_EXISTS_AFTER _load_project missing path={path}")
     return {}
+
+
+def _merge_concurrent_value(base: Any, current: Any, updated: Any) -> Any:
+    """Three-way merge preserving independent concurrent additions."""
+    if updated == base:
+        return current
+    if current == base:
+        return updated
+    if isinstance(base, dict) and isinstance(current, dict) and isinstance(updated, dict):
+        merged = {}
+        for key in set(base) | set(current) | set(updated):
+            merged[key] = _merge_concurrent_value(
+                base.get(key),
+                current.get(key),
+                updated.get(key),
+            )
+        return merged
+    if isinstance(base, list) and isinstance(current, list) and isinstance(updated, list):
+        if current[:len(base)] == base and updated[:len(base)] == base:
+            merged = list(base)
+            for item in current[len(base):] + updated[len(base):]:
+                if item not in merged:
+                    merged.append(item)
+            return merged
+    return updated
+
+
+def _record_identity(item: Dict[str, Any]) -> str:
+    for field in ("id", "decision", "what", "problem", "text", "name"):
+        value = item.get(field)
+        if value:
+            return f"{field}:{value}"
+    return json.dumps(item, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _ensure_new_durable_attribution(
+    base: Dict[str, Any],
+    updated: Dict[str, Any],
+    tool_name: str = "memory_write",
+) -> None:
+    """Attach provenance only to records created after the loaded base."""
+    attribution = _new_record_attribution(tool_name)
+    collection_paths = (
+        ("decisions",),
+        ("avoid",),
+        ("debug_sessions",),
+        ("ai_handoffs",),
+        ("command_audit",),
+        ("active_issues",),
+        ("solutions_history",),
+        ("resume_state_history",),
+        ("live_record", "lessons", "insights"),
+        ("live_record", "lessons", "failed_attempts"),
+        ("live_record", "architecture", "components"),
+        ("live_record", "intent", "goal_history"),
+    )
+
+    for path in collection_paths:
+        base_value: Any = base
+        updated_value: Any = updated
+        for key in path:
+            base_value = base_value.get(key, {}) if isinstance(base_value, dict) else {}
+            updated_value = updated_value.get(key, {}) if isinstance(updated_value, dict) else {}
+        if not isinstance(updated_value, list):
+            continue
+        base_ids = {
+            _record_identity(item)
+            for item in base_value
+            if isinstance(item, dict)
+        } if isinstance(base_value, list) else set()
+        for item in updated_value:
+            if not isinstance(item, dict) or _record_identity(item) in base_ids:
+                continue
+            for field, value in attribution.items():
+                item.setdefault(field, value)
+
+    for path in (("live_record", "intent"), ("resume_state",)):
+        base_value: Any = base
+        updated_value: Any = updated
+        for key in path:
+            base_value = base_value.get(key, {}) if isinstance(base_value, dict) else {}
+            updated_value = updated_value.get(key, {}) if isinstance(updated_value, dict) else {}
+        if isinstance(updated_value, dict) and updated_value != base_value:
+            for field, value in attribution.items():
+                updated_value.setdefault(field, value)
 
 
 def _save_project(project_id: str, data: Dict[str, Any]):
@@ -3792,10 +4049,20 @@ def _save_project(project_id: str, data: Dict[str, Any]):
     )
 
     if _safe_file_available:
-        # Use safe write with auto-backup
-        _fo_init_trace(f"FS_WRITE_BEFORE _save_project atomic_json_write path={path}")
-        atomic_json_write(str(path), data, create_backup=True)
-        _fo_init_trace(f"FS_WRITE_AFTER _save_project atomic_json_write path={path}")
+        bases = getattr(_project_load_state, "bases", {})
+        base = bases.get(project_id, {})
+        _ensure_new_durable_attribution(base, data)
+        _fo_init_trace(f"FS_WRITE_BEFORE _save_project atomic_json_update path={path}")
+        saved_data = atomic_json_update(
+            str(path),
+            lambda current: _merge_concurrent_value(base, current or {}, data),
+            default={},
+            create_backup=True,
+        )
+        bases[project_id] = copy.deepcopy(saved_data)
+        _project_load_state.bases = bases
+        data = saved_data
+        _fo_init_trace(f"FS_WRITE_AFTER _save_project atomic_json_update path={path}")
     else:
         # Fallback to regular json
         _fo_init_trace(f"FS_WRITE_BEFORE _save_project open path={path}")
@@ -3809,6 +4076,73 @@ def _save_project(project_id: str, data: Dict[str, Any]):
         _fo_init_trace("_save_project update_snapshot_before")
         _update_snapshot(project_id, session.working_dir, data)
         _fo_init_trace("_save_project update_snapshot_after")
+        _persist_portable_team_memory(project_id, session.working_dir, data)
+
+
+def _persist_portable_team_memory(
+    project_id: str,
+    working_dir: str,
+    memory: Dict[str, Any],
+) -> None:
+    """Persist bounded team state inside the repository for future agents."""
+    if not working_dir:
+        return
+    audit = list(memory.get("agent_audit", []))[-200:]
+    handoffs = list(memory.get("ai_handoffs", []))[-50:]
+    if not audit and not handoffs:
+        return
+    path = Path(working_dir) / ".fixonce" / "team_memory.json"
+    try:
+        from core.committed_knowledge import sanitize_portable_value
+        audit = sanitize_portable_value(audit)
+        handoffs = sanitize_portable_value(handoffs)
+    except ImportError:
+        pass
+    if _safe_file_available:
+        def merge_portable(current):
+            current = dict(current or {})
+
+            def merge_records(existing, incoming, key_fields, limit):
+                merged = list(existing or [])
+                known = {
+                    tuple(item.get(field) for field in key_fields)
+                    for item in merged
+                    if isinstance(item, dict)
+                }
+                for item in incoming:
+                    if not isinstance(item, dict):
+                        continue
+                    key = tuple(item.get(field) for field in key_fields)
+                    if key not in known:
+                        merged.append(item)
+                        known.add(key)
+                return merged[-limit:]
+
+            current.update({
+                "fixonce_version": "1.0",
+                "project_id": project_id,
+                "updated_at": datetime.now().isoformat(),
+            })
+            current["agent_audit"] = merge_records(
+                current.get("agent_audit"),
+                audit,
+                ("timestamp", "session_id", "gate"),
+                200,
+            )
+            current["handoffs"] = merge_records(
+                current.get("handoffs"),
+                handoffs,
+                ("timestamp", "from_actor", "to_actor", "next_action"),
+                50,
+            )
+            return current
+
+        atomic_json_update(
+            str(path),
+            merge_portable,
+            default={},
+            create_backup=False,
+        )
 
 
 def _init_project_memory(working_dir: str) -> Dict[str, Any]:
@@ -4344,14 +4678,19 @@ def _do_init_session(working_dir: str) -> str:
                 "briefing_sent": False,
                 "actor_source": actor_identity.get("source", "fallback"),
                 "actor_confidence": actor_identity.get("confidence", 0.0),
-                "previous_ai": previous_ai
+                "previous_ai": previous_ai,
+                **_new_record_attribution("fo_init"),
             }
 
             # Track handoff history
             if "ai_handoffs" not in data:
                 data["ai_handoffs"] = []
             if previous_ai and previous_ai["editor"] != detected_editor:
-                data["ai_handoffs"].append(_create_handoff_record(previous_ai["editor"], detected_editor))
+                data["ai_handoffs"].append(_create_handoff_record(
+                    previous_ai["editor"],
+                    detected_editor,
+                    **_handoff_details(data),
+                ))
                 data["ai_handoffs"] = data["ai_handoffs"][-10:]
 
             _save_project(project_id, data)
@@ -4394,14 +4733,19 @@ def _do_init_session(working_dir: str) -> str:
         "briefing_sent": False,
         "actor_source": actor_identity.get("source", "fallback"),
         "actor_confidence": actor_identity.get("confidence", 0.0),
-        "previous_ai": previous_ai  # Track handoff
+        "previous_ai": previous_ai,  # Track handoff
+        **_new_record_attribution("fo_init"),
     }
 
     # Keep history of AI handoffs
     if "ai_handoffs" not in data:
         data["ai_handoffs"] = []
     if previous_ai and previous_ai["editor"] != detected_editor:
-        data["ai_handoffs"].append(_create_handoff_record(previous_ai["editor"], detected_editor))
+        data["ai_handoffs"].append(_create_handoff_record(
+            previous_ai["editor"],
+            detected_editor,
+            **_handoff_details(data),
+        ))
         # Keep last 10 handoffs
         data["ai_handoffs"] = data["ai_handoffs"][-10:]
 
@@ -5129,13 +5473,15 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
             item["delivered_to"] = detected_editor
 
             # Add audit entry
-            data["command_audit"].append({
+            audit_entry = {
                 "id": item.get("id", "unknown"),
                 "action": "delivered",
                 "delivered_to": detected_editor,
                 "timestamp": now,
                 "session_id": current_session_id
-            })
+            }
+            audit_entry.update(_new_record_attribution("fo_init"))
+            data["command_audit"].append(audit_entry)
 
         # Keep audit log bounded
         data["command_audit"] = data["command_audit"][-50:]
@@ -5571,13 +5917,15 @@ def update_live_record(section: str, data: str) -> str:
                 lr['intent']['goal_history'] = []
             lr['intent']['goal_history'].insert(0, {
                 'goal': old_goal,
-                'completed_at': datetime.now().isoformat()
+                'completed_at': datetime.now().isoformat(),
+                **_new_record_attribution("update_live_record"),
             })
             # Keep only last 5 goals
             lr['intent']['goal_history'] = lr['intent']['goal_history'][:5]
 
         # Update intent with new data
         lr['intent'].update(update_data)
+        lr['intent'].update(_new_record_attribution("update_live_record"))
         # Always update timestamp when intent changes
         lr['intent']['updated_at'] = datetime.now().isoformat()
         _maybe_record_solved_bug_from_memory_event(
@@ -5733,6 +6081,7 @@ def _update_work_context_impl(
 
     # Always refresh next_step (clear stale values)
     update_data['next_step'] = _normalize_next_step(next_step) if next_step else ""
+    update_data.update(_new_record_attribution(tool_name))
 
     # Update the intent section
     project_id = session.project_id
@@ -5794,12 +6143,29 @@ def _load_project_lightweight(project_id: str) -> Dict[str, Any]:
     if not path.exists():
         return {}
     with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+        data = json.load(handle)
+    bases = getattr(_project_load_state, "bases", {})
+    bases[project_id] = copy.deepcopy(data)
+    _project_load_state.bases = bases
+    return data
 
 
 def _save_project_lightweight(project_id: str, data: Dict[str, Any]) -> None:
     path = _get_project_path(project_id)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if _safe_file_available:
+        bases = getattr(_project_load_state, "bases", {})
+        base = bases.get(project_id, {})
+        _ensure_new_durable_attribution(base, data)
+        saved_data = atomic_json_update(
+            str(path),
+            lambda current: _merge_concurrent_value(base, current or {}, data),
+            default={},
+            create_backup=False,
+        )
+        bases[project_id] = copy.deepcopy(saved_data)
+        _project_load_state.bases = bases
+        return
     fd, temp_path = tempfile.mkstemp(dir=path.parent, prefix=f".{path.stem}_", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -6038,8 +6404,6 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
                 policy_message = f"\n⚠️ **Similar decision exists:** {existing.get('decision', '')[:60]}..."
                 break
 
-    actor_identity = _resolve_actor_identity()
-
     # Log the decision
     decision_record = {
         "type": "decision",
@@ -6047,12 +6411,10 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
         "reason": reason,
         "expected_benefit": "",
         "timestamp": datetime.now().isoformat(),
-        "actor": actor_identity.get("editor", "unknown"),
-        "actor_source": actor_identity.get("source", "none"),
-        "actor_confidence": actor_identity.get("confidence", 0.0),
         "importance": "permanent",
         "forced": force if force else None
     }
+    decision_record.update(_new_record_attribution("fo_decide"))
     memory['decisions'].append(_attach_memory_quality_audit("decision", decision_record))
     _maybe_record_solved_bug_from_memory_event(
         memory,
@@ -6094,17 +6456,14 @@ def log_avoid(what: str, reason: str) -> str:
     if 'avoid' not in memory:
         memory['avoid'] = []
 
-    actor_identity = _resolve_actor_identity()
     avoid_record = {
         "type": "avoid",  # Marked as avoid - will NEVER be archived
         "what": what,
         "reason": reason,
         "timestamp": datetime.now().isoformat(),
-        "actor": actor_identity.get("editor", "unknown"),
-        "actor_source": actor_identity.get("source", "none"),
-        "actor_confidence": actor_identity.get("confidence", 0.0),
         "importance": "permanent"  # Avoid patterns never decay
     }
+    avoid_record.update(_new_record_attribution("fo_decide"))
     memory['avoid'].append(_attach_memory_quality_audit("avoid", avoid_record))
 
     _save_project(session.project_id, memory)
@@ -6163,12 +6522,14 @@ def supersede_decision(
     if not _policy_available:
         return context + "Policy engine not available. Cannot supersede decisions."
 
+    attribution = _new_record_attribution("fo_decide")
     success, message, updated_decisions = do_supersede(
         memory['decisions'],
         old_decision,
         new_decision,
         new_reason,
-        supersede_reason or "Superseded via MCP tool"
+        supersede_reason or "Superseded via MCP tool",
+        attribution=attribution,
     )
 
     if not success:
@@ -6258,7 +6619,7 @@ def update_component_status(name: str, status: str, desc: str = "") -> str:
 
     session = _get_session()
     memory = _load_project(session.project_id)
-    actor_identity = _resolve_actor_identity()
+    attribution = _new_record_attribution("fo_component")
 
     # Ensure live_record and architecture exist
     if 'live_record' not in memory:
@@ -6281,8 +6642,9 @@ def update_component_status(name: str, status: str, desc: str = "") -> str:
             if desc:
                 comp['desc'] = desc
             comp['updated_at'] = datetime.now().isoformat()
-            comp['updated_by'] = actor_identity.get("editor", "unknown")
-            comp['update_source'] = actor_identity.get("source", "fallback")
+            comp['updated_by'] = attribution["actor"]
+            comp['update_source'] = attribution["actor_source"]
+            comp.update(attribution)
             found = True
             action = f"Updated '{name}': {old_status} → {status}"
             break
@@ -6295,9 +6657,10 @@ def update_component_status(name: str, status: str, desc: str = "") -> str:
             "desc": desc or f"Added by AI",
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
-            "updated_by": actor_identity.get("editor", "unknown"),
-            "update_source": actor_identity.get("source", "fallback"),
+            "updated_by": attribution["actor"],
+            "update_source": attribution["actor_source"],
         }
+        new_comp.update(attribution)
         components.append(new_comp)
         action = f"Created '{name}' with status: {status}"
 
@@ -6934,8 +7297,6 @@ def log_debug_session(
     files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
     symptoms_list = [s.strip() for s in symptoms.split(",") if s.strip()] if symptoms else []
 
-    actor_identity = _resolve_actor_identity()
-
     # Create debug session
     debug_session = {
         "id": f"debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -6946,11 +7307,9 @@ def log_debug_session(
         "symptoms": symptoms_list,
         "files_changed": files_list,
         "resolved_at": datetime.now().isoformat(),
-        "actor": actor_identity.get("editor", "unknown"),
-        "actor_source": actor_identity.get("source", "none"),
-        "actor_confidence": actor_identity.get("confidence", 0.0),
         "importance": "high"  # Debug sessions are always important
     }
+    debug_session.update(_new_record_attribution("fo_solved"))
     _attach_memory_quality_audit("debug_session", debug_session)
 
     # Check for duplicate/similar debug sessions
@@ -7045,8 +7404,6 @@ def solution_applied(
 
     # Parse files
     files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
-    actor_identity = _resolve_actor_identity()
-
     # Create solution record (same structure as debug_session for compatibility)
     solution_record = {
         "id": f"fix_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -7057,12 +7414,11 @@ def solution_applied(
         "symptoms": [error_message[:100]],  # Use error as symptom for matching
         "files_changed": files_list,
         "resolved_at": datetime.now().isoformat(),
-        "actor": actor_identity.get("editor", "unknown"),
-        "actor_source": actor_identity.get("source", "none"),
-        "actor_confidence": actor_identity.get("confidence", 0.0),
         "importance": "high",  # All fixes are important
         "reuse_count": 0
     }
+    attribution = _new_record_attribution("fo_solved")
+    solution_record.update(attribution)
     _attach_memory_quality_audit("solution", solution_record)
 
     # Check for duplicate (same error already solved)
@@ -7074,9 +7430,11 @@ def solution_applied(
             existing['reuse_count'] = existing.get('reuse_count', 0) + 1
             existing['solution'] = solution  # Update with latest solution
             existing['files_changed'] = files_list or existing.get('files_changed', [])
-            existing.setdefault("actor", actor_identity.get("editor", "unknown"))
-            existing.setdefault("actor_source", actor_identity.get("source", "none"))
-            existing.setdefault("actor_confidence", actor_identity.get("confidence", 0.0))
+            existing.setdefault("actor", attribution["actor"])
+            existing.setdefault("actor_source", attribution["actor_source"])
+            existing.setdefault("actor_confidence", attribution["actor_confidence"])
+            existing.setdefault("session_id", attribution["session_id"])
+            existing.setdefault("tool_name", attribution["tool_name"])
             _attach_memory_quality_audit("solution", existing)
             _save_project(session.project_id, memory)
             # Minimal response
@@ -8648,14 +9006,16 @@ def mark_command_executed(command_id: str, result: str = "success", details: str
     if "command_audit" not in memory:
         memory["command_audit"] = []
 
-    memory["command_audit"].append({
+    audit_entry = {
         "id": command_id,
         "action": "executed",
         "result": result,
         "details": details[:200] if details else "",
         "timestamp": datetime.now().isoformat(),
         "executed_by": _detect_editor()
-    })
+    }
+    audit_entry.update(_new_record_attribution("mark_command_executed"))
+    memory["command_audit"].append(audit_entry)
 
     # Keep audit bounded
     memory["command_audit"] = memory["command_audit"][-50:]
@@ -8783,7 +9143,8 @@ def save_resume_state(
         last_completed_step=last_completed_step,
         current_status=current_status,
         next_recommended_action=next_recommended_action,
-        short_summary=short_summary
+        short_summary=short_summary,
+        attribution=_new_record_attribution("save_resume_state"),
     )
 
     if "error" in result:
