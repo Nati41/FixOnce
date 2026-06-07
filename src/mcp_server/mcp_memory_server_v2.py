@@ -6431,6 +6431,12 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
     if _policy_available:
         # Filter to active decisions only for validation
         active_decisions = [d for d in memory['decisions'] if not d.get('superseded')]
+
+        # Extract vision non-negotiables and avoid patterns for validation
+        vision = _ensure_vision_store(memory)
+        non_negotiables = _active_vision_items(vision, "non_negotiables")
+        avoid_patterns = [p for p in memory.get("avoid", []) if isinstance(p, dict)]
+
         decision_gate_evaluator = None
         if _intervention_policy_available:
             decision_gate_evaluator = lambda ctx: _evaluate_current_decision_conflict_gate(
@@ -6440,7 +6446,10 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
                 intent=decision,
             )
         is_valid, message, conflicts = validate_decision(
-            decision, reason, active_decisions, force=force, gate_evaluator=decision_gate_evaluator
+            decision, reason, active_decisions,
+            non_negotiables=non_negotiables,
+            avoid_patterns=avoid_patterns,
+            force=force, gate_evaluator=decision_gate_evaluator
         )
 
         _log(f"[PolicyEngine] Validating: {decision[:50]}...")

@@ -52,13 +52,34 @@ CONFLICT_PATTERNS = [
 
 # Topic keywords that help identify related decisions
 TOPIC_KEYWORDS = {
-    "storage": ["store", "storage", "save", "persist", "database", "אחסון"],
+    "storage": ["store", "storage", "save", "persist", "אחסון"],
     "language": ["english", "hebrew", "language", "עברית", "שפה", "translation"],
     "ui": ["ui", "dashboard", "display", "show", "render", "interface"],
     "api": ["api", "endpoint", "route", "rest", "http"],
     "auth": ["auth", "login", "session", "token", "permission"],
     "data": ["data", "format", "schema", "structure", "json"],
+    "infrastructure": ["cloud", "firebase", "firestore", "aws", "gcp", "azure", "remote", "server", "hosted"],
+    "database": ["database", "db", "sql", "postgres", "postgresql", "mysql", "mongo", "mongodb", "firestore", "sqlite"],
 }
+
+# ============================================================
+# NON-NEGOTIABLE CONSTRAINT PATTERNS
+# ============================================================
+
+# Maps non-negotiable phrases to the decision keywords they block
+# Format: (non_negotiable_pattern, blocked_keywords)
+NON_NEGOTIABLE_BLOCKERS = [
+    # Local-only constraints block cloud/remote services
+    (r"\blocal\s+only\b", ["cloud", "firebase", "firestore", "aws", "gcp", "azure", "remote", "hosted", "server"]),
+    (r"\bno\s+cloud\b", ["cloud", "firebase", "firestore", "aws", "gcp", "azure", "remote", "hosted"]),
+    (r"\bno\s+cloud\s+service", ["cloud", "firebase", "firestore", "aws", "gcp", "azure", "remote", "hosted"]),
+    (r"\bno\s+external\s+service", ["cloud", "firebase", "firestore", "aws", "gcp", "azure", "external", "remote", "hosted"]),
+    (r"\bno\s+external\s+storage", ["cloud", "firebase", "firestore", "aws", "gcp", "azure", "s3", "remote", "hosted"]),
+    # No-database constraints block database usage
+    (r"\bno\s+database\b", ["database", "db", "sql", "postgres", "postgresql", "mysql", "mongo", "mongodb", "firestore", "sqlite"]),
+    # No-auth constraints
+    (r"\bno\s+auth", ["auth", "authentication", "login", "oauth", "session"]),
+]
 
 
 def extract_topics(text: str) -> set:
@@ -158,20 +179,128 @@ def detect_antonym_conflict(text1: str, text2: str) -> Optional[Tuple[str, str, 
     return None
 
 
+def check_non_negotiable_violations(
+    decision_text: str,
+    non_negotiables: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Check if a decision violates any active non-negotiable constraints.
+
+    Returns list of HIGH-severity conflicts for each violation.
+    """
+    if not non_negotiables:
+        return []
+
+    violations = []
+    decision_lower = decision_text.lower()
+
+    for constraint in non_negotiables:
+        if not isinstance(constraint, dict):
+            continue
+        if constraint.get("status", "active") != "active":
+            continue
+
+        constraint_text = constraint.get("text", "").lower()
+        if not constraint_text:
+            continue
+
+        for pattern, blocked_keywords in NON_NEGOTIABLE_BLOCKERS:
+            if not re.search(pattern, constraint_text, re.IGNORECASE):
+                continue
+
+            for keyword in blocked_keywords:
+                if keyword in decision_lower:
+                    violations.append({
+                        "type": "NON_NEGOTIABLE_VIOLATION",
+                        "severity": "HIGH",
+                        "existing_decision": constraint.get("text", ""),
+                        "existing_reason": constraint.get("reason", "Project non-negotiable constraint"),
+                        "existing_actor": constraint.get("actor", "user"),
+                        "existing_actor_source": constraint.get("actor_source", "vision"),
+                        "timestamp": constraint.get("timestamp", constraint.get("created_at", "")),
+                        "topics": ["infrastructure", "constraint"],
+                        "blocked_keyword": keyword,
+                        "message": f"Violates non-negotiable: '{constraint.get('text', '')}' (blocked: '{keyword}')"
+                    })
+                    break
+            else:
+                continue
+            break
+
+    return violations
+
+
+def check_avoid_pattern_conflicts(
+    decision_text: str,
+    avoid_patterns: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Check if a decision conflicts with any avoid patterns.
+
+    Returns list of MEDIUM-severity conflicts for matches.
+    """
+    if not avoid_patterns:
+        return []
+
+    conflicts = []
+    decision_lower = decision_text.lower()
+    decision_words = set(re.findall(r'\w+', decision_lower))
+
+    for pattern in avoid_patterns:
+        if not isinstance(pattern, dict):
+            continue
+
+        what = (pattern.get("what", "") or "").lower()
+        if not what:
+            continue
+
+        what_words = set(re.findall(r'\w+', what))
+        overlap = decision_words & what_words
+
+        if len(overlap) >= 2 or any(word in decision_lower for word in what_words if len(word) > 4):
+            conflicts.append({
+                "type": "AVOID_PATTERN_CONFLICT",
+                "severity": "MEDIUM",
+                "existing_decision": pattern.get("what", ""),
+                "existing_reason": pattern.get("reason", "Marked as avoid pattern"),
+                "existing_actor": pattern.get("actor", "unknown"),
+                "existing_actor_source": pattern.get("actor_source", "avoid"),
+                "timestamp": pattern.get("timestamp", ""),
+                "topics": list(extract_topics(what)),
+                "overlap": list(overlap),
+                "message": f"Conflicts with avoid pattern: '{pattern.get('what', '')}'"
+            })
+
+    return conflicts
+
+
 def detect_conflicts(
     new_decision: str,
     new_reason: str,
     existing_decisions: List[Dict[str, Any]],
+    non_negotiables: Optional[List[Dict[str, Any]]] = None,
+    avoid_patterns: Optional[List[Dict[str, Any]]] = None,
     threshold: float = 0.3
 ) -> List[Dict[str, Any]]:
     """
-    Detect potential conflicts between new decision and existing ones.
+    Detect potential conflicts between new decision and existing ones,
+    non-negotiable constraints, and avoid patterns.
 
     Returns list of conflicts with severity and explanation.
     """
     conflicts = []
     new_text = f"{new_decision} {new_reason}"
     new_topics = extract_topics(new_text)
+
+    # Check non-negotiable violations first (highest priority)
+    if non_negotiables:
+        violations = check_non_negotiable_violations(new_text, non_negotiables)
+        conflicts.extend(violations)
+
+    # Check avoid pattern conflicts
+    if avoid_patterns:
+        avoid_conflicts = check_avoid_pattern_conflicts(new_text, avoid_patterns)
+        conflicts.extend(avoid_conflicts)
 
     for existing in existing_decisions:
         # Skip superseded decisions
@@ -255,6 +384,8 @@ def validate_decision(
     decision: str,
     reason: str,
     existing_decisions: List[Dict[str, Any]],
+    non_negotiables: Optional[List[Dict[str, Any]]] = None,
+    avoid_patterns: Optional[List[Dict[str, Any]]] = None,
     force: bool = False,
     gate_evaluator: Optional[Callable[[InterventionContext], Any]] = None,
 ) -> Tuple[bool, str, List[Dict[str, Any]]]:
@@ -267,7 +398,11 @@ def validate_decision(
         - message: Explanation
         - conflicts: List of detected conflicts
     """
-    conflicts = detect_conflicts(decision, reason, existing_decisions)
+    conflicts = detect_conflicts(
+        decision, reason, existing_decisions,
+        non_negotiables=non_negotiables,
+        avoid_patterns=avoid_patterns,
+    )
 
     if not conflicts:
         return True, "No conflicts detected", []
