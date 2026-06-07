@@ -85,69 +85,75 @@ def calculate_similarity(text1: str, text2: str) -> float:
     return len(intersection) / len(union)
 
 
-def detect_antonym_conflict(text1: str, text2: str) -> Optional[Tuple[str, str]]:
-    """Check if two texts contain antonym pairs suggesting conflict."""
+def detect_antonym_conflict(text1: str, text2: str) -> Optional[Tuple[str, str, str]]:
+    """
+    Check if two texts contain semantic conflicts.
+
+    Returns:
+        None if no conflict detected.
+        (term1, term2, strength) where strength is:
+        - "HIGH": Explicit negation conflict (negated target appears in both texts)
+        - "WEAK": Antonym pair match (may be false positive, should not block)
+    """
     text1_lower = text1.lower()
     text2_lower = text2.lower()
 
+    # Stop words that should not be considered as negation targets
+    STOP_WORDS = {"the", "a", "an", "to", "in", "on", "at", "is", "are", "be", "we", "it",
+                  "use", "store", "do", "for", "with", "from", "by", "as", "of", "and", "or",
+                  "mvp", "v1", "v2", "phase", "version"}  # Also exclude version/phase markers
+
+    def _get_negated_target(text: str, neg_word: str) -> Optional[str]:
+        """Get the primary substantive word being negated (first 1-3 words after negation)."""
+        # Match up to 3 words after negation to find the real target
+        pattern = rf'\b{re.escape(neg_word)}\s+(\w+)(?:\s+(\w+))?(?:\s+(\w+))?'
+        match = re.search(pattern, text.lower())
+        if not match:
+            return None
+        # Check each word in order, return first substantive one
+        for group in [match.group(1), match.group(2), match.group(3)]:
+            if group and len(group) > 2 and group not in STOP_WORDS:
+                return group
+        return None
+
+    # HIGH CONFIDENCE: Explicit negation conflicts
+    # Only flag when the primary NEGATED TARGET appears in both texts.
+    # "Do not use PostgreSQL" vs "Use PostgreSQL" → HIGH (postgresql in both)
+    # "No external database" vs "Use local JSON" → None (external not in second)
+    # "No external database in MVP" vs "Use local JSON in MVP" → None (MVP is context, not target)
+    for neg in NEGATION_WORDS:
+        if neg in text1_lower and neg not in text2_lower:
+            negated_target = _get_negated_target(text1_lower, neg)
+            if negated_target and negated_target in text2_lower:
+                return (f"{neg} {negated_target}", negated_target, "HIGH")
+        if neg in text2_lower and neg not in text1_lower:
+            negated_target = _get_negated_target(text2_lower, neg)
+            if negated_target and negated_target in text1_lower:
+                return (negated_target, f"{neg} {negated_target}", "HIGH")
+
+    # Check regex-based conflict patterns (explicit contradictions)
+    for pattern1, pattern2 in CONFLICT_PATTERNS:
+        if re.search(pattern1, text1_lower) and re.search(pattern2, text2_lower):
+            return (pattern1, pattern2, "HIGH")
+        if re.search(pattern2, text1_lower) and re.search(pattern1, text2_lower):
+            return (pattern2, pattern1, "HIGH")
+
+    # WEAK CONFIDENCE: Antonym pair matches
+    # These often produce false positives (e.g., "use" + "avoid" in unrelated contexts)
+    # Demoted to WEAK - should warn, not block
     def _is_negated(text: str, word: str) -> bool:
-        """Check if a word is preceded by a negation in the text."""
         for neg in NEGATION_WORDS:
             if re.search(rf'\b{re.escape(neg)}\b\s+\w*\s*{re.escape(word)}', text):
                 return True
         return False
 
-    # Check antonym pairs, but skip if one is negated (negated antonyms align)
     for word1, word2 in ANTONYM_PAIRS:
         if word1 in text1_lower and word2 in text2_lower:
-            # "No external" + "internal" are ALIGNED, not conflicting
-            # Only conflict if neither antonym is negated
             if not _is_negated(text1_lower, word1) and not _is_negated(text2_lower, word2):
-                return (word1, word2)
+                return (word1, word2, "WEAK")
         if word2 in text1_lower and word1 in text2_lower:
             if not _is_negated(text1_lower, word2) and not _is_negated(text2_lower, word1):
-                return (word2, word1)
-
-    # Check negation conflicts (same topic but one negated)
-    # Only flag if the NEGATED TARGET (word after negation) appears in both texts,
-    # not just any shared topic word. This prevents false positives where
-    # "No external database" vs "Use local database" are flagged as conflicts
-    # when they actually support each other.
-    topic_words = set()
-    for keywords in TOPIC_KEYWORDS.values():
-        topic_words.update(kw.lower() for kw in keywords)
-
-    def _get_negated_target(text: str, neg_word: str) -> Optional[str]:
-        """Get the word immediately following the negation (the thing being negated)."""
-        pattern = rf'\b{re.escape(neg_word)}\s+(\w+)'
-        match = re.search(pattern, text.lower())
-        return match.group(1) if match else None
-
-    words1 = set(re.findall(r'\w+', text1_lower))
-    words2 = set(re.findall(r'\w+', text2_lower))
-    shared_topics = words1 & words2 & topic_words
-
-    for neg in NEGATION_WORDS:
-        if neg in text1_lower and neg not in text2_lower:
-            negated_target = _get_negated_target(text1_lower, neg)
-            if negated_target and negated_target in text2_lower:
-                # Negated target appears in both - conflict if:
-                # 1. The negated target is a topic word (e.g., "no database" vs "use database")
-                # 2. OR they share a topic AND negated target is in both (e.g., "no external api" vs "use external api")
-                if negated_target in topic_words or shared_topics:
-                    return (f"{neg} {negated_target}", "positive context")
-        if neg in text2_lower and neg not in text1_lower:
-            negated_target = _get_negated_target(text2_lower, neg)
-            if negated_target and negated_target in text1_lower:
-                if negated_target in topic_words or shared_topics:
-                    return ("positive context", f"{neg} {negated_target}")
-
-    # Check regex-based conflict patterns
-    for pattern1, pattern2 in CONFLICT_PATTERNS:
-        if re.search(pattern1, text1_lower) and re.search(pattern2, text2_lower):
-            return (pattern1, pattern2)
-        if re.search(pattern2, text1_lower) and re.search(pattern1, text2_lower):
-            return (pattern2, pattern1)
+                return (word2, word1, "WEAK")
 
     return None
 
@@ -174,27 +180,52 @@ def detect_conflicts(
 
         existing_text = f"{existing.get('decision', '')} {existing.get('reason', '')}"
         existing_topics = extract_topics(existing_text)
-
-        # Check topic overlap
         topic_overlap = new_topics & existing_topics
-        if not topic_overlap:
-            continue  # Different topics, no conflict
 
-        # Check for antonym conflicts (high severity)
-        antonyms = detect_antonym_conflict(new_text, existing_text)
-        if antonyms:
+        # Check for semantic conflicts
+        conflict_result = detect_antonym_conflict(new_text, existing_text)
+        if conflict_result:
+            term1, term2, strength = conflict_result
+            # HIGH strength = explicit negation conflict (block)
+            # For HIGH conflicts, the shared word IS the topic (e.g., "postgresql")
+            if strength == "HIGH":
+                # Use detected topic overlap, or infer from the conflict term
+                conflict_topics = list(topic_overlap) if topic_overlap else [term2]
+                conflicts.append({
+                    "type": "CONTRADICTION",
+                    "severity": "HIGH",
+                    "existing_decision": existing.get("decision", ""),
+                    "existing_reason": existing.get("reason", ""),
+                    "existing_actor": existing.get("actor", "unknown"),
+                    "existing_actor_source": existing.get("actor_source", "none"),
+                    "timestamp": existing.get("timestamp", ""),
+                    "topics": conflict_topics,
+                    "antonyms": (term1, term2),
+                    "message": f"Direct contradiction detected: '{term1}' vs '{term2}' on topics: {', '.join(conflict_topics)}"
+                })
+                continue
+
+            # WEAK conflicts require topic overlap to be meaningful
+            if not topic_overlap:
+                continue  # Antonym match without topic overlap - ignore
+
+            # WEAK conflicts get MEDIUM severity - warn but don't block
             conflicts.append({
-                "type": "CONTRADICTION",
-                "severity": "HIGH",
+                "type": "POTENTIAL_CONFLICT",
+                "severity": "MEDIUM",
                 "existing_decision": existing.get("decision", ""),
                 "existing_reason": existing.get("reason", ""),
                 "existing_actor": existing.get("actor", "unknown"),
                 "existing_actor_source": existing.get("actor_source", "none"),
                 "timestamp": existing.get("timestamp", ""),
                 "topics": list(topic_overlap),
-                "antonyms": antonyms,
-                "message": f"Direct contradiction detected: '{antonyms[0]}' vs '{antonyms[1]}' on topics: {', '.join(topic_overlap)}"
+                "antonyms": (term1, term2),
+                "message": f"Potential conflict: '{term1}' and '{term2}' appear in related statements on topics: {', '.join(topic_overlap)}"
             })
+            continue
+
+        # For similarity check, require topic overlap
+        if not topic_overlap:
             continue
 
         # Check similarity (medium severity)

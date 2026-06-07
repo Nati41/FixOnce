@@ -158,6 +158,86 @@ class TestTeamMemoryFoundation(unittest.TestCase):
                 f"Missing conflict: {proposed!r} SHOULD conflict with {existing!r}"
             )
 
+    def test_conflict_severity_explicit_negation_is_high(self):
+        """HIGH severity only for explicit negation where target appears in both texts."""
+        high_conflict_cases = [
+            ("Use PostgreSQL for storage", "Do not use PostgreSQL"),
+            ("Always store in English", "Never store in English"),
+            ("Use JSON format", "Don't use JSON"),
+        ]
+        for decision1, decision2 in high_conflict_cases:
+            conflicts = detect_conflicts(
+                decision2, "", [{"decision": decision1, "reason": ""}]
+            )
+            self.assertEqual(len(conflicts), 1, f"Expected conflict: {decision1} vs {decision2}")
+            self.assertEqual(
+                conflicts[0]["severity"], "HIGH",
+                f"Expected HIGH severity for: {decision1} vs {decision2}, got {conflicts[0]['severity']}"
+            )
+
+    def test_conflict_severity_antonym_pairs_are_medium_not_high(self):
+        """Antonym pair matches (use/avoid) should be MEDIUM, not HIGH."""
+        weak_conflict_cases = [
+            ("Use JSON storage", "Avoid JSON in production"),
+            ("Use local storage", "Prefer remote storage"),
+        ]
+        for decision1, decision2 in weak_conflict_cases:
+            conflicts = detect_conflicts(
+                decision2, "", [{"decision": decision1, "reason": ""}]
+            )
+            if conflicts:
+                self.assertNotEqual(
+                    conflicts[0]["severity"], "HIGH",
+                    f"Antonym match should NOT be HIGH: {decision1} vs {decision2}"
+                )
+
+    def test_meta_descriptions_do_not_conflict(self):
+        """Meta-descriptions like 'what we avoid' should not trigger conflicts."""
+        # The word 'avoid' in 'what we avoid' is describing the document, not a rule
+        vision_with_meta = "TaskPilot Vision: simplicity over features"
+        vision_reason = "Founding vision - defines what we build and what we explicitly avoid"
+
+        conflicts = detect_conflicts(
+            "Use JSON storage", "Local persistence",
+            [{"decision": vision_with_meta, "reason": vision_reason}]
+        )
+        # Should not have HIGH conflict just because reason contains 'avoid'
+        high_conflicts = [c for c in conflicts if c["severity"] == "HIGH"]
+        self.assertEqual(
+            len(high_conflicts), 0,
+            f"Meta-description should not cause HIGH conflict, got: {conflicts}"
+        )
+
+    def test_no_external_database_vs_use_local_json_no_conflict(self):
+        """Specific regression: vision 'No external database' + decision 'Use local JSON' should align."""
+        conflicts = detect_conflicts(
+            "TaskPilot uses a local JSON file as storage",
+            "Local persistence for MVP",
+            [{"decision": "No external database in MVP", "reason": "Keep it simple"}]
+        )
+        high_conflicts = [c for c in conflicts if c["severity"] == "HIGH"]
+        self.assertEqual(
+            len(high_conflicts), 0,
+            f"Supporting decision should not have HIGH conflict: {conflicts}"
+        )
+
+    def test_compatible_statements_same_topic_no_conflict(self):
+        """Compatible statements on same topic should not conflict."""
+        compatible_cases = [
+            ("Store data in JSON format", "Use JSON for persistence"),
+            ("Use local storage", "Store data locally"),
+            ("No external dependencies", "Keep dependencies internal"),
+        ]
+        for existing, proposed in compatible_cases:
+            conflicts = detect_conflicts(
+                proposed, "", [{"decision": existing, "reason": ""}]
+            )
+            high_conflicts = [c for c in conflicts if c["severity"] == "HIGH"]
+            self.assertEqual(
+                len(high_conflicts), 0,
+                f"Compatible statements should not conflict: {existing} vs {proposed}"
+            )
+
     def test_persistent_audit_is_bounded_and_portable(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
