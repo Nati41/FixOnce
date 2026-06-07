@@ -104,7 +104,7 @@ Then configure MCP for your editor. See [docs](https://nati41.github.io/FixOnce/
 
 ## Version
 
-**v1.0.12** — Port 5000
+**v1.0.13** — Port 5000
 
 ---
 

@@ -20,7 +20,7 @@ Build a professional Windows installer using Inno Setup.
 ### Option 1: GUI
 1. Open `fixonce_setup.iss` in Inno Setup Compiler
 2. Click **Build > Compile** (or press F9)
-3. Output: `installer/Output/FixOnce_Setup_1.0.12.exe`
+3. Output: `installer/Output/FixOnce_Setup_1.0.13.exe`
 
 ### Option 2: Command Line
 ```cmd
@@ -64,7 +64,7 @@ installer/
 ├── fixonce_setup.iss    # Inno Setup script
 ├── README.md            # This file
 └── Output/              # Generated installers go here
-    └── FixOnce_Setup_1.0.12.exe
+    └── FixOnce_Setup_1.0.13.exe
 ```
 
 ## Customization

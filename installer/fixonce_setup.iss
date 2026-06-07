@@ -8,7 +8,7 @@
 ; 4. Output: installer/Output/FixOnce_Setup.exe
 
 #define MyAppName "FixOnce"
-#define MyAppVersion "1.0.12"
+#define MyAppVersion "1.0.13"
 #define MyAppPublisher "FixOnce"
 #define MyAppURL "https://github.com/fixonce/fixonce"
 #define MyAppExeName "FixOnce.exe"

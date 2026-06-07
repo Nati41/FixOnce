@@ -99,8 +99,8 @@ class TestInnoSetupWiring(unittest.TestCase):
     def test_installer_version_matches_app_version(self):
         version_file = PROJECT_ROOT / "src" / "version.py"
         version_text = version_file.read_text(encoding="utf-8")
-        self.assertIn('__version__ = "1.0.12"', version_text)
-        self.assertIn('#define MyAppVersion "1.0.12"', self.inno_text)
+        self.assertIn('__version__ = "1.0.13"', version_text)
+        self.assertIn('#define MyAppVersion "1.0.13"', self.inno_text)
 
 
 if __name__ == "__main__":

@@ -68,7 +68,7 @@ echo ======================================
 echo.
 echo Outputs:
 echo   EXE:       dist\FixOnce\FixOnce.exe
-echo   Installer: installer\Output\FixOnce_Setup_1.0.12.exe
+echo   Installer: installer\Output\FixOnce_Setup_1.0.13.exe
 echo.
 echo Distribution options:
 echo   - Share the Installer for full experience

@@ -570,7 +570,7 @@ try {
     $state = @{
         "installed" = $true
         "installed_at" = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-        "version" = "1.0.12"
+        "version" = "1.0.13"
         "installer" = "powershell"
         "install_dir" = $InstallDir
         "app_exe" = (Join-Path $InstallDir "FixOnce.exe")

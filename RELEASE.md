@@ -1,4 +1,4 @@
-# FixOnce v1.0.12
+# FixOnce v1.0.13
 
 ## Install
 
@@ -14,12 +14,12 @@ Or download from [install page](https://nati41.github.io/FixOnce/install.html).
 ## Build (for maintainers)
 
 ```bash
-python3 scripts/build_release.py --version 1.0.12
+python3 scripts/build_release.py --version 1.0.13
 ```
 
 Output:
-- `dist/FixOnce-v1.0.12/FixOnce-macOS-v1.0.12.zip`
-- `dist/FixOnce-v1.0.12/FixOnce-Windows-v1.0.12.zip`
+- `dist/FixOnce-v1.0.13/FixOnce-macOS-v1.0.13.zip`
+- `dist/FixOnce-v1.0.13/FixOnce-Windows-v1.0.13.zip`
 
 ---
 
@@ -33,6 +33,6 @@ Output:
 
 ## Version Info
 
-- **Version:** v1.0.12
+- **Version:** v1.0.13
 - **Port:** 5000
 - **MCP Tools:** fo_init, fo_errors, fo_apply, fo_sync, fo_search, fo_solved, fo_decide
