@@ -826,6 +826,11 @@ sys.path.insert(0, str(SRC_DIR))
 
 from fastmcp import FastMCP
 from core.agent_context import AgentContext, classify_agent_intent
+from core.conflict_lifecycle import (
+    bound_conflicts,
+    resolve_decision_conflicts,
+    upsert_decision_conflicts,
+)
 from core.system_mode import get_system_mode, MODE_FULL, MODE_PASSIVE, MODE_OFF
 
 _agent_intervention_available = False
@@ -1629,6 +1634,93 @@ def _persist_agent_audit(project_id: str, entries: List[Dict[str, Any]]) -> None
     session = _get_session()
     if session.project_id == project_id and session.working_dir:
         _persist_portable_team_memory(project_id, session.working_dir, memory)
+
+
+def _persist_detected_decision_conflicts(
+    project_id: str,
+    conflicts: List[Dict[str, Any]],
+    proposed_decision: str,
+    proposed_reason: str,
+    *,
+    resolve_as_override: bool = False,
+) -> List[str]:
+    """Upsert detected conflicts even when the proposed decision is blocked."""
+    if not conflicts or not project_id or project_id == "unknown-project":
+        return []
+    path = _get_project_path(project_id)
+    if not path.exists() or not _safe_file_available:
+        return []
+
+    attribution = _new_record_attribution("fo_decide")
+    touched_ids: List[str] = []
+
+    def mutate(memory):
+        nonlocal touched_ids
+        memory, touched_ids = upsert_decision_conflicts(
+            dict(memory or {}),
+            conflicts,
+            proposed_decision,
+            proposed_reason,
+            attribution=attribution,
+        )
+        if resolve_as_override:
+            memory, _ = resolve_decision_conflicts(
+                memory,
+                status="resolved",
+                action="accepted_override",
+                reason=proposed_reason or "Decision accepted with force override.",
+                attribution=attribution,
+                conflict_ids=touched_ids,
+            )
+        return memory
+
+    memory = durable_memory_write(
+        path,
+        mutator=mutate,
+        attribution=attribution,
+        tool_name="fo_decide",
+        create_backup=False,
+    )
+    session = _get_session()
+    if session.project_id == project_id and session.working_dir:
+        _persist_portable_team_memory(project_id, session.working_dir, memory)
+    return touched_ids
+
+
+def _resolve_decision_conflict_by_id(conflict_id: str, reason: str) -> str:
+    """Explicitly resolve one open conflict through fo_decide."""
+    error, context = _universal_gate("fo_decide")
+    if error:
+        return error
+    session = _get_session()
+    attribution = _new_record_attribution("fo_decide")
+    resolved_count = 0
+
+    def mutate(memory):
+        nonlocal resolved_count
+        memory, resolved_count = resolve_decision_conflicts(
+            dict(memory or {}),
+            status="resolved",
+            action="manual_resolution",
+            reason=reason,
+            attribution=attribution,
+            conflict_ids=[conflict_id],
+        )
+        return memory
+
+    memory = durable_memory_write(
+        _get_project_path(session.project_id),
+        mutator=mutate,
+        attribution=attribution,
+        tool_name="fo_decide",
+        create_backup=True,
+        require_existing=True,
+    )
+    if resolved_count == 0:
+        return context + f"Conflict not found or already closed: {conflict_id}"
+    if session.working_dir:
+        _persist_portable_team_memory(session.project_id, session.working_dir, memory)
+    return context + f"Resolved conflict: {conflict_id}"
 
 
 def get_agent_evaluation_flow_audit() -> Dict[str, Dict[str, Any]]:
@@ -3362,24 +3454,32 @@ def _format_deep_project_brief(memory: Dict[str, Any], mode: str = "compact") ->
             f"{handoff.get('next_action', handoff.get('next_step', 'No next action recorded.'))}"
         )
 
+    severity_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
     unresolved_conflicts = [
-        entry for entry in memory.get("agent_audit", [])
-        if isinstance(entry, dict)
-        and entry.get("gate") == "decision_conflict_gate"
-        and entry.get("verdict") in {"warn", "block"}
+        conflict for conflict in memory.get("decision_conflicts", [])
+        if isinstance(conflict, dict)
+        and conflict.get("status", "open") == "open"
     ]
+    unresolved_conflicts.sort(
+        key=lambda conflict: (
+            severity_rank.get(str(conflict.get("severity", "")).upper(), 0),
+            conflict.get("last_seen") or conflict.get("updated_at") or "",
+        ),
+        reverse=True,
+    )
     lines.append(f"- Unresolved conflicts: {len(unresolved_conflicts)}")
-    for entry in unresolved_conflicts[-3:]:
-        conflicts = entry.get("evidence", {}).get("conflicts", [])
-        competing = conflicts[0] if conflicts else {}
+    for conflict in unresolved_conflicts[:3]:
+        existing = conflict.get("existing_decision", {})
+        proposed = conflict.get("proposed_decision", {})
         lines.append(
-            f"  - {entry.get('actor_name', 'unknown')} via "
-            f"{entry.get('tool_name', 'unknown-tool')} at "
-            f"{_format_trust_timestamp(entry.get('timestamp', ''))}: "
-            f"{entry.get('verdict')}; competing actor="
-            f"{competing.get('existing_actor', 'unknown')} "
-            f"(source={competing.get('existing_actor_source', 'none')}, "
-            f"timestamp={competing.get('timestamp') or 'unknown'})"
+            f"  - {conflict.get('id', 'unknown-conflict')} "
+            f"[{conflict.get('severity', 'UNKNOWN')}]: "
+            f"existing=\"{_compact_text(existing.get('decision', ''), 100)}\" "
+            f"(actor={existing.get('actor', 'unknown')}) vs "
+            f"proposed=\"{_compact_text(proposed.get('decision', ''), 100)}\" "
+            f"(actor={proposed.get('actor', 'unknown')}). "
+            f"Recommended: supersede the existing decision, accept an override, "
+            f"or resolve this conflict explicitly."
         )
 
     sections = [
@@ -4038,13 +4138,15 @@ def _persist_portable_team_memory(
         return
     audit = list(memory.get("agent_audit", []))[-200:]
     handoffs = list(memory.get("ai_handoffs", []))[-50:]
-    if not audit and not handoffs:
+    conflicts = bound_conflicts(memory.get("decision_conflicts", []))
+    if not audit and not handoffs and not conflicts:
         return
     path = Path(working_dir) / ".fixonce" / "team_memory.json"
     try:
         from core.committed_knowledge import sanitize_portable_value
         audit = sanitize_portable_value(audit)
         handoffs = sanitize_portable_value(handoffs)
+        conflicts = sanitize_portable_value(conflicts)
     except ImportError:
         pass
     if _safe_file_available:
@@ -4083,6 +4185,17 @@ def _persist_portable_team_memory(
                 handoffs,
                 ("timestamp", "from_actor", "to_actor", "next_action"),
                 50,
+            )
+            existing_conflicts = {
+                item.get("id"): item
+                for item in current.get("decision_conflicts", [])
+                if isinstance(item, dict) and item.get("id")
+            }
+            for item in conflicts:
+                if isinstance(item, dict) and item.get("id"):
+                    existing_conflicts[item["id"]] = item
+            current["decision_conflicts"] = bound_conflicts(
+                existing_conflicts.values()
             )
             return current
 
@@ -4125,6 +4238,7 @@ def _init_project_memory(working_dir: str) -> Dict[str, Any]:
             }
         },
         "decisions": [],
+        "decision_conflicts": [],
         "avoid": [],
         "errors": []
     }
@@ -6333,6 +6447,15 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
         _log(f"[PolicyEngine] Against {len(active_decisions)} active decisions")
         _log(f"[PolicyEngine] Result: is_valid={is_valid}, conflicts={len(conflicts)}")
 
+        if conflicts:
+            _persist_detected_decision_conflicts(
+                session.project_id,
+                conflicts,
+                decision,
+                reason,
+                resolve_as_override=bool(force),
+            )
+
         if not is_valid:
             # BLOCK the decision - return error
             return context + f"\n{message}\n\nDecision NOT logged."
@@ -6486,6 +6609,14 @@ def supersede_decision(
         return context + f"❌ {message}"
 
     memory['decisions'] = updated_decisions
+    memory, _ = resolve_decision_conflicts(
+        memory,
+        status="superseded",
+        action="decision_superseded",
+        reason=supersede_reason or "Superseded via MCP tool",
+        attribution=attribution,
+        existing_decision_text=old_decision,
+    )
     _save_project(session.project_id, memory)
 
     # Log MCP activity
@@ -9480,7 +9611,8 @@ def fo_decide(text: str, reason: str, action: str = "add") -> str:
     Args:
         text: The decision or avoid text
         reason: Why this decision was made
-        action: "add" (default), "avoid", or "supersede:OLD_TEXT"
+        action: "add" (default), "avoid", "supersede:OLD_TEXT", or
+                "resolve:CONFLICT_ID"
 
     Examples:
         fo_decide("Use PostgreSQL", "Better for our scale")
@@ -9489,9 +9621,19 @@ def fo_decide(text: str, reason: str, action: str = "add") -> str:
     """
     if action == "avoid":
         return log_avoid(text, reason)
+    elif action.startswith("resolve:"):
+        conflict_id = action[len("resolve:"):].strip()
+        if not conflict_id:
+            return "Error: conflict id is required."
+        return _resolve_decision_conflict_by_id(conflict_id, reason or text)
     elif action.startswith("supersede:"):
         old_text = action[10:]  # Remove "supersede:" prefix
-        return supersede_decision(old_decision_text=old_text, new_decision=text, reason=reason)
+        return supersede_decision(
+            old_decision=old_text,
+            new_decision=text,
+            new_reason=reason,
+            supersede_reason=reason,
+        )
     else:
         return log_decision(text, reason)
 

@@ -400,6 +400,7 @@ def init_project_memory(project_id: str, display_name: str = None, working_dir: 
             "updated_at": now
         },
         "decisions": [],
+        "decision_conflicts": [],
         "avoid": [],
         "active_issues": [],
         "solutions_history": [],
@@ -430,6 +431,7 @@ def init_project_memory(project_id: str, display_name: str = None, working_dir: 
             memory["avoid"].append(avoid)
         memory["agent_audit"] = list(committed_knowledge.get("agent_audit", []))[-200:]
         memory["ai_handoffs"] = list(committed_knowledge.get("handoffs", []))[-50:]
+        memory["decision_conflicts"] = list(committed_knowledge.get("decision_conflicts", []))
         print(f"[MultiProject] Merged {len(memory['decisions'])} decisions, {len(memory['avoid'])} avoid patterns from repo")
 
     project_path = get_project_path(project_id)
@@ -594,6 +596,7 @@ def _build_memory_from_fixonce(working_dir: str, project_id: str, metadata: dict
             "source": "fixonce_portable"
         },
         "decisions": committed.get("decisions", []),
+        "decision_conflicts": committed.get("decision_conflicts", []),
         "avoid": committed.get("avoid", []),
         "debug_sessions": committed.get("solutions", []),
         "agent_audit": committed.get("agent_audit", []),

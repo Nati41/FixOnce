@@ -19,6 +19,7 @@ PathSpec = Tuple[str, ...]
 
 DEFAULT_COLLECTION_PATHS: Tuple[PathSpec, ...] = (
     ("decisions",),
+    ("decision_conflicts",),
     ("avoid",),
     ("debug_sessions",),
     ("ai_handoffs",),

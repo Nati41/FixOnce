@@ -237,6 +237,20 @@ class TestTeamMemoryFoundation(unittest.TestCase):
                     "timestamp": "2026-06-07T07:00:00",
                 }]},
             }],
+            "decision_conflicts": [{
+                "id": "conflict-demo",
+                "status": "open",
+                "severity": "HIGH",
+                "existing_decision": {
+                    "decision": "Use SQLite",
+                    "actor": "claude",
+                },
+                "proposed_decision": {
+                    "decision": "Never use SQLite",
+                    "actor": "codex",
+                },
+                "last_seen": "2026-06-07T08:00:00",
+            }],
             "ai_handoffs": [{
                 "from_actor": "claude",
                 "to_actor": "codex",
@@ -251,7 +265,7 @@ class TestTeamMemoryFoundation(unittest.TestCase):
         self.assertIn("Attribution coverage:", brief)
         self.assertIn("Recent handoffs: 1", brief)
         self.assertIn("Unresolved conflicts: 1", brief)
-        self.assertIn("competing actor=claude", brief)
+        self.assertIn("conflict-demo", brief)
 
 
 if __name__ == "__main__":

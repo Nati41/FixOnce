@@ -573,7 +573,8 @@ def write_committed_knowledge(
     solutions: List[Dict[str, Any]] = None,
     agent_audit: List[Dict[str, Any]] = None,
     handoffs: List[Dict[str, Any]] = None,
-    project_id: str = None
+    project_id: str = None,
+    decision_conflicts: List[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Write quality, sanitized knowledge to .fixonce/ directory.
@@ -745,7 +746,11 @@ def write_committed_knowledge(
 
         portable_audit = sanitize_portable_value(list(agent_audit or [])[-200:])
         portable_handoffs = sanitize_portable_value(list(handoffs or [])[-50:])
-        if portable_audit or portable_handoffs:
+        from core.conflict_lifecycle import bound_conflicts
+        portable_conflicts = sanitize_portable_value(
+            bound_conflicts(decision_conflicts or [])
+        )
+        if portable_audit or portable_handoffs or portable_conflicts:
             team_memory_path = fixonce_dir / "team_memory.json"
             team_memory_data = {
                 "fixonce_version": FIXONCE_VERSION,
@@ -753,6 +758,7 @@ def write_committed_knowledge(
                 "updated_at": datetime.now().isoformat(),
                 "agent_audit": portable_audit,
                 "handoffs": portable_handoffs,
+                "decision_conflicts": portable_conflicts,
             }
             if SAFE_FILE_AVAILABLE:
                 def merge_team_memory(current):
@@ -791,6 +797,17 @@ def write_committed_knowledge(
                         ("timestamp", "from_actor", "to_actor", "next_action"),
                         50,
                     )
+                    existing_conflicts = {
+                        item.get("id"): item
+                        for item in current.get("decision_conflicts", [])
+                        if isinstance(item, dict) and item.get("id")
+                    }
+                    for item in portable_conflicts:
+                        if isinstance(item, dict) and item.get("id"):
+                            existing_conflicts[item["id"]] = item
+                    current["decision_conflicts"] = bound_conflicts(
+                        existing_conflicts.values()
+                    )
                     return current
 
                 atomic_json_update(
@@ -805,6 +822,7 @@ def write_committed_knowledge(
             result["files"].append(str(team_memory_path))
             result["stats"]["agent_audit"] = len(portable_audit)
             result["stats"]["handoffs"] = len(portable_handoffs)
+            result["stats"]["decision_conflicts"] = len(portable_conflicts)
 
         return result
 
@@ -831,6 +849,7 @@ def read_committed_knowledge(working_dir: str) -> Dict[str, Any]:
         "solutions": [],
         "agent_audit": [],
         "handoffs": [],
+        "decision_conflicts": [],
         "found": False,
         "fixonce_version": None,
         "project_id": None
@@ -912,6 +931,7 @@ def read_committed_knowledge(working_dir: str) -> Dict[str, Any]:
                     data = json.load(handle)
             result["agent_audit"] = data.get("agent_audit", [])
             result["handoffs"] = data.get("handoffs", [])
+            result["decision_conflicts"] = data.get("decision_conflicts", [])
             result["found"] = True
         except Exception:
             pass
@@ -995,6 +1015,11 @@ def sync_from_committed(working_dir: str, memory: Dict[str, Any]) -> Dict[str, A
         memory["agent_audit"] = list(committed["agent_audit"])[-200:]
     if committed.get("handoffs"):
         memory["ai_handoffs"] = list(committed["handoffs"])[-50:]
+    if committed.get("decision_conflicts"):
+        from core.conflict_lifecycle import bound_conflicts
+        memory["decision_conflicts"] = bound_conflicts(
+            committed["decision_conflicts"]
+        )
 
     if merged_decisions > 0 or merged_avoids > 0 or merged_insights > 0 or merged_solutions > 0:
         print(f"[CommittedKnowledge] Merged {merged_decisions} decisions, {merged_avoids} avoid, {merged_insights} insights, {merged_solutions} solutions")
@@ -1027,9 +1052,10 @@ def update_committed_on_save(project_id: str, memory: Dict[str, Any]) -> Optiona
     solutions = memory.get('debug_sessions', [])
     agent_audit = memory.get("agent_audit", [])
     handoffs = memory.get("ai_handoffs", [])
+    decision_conflicts = memory.get("decision_conflicts", [])
 
     # Only write if there's something to write
-    if not decisions and not avoid and not insights and not solutions and not agent_audit and not handoffs:
+    if not decisions and not avoid and not insights and not solutions and not agent_audit and not handoffs and not decision_conflicts:
         return None
 
     try:
@@ -1039,6 +1065,7 @@ def update_committed_on_save(project_id: str, memory: Dict[str, Any]) -> Optiona
             solutions=solutions,
             agent_audit=agent_audit,
             handoffs=handoffs,
+            decision_conflicts=decision_conflicts,
             project_id=project_id,
         )
         if result["status"] == "ok":
