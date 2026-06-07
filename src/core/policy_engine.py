@@ -90,33 +90,57 @@ def detect_antonym_conflict(text1: str, text2: str) -> Optional[Tuple[str, str]]
     text1_lower = text1.lower()
     text2_lower = text2.lower()
 
-    # Check antonym pairs
+    def _is_negated(text: str, word: str) -> bool:
+        """Check if a word is preceded by a negation in the text."""
+        for neg in NEGATION_WORDS:
+            if re.search(rf'\b{re.escape(neg)}\b\s+\w*\s*{re.escape(word)}', text):
+                return True
+        return False
+
+    # Check antonym pairs, but skip if one is negated (negated antonyms align)
     for word1, word2 in ANTONYM_PAIRS:
         if word1 in text1_lower and word2 in text2_lower:
-            return (word1, word2)
+            # "No external" + "internal" are ALIGNED, not conflicting
+            # Only conflict if neither antonym is negated
+            if not _is_negated(text1_lower, word1) and not _is_negated(text2_lower, word2):
+                return (word1, word2)
         if word2 in text1_lower and word1 in text2_lower:
-            return (word2, word1)
+            if not _is_negated(text1_lower, word2) and not _is_negated(text2_lower, word1):
+                return (word2, word1)
 
     # Check negation conflicts (same topic but one negated)
-    # FIXED: Only flag if negation is on a TOPIC keyword, not just any 2 common words
+    # Only flag if the NEGATED TARGET (word after negation) appears in both texts,
+    # not just any shared topic word. This prevents false positives where
+    # "No external database" vs "Use local database" are flagged as conflicts
+    # when they actually support each other.
     topic_words = set()
     for keywords in TOPIC_KEYWORDS.values():
         topic_words.update(kw.lower() for kw in keywords)
 
+    def _get_negated_target(text: str, neg_word: str) -> Optional[str]:
+        """Get the word immediately following the negation (the thing being negated)."""
+        pattern = rf'\b{re.escape(neg_word)}\s+(\w+)'
+        match = re.search(pattern, text.lower())
+        return match.group(1) if match else None
+
+    words1 = set(re.findall(r'\w+', text1_lower))
+    words2 = set(re.findall(r'\w+', text2_lower))
+    shared_topics = words1 & words2 & topic_words
+
     for neg in NEGATION_WORDS:
         if neg in text1_lower and neg not in text2_lower:
-            # text1 has negation - check if negation is about a topic in text2
-            words1 = set(re.findall(r'\w+', text1_lower)) - set(NEGATION_WORDS)
-            words2 = set(re.findall(r'\w+', text2_lower))
-            common = words1 & words2 & topic_words  # Must share TOPIC words
-            if len(common) >= 1:  # At least 1 common TOPIC word
-                return (f"{neg} + context", "positive context")
+            negated_target = _get_negated_target(text1_lower, neg)
+            if negated_target and negated_target in text2_lower:
+                # Negated target appears in both - conflict if:
+                # 1. The negated target is a topic word (e.g., "no database" vs "use database")
+                # 2. OR they share a topic AND negated target is in both (e.g., "no external api" vs "use external api")
+                if negated_target in topic_words or shared_topics:
+                    return (f"{neg} {negated_target}", "positive context")
         if neg in text2_lower and neg not in text1_lower:
-            words1 = set(re.findall(r'\w+', text1_lower))
-            words2 = set(re.findall(r'\w+', text2_lower)) - set(NEGATION_WORDS)
-            common = words1 & words2 & topic_words
-            if len(common) >= 1:
-                return ("positive context", f"{neg} + context")
+            negated_target = _get_negated_target(text2_lower, neg)
+            if negated_target and negated_target in text1_lower:
+                if negated_target in topic_words or shared_topics:
+                    return ("positive context", f"{neg} {negated_target}")
 
     # Check regex-based conflict patterns
     for pattern1, pattern2 in CONFLICT_PATTERNS:

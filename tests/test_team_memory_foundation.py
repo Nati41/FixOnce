@@ -123,6 +123,41 @@ class TestTeamMemoryFoundation(unittest.TestCase):
         self.assertIn("actor=claude", message)
         self.assertIn("2026-06-01T10:00:00", message)
 
+    def test_supporting_decisions_do_not_create_conflicts(self):
+        """Regression test: decisions that support a vision should not conflict."""
+        # "No external database" and "Use local storage" are semantically aligned
+        supporting_cases = [
+            ("No external database in MVP", "Use local JSON file storage"),
+            ("No external database", "Use local database"),
+            ("No external storage", "Use local storage"),
+            ("No external API calls", "Use internal API"),
+        ]
+        for vision, decision in supporting_cases:
+            conflicts = detect_conflicts(
+                decision, "", [{"decision": vision, "reason": ""}]
+            )
+            self.assertEqual(
+                len(conflicts), 0,
+                f"False positive: {decision!r} should NOT conflict with {vision!r}"
+            )
+
+    def test_true_contradictions_still_create_conflicts(self):
+        """Ensure real contradictions are still detected after false-positive fix."""
+        contradiction_cases = [
+            ("No database", "Use database"),
+            ("No external API", "Use external API"),
+            ("Never store in English", "Store data in English"),
+            ("Always store in English", "Never store in English"),
+        ]
+        for existing, proposed in contradiction_cases:
+            conflicts = detect_conflicts(
+                proposed, "", [{"decision": existing, "reason": ""}]
+            )
+            self.assertGreater(
+                len(conflicts), 0,
+                f"Missing conflict: {proposed!r} SHOULD conflict with {existing!r}"
+            )
+
     def test_persistent_audit_is_bounded_and_portable(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
