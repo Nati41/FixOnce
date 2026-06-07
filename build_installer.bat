@@ -8,10 +8,8 @@ echo ======================================
 echo.
 
 REM Step 1: Check for .ico file
-if not exist "FixOnce.ico" (
-    echo ERROR: FixOnce.ico not found!
-    echo.
-    echo Please generate FixOnce.ico from data\app-icon.png with sizes 16,32,48,256.
+if not exist "assets\FixOnce.ico" (
+    echo ERROR: assets\FixOnce.ico not found!
     echo.
     pause
     exit /b 1

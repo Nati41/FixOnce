@@ -32,13 +32,13 @@ echo Installing dependencies...
 %PYTHON% -m pip install -r requirements.txt
 %PYTHON% -m pip install fastembed onnxruntime
 
-REM Create .ico if missing (Windows needs .ico, not .icns)
-if not exist "FixOnce.ico" (
+REM Require the approved Windows icon asset.
+if not exist "assets\FixOnce.ico" (
     echo.
-    echo WARNING: FixOnce.ico not found!
-    echo The EXE will be built without an icon.
-    echo To add an icon, convert FixOnce.icns to FixOnce.ico
+    echo ERROR: assets\FixOnce.ico not found!
     echo.
+    pause
+    exit /b 1
 )
 
 REM Build
@@ -73,6 +73,15 @@ if errorlevel 1 (
     echo.
     echo BUILD FAILED!
     echo Check the error messages above.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Copying approved app icon to package root...
+copy /Y assets\FixOnce.ico dist\FixOnce\FixOnce.ico >nul
+if errorlevel 1 (
+    echo ERROR: Failed to copy assets\FixOnce.ico
     pause
     exit /b 1
 )

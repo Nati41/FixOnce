@@ -6,7 +6,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent
 INNO_SETUP = PROJECT_ROOT / "installer" / "fixonce_setup.iss"
 PYINSTALLER_SPEC = PROJECT_ROOT / "fixonce.spec"
-ROOT_ICON = PROJECT_ROOT / "FixOnce.ico"
+WINDOWS_ICON = PROJECT_ROOT / "assets" / "FixOnce.ico"
 
 
 class TestInnoSetupWiring(unittest.TestCase):
@@ -71,7 +71,7 @@ class TestInnoSetupWiring(unittest.TestCase):
         self.assertFalse(postinstall_runs)
 
     def test_windows_icon_is_multi_size_square_ico(self):
-        data = ROOT_ICON.read_bytes()
+        data = WINDOWS_ICON.read_bytes()
         self.assertGreaterEqual(len(data), 6)
         reserved, icon_type, count = struct.unpack_from("<HHH", data, 0)
         self.assertEqual(reserved, 0)
@@ -89,11 +89,11 @@ class TestInnoSetupWiring(unittest.TestCase):
 
         self.assertTrue({16, 32, 48, 256}.issubset(sizes))
 
-    def test_windows_icon_wiring_uses_root_icon(self):
-        self.assertIn('icon=str(PROJECT_ROOT / "FixOnce.ico")', self.spec_text)
-        self.assertIn('"FixOnce.ico"', self.spec_text)
-        self.assertIn("SetupIconFile=..\\FixOnce.ico", self.inno_text)
-        self.assertIn('Source: "..\\FixOnce.ico"; DestDir: "{app}"', self.inno_text)
+    def test_windows_icon_wiring_uses_approved_asset(self):
+        self.assertIn('icon=str(PROJECT_ROOT / "assets" / "FixOnce.ico")', self.spec_text)
+        self.assertIn('"assets/FixOnce.ico"', self.spec_text)
+        self.assertIn("SetupIconFile=..\\assets\\FixOnce.ico", self.inno_text)
+        self.assertIn('Source: "..\\dist\\FixOnce\\FixOnce.ico"; DestDir: "{app}"', self.inno_text)
         self.assertIn('IconFilename: "{app}\\FixOnce.ico"', self.inno_text)
 
     def test_installer_version_matches_app_version(self):

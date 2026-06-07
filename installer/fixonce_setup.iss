@@ -32,7 +32,7 @@ DisableProgramGroupPage=yes
 ; Output settings
 OutputDir=Output
 OutputBaseFilename=FixOnce_Setup_{#MyAppVersion}
-SetupIconFile=..\FixOnce.ico
+SetupIconFile=..\assets\FixOnce.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 ; Compression
@@ -65,7 +65,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "..\dist\FixOnce\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Icon file
-Source: "..\FixOnce.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\FixOnce\FixOnce.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 ; Start Menu

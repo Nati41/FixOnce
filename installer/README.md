@@ -9,10 +9,9 @@ Build a professional Windows installer using Inno Setup.
    build_windows.bat
    ```
 
-2. **FixOnce.ico** - Windows icon generated from the same artwork as the macOS app:
-   - Source artwork: `data/app-icon.png`
+2. **assets/FixOnce.ico** - Approved Windows application icon:
    - Required ICO sizes: 16x16, 32x32, 48x48, 256x256
-   - Save as `FixOnce.ico` in project root
+   - `build_windows.bat` copies it to `dist/FixOnce/FixOnce.ico`
 
 3. **Inno Setup** - Download from https://jrsoftware.org/isdl.php
 

@@ -38,7 +38,7 @@ Runtime contract:
 
 - `pywebview` may require a Windows runtime backend such as WebView2 / Edge WebView support on the VM.
 - `fastembed` and `onnxruntime` are heavy dependencies and may extend build time or fail if wheel resolution differs on Windows.
-- `FixOnce.ico` must exist for branded Windows output; build still works without it but packaging quality drops.
+- `assets/FixOnce.ico` must exist for branded Windows output and is copied to `dist/FixOnce/FixOnce.ico`.
 - PyInstaller hidden-import drift is possible if `pywebview` changes its internal module layout.
 - Actual packaged import resolution for `server`, `config`, and internal modules still requires a real Windows build test.
 - Scheduled Task behavior must be validated on a real Windows user session after reboot.

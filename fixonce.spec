@@ -62,7 +62,6 @@ EXTENSION_ALLOWLIST = [
 ]
 
 ASSET_ALLOWLIST = [
-    "FixOnce.ico",
     "assets/FixOnce.ico",
     "assets/FixOnce.png",
     "assets/logo.svg",
@@ -209,7 +208,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(PROJECT_ROOT / "FixOnce.ico"),
+    icon=str(PROJECT_ROOT / "assets" / "FixOnce.ico"),
 )
 
 coll = COLLECT(

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Create FixOnce icons for Windows (.ico) and Mac (.icns)
-Design: Blue circle with white brain/memory symbol
+Source: approved eye/check application artwork used by the dashboard and macOS app
 """
 
 from PIL import Image, ImageDraw, ImageFont
@@ -10,6 +10,7 @@ import struct
 import io
 
 FIXONCE_DIR = Path(__file__).parent.parent
+APP_ICON_SOURCE = FIXONCE_DIR / "data" / "fixonce_icon_1024.png"
 
 # Colors
 BLUE = (66, 133, 244)      # Google Blue
@@ -196,12 +197,15 @@ def create_icns(images: dict, output_path: Path):
 def main():
     print("Creating FixOnce icons...")
 
-    # Generate icons at various sizes
+    if not APP_ICON_SOURCE.exists():
+        raise FileNotFoundError(f"Approved app icon not found: {APP_ICON_SOURCE}")
+
+    source = Image.open(APP_ICON_SOURCE).convert("RGBA")
     sizes = [16, 32, 48, 64, 128, 256, 512, 1024]
     images = {}
 
     for size in sizes:
-        images[size] = create_brain_icon(size)
+        images[size] = source.resize((size, size), Image.Resampling.LANCZOS)
         print(f"  Generated {size}x{size}")
 
     # Save Windows .ico
