@@ -58,14 +58,17 @@ class TestDashboardWizardUI(unittest.TestCase):
         self.assertIn("getClientDisplayName(client.client)", self.html)
         self.assertIn("copy[`open_${client.client}`]", self.html)
 
-    def test_header_and_agent_card_use_shared_actor_resolver(self):
-        self.assertIn(
-            "const activeAI = displayAgentName(getCurrentActorName(s, agentContext, primaryAI, setupFinalizing), setupFinalizing);",
-            self.html,
-        )
-        self.assertIn("const resolvedAgentName = activeAI;", self.html)
-        self.assertIn("function isKnownActor(value)", self.html)
-        self.assertIn("text !== 'unknown'", self.html)
+    def test_phase_one_multi_agent_ui_uses_project_scoped_contract(self):
+        self.assertIn('id="agentsCard"', self.html)
+        self.assertIn('id="agentsList"', self.html)
+        self.assertIn("const agents = safeObject(s.agents);", self.html)
+        self.assertIn("renderAgents(agents);", self.html)
+        self.assertIn("const visible = allAgents.slice(0, visibleLimit);", self.html)
+        self.assertIn("more.textContent = remaining > 0 ? `+${remaining} more` : '';", self.html)
+        self.assertIn("Context by ${contextActor} · synced ${contextTime}", self.html)
+        self.assertIn("return [actor, text, time].filter(Boolean).join(' · ');", self.html)
+        self.assertIn("return 'Project memory active';", self.html)
+        self.assertIn("setInterval(() => { fetchData(); fetchOnboarding(); fetchActivity(); }, 5000);", self.html)
 
 
 if __name__ == "__main__":

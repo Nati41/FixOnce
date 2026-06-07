@@ -3,6 +3,7 @@ import json
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -56,8 +57,8 @@ class TestDashboardSnapshotMcpImport(unittest.TestCase):
             self.assertEqual(snapshot["compliance"]["editor"], "codex")
             self.assertEqual(snapshot["agent_context"]["tool_name"], "fo_sync")
             self.assertTrue(snapshot["agent_audit_active"])
-            self.assertEqual(snapshot["active_ai"], "codex")
-            self.assertEqual(snapshot["active_ais"][0]["editor"], "codex")
+            self.assertIsNone(snapshot["active_ai"])
+            self.assertFalse(snapshot["active_agent"]["is_active"])
 
     def test_dashboard_snapshot_uses_mcp_session_actor_when_active_ai_missing(self):
         with tempfile.TemporaryDirectory(prefix="fixonce-mcp-session-actor-") as temp_dir:
@@ -69,7 +70,9 @@ class TestDashboardSnapshotMcpImport(unittest.TestCase):
                 "last_error": None,
                 "last_actor": "codex",
                 "last_actor_source": "client_actor",
-                "updated_at": "2026-05-31T10:00:00",
+                "last_actor_confidence": 1.0,
+                "last_success_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
             }), encoding="utf-8")
 
             client = server_module.flask_app.test_client()
@@ -82,8 +85,100 @@ class TestDashboardSnapshotMcpImport(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             snapshot = response.get_json()["snapshot"]
             self.assertEqual(snapshot["active_ai"], "codex")
-            self.assertEqual(snapshot["active_ais"][0]["editor"], "codex")
+            self.assertTrue(snapshot["active_agent"]["is_active"])
+            self.assertEqual(snapshot["active_agent"]["name"], "codex")
             self.assertEqual(snapshot["system_status"]["ai"]["name"], "codex")
+
+    def test_latest_mcp_heartbeat_replaces_previous_agent(self):
+        with tempfile.TemporaryDirectory(prefix="fixonce-agent-handoff-") as temp_dir:
+            user_data_dir = Path(temp_dir)
+            state_file = user_data_dir / "mcp_session_health.json"
+            with patch.object(session_health, "STATE_FILE", state_file), \
+                 patch.object(session_health, "LOG_FILE", user_data_dir / "logs" / "mcp_session_health.jsonl"):
+                session_health.record_mcp_success(
+                    "fo_search",
+                    {"editor": "cursor", "source": "client_actor", "confidence": 1.0},
+                )
+                session_health.record_mcp_success(
+                    "fo_init",
+                    {"editor": "claude", "source": "client_actor", "confidence": 1.0},
+                )
+                active_agent = status_module._get_active_agent_status(session_health.get_session_health())
+
+            self.assertTrue(active_agent["is_active"])
+            self.assertEqual(active_agent["name"], "claude")
+            self.assertEqual(active_agent["tool"], "fo_init")
+
+    def test_stale_mcp_heartbeat_does_not_keep_agent_active(self):
+        stale_seen = (datetime.now() - timedelta(minutes=8)).isoformat()
+        active_agent = status_module._get_active_agent_status({
+            "state": "connected",
+            "last_actor": "claude",
+            "last_actor_source": "client_actor",
+            "last_actor_confidence": 1.0,
+            "last_tool": "fo_sync",
+            "last_success_at": stale_seen,
+        })
+
+        self.assertFalse(active_agent["is_active"])
+        self.assertIsNone(active_agent["name"])
+        self.assertEqual(active_agent["last_agent_name"], "claude")
+        self.assertEqual(active_agent["status"], "stale")
+
+    def test_recent_uncertain_identity_does_not_guess_agent_name(self):
+        active_agent = status_module._get_active_agent_status({
+            "state": "connected",
+            "last_actor": "cursor",
+            "last_actor_source": "config_file",
+            "last_actor_confidence": 0.3,
+            "last_tool": "fo_search",
+            "last_success_at": datetime.now().isoformat(),
+        })
+
+        self.assertTrue(active_agent["is_active"])
+        self.assertFalse(active_agent["identity_known"])
+        self.assertIsNone(active_agent["name"])
+
+    def test_project_agents_separates_active_recent_and_other_projects(self):
+        with tempfile.TemporaryDirectory(prefix="fixonce-project-agents-") as temp_dir:
+            user_data_dir = Path(temp_dir)
+            now = datetime(2026, 6, 7, 18, 0, 0)
+            (user_data_dir / "ai_connections.json").write_text(json.dumps({
+                "clients": {
+                    "claude": {
+                        "project_id": "project-a",
+                        "last_seen": (now - timedelta(seconds=12)).isoformat(),
+                        "actor_source": "client_actor",
+                        "actor_confidence": 1.0,
+                    },
+                    "codex": {
+                        "project_id": "project-a",
+                        "last_seen": (now - timedelta(minutes=8)).isoformat(),
+                        "actor_source": "client_actor",
+                        "actor_confidence": 1.0,
+                    },
+                    "gemini": {
+                        "project_id": "project-a",
+                        "last_seen": (now - timedelta(seconds=40)).isoformat(),
+                        "actor_source": "client_actor",
+                        "actor_confidence": 1.0,
+                    },
+                    "cursor": {
+                        "project_id": "project-b",
+                        "last_seen": (now - timedelta(seconds=5)).isoformat(),
+                        "actor_source": "client_actor",
+                        "actor_confidence": 1.0,
+                    },
+                }
+            }), encoding="utf-8")
+
+            with patch.object(status_module, "USER_DATA_DIR", user_data_dir):
+                agents = status_module._get_project_agents_status("project-a", now=now)
+
+        self.assertEqual([item["name"] for item in agents["active"]], ["claude", "gemini"])
+        self.assertEqual([item["name"] for item in agents["recent"]], ["codex"])
+        self.assertEqual(agents["total"], 3)
+        self.assertEqual(agents["visible_limit"], 3)
 
     def test_dashboard_snapshot_returns_mcp_session_status(self):
         with tempfile.TemporaryDirectory(prefix="fixonce-mcp-session-api-") as temp_dir:

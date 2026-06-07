@@ -57,6 +57,43 @@ class TestMcpSessionHealth(unittest.TestCase):
         self.assertEqual(state["state"], "connected")
         self.assertEqual(state["consecutive_failures"], 0)
         self.assertEqual(state["last_actor"], "codex")
+        self.assertEqual(state["last_actor_confidence"], 0.0)
+
+    def test_success_persists_actor_identity_metadata(self):
+        state = session_health.record_mcp_success(
+            tool_name="fo_init",
+            actor_identity={
+                "editor": "claude",
+                "source": "client_actor",
+                "confidence": 1.0,
+            },
+        )
+
+        self.assertEqual(state["last_actor"], "claude")
+        self.assertEqual(state["last_actor_source"], "client_actor")
+        self.assertEqual(state["last_actor_confidence"], 1.0)
+        self.assertEqual(state["last_tool"], "fo_init")
+
+    def test_latest_successful_tool_call_replaces_previous_actor(self):
+        session_health.record_mcp_success(
+            tool_name="fo_search",
+            actor_identity={
+                "editor": "cursor",
+                "source": "client_actor",
+                "confidence": 1.0,
+            },
+        )
+        state = session_health.record_mcp_success(
+            tool_name="fo_init",
+            actor_identity={
+                "editor": "claude",
+                "source": "client_actor",
+                "confidence": 1.0,
+            },
+        )
+
+        self.assertEqual(state["last_actor"], "claude")
+        self.assertEqual(state["last_tool"], "fo_init")
 
     def test_transport_closed_converts_to_friendly_text(self):
         session_health.record_mcp_failure("Transport closed", tool_name="fo_sync")

@@ -134,7 +134,12 @@ class TestAgentContext(unittest.TestCase):
 
             with patch.object(server, "DATA_DIR", projects_dir), \
                  patch.object(server, "SESSION_FILE", session_file), \
-                 patch.object(server, "COMPLIANCE_FILE", compliance_file):
+                 patch.object(server, "COMPLIANCE_FILE", compliance_file), \
+                 patch.object(server, "_resolve_actor_identity", return_value={
+                     "editor": "codex",
+                     "source": "client_actor",
+                     "confidence": 1.0,
+                 }):
                 server._set_session(project_id, temp_dir)
                 server._persist_session(project_id, temp_dir)
                 server._mark_session_initialized()
@@ -146,6 +151,10 @@ class TestAgentContext(unittest.TestCase):
         self.assertEqual(result, "Synced.")
         self.assertEqual(data["live_record"]["intent"]["current_goal"], "בדיקת סנכרון")
         self.assertEqual(data["live_record"]["intent"]["next_step"], "המשך בדיקה")
+        self.assertEqual(data["live_record"]["intent"]["actor"], "codex")
+        self.assertEqual(data["live_record"]["intent"]["actor_source"], "client_actor")
+        self.assertEqual(data["live_record"]["intent"]["actor_confidence"], 1.0)
+        self.assertEqual(data["live_record"]["intent"]["tool_name"], "fo_sync")
 
     def test_agent_context_fields_are_preserved(self):
         ctx = AgentContext(

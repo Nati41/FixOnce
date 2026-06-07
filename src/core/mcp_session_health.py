@@ -76,6 +76,7 @@ def _default_state() -> Dict[str, Any]:
         "last_error_category": None,
         "last_actor": None,
         "last_actor_source": None,
+        "last_actor_confidence": 0.0,
         "last_tool": None,
         "warning_generation": 0,
         "warning_acknowledged_generation": 0,
@@ -191,6 +192,9 @@ def record_mcp_success(tool_name: str = "", actor_identity: Optional[Dict[str, A
         "last_success_at": _now(),
         "last_actor": actor_identity.get("editor") or previous.get("last_actor"),
         "last_actor_source": actor_identity.get("source") or previous.get("last_actor_source"),
+        "last_actor_confidence": float(
+            actor_identity.get("confidence", previous.get("last_actor_confidence", 0.0)) or 0.0
+        ),
         "last_tool": tool_name or previous.get("last_tool"),
         "updated_at": _now(),
     })
@@ -231,6 +235,9 @@ def record_mcp_failure(
         "last_error_category": classification.category,
         "last_actor": actor_identity.get("editor") or previous.get("last_actor"),
         "last_actor_source": actor_identity.get("source") or previous.get("last_actor_source"),
+        "last_actor_confidence": float(
+            actor_identity.get("confidence", previous.get("last_actor_confidence", 0.0)) or 0.0
+        ),
         "last_tool": tool_name or previous.get("last_tool"),
         "updated_at": _now(),
     })
@@ -295,6 +302,9 @@ def mark_session_lost(
         "last_error_category": "transport",
         "last_actor": actor_identity.get("editor") or previous.get("last_actor"),
         "last_actor_source": actor_identity.get("source") or previous.get("last_actor_source"),
+        "last_actor_confidence": float(
+            actor_identity.get("confidence", previous.get("last_actor_confidence", 0.0)) or 0.0
+        ),
         "last_tool": tool_name or previous.get("last_tool"),
         "updated_at": _now(),
     })

@@ -6274,6 +6274,7 @@ def _update_work_context_lightweight(
         return "Error: No fields provided to update"
 
     update_data['next_step'] = _normalize_next_step(next_step) if next_step else ""
+    update_data.update(_new_record_attribution(tool_name))
 
     session = _get_session()
     if current_goal:
@@ -7562,7 +7563,10 @@ def solution_applied(
                 "human_name": f"Fixed: {short_error}",
                 "file_context": "fix",
                 "project_id": session.project_id,
-                "cwd": session.cwd
+                "cwd": session.cwd,
+                "editor": attribution["actor"],
+                "actor_source": attribution["actor_source"],
+                "actor_confidence": attribution["actor_confidence"],
             },
             timeout=2
         )
@@ -9568,6 +9572,8 @@ def fo_init(cwd: str = "") -> str:
         except Exception as exc:
             _fo_init_trace(f"FO_INIT_ACTIVE_PROJECT_ERROR {type(exc).__name__}: {exc}", include_stack=True)
             pass
+
+        _persist_ai_connection(_resolve_actor_identity(), project_id=project_id)
 
         # Return minimal formatted output
         _fo_init_trace("FO_INIT_FORMAT_RESPONSE_BEFORE")

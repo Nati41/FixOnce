@@ -24,35 +24,147 @@ from core.system_mode import get_system_mode, set_system_mode, VALID_MODES
 EXTENSION_CONNECTED = False
 EXTENSION_LAST_SEEN = None
 ACTUAL_PORT = 5000
-KNOWN_AGENT_NAMES = {"codex", "claude", "cursor", "vscode", "windsurf"}
+RELIABLE_AGENT_CONFIDENCE = 0.5
+RECENT_AGENT_THRESHOLD_SECONDS = 1800
 
 
 def _known_agent_name(value):
     name = str(value or "").strip().lower()
-    if name in KNOWN_AGENT_NAMES:
-        return name
-    return None
+    if not name or name in {"unknown", "checking..."}:
+        return None
+    return name[:80]
 
 
-def _has_known_agent(snapshot: dict) -> bool:
-    return any(_known_agent_name(ai.get("editor")) for ai in snapshot.get("active_ais") or [])
+def _agent_display_name(value):
+    name = _known_agent_name(value)
+    if not name:
+        return "AI"
+    return " ".join(part.capitalize() for part in name.replace("_", " ").replace("-", " ").split())
 
 
-def _ensure_active_agent(snapshot: dict, editor=None, source: str = "mcp_session", confidence: float = 0.9) -> None:
-    known = _known_agent_name(editor)
-    if not known or _has_known_agent(snapshot):
-        return
+def _agent_confidence(session_health: dict) -> float:
+    value = session_health.get("last_actor_confidence")
+    if value is not None:
+        try:
+            return float(value or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
 
-    snapshot.setdefault("active_ais", []).insert(0, {
-        "id": known,
-        "editor": known,
-        "started_at": None,
-        "last_activity": datetime.now().isoformat(),
-        "is_primary": True,
-        "actor_source": source,
-        "actor_confidence": confidence,
-        "tool_calls": 0,
-    })
+    source = session_health.get("last_actor_source")
+    if source == "client_actor":
+        return 1.0
+    if source in {"runtime_env", "parent_process", "env_var", "vscode_pid_check"}:
+        return 0.9
+    return 0.0
+
+
+def _get_active_agent_status(session_health: dict, now: datetime = None) -> dict:
+    """Build current agent presence from the latest successful MCP heartbeat only."""
+    from core.mcp_health import ACTIVE_THRESHOLD_SECONDS
+
+    current_time = now or datetime.now()
+    last_seen = session_health.get("last_success_at")
+    seen_at = None
+    if last_seen:
+        try:
+            seen_at = datetime.fromisoformat(str(last_seen).replace("Z", "+00:00"))
+            if seen_at.tzinfo:
+                current_time = datetime.now(seen_at.tzinfo) if now is None else current_time
+                if current_time.tzinfo is None:
+                    current_time = current_time.replace(tzinfo=seen_at.tzinfo)
+            elif current_time.tzinfo:
+                seen_at = seen_at.replace(tzinfo=current_time.tzinfo)
+        except (TypeError, ValueError):
+            seen_at = None
+
+    confidence = _agent_confidence(session_health)
+    actor = _known_agent_name(session_health.get("last_actor"))
+    reliable_actor = actor if confidence >= RELIABLE_AGENT_CONFIDENCE else None
+    age_seconds = max(0.0, (current_time - seen_at).total_seconds()) if seen_at else None
+    is_recent = age_seconds is not None and age_seconds <= ACTIVE_THRESHOLD_SECONDS
+    is_active = session_health.get("state") == "connected" and is_recent
+
+    return {
+        "name": reliable_actor if is_active else None,
+        "client": reliable_actor,
+        "source": session_health.get("last_actor_source"),
+        "tool": session_health.get("last_tool"),
+        "last_seen": last_seen,
+        "confidence": confidence,
+        "is_active": is_active,
+        "identity_known": bool(reliable_actor),
+        "last_agent_name": reliable_actor,
+        "status": "active" if is_active else ("stale" if last_seen else "unknown"),
+        "stale_after_seconds": ACTIVE_THRESHOLD_SECONDS,
+    }
+
+
+def _get_project_agents_status(project_id: str, now: datetime = None) -> dict:
+    """Return reliable active and recent MCP agents for one project."""
+    from core.mcp_health import ACTIVE_THRESHOLD_SECONDS
+
+    result = {
+        "active": [],
+        "recent": [],
+        "total": 0,
+        "visible_limit": 3,
+        "active_threshold_seconds": ACTIVE_THRESHOLD_SECONDS,
+        "recent_threshold_seconds": RECENT_AGENT_THRESHOLD_SECONDS,
+    }
+    if not project_id:
+        return result
+
+    connections_file = USER_DATA_DIR / "ai_connections.json"
+    try:
+        payload = json.loads(connections_file.read_text(encoding="utf-8"))
+        clients = payload.get("clients", {})
+    except Exception:
+        return result
+
+    current_time = now or datetime.now()
+    for actor_id, connection in clients.items():
+        if not isinstance(connection, dict) or connection.get("project_id") != project_id:
+            continue
+
+        actor = _known_agent_name(actor_id)
+        try:
+            confidence = float(connection.get("actor_confidence", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            confidence = 0.0
+        if not actor or confidence < RELIABLE_AGENT_CONFIDENCE:
+            continue
+
+        last_seen = connection.get("last_seen")
+        try:
+            seen_at = datetime.fromisoformat(str(last_seen).replace("Z", "+00:00"))
+            comparison_time = current_time
+            if seen_at.tzinfo and comparison_time.tzinfo is None:
+                comparison_time = comparison_time.replace(tzinfo=seen_at.tzinfo)
+            elif not seen_at.tzinfo and comparison_time.tzinfo:
+                seen_at = seen_at.replace(tzinfo=comparison_time.tzinfo)
+            age_seconds = max(0.0, (comparison_time - seen_at).total_seconds())
+        except (TypeError, ValueError):
+            continue
+
+        if age_seconds > RECENT_AGENT_THRESHOLD_SECONDS:
+            continue
+
+        state = "active" if age_seconds <= ACTIVE_THRESHOLD_SECONDS else "recent"
+        entry = {
+            "id": actor,
+            "name": actor,
+            "display_name": _agent_display_name(actor),
+            "state": state,
+            "last_seen": last_seen,
+            "source": connection.get("actor_source"),
+            "confidence": confidence,
+        }
+        result[state].append(entry)
+
+    result["active"].sort(key=lambda item: item.get("last_seen") or "", reverse=True)
+    result["recent"].sort(key=lambda item: item.get("last_seen") or "", reverse=True)
+    result["total"] = len(result["active"]) + len(result["recent"])
+    return result
 
 
 def _get_mcp_compliance_for_api() -> dict:
@@ -520,6 +632,8 @@ def api_dashboard_snapshot():
             "updated_by": "unknown"
         },
         "identity": None,
+        "active_agent": _get_active_agent_status({}),
+        "agents": _get_project_agents_status(""),
         "activity": [],
         "timestamp": datetime.now().isoformat()
     }
@@ -1090,6 +1204,7 @@ def api_dashboard_snapshot():
                 memory = load_project_memory(active_id) or {}
                 intent = memory.get("live_record", {}).get("intent", {})
                 snapshot["intent"] = intent
+                snapshot["agents"] = _get_project_agents_status(active_id)
 
             # Active AI name
             if snapshot.get("active_ais") and len(snapshot["active_ais"]) > 0:
@@ -1115,12 +1230,6 @@ def api_dashboard_snapshot():
                 snapshot["compliance"] = compliance
                 snapshot["agent_context"] = agent_context
                 snapshot["last_agent_intervention"] = last_agent_intervention
-                _ensure_active_agent(
-                    snapshot,
-                    agent_context.get("actor_name") or compliance.get("editor"),
-                    agent_context.get("actor_source") or "mcp_compliance",
-                    float(agent_context.get("actor_confidence") or 0.9),
-                )
                 snapshot["agent_audit_active"] = bool(
                     agent_context.get("tool_name")
                     or last_agent_intervention.get("tool_name")
@@ -1135,18 +1244,12 @@ def api_dashboard_snapshot():
             try:
                 from core.mcp_session_health import get_session_health
                 session_health = get_session_health()
-                _ensure_active_agent(
-                    snapshot,
-                    session_health.get("last_actor"),
-                    session_health.get("last_actor_source") or "mcp_session_health",
-                    0.9,
-                )
+                snapshot["active_agent"] = _get_active_agent_status(session_health)
             except Exception:
-                pass
+                snapshot["active_agent"] = _get_active_agent_status({})
 
-            if snapshot.get("active_ais"):
-                primary = next((ai for ai in snapshot["active_ais"] if ai.get("is_primary")), snapshot["active_ais"][0])
-                snapshot["active_ai"] = primary.get("editor") or snapshot.get("active_ai")
+            active_agent = snapshot["active_agent"]
+            snapshot["active_ai"] = active_agent.get("name") if active_agent.get("is_active") else None
 
         except Exception:
             pass
@@ -1160,14 +1263,15 @@ def api_dashboard_snapshot():
                 "memory": {"loaded": False, "project_id": None, "source": "unknown"}
             }
 
-            # AI status from real session data
-            if snapshot.get("active_ais") and len(snapshot["active_ais"]) > 0:
-                primary = next((ai for ai in snapshot["active_ais"] if ai.get("is_primary")), snapshot["active_ais"][0])
+            # AI presence comes only from the latest successful MCP heartbeat.
+            active_agent = snapshot.get("active_agent") or {}
+            if active_agent.get("is_active"):
                 system_status["ai"] = {
-                    "name": primary.get("editor"),
-                    "source": primary.get("actor_source", "unknown"),
+                    "name": active_agent.get("name"),
+                    "source": active_agent.get("source"),
                     "connected": True,
-                    "last_activity": primary.get("last_activity")
+                    "last_activity": active_agent.get("last_seen"),
+                    "confidence": active_agent.get("confidence", 0.0),
                 }
 
             system_status["extension"] = _get_extension_status_payload()

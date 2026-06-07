@@ -411,6 +411,158 @@ input:checked + .slider:before {
   color: var(--text-dim);
 }
 
+/* Hero Card (Context/Resume) */
+.card.hero {
+  padding: 18px;
+  border: 1px solid rgba(0, 230, 118, 0.2);
+  background: linear-gradient(180deg, rgba(0, 230, 118, 0.04) 0%, var(--surface) 100%);
+}
+
+.card.hero .card-label {
+  color: var(--green);
+  font-size: 11px;
+  margin-bottom: 10px;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 32px 20px;
+}
+
+.empty-state-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.empty-state-subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 20px;
+}
+
+.empty-state-list {
+  text-align: left;
+  display: inline-block;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.empty-state-list li {
+  padding: 4px 0;
+  list-style: none;
+}
+
+.empty-state-list li::before {
+  content: "•";
+  color: var(--green);
+  margin-right: 8px;
+}
+
+/* Collapsed Status */
+#statusCard {
+  background: transparent;
+  padding: 0;
+}
+
+#statusCard #statusExpanded {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.status-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.status-collapsed-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.status-collapsed-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--green);
+  border-radius: 50%;
+}
+
+.status-collapsed-dot.warn {
+  background: var(--amber);
+}
+
+.status-collapsed-dot.error {
+  background: var(--red);
+}
+
+.status-collapsed button {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.status-collapsed button:hover {
+  color: var(--text);
+}
+
+.agents-list {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-presence-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.agent-presence-dot.recent {
+  background: transparent;
+  border: 1px solid var(--text-dim);
+}
+
+.agent-row-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-row-state,
+.agents-more,
+.agents-empty {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.agents-more {
+  margin-top: 8px;
+}
+
+/* Hidden utility */
+.hidden {
+  display: none !important;
+}
+
 .agent-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -587,6 +739,38 @@ body.powered-off .card {
   </div>
 </div>
 
+<!-- Empty State (shown when no project) -->
+<div class="card grid-full empty-state" id="emptyStateCard" style="display: none;">
+  <div class="empty-state-title">Welcome to FixOnce</div>
+  <div class="empty-state-subtitle">Open a Git project to start building project memory.</div>
+  <ul class="empty-state-list">
+    <li>Decisions you made</li>
+    <li>Bug fixes you solved</li>
+    <li>Context from each session</li>
+    <li>Where you left off</li>
+  </ul>
+</div>
+
+<!-- Resume Project (hero card - primary focus) -->
+<div class="card hero grid-full" id="contextCard" style="display: none;">
+  <div class="card-label">Where You Left Off</div>
+  <div id="contextContent">
+    <div class="context-item">
+      <span class="context-label">Last</span>
+      <span class="context-value" id="lastChange">—</span>
+    </div>
+    <div class="context-item">
+      <span class="context-label">Next</span>
+      <span class="context-value" id="nextStep">—</span>
+    </div>
+    <div class="context-item" id="recentRow" style="display: none;">
+      <span class="context-label">Recent</span>
+      <span class="context-value" id="recentAction">—</span>
+    </div>
+  </div>
+  <div class="context-time" id="syncTime"></div>
+</div>
+
 <!-- AI Summary -->
 <div class="card" id="aiSummaryCard">
   <div class="card-label">AI</div>
@@ -608,69 +792,40 @@ body.powered-off .card {
 </div>
 
 <!-- Project -->
-<div class="card">
+<div class="card" id="projectCard">
   <div class="card-label">Project</div>
   <div class="project-name" id="projectName">—</div>
   <div class="project-goal" id="projectGoal">No active project</div>
   <div class="project-subtitle muted" id="projectSubtitle">Audit only</div>
 </div>
 
-<!-- Status -->
-<div class="card">
-  <div class="card-label">Status</div>
-  <div id="statusContent">
-    <div class="status-row">
-      <span class="status-icon status-ok">✓</span>
-      <span class="status-text">System healthy</span>
+<!-- Status (collapsed when healthy) -->
+<div class="card grid-full" id="statusCard">
+  <div id="statusCollapsed" class="status-collapsed" style="display: none;">
+    <div class="status-collapsed-left">
+      <span class="status-collapsed-dot" id="statusDot"></span>
+      <span id="statusSummary">FixOnce Active</span>
+    </div>
+    <button type="button" id="statusToggle">Details</button>
+  </div>
+  <div id="statusExpanded">
+    <div class="card-label">Status</div>
+    <div id="statusContent">
+      <div class="status-row">
+        <span class="status-icon status-ok">✓</span>
+        <span class="status-text">System healthy</span>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Agent -->
-<div class="card">
-  <div class="card-label">Agent</div>
-  <div class="agent-grid">
-    <div class="agent-stat">
-      <div class="agent-stat-label">Agent</div>
-      <div class="agent-stat-value" id="agentName">Connected agent</div>
-    </div>
-    <div class="agent-stat">
-      <div class="agent-stat-label">Confidence</div>
-      <div class="agent-stat-value" id="agentConfidence">—</div>
-    </div>
-    <div class="agent-stat">
-      <div class="agent-stat-label">Last Tool</div>
-      <div class="agent-stat-value" id="agentLastTool">—</div>
-    </div>
-    <div class="agent-stat">
-      <div class="agent-stat-label">Mode</div>
-      <div class="agent-stat-value" id="agentMode">Audit only</div>
-    </div>
-    <div class="agent-stat">
-      <div class="agent-stat-label">Status</div>
-      <div class="agent-stat-value safe" id="agentStatus">Safe</div>
-    </div>
+<!-- Agents -->
+<div class="card" id="agentsCard">
+  <div class="card-label">Agents</div>
+  <div class="agents-list" id="agentsList">
+    <div class="agents-empty">No agents active</div>
   </div>
-</div>
-
-<!-- Context -->
-<div class="card grid-full" id="contextCard" style="display: none;">
-  <div class="card-label">Context</div>
-  <div id="contextContent">
-    <div class="context-item">
-      <span class="context-label">Last</span>
-      <span class="context-value" id="lastChange">—</span>
-    </div>
-    <div class="context-item">
-      <span class="context-label">Next</span>
-      <span class="context-value" id="nextStep">—</span>
-    </div>
-    <div class="context-item" id="recentRow" style="display: none;">
-      <span class="context-label">Recent</span>
-      <span class="context-value" id="recentAction">—</span>
-    </div>
-  </div>
-  <div class="context-time" id="syncTime"></div>
+  <div class="agents-more" id="agentsMore" style="display: none;"></div>
 </div>
 
 </div><!-- /dashboard-grid -->
@@ -803,25 +958,42 @@ async function fetchOnboarding() {
   }
 }
 
+let statusExpanded = false;
+
 function render(s) {
-  const primaryAI = getPrimaryAI(s);
   const agentContext = safeObject(s.agent_context);
   const lastIntervention = safeObject(s.last_agent_intervention);
   const policy = safeObject(s.policy);
   const compliance = safeObject(s.compliance);
+  const activeAgent = safeObject(s.active_agent);
+  const agents = safeObject(s.agents);
+
+  // Determine if we have an active project
+  const projectName = s.project_name || s.project_id || '';
+  const hasProject = projectName && projectName !== '—';
+  const goal = s.current_goal || s.knowledge?.current_goal || '';
+
+  // Empty State - show when no project
+  const emptyStateCard = document.getElementById('emptyStateCard');
+  const projectCard = document.getElementById('projectCard');
+  if (!hasProject) {
+    emptyStateCard.style.display = '';
+    projectCard.style.display = 'none';
+  } else {
+    emptyStateCard.style.display = 'none';
+    projectCard.style.display = '';
+  }
 
   // Project
-  const projectName = s.project_name || s.project_id || '—';
-  const goal = s.current_goal || s.knowledge?.current_goal || '';
-  document.getElementById('projectName').textContent = projectName;
+  document.getElementById('projectName').textContent = projectName || '—';
   document.getElementById('projectGoal').textContent = goal || 'No active goal';
-  document.getElementById('projectSubtitle').textContent = getProjectSubtitle(s, policy, lastIntervention);
-  document.getElementById('projectSubtitle').className = 'project-subtitle' + (s.agent_audit_active ? '' : ' muted');
+  document.getElementById('projectSubtitle').textContent = getProjectSubtitle(s, policy);
+  document.getElementById('projectSubtitle').className = 'project-subtitle';
 
   // Active AI
   const setupFinalizing = isSetupFinalizing(s);
-  const activeAI = displayAgentName(getCurrentActorName(s, agentContext, primaryAI, setupFinalizing), setupFinalizing);
-  document.getElementById('activeAI').textContent = activeAI;
+  const agentPresence = formatAgentPresence(activeAgent, setupFinalizing);
+  document.getElementById('activeAI').textContent = formatAgentsHeader(agents, agentPresence);
 
   // Status - Build status rows
   const statusEl = document.getElementById('statusContent');
@@ -891,6 +1063,35 @@ function render(s) {
   `).join('');
   wireRepairMcpButton();
 
+  // Collapsed status logic
+  const allHealthy = errorCount === 0 && intervention === 'silent';
+  const statusCollapsed = document.getElementById('statusCollapsed');
+  const statusExpandedEl = document.getElementById('statusExpanded');
+  const statusDot = document.getElementById('statusDot');
+  const statusSummary = document.getElementById('statusSummary');
+
+  if (allHealthy && !statusExpanded) {
+    statusCollapsed.style.display = '';
+    statusExpandedEl.style.display = 'none';
+    statusDot.className = 'status-collapsed-dot';
+    statusSummary.textContent = 'FixOnce Active';
+  } else {
+    statusCollapsed.style.display = statusExpanded ? '' : 'none';
+    statusExpandedEl.style.display = '';
+    if (!allHealthy) {
+      statusDot.className = errorCount > 0 ? 'status-collapsed-dot error' : 'status-collapsed-dot warn';
+      statusSummary.textContent = errorCount > 0 ? `${errorCount} issue${errorCount > 1 ? 's' : ''} need attention` : 'Status';
+    }
+  }
+
+  // Wire status toggle
+  const statusToggle = document.getElementById('statusToggle');
+  statusToggle.textContent = statusExpanded ? 'Hide' : 'Details';
+  statusToggle.onclick = () => {
+    statusExpanded = !statusExpanded;
+    render(s);
+  };
+
   // Context - from intent/live_record
   const intent = s.intent || s.live_record?.intent || {};
   const lastChange = intent.last_change || '';
@@ -903,18 +1104,15 @@ function render(s) {
     setTextWithTitle(document.getElementById('nextStep'), nextStep || '—');
     document.getElementById('nextStep').classList.add('truncate');
 
-    // Sync time - only show if recent (< 10 min)
     const updatedAt = intent.updated_at;
     const syncTimeEl = document.getElementById('syncTime');
     if (updatedAt) {
-      const syncAge = Date.now() - new Date(updatedAt).getTime();
-      const tenMinutes = 10 * 60 * 1000;
-      if (syncAge < tenMinutes) {
-        syncTimeEl.textContent = 'Synced ' + relativeTime(updatedAt);
-        syncTimeEl.style.display = '';
-      } else {
-        syncTimeEl.style.display = 'none';
-      }
+      const contextActor = formatActorName(intent.actor);
+      const contextTime = relativeTime(updatedAt);
+      syncTimeEl.textContent = contextActor
+        ? `Context by ${contextActor} · synced ${contextTime}`
+        : `Context synced ${contextTime}`;
+      syncTimeEl.style.display = '';
     } else {
       syncTimeEl.style.display = 'none';
     }
@@ -922,21 +1120,18 @@ function render(s) {
     contextCard.style.display = 'none';
   }
 
-  // Agent card
-  const resolvedAgentName = activeAI;
-  const resolvedConfidence = normalizeConfidence(agentContext.actor_confidence ?? primaryAI.actor_confidence);
-  const resolvedLastTool = agentContext.tool_name || lastIntervention.tool_name || '—';
-  const agentStatus = getAgentStatus(errorCount, intervention);
-  const agentStatusEl = document.getElementById('agentStatus');
-
-  setTextWithTitle(document.getElementById('agentName'), resolvedAgentName);
-  document.getElementById('agentConfidence').textContent = resolvedConfidence;
-  setTextWithTitle(document.getElementById('agentLastTool'), resolvedLastTool);
-  document.getElementById('agentMode').textContent = 'Audit only';
-  agentStatusEl.textContent = agentStatus;
-  agentStatusEl.className = 'agent-stat-value ' + (agentStatus === 'Safe' ? 'safe' : 'warn');
+  renderAgents(agents);
 
   // System Status (from real sources)
+  // sys already defined above for extension row
+  const memoryLoaded = Boolean(sys.memory?.loaded);
+  const policyActive = Boolean(policy.mode || policy.reason);
+
+  // Hide system status dots when everything is healthy
+  const systemStatusEl = document.getElementById('systemStatus');
+  const allSystemsHealthy = extensionConnected && memoryLoaded && policyActive;
+  systemStatusEl.style.display = allSystemsHealthy ? 'none' : '';
+
   // Server status - if we got data, server is up
   const sysFixonce = document.getElementById('sysFixonce');
   sysFixonce.className = 'sys-item ok';
@@ -944,7 +1139,7 @@ function render(s) {
 
   // Extension status - from real heartbeat
   const sysExtension = document.getElementById('sysExtension');
-  if (sys.extension?.connected) {
+  if (extensionConnected) {
     sysExtension.className = 'sys-item ok';
     sysExtension.title = 'FixOnce extension: Connected. Current-site monitoring is controlled per website in the extension popup.' +
       (sys.extension.last_seen ? ' (' + relativeTime(sys.extension.last_seen) + ')' : '');
@@ -955,7 +1150,7 @@ function render(s) {
 
   // Memory status - from active project
   const sysMemory = document.getElementById('sysMemory');
-  if (sys.memory?.loaded) {
+  if (memoryLoaded) {
     sysMemory.className = 'sys-item ok';
     sysMemory.title = 'Project Memory: Loaded (' + (sys.memory.project_id || 'unknown') + ')';
   } else {
@@ -964,7 +1159,7 @@ function render(s) {
   }
 
   const sysPolicy = document.getElementById('sysPolicy');
-  sysPolicy.className = policy.mode || policy.reason ? 'sys-item ok' : 'sys-item warn';
+  sysPolicy.className = policyActive ? 'sys-item ok' : 'sys-item warn';
   sysPolicy.title = policy.reason || 'Policy layer active';
 
   const sysAgent = document.getElementById('sysAgent');
@@ -1130,8 +1325,9 @@ function relativeTime(ts) {
   const then = new Date(ts).getTime();
   if (isNaN(then)) return '';
   const diffMs = Date.now() - then;
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+  if (diffSec < 60) return `${diffSec}s ago`;
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return 'just now';
   if (diffMin < 60) return `${diffMin}m ago`;
   const diffHr = Math.floor(diffMin / 60);
   if (diffHr < 24) return `${diffHr}h ago`;
@@ -1216,27 +1412,6 @@ function wireRepairMcpButton() {
   });
 }
 
-function getPrimaryAI(snapshot) {
-  const ais = Array.isArray(snapshot.active_ais) ? snapshot.active_ais : [];
-  return ais.find(ai => ai?.is_primary) || ais[0] || {};
-}
-
-function isKnownActor(value) {
-  const text = String(value || '').trim().toLowerCase();
-  return Boolean(text && text !== 'unknown' && text !== 'checking...');
-}
-
-function getCurrentActorName(snapshot, agentContext, primaryAI, setupFinalizing) {
-  const candidates = [
-    agentContext.actor_name,
-    primaryAI.editor,
-    snapshot.active_ai,
-    snapshot.ai_session?.editor,
-  ];
-  const actor = candidates.find(isKnownActor);
-  return actor || (setupFinalizing ? WIZARD_COPY.finalizing_setup : 'unknown');
-}
-
 function normalizeConfidence(value) {
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) return 'unknown';
@@ -1245,12 +1420,94 @@ function normalizeConfidence(value) {
   return 'observed';
 }
 
-function displayAgentName(value, setupFinalizing = false) {
+function formatActorName(value) {
   const raw = String(value || '').trim();
-  if (!raw || raw.toLowerCase() === 'unknown') {
-    return setupFinalizing ? WIZARD_COPY.finalizing_setup : 'Connected agent';
+  if (!raw || raw.toLowerCase() === 'unknown') return '';
+  return raw
+    .replace(/[_-]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(capitalize)
+    .join(' ');
+}
+
+function formatAgentsHeader(agents, fallbackPresence) {
+  const active = Array.isArray(agents.active) ? agents.active : [];
+  if (active.length === 1) {
+    return `${active[0].display_name || formatActorName(active[0].name)} active`;
   }
-  return capitalize(raw);
+  if (active.length > 1) {
+    return `${active.length} agents active`;
+  }
+  return fallbackPresence.summary;
+}
+
+function renderAgents(agents) {
+  const list = document.getElementById('agentsList');
+  const more = document.getElementById('agentsMore');
+  const active = Array.isArray(agents.active) ? agents.active : [];
+  const recent = Array.isArray(agents.recent) ? agents.recent : [];
+  const allAgents = [...active, ...recent];
+  const visibleLimit = Number(agents.visible_limit) || 3;
+  const visible = allAgents.slice(0, visibleLimit);
+
+  if (!visible.length) {
+    list.innerHTML = '<div class="agents-empty">No agents active</div>';
+    more.style.display = 'none';
+    return;
+  }
+
+  list.innerHTML = visible.map(agent => {
+    const isActive = agent.state === 'active';
+    const name = agent.display_name || formatActorName(agent.name) || 'AI';
+    const seen = relativeTime(agent.last_seen);
+    const state = `${isActive ? 'Active' : 'Recent'}${seen ? ` · ${seen}` : ''}`;
+    return `
+      <div class="agent-row">
+        <span class="agent-presence-dot${isActive ? '' : ' recent'}"></span>
+        <span class="agent-row-name">${escapeHtml(name)}</span>
+        <span class="agent-row-state">${escapeHtml(state)}</span>
+      </div>
+    `;
+  }).join('');
+
+  const remaining = allAgents.length - visible.length;
+  more.textContent = remaining > 0 ? `+${remaining} more` : '';
+  more.style.display = remaining > 0 ? '' : 'none';
+}
+
+function formatAgentPresence(activeAgent, setupFinalizing = false) {
+  const seen = relativeTime(activeAgent.last_seen);
+  const knownName = activeAgent.identity_known && activeAgent.last_agent_name
+    ? capitalize(activeAgent.last_agent_name)
+    : '';
+
+  if (activeAgent.is_active && knownName) {
+    return {
+      name: `${knownName} connected`,
+      detail: seen ? `seen ${seen}` : '',
+      summary: `${knownName} connected${seen ? ` · seen ${seen}` : ''}`,
+    };
+  }
+  if (activeAgent.is_active) {
+    return {
+      name: 'AI connected',
+      detail: 'identity unknown',
+      summary: 'AI connected · identity unknown',
+    };
+  }
+  if (knownName && seen) {
+    return {
+      name: 'No active agent',
+      detail: `last seen ${knownName} ${seen}`,
+      summary: `No active agent · last seen ${knownName} ${seen}`,
+    };
+  }
+  return {
+    name: setupFinalizing ? WIZARD_COPY.finalizing_setup : 'No active agent',
+    detail: '',
+    summary: setupFinalizing ? WIZARD_COPY.finalizing_setup : 'No active agent',
+  };
 }
 
 function getInterventionLevel(lastIntervention) {
@@ -1258,14 +1515,14 @@ function getInterventionLevel(lastIntervention) {
   return verdict || 'silent';
 }
 
-function getProjectSubtitle(snapshot, policy, lastIntervention) {
-  if (snapshot.agent_audit_active || lastIntervention.tool_name) {
-    return 'AI activity connected';
+function getProjectSubtitle(snapshot, policy) {
+  if (snapshot.identity || snapshot.project_id || snapshot.project_name) {
+    return 'Project memory active';
   }
   if (policy.mode) {
     return 'Audit only';
   }
-  return 'No active intervention';
+  return 'No project memory';
 }
 
 function getAgentStatus(errorCount, intervention) {
@@ -1323,7 +1580,8 @@ function formatActivity(act) {
     text = act.human_name || act.tool || 'Activity';
   }
 
-  return time ? `${text} (${time})` : text;
+  const actor = formatActorName(act.actor || act.editor);
+  return [actor, text, time].filter(Boolean).join(' · ');
 }
 
 async function fetchActivity() {
