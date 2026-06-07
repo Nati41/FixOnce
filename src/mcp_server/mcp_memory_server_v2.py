@@ -3810,12 +3810,17 @@ def _record_mcp_tool_success(
     resolve_actor: bool = True,
     wait_seconds: float = 0.2,
 ) -> None:
+    actor_identity = _mcp_actor_for_health() if resolve_actor else {}
+    session = _get_session()
+    project_id = session.project_id if session and session.is_active() else None
+
     def record_success():
         try:
             from core.mcp_session_health import record_mcp_success
 
-            actor_identity = _mcp_actor_for_health() if resolve_actor else {}
             record_mcp_success(tool_name=tool_name, actor_identity=actor_identity)
+            if project_id:
+                _persist_ai_connection(actor_identity, project_id=project_id)
         except Exception:
             pass
 

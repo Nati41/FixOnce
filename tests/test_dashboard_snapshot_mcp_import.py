@@ -139,6 +139,22 @@ class TestDashboardSnapshotMcpImport(unittest.TestCase):
         self.assertFalse(active_agent["identity_known"])
         self.assertIsNone(active_agent["name"])
 
+    def test_legacy_health_without_confidence_uses_reliable_actor_source(self):
+        now = datetime.now()
+        active_agent = status_module._get_active_agent_status({
+            "state": "connected",
+            "last_actor": "codex",
+            "last_actor_source": "client_actor",
+            "last_actor_confidence": 0.0,
+            "last_tool": "fo_search",
+            "last_success_at": (now - timedelta(seconds=10)).isoformat(),
+        }, now=now)
+
+        self.assertTrue(active_agent["is_active"])
+        self.assertTrue(active_agent["identity_known"])
+        self.assertEqual(active_agent["name"], "codex")
+        self.assertEqual(active_agent["confidence"], 1.0)
+
     def test_project_agents_separates_active_recent_and_other_projects(self):
         with tempfile.TemporaryDirectory(prefix="fixonce-project-agents-") as temp_dir:
             user_data_dir = Path(temp_dir)

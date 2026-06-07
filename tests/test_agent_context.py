@@ -109,6 +109,34 @@ class TestAgentContext(unittest.TestCase):
         self.assertEqual(result, "ok")
         self.assertEqual(stdout.getvalue(), "")
 
+    def test_successful_shortcut_tool_refreshes_project_agent_presence(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            connections_file = temp_root / "ai_connections.json"
+            state_file = temp_root / "mcp_session_health.json"
+            log_file = temp_root / "logs" / "mcp_session_health.jsonl"
+            session = server.SessionContext(project_id="proj-shortcut", working_dir=temp_dir)
+            session.mark_initialized()
+
+            with patch.object(server, "AI_CONNECTIONS_FILE", connections_file), \
+                 patch.object(session_health, "STATE_FILE", state_file), \
+                 patch.object(session_health, "LOG_FILE", log_file), \
+                 patch.object(server, "_get_session", return_value=session), \
+                 patch.object(server, "_mcp_actor_for_health", return_value={
+                     "editor": "codex",
+                     "source": "client_actor",
+                     "confidence": 1.0,
+                 }):
+                server._record_mcp_tool_success("fo_search", wait_seconds=1)
+
+            connection = json.loads(connections_file.read_text(encoding="utf-8"))["clients"]["codex"]
+            health = json.loads(state_file.read_text(encoding="utf-8"))
+
+        self.assertEqual(connection["project_id"], "proj-shortcut")
+        self.assertEqual(connection["actor_confidence"], 1.0)
+        self.assertEqual(health["last_tool"], "fo_search")
+        self.assertEqual(health["last_actor"], "codex")
+
     def test_tool_timeout_returns_structured_error_quickly(self):
         def slow():
             time.sleep(0.2)

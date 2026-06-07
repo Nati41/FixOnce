@@ -46,9 +46,11 @@ def _agent_confidence(session_health: dict) -> float:
     value = session_health.get("last_actor_confidence")
     if value is not None:
         try:
-            return float(value or 0.0)
+            confidence = float(value or 0.0)
+            if confidence > 0:
+                return confidence
         except (TypeError, ValueError):
-            return 0.0
+            pass
 
     source = session_health.get("last_actor_source")
     if source == "client_actor":
