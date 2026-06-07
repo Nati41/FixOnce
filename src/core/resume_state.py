@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from core.safe_file import atomic_json_update
+from core.durable_memory import durable_memory_write
 
 # Data paths
 DATA_DIR = Path(__file__).parent.parent.parent / 'data'
@@ -40,20 +40,31 @@ def _save_project_data(project_id: str, data: Dict[str, Any]) -> bool:
     """Save project data to file."""
     project_file = _get_project_file(project_id)
     try:
-        PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
-        with open(project_file, 'w') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        return True
+        saved = durable_memory_write(
+            project_file,
+            updated=data,
+            tool_name="resume_state",
+        )
+        return saved is not None
     except Exception:
         return False
 
 
-def _update_project_data(project_id: str, mutator) -> Optional[Dict[str, Any]]:
+def _update_project_data(
+    project_id: str,
+    mutator,
+    attribution: Optional[Dict[str, Any]] = None,
+    tool_name: str = "resume_state",
+) -> Optional[Dict[str, Any]]:
     project_file = _get_project_file(project_id)
-    if not project_file.exists():
-        return None
     try:
-        return atomic_json_update(str(project_file), mutator, default={})
+        return durable_memory_write(
+            project_file,
+            mutator=mutator,
+            attribution=attribution,
+            tool_name=tool_name,
+            require_existing=True,
+        )
     except Exception:
         return None
 
@@ -96,6 +107,8 @@ def save_resume_state(
     updated = _update_project_data(
         project_id,
         lambda data: {**(data or {}), "resume_state": resume_state},
+        attribution=attribution,
+        tool_name="save_resume_state",
     )
     if updated:
         return resume_state

@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Any
 # Safe file operations (auto-backup, atomic writes)
 try:
     from core.safe_file import atomic_json_write, atomic_json_read
+    from core.durable_memory import durable_memory_write
     SAFE_FILE_AVAILABLE = True
 except ImportError:
     SAFE_FILE_AVAILABLE = False
@@ -435,7 +436,13 @@ def init_project_memory(project_id: str, display_name: str = None, working_dir: 
 
     # Use safe write with auto-backup
     if SAFE_FILE_AVAILABLE:
-        atomic_json_write(str(project_path), memory, create_backup=False)  # No backup for new files
+        durable_memory_write(
+            project_path,
+            updated=memory,
+            tool_name="init_project_memory",
+            create_backup=False,
+            annotate_new=not bool(committed_knowledge and committed_knowledge.get("found")),
+        )
     else:
         with open(project_path, 'w', encoding='utf-8') as f:
             json.dump(memory, f, ensure_ascii=False, indent=2)
@@ -609,7 +616,13 @@ def _build_memory_from_fixonce(working_dir: str, project_id: str, metadata: dict
     cache_path = get_project_path(project_id)
     try:
         if SAFE_FILE_AVAILABLE:
-            atomic_json_write(str(cache_path), memory, create_backup=False)
+            durable_memory_write(
+                cache_path,
+                updated=memory,
+                tool_name="portable_memory_import",
+                create_backup=False,
+                annotate_new=False,
+            )
         else:
             with open(cache_path, 'w', encoding='utf-8') as f:
                 json.dump(memory, f, ensure_ascii=False, indent=2)
@@ -655,8 +668,12 @@ def save_project_memory(project_id: str, memory: Dict[str, Any] = None) -> bool:
 
             # Use atomic write for crash safety
             try:
-                from core.safe_file import atomic_json_write
-                success = atomic_json_write(str(project_path), memory)
+                saved = durable_memory_write(
+                    project_path,
+                    updated=memory,
+                    tool_name="save_project_memory",
+                )
+                success = saved is not None
             except ImportError:
                 # Fallback to regular write if safe_file not available
                 with open(project_path, 'w', encoding='utf-8') as f:
@@ -738,7 +755,17 @@ def archive_project(project_id: str) -> Dict[str, Any]:
 
         # Use safe write with auto-backup
         if SAFE_FILE_AVAILABLE:
-            atomic_json_write(str(project_path), memory)
+            durable_memory_write(
+                project_path,
+                mutator=lambda current: {
+                    **current,
+                    "project_info": {
+                        **current.get("project_info", {}),
+                        "archived": True,
+                    },
+                },
+                tool_name="archive_project",
+            )
         else:
             with open(project_path, 'w', encoding='utf-8') as f:
                 json.dump(memory, f, indent=2, ensure_ascii=False)
@@ -769,7 +796,17 @@ def unarchive_project(project_id: str) -> Dict[str, Any]:
 
         # Use safe write with auto-backup
         if SAFE_FILE_AVAILABLE:
-            atomic_json_write(str(project_path), memory)
+            durable_memory_write(
+                project_path,
+                mutator=lambda current: {
+                    **current,
+                    "project_info": {
+                        **current.get("project_info", {}),
+                        "archived": False,
+                    },
+                },
+                tool_name="unarchive_project",
+            )
         else:
             with open(project_path, 'w', encoding='utf-8') as f:
                 json.dump(memory, f, indent=2, ensure_ascii=False)

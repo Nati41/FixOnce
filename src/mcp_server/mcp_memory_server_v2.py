@@ -569,6 +569,11 @@ def _debug_log(message: str):
 _safe_file_available = False
 try:
     from core.safe_file import atomic_json_write, atomic_json_read, atomic_json_update
+    from core.durable_memory import (
+        apply_new_record_defaults,
+        durable_memory_write,
+        merge_concurrent_value,
+    )
     _safe_file_available = True
 except ImportError:
     pass  # Safe file not available, will use regular json
@@ -1614,10 +1619,11 @@ def _persist_agent_audit(project_id: str, entries: List[Dict[str, Any]]) -> None
         memory["agent_audit"] = existing[-200:]
         return memory
 
-    memory = atomic_json_update(
-        str(path),
-        append_entries,
-        default={},
+    memory = durable_memory_write(
+        path,
+        mutator=append_entries,
+        attribution=_new_record_attribution("agent_intervention"),
+        tool_name="agent_intervention",
         create_backup=False,
     )
     session = _get_session()
@@ -3957,27 +3963,7 @@ def _load_project(project_id: str) -> Dict[str, Any]:
 
 def _merge_concurrent_value(base: Any, current: Any, updated: Any) -> Any:
     """Three-way merge preserving independent concurrent additions."""
-    if updated == base:
-        return current
-    if current == base:
-        return updated
-    if isinstance(base, dict) and isinstance(current, dict) and isinstance(updated, dict):
-        merged = {}
-        for key in set(base) | set(current) | set(updated):
-            merged[key] = _merge_concurrent_value(
-                base.get(key),
-                current.get(key),
-                updated.get(key),
-            )
-        return merged
-    if isinstance(base, list) and isinstance(current, list) and isinstance(updated, list):
-        if current[:len(base)] == base and updated[:len(base)] == base:
-            merged = list(base)
-            for item in current[len(base):] + updated[len(base):]:
-                if item not in merged:
-                    merged.append(item)
-            return merged
-    return updated
+    return merge_concurrent_value(base, current, updated)
 
 
 def _record_identity(item: Dict[str, Any]) -> str:
@@ -3994,50 +3980,12 @@ def _ensure_new_durable_attribution(
     tool_name: str = "memory_write",
 ) -> None:
     """Attach provenance only to records created after the loaded base."""
-    attribution = _new_record_attribution(tool_name)
-    collection_paths = (
-        ("decisions",),
-        ("avoid",),
-        ("debug_sessions",),
-        ("ai_handoffs",),
-        ("command_audit",),
-        ("active_issues",),
-        ("solutions_history",),
-        ("resume_state_history",),
-        ("live_record", "lessons", "insights"),
-        ("live_record", "lessons", "failed_attempts"),
-        ("live_record", "architecture", "components"),
-        ("live_record", "intent", "goal_history"),
+    apply_new_record_defaults(
+        base,
+        updated,
+        attribution=_new_record_attribution(tool_name),
+        tool_name=tool_name,
     )
-
-    for path in collection_paths:
-        base_value: Any = base
-        updated_value: Any = updated
-        for key in path:
-            base_value = base_value.get(key, {}) if isinstance(base_value, dict) else {}
-            updated_value = updated_value.get(key, {}) if isinstance(updated_value, dict) else {}
-        if not isinstance(updated_value, list):
-            continue
-        base_ids = {
-            _record_identity(item)
-            for item in base_value
-            if isinstance(item, dict)
-        } if isinstance(base_value, list) else set()
-        for item in updated_value:
-            if not isinstance(item, dict) or _record_identity(item) in base_ids:
-                continue
-            for field, value in attribution.items():
-                item.setdefault(field, value)
-
-    for path in (("live_record", "intent"), ("resume_state",)):
-        base_value: Any = base
-        updated_value: Any = updated
-        for key in path:
-            base_value = base_value.get(key, {}) if isinstance(base_value, dict) else {}
-            updated_value = updated_value.get(key, {}) if isinstance(updated_value, dict) else {}
-        if isinstance(updated_value, dict) and updated_value != base_value:
-            for field, value in attribution.items():
-                updated_value.setdefault(field, value)
 
 
 def _save_project(project_id: str, data: Dict[str, Any]):
@@ -4051,18 +3999,19 @@ def _save_project(project_id: str, data: Dict[str, Any]):
     if _safe_file_available:
         bases = getattr(_project_load_state, "bases", {})
         base = bases.get(project_id, {})
-        _ensure_new_durable_attribution(base, data)
-        _fo_init_trace(f"FS_WRITE_BEFORE _save_project atomic_json_update path={path}")
-        saved_data = atomic_json_update(
-            str(path),
-            lambda current: _merge_concurrent_value(base, current or {}, data),
-            default={},
+        _fo_init_trace(f"FS_WRITE_BEFORE _save_project durable_memory_write path={path}")
+        saved_data = durable_memory_write(
+            path,
+            updated=data,
+            base=base,
+            attribution=_new_record_attribution("memory_write"),
+            tool_name="memory_write",
             create_backup=True,
         )
         bases[project_id] = copy.deepcopy(saved_data)
         _project_load_state.bases = bases
         data = saved_data
-        _fo_init_trace(f"FS_WRITE_AFTER _save_project atomic_json_update path={path}")
+        _fo_init_trace(f"FS_WRITE_AFTER _save_project durable_memory_write path={path}")
     else:
         # Fallback to regular json
         _fo_init_trace(f"FS_WRITE_BEFORE _save_project open path={path}")
@@ -6156,11 +6105,12 @@ def _save_project_lightweight(project_id: str, data: Dict[str, Any]) -> None:
     if _safe_file_available:
         bases = getattr(_project_load_state, "bases", {})
         base = bases.get(project_id, {})
-        _ensure_new_durable_attribution(base, data)
-        saved_data = atomic_json_update(
-            str(path),
-            lambda current: _merge_concurrent_value(base, current or {}, data),
-            default={},
+        saved_data = durable_memory_write(
+            path,
+            updated=data,
+            base=base,
+            attribution=_new_record_attribution("memory_write"),
+            tool_name="memory_write",
             create_backup=False,
         )
         bases[project_id] = copy.deepcopy(saved_data)
