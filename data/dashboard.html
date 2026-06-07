@@ -29,6 +29,42 @@ body {
   margin: 0 auto;
 }
 
+/* Responsive layout */
+@media (min-width: 600px) {
+  body {
+    max-width: 520px;
+  }
+}
+
+@media (min-width: 900px) {
+  body {
+    max-width: 880px;
+    padding: 20px 24px;
+  }
+}
+
+/* Dashboard grid - two columns on wide screens */
+.dashboard-grid {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 900px) {
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .dashboard-grid > .card {
+    margin-bottom: 0;
+  }
+
+  .dashboard-grid > .card.grid-full {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Header */
 .header {
   display: flex;
@@ -534,8 +570,11 @@ body.powered-off .card {
   </div>
 </div>
 
+<!-- Dashboard Grid -->
+<div class="dashboard-grid">
+
 <!-- First-Run Wizard -->
-<div class="card wizard-card" id="onboardingCard" style="display: none;">
+<div class="card wizard-card grid-full" id="onboardingCard" style="display: none;">
   <div class="wizard-header">
     <div>
       <div class="wizard-title" id="wizardTitle">Connect your AI tools</div>
@@ -559,7 +598,7 @@ body.powered-off .card {
 </div>
 
 <!-- Settings -> AI Integrations -->
-<div class="card" id="aiIntegrationsCard" style="display: none;">
+<div class="card grid-full" id="aiIntegrationsCard" style="display: none;">
   <div class="card-label">Settings</div>
   <div class="settings-header">
     <div class="summary-title" id="integrationsTitle">AI Integrations</div>
@@ -615,7 +654,7 @@ body.powered-off .card {
 </div>
 
 <!-- Context -->
-<div class="card" id="contextCard" style="display: none;">
+<div class="card grid-full" id="contextCard" style="display: none;">
   <div class="card-label">Context</div>
   <div id="contextContent">
     <div class="context-item">
@@ -633,6 +672,8 @@ body.powered-off .card {
   </div>
   <div class="context-time" id="syncTime"></div>
 </div>
+
+</div><!-- /dashboard-grid -->
 
 <!-- System Status (compact) -->
 <div class="system-status" id="systemStatus">
