@@ -85,17 +85,11 @@ fo_sync()    → update context
 
 1. **Init first** — `fo_init()` before anything
 2. **Auto-fix first** — if AUTO-FIX READY, use `fo_apply()` immediately
-3. **Save fixes** — `fo_solved()` after every fix
-4. **Sync on progress** — `fo_sync()` after any meaningful work:
-   - Code changes
-   - Decisions made
-   - Direction changes
-   - Completing a step
-   - Reaching a clear next action
-5. **Specific next_step** — must be actionable:
-   - Good: "Fix validation in api/endpoints.py:203"
-   - Bad: "Continue work"
-6. **Sync at stopping points** — call `fo_sync(last_change, next_step)` when reaching natural pauses, don't rely on session end
+3. **Search before investigating** — call `fo_search(query)` BEFORE using Read/Bash to debug errors or unfamiliar behavior
+4. **Save fixes** — `fo_solved()` after every fix
+5. **Record decisions** — `fo_decide()` after important project decisions
+6. **Sync on progress** — `fo_sync()` after meaningful work (code changes, decisions, direction changes)
+7. **Specific next_step** — must be actionable: "Fix validation in api/endpoints.py:203" not "Continue work"
 
 ---
 
