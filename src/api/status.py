@@ -28,6 +28,44 @@ RELIABLE_AGENT_CONFIDENCE = 0.5
 RECENT_AGENT_THRESHOLD_SECONDS = 1800
 
 
+def _dashboard_project_status(project: dict, active_id: str, now: datetime) -> str:
+    """Classify display status without deciding whether a project is visible."""
+    if project.get("id") == active_id:
+        return "active"
+
+    last_updated = project.get("last_updated")
+    if last_updated:
+        try:
+            last_dt = datetime.fromisoformat(
+                str(last_updated).replace("Z", "+00:00").replace("+00:00", "")
+            )
+            if (now - last_dt).days < 7:
+                return "recent"
+        except (TypeError, ValueError):
+            pass
+    return "stale"
+
+
+def _sort_dashboard_projects(projects: list[dict]) -> list[dict]:
+    """Sort visible projects by display status, then last activity."""
+    status_order = {"active": 0, "recent": 1, "stale": 2}
+
+    def last_updated_rank(project: dict) -> float:
+        try:
+            value = str(project.get("last_updated") or "")
+            return -datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError):
+            return 0.0
+
+    return sorted(
+        projects,
+        key=lambda project: (
+            status_order.get(project.get("status"), 3),
+            last_updated_rank(project),
+        ),
+    )
+
+
 def _known_agent_name(value):
     name = str(value or "").strip().lower()
     if not name or name in {"unknown", "checking..."}:
@@ -634,6 +672,7 @@ def api_dashboard_snapshot():
             "updated_by": "unknown"
         },
         "identity": None,
+        "selected_project_id": None,
         "active_agent": _get_active_agent_status({}),
         "agents": _get_project_agents_status(""),
         "activity": [],
@@ -773,49 +812,44 @@ def api_dashboard_snapshot():
         # === Projects List ===
         try:
             from managers.multi_project_manager import (
-                get_active_project_id, load_project_memory
+                get_active_project_id,
+                list_projects,
             )
 
             active_id = get_active_project_id()
-            all_projects = []
+            snapshot["selected_project_id"] = active_id
+            projects = list_projects(
+                user_visible_only=True,
+                migrate=True,
+                data_dir=USER_DATA_DIR,
+            )
+            visible_ids = {project.get("id") for project in projects}
+            if projects and active_id not in visible_ids:
+                from managers import multi_project_manager as project_manager
 
-            # Scan projects_v2 directory
-            projects_dir = DATA_DIR / "projects_v2"
-            if projects_dir.exists():
-                for f in projects_dir.glob("*.json"):
-                    name = f.stem
-                    if name not in ('__global__', 'live-state'):
-                        all_projects.append(name)
+                if Path(project_manager.DATA_DIR) == Path(USER_DATA_DIR):
+                    replacement = projects[0]
+                    active = project_manager.set_active_project(
+                        replacement["id"],
+                        detected_from="catalog_repair",
+                        display_name=replacement.get("name"),
+                        create_if_missing=False,
+                        working_dir=replacement.get("working_dir"),
+                    )
+                    active_id = active.get("active_id")
+                    snapshot["selected_project_id"] = active_id
 
             now = datetime.now()
-            for pid in all_projects[:20]:  # Limit to 20 projects
+            for project in projects[:20]:
                 try:
-                    memory = load_project_memory(pid) or {}
-                    project_info = memory.get("project_info", {})
-                    live_record = memory.get("live_record", {})
+                    pid = project["id"]
 
-                    # Determine status based on last activity
-                    last_updated = memory.get("last_updated") or live_record.get("updated_at")
-                    status = "stale"
-                    if pid == active_id:
-                        status = "active"
-                    elif last_updated:
-                        try:
-                            last_dt = datetime.fromisoformat(last_updated.replace('Z', '+00:00').replace('+00:00', ''))
-                            if (now - last_dt).days < 7:
-                                status = "recent"
-                        except:
-                            pass
-
-                    # Get counts
-                    lessons = live_record.get("lessons", {})
-                    insights_count = len(lessons.get("insights", []))
-                    decisions_count = len(memory.get("decisions", []))
-                    avoids_count = len(memory.get("avoid", []))
+                    last_updated = project.get("last_updated")
+                    status = _dashboard_project_status(project, active_id, now)
 
                     # Check semantic index
                     semantic_info = {"indexed": False, "doc_count": 0}
-                    emb_dir = DATA_DIR / "projects_v2" / f"{pid}.embeddings"
+                    emb_dir = Path(project["record_path"]).with_suffix(".embeddings")
                     if emb_dir.exists():
                         config_file = emb_dir / "config.json"
                         if config_file.exists():
@@ -828,24 +862,25 @@ def api_dashboard_snapshot():
 
                     snapshot["projects"].append({
                         "project_id": pid,
-                        "name": project_info.get("name") or pid.split("_")[0],
-                        "working_dir": project_info.get("working_dir", ""),
+                        "name": project.get("name") or pid.split("_")[0],
+                        "working_dir": project.get("working_dir", ""),
+                        "provenance": project.get("provenance", "user"),
                         "status": status,
+                        "selected": pid == active_id,
+                        "agents": _get_project_agents_status(pid),
                         "last_updated": last_updated,
-                        "archived": project_info.get("archived", False),
+                        "archived": False,
                         "counts": {
-                            "insights": insights_count,
-                            "decisions": decisions_count,
-                            "avoids": avoids_count
+                            "insights": project.get("insights_count", 0),
+                            "decisions": project.get("decisions_count", 0),
+                            "avoids": project.get("avoid_count", 0),
                         },
                         "semantic": semantic_info
                     })
                 except Exception:
                     continue
 
-            # Sort: active first, then recent, then stale
-            status_order = {"active": 0, "recent": 1, "stale": 2}
-            snapshot["projects"].sort(key=lambda p: status_order.get(p["status"], 3))
+            snapshot["projects"] = _sort_dashboard_projects(snapshot["projects"])
 
         except Exception:
             pass

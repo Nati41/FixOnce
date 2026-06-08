@@ -339,7 +339,7 @@ def get_openai_schema():
 def _handle_init_session(args: dict) -> dict:
     """Handle init_session function call."""
     from managers.multi_project_manager import (
-        set_active_project,
+        ensure_dashboard_project,
         load_project_memory
     )
     from core.boundary_detector import find_project_root
@@ -358,7 +358,7 @@ def _handle_init_session(args: dict) -> dict:
 
     # Use ProjectContext for consistent ID generation (respects git remote)
     project_id = ProjectContext.from_path(root)
-    set_active_project(project_id, detected_from="openai", working_dir=root)
+    ensure_dashboard_project(project_id, detected_from="openai", working_dir=root)
 
     # Get git hash
     git_hash = None

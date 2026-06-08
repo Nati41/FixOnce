@@ -59,8 +59,12 @@ LOAD_TEST_OPS_PER_THREAD = 100
 CONCURRENT_TEST_THREADS = 5
 TIMEOUT_SECONDS = 5
 
-# IMPORTANT: Use dedicated test project, NOT active project
-TEST_PROJECT_DIR = "/tmp/fixonce_stress_test_project"
+# IMPORTANT: the server and this test must share an isolated user-data root.
+TEST_USER_DATA_DIR = Path(
+    os.environ.get("FIXONCE_USER_DATA_DIR", "").strip()
+    or (Path(tempfile.gettempdir()) / f"fixonce-stress-{os.getpid()}" / ".fixonce")
+).expanduser()
+TEST_PROJECT_DIR = str(TEST_USER_DATA_DIR.parent / "workspaces" / "fixonce_stress_test_project")
 
 # Store original active project to restore after tests
 ORIGINAL_ACTIVE_PROJECT = None
@@ -128,6 +132,21 @@ def check_server_running() -> bool:
         return False
 
 
+def verify_server_uses_isolated_storage() -> bool:
+    """Refuse to run if the target server is using real user data."""
+    try:
+        resp = requests.get(f"{API_URL}/health", timeout=2)
+        payload = resp.json()
+        memory_path = (
+            payload.get("checks", {})
+            .get("memory_writable", {})
+            .get("path", "")
+        )
+        return Path(memory_path).expanduser() == TEST_USER_DATA_DIR
+    except Exception:
+        return False
+
+
 def wait_for_server(timeout: int = 30) -> bool:
     """Wait for server to become available."""
     start = time.time()
@@ -146,7 +165,7 @@ def setup_test_project() -> bool:
     global ORIGINAL_ACTIVE_PROJECT
 
     # Save original active project to restore later
-    active_file = Path(__file__).parent.parent / "data" / "active_project.json"
+    active_file = TEST_USER_DATA_DIR / "active_project.json"
     if active_file.exists():
         try:
             with open(active_file, 'r') as f:
@@ -207,7 +226,7 @@ def cleanup_test_project():
             pass
 
     # Clean project data files from FixOnce data directory
-    data_dir = Path(__file__).parent.parent / "data" / "projects_v2"
+    data_dir = TEST_USER_DATA_DIR / "projects_v2"
     if data_dir.exists():
         # Patterns for test-generated project files
         test_patterns = [
@@ -229,7 +248,7 @@ def cleanup_test_project():
 
     # Restore original active project
     if ORIGINAL_ACTIVE_PROJECT:
-        active_file = Path(__file__).parent.parent / "data" / "active_project.json"
+        active_file = TEST_USER_DATA_DIR / "active_project.json"
         try:
             with open(active_file, 'w') as f:
                 json.dump(ORIGINAL_ACTIVE_PROJECT, f, indent=2)
@@ -830,8 +849,20 @@ def run_all_tests() -> StressTestReport:
     # Check server
     if not check_server_running():
         print("\n❌ ERROR: FixOnce server is not running!")
-        print(f"   Please start the server: python src/server.py")
+        print(
+            "   Start it with isolated storage:\n"
+            f"   FIXONCE_USER_DATA_DIR={TEST_USER_DATA_DIR} python src/server.py"
+        )
         print(f"   Then run this test again.")
+        sys.exit(1)
+
+    if not verify_server_uses_isolated_storage():
+        print("\n❌ ERROR: Refusing to run against non-isolated FixOnce storage.")
+        print(f"   Expected server data directory: {TEST_USER_DATA_DIR}")
+        print(
+            "   Restart the test server with:\n"
+            f"   FIXONCE_USER_DATA_DIR={TEST_USER_DATA_DIR} python src/server.py"
+        )
         sys.exit(1)
 
     print("\n✅ Server is running")
@@ -940,7 +971,7 @@ def main():
             "boundary": ("boundary_detection", test_boundary_detection),
             "ux": ("ux_edge_cases", test_ux_edge_cases),
         }
-        if check_server_running():
+        if check_server_running() and verify_server_uses_isolated_storage():
             test_key, test_func = test_map[args.test]
             try:
                 test_func()
@@ -948,7 +979,8 @@ def main():
             except AssertionError:
                 sys.exit(1)
         else:
-            print("❌ Server not running")
+            print("❌ Server is not running with isolated test storage")
+            print(f"Expected FIXONCE_USER_DATA_DIR={TEST_USER_DATA_DIR}")
             sys.exit(1)
     else:
         report = run_all_tests()

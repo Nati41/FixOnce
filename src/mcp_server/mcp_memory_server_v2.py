@@ -928,8 +928,9 @@ except ImportError as e:
 # ===========================================================================
 def _get_user_data_dir() -> Path:
     """Get user-specific data directory (~/.fixonce/)."""
-    user_dir = Path.home() / ".fixonce"
-    user_dir.mkdir(exist_ok=True)
+    override = os.environ.get("FIXONCE_USER_DATA_DIR", "").strip()
+    user_dir = Path(override).expanduser() if override else Path.home() / ".fixonce"
+    user_dir.mkdir(parents=True, exist_ok=True)
     return user_dir
 
 USER_DATA_DIR = _get_user_data_dir()
@@ -4214,10 +4215,17 @@ def _persist_portable_team_memory(
 
 def _init_project_memory(working_dir: str) -> Dict[str, Any]:
     """Create empty project memory."""
+    try:
+        from managers.multi_project_manager import infer_project_provenance
+        provenance = infer_project_provenance(Path(working_dir).name, working_dir)
+    except Exception:
+        provenance = "user"
+
     return {
         "project_info": {
             "working_dir": working_dir,
             "name": Path(working_dir).name,
+            "provenance": provenance,
             "created_at": datetime.now().isoformat()
         },
         "live_record": {

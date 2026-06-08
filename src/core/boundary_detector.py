@@ -49,7 +49,10 @@ BUILD_FOLDER_PATTERNS = [
 SWITCH_COOLDOWN_SECONDS = 5
 
 # Data paths
-DATA_DIR = Path(__file__).parent.parent.parent / 'data'
+DATA_DIR = Path(
+    os.environ.get("FIXONCE_USER_DATA_DIR", "").strip()
+    or (Path.home() / ".fixonce")
+).expanduser()
 BOUNDARY_STATE_FILE = DATA_DIR / 'boundary_state.json'
 ACTIVE_PROJECT_FILE = DATA_DIR / 'active_project.json'
 
@@ -519,13 +522,12 @@ def detect_boundary_violation(file_path: str) -> Optional[BoundaryEvent]:
 
 def handle_boundary_transition(event: BoundaryEvent) -> str:
     """
-    Execute the project switch.
+    Initialize the newly detected project without changing dashboard selection.
 
     Returns:
         The new project_id
     """
     from managers.multi_project_manager import (
-        set_active_project,
         init_project_memory,
         load_project_memory
     )
@@ -547,14 +549,6 @@ def handle_boundary_transition(event: BoundaryEvent) -> str:
             display_name=Path(event.new_working_dir).name,
             working_dir=event.new_working_dir
         )
-
-    # Update active project with transition metadata
-    set_active_project(
-        project_id=event.new_project_id,
-        detected_from="boundary",
-        display_name=Path(event.new_working_dir).name,
-        working_dir=event.new_working_dir
-    )
 
     # Update boundary state
     state = _load_boundary_state()

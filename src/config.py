@@ -66,8 +66,9 @@ INSTALL_DATA_DIR = get_install_data_dir()
 # This is private per user - READ/WRITE
 def get_user_data_dir() -> Path:
     """Get the user-specific data directory."""
-    user_dir = Path.home() / ".fixonce"
-    user_dir.mkdir(exist_ok=True)
+    override = os.environ.get("FIXONCE_USER_DATA_DIR", "").strip()
+    user_dir = Path(override).expanduser() if override else Path.home() / ".fixonce"
+    user_dir.mkdir(parents=True, exist_ok=True)
     return user_dir
 
 # User runtime state must always live in ~/.fixonce, including Windows EXE mode.

@@ -8,6 +8,7 @@ Key format: "ai_name:project_path" → IsolatedSession
 """
 
 import json
+import os
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -15,7 +16,10 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field, asdict
 
 # Data paths
-DATA_DIR = Path(__file__).parent.parent.parent / 'data'
+DATA_DIR = Path(
+    os.environ.get("FIXONCE_USER_DATA_DIR", "").strip()
+    or (Path.home() / ".fixonce")
+).expanduser()
 REGISTRY_FILE = DATA_DIR / 'session_registry.json'
 
 # Session timeout (remove inactive sessions after this)

@@ -215,6 +215,43 @@ input:checked + .slider:before {
   color: var(--text-dim);
 }
 
+.project-select {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  margin-bottom: 8px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.project-presence {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.project-presence-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.project-presence-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-presence-agents {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
 .wizard-card {
   padding: 14px;
 }
@@ -794,9 +831,11 @@ body.powered-off .card {
 <!-- Project -->
 <div class="card" id="projectCard">
   <div class="card-label">Project</div>
+  <select class="project-select" id="projectSelect" aria-label="Displayed project" onchange="switchDisplayedProject(this.value)"></select>
   <div class="project-name" id="projectName">—</div>
   <div class="project-goal" id="projectGoal">No active project</div>
   <div class="project-subtitle muted" id="projectSubtitle">Audit only</div>
+  <div class="project-presence" id="projectPresence"></div>
 </div>
 
 <!-- Status (collapsed when healthy) -->
@@ -989,6 +1028,7 @@ function render(s) {
   document.getElementById('projectGoal').textContent = goal || 'No active goal';
   document.getElementById('projectSubtitle').textContent = getProjectSubtitle(s, policy);
   document.getElementById('projectSubtitle').className = 'project-subtitle';
+  renderProjects(s.projects || [], s.selected_project_id);
 
   // Active AI
   const setupFinalizing = isSetupFinalizing(s);
@@ -1169,6 +1209,58 @@ function render(s) {
   } else {
     sysAgent.className = 'sys-item warn';
     sysAgent.title = setupFinalizing ? 'Agent audit: Checking integrations' : 'Agent audit unavailable - Audit only';
+  }
+}
+
+function renderProjects(projects, selectedProjectId) {
+  const select = document.getElementById('projectSelect');
+  const presence = document.getElementById('projectPresence');
+  const currentValue = selectedProjectId || select.value;
+
+  select.replaceChildren();
+  for (const project of projects) {
+    const option = document.createElement('option');
+    option.value = project.project_id;
+    option.textContent = project.name || project.project_id;
+    option.selected = project.project_id === currentValue;
+    select.appendChild(option);
+  }
+  select.style.display = projects.length > 1 ? '' : 'none';
+
+  presence.replaceChildren();
+  for (const project of projects) {
+    const activeAgents = project.agents?.active || [];
+    if (!activeAgents.length) continue;
+
+    const row = document.createElement('div');
+    row.className = 'project-presence-row';
+
+    const name = document.createElement('span');
+    name.className = 'project-presence-name';
+    name.textContent = project.name || project.project_id;
+
+    const agents = document.createElement('span');
+    agents.className = 'project-presence-agents';
+    agents.textContent = activeAgents.map(agent => capitalize(agent.name)).join(', ');
+
+    row.append(name, agents);
+    presence.appendChild(row);
+  }
+}
+
+async function switchDisplayedProject(projectId) {
+  if (!projectId) return;
+  try {
+    const res = await fetch(`${API}/api/projects/switch/${encodeURIComponent(projectId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dashboard': 'true' },
+      body: JSON.stringify({})
+    });
+    if (!res.ok) throw new Error(`Project switch failed: ${res.status}`);
+    await Promise.all([fetchData(), fetchActivity()]);
+  } catch (error) {
+    logPollingError('Project switch error:', error);
+    showToast('Could not switch project', 'error');
   }
 }
 

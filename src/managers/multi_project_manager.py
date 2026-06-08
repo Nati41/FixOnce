@@ -16,6 +16,7 @@ import json
 import hashlib
 import threading
 import subprocess
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -71,11 +72,25 @@ PROJECT_DIR = SRC_DIR.parent
 
 # USER data directory (must match MCP server's DATA_DIR)
 # MCP writes to ~/.fixonce/projects_v2/, so we must read from there too
-USER_DATA_DIR = Path.home() / ".fixonce"
+USER_DATA_DIR = Path(
+    os.environ.get("FIXONCE_USER_DATA_DIR", "").strip()
+    or (Path.home() / ".fixonce")
+).expanduser()
 DATA_DIR = USER_DATA_DIR
 PROJECTS_V2_DIR = DATA_DIR / "projects_v2"
 GLOBAL_DIR = DATA_DIR / "global"
 ACTIVE_PROJECT_FILE = DATA_DIR / "active_project.json"
+PROJECT_INDEX_FILE = DATA_DIR / "project_index.json"
+PROJECT_CATALOG_MIGRATION_FILE = DATA_DIR / "project_catalog_migration_v1.json"
+
+PROJECT_PROVENANCE_VALUES = {"user", "test", "temporary", "legacy"}
+TEST_PROJECT_NAME_MARKERS = (
+    "fixonce-init-valid-",
+    "fixonce_boundary_test_",
+    "fixonce_stress_test_project",
+    "stress_test_project",
+    "testproject",
+)
 
 # Installation data dir (for templates only)
 INSTALL_DATA_DIR = PROJECT_DIR / "data"
@@ -232,6 +247,188 @@ def project_exists(project_id: str) -> bool:
     return get_project_path(project_id).exists()
 
 
+def infer_project_provenance(
+    name: str = "",
+    working_dir: str = "",
+    explicit: str = None,
+) -> str:
+    """Classify where a project record came from."""
+    normalized_explicit = str(explicit or "").strip().lower()
+    if normalized_explicit in PROJECT_PROVENANCE_VALUES:
+        return normalized_explicit
+
+    normalized_name = str(name or "").strip().lower()
+    normalized_path = str(working_dir or "").strip()
+    lowered_path = normalized_path.lower()
+
+    if (
+        normalized_name == "test"
+        or normalized_name.startswith(TEST_PROJECT_NAME_MARKERS)
+        or "testproject" in normalized_name
+        or any(marker in lowered_path for marker in TEST_PROJECT_NAME_MARKERS)
+    ):
+        return "test"
+
+    if normalized_path:
+        try:
+            resolved = Path(normalized_path).expanduser().resolve(strict=False)
+            temp_roots = [
+                Path("/tmp"),
+                Path("/private/tmp"),
+                Path(tempfile.gettempdir()),
+            ]
+            if any(resolved == root or root in resolved.parents for root in temp_roots):
+                return "temporary"
+            if "/var/folders/" in str(resolved) and "/t/" in str(resolved).lower():
+                return "temporary"
+        except Exception:
+            pass
+        return "user"
+
+    return "legacy"
+
+
+def _is_pinned_or_imported(info: Dict[str, Any]) -> bool:
+    source = str(info.get("source") or "").strip().lower()
+    return bool(
+        info.get("pinned")
+        or info.get("imported")
+        or source in {"imported", "fixonce_portable", "repo"}
+    )
+
+
+def _project_quarantine_reason(project: Dict[str, Any]) -> Optional[str]:
+    provenance = project.get("provenance")
+    working_dir = str(project.get("working_dir") or "").strip()
+
+    if provenance in {"test", "temporary"}:
+        return f"{provenance}_provenance"
+    if not working_dir and not project.get("pinned_or_imported"):
+        return "legacy_empty_working_dir"
+    if working_dir and not Path(working_dir).expanduser().is_dir():
+        return "missing_working_dir"
+    return None
+
+
+def _write_project_record(path: Path, memory: Dict[str, Any]) -> None:
+    if SAFE_FILE_AVAILABLE:
+        if not atomic_json_write(str(path), memory, create_backup=True):
+            raise IOError(f"Could not update project catalog record: {path}")
+    else:
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(memory, handle, ensure_ascii=False, indent=2)
+
+
+def _load_indexed_working_dirs(index_file: Path = None) -> Dict[str, str]:
+    """Read known project paths from the project index for legacy recovery."""
+    index_file = index_file or PROJECT_INDEX_FILE
+    try:
+        payload = json.loads(index_file.read_text(encoding="utf-8"))
+        projects = payload.get("projects", {})
+        return {
+            project_id: str(record.get("working_dir") or "").strip()
+            for project_id, record in projects.items()
+            if isinstance(record, dict) and record.get("working_dir")
+        }
+    except Exception:
+        return {}
+
+
+def migrate_project_catalog_once(data_dir: Path = None) -> Dict[str, Any]:
+    """Classify legacy records and quarantine invalid entries without deleting them."""
+    catalog_data_dir = Path(data_dir) if data_dir else DATA_DIR
+    projects_dir = catalog_data_dir / "projects_v2"
+    migration_file = (
+        catalog_data_dir / "project_catalog_migration_v1.json"
+        if data_dir
+        else PROJECT_CATALOG_MIGRATION_FILE
+    )
+    index_file = (
+        catalog_data_dir / "project_index.json"
+        if data_dir
+        else PROJECT_INDEX_FILE
+    )
+
+    if migration_file.exists():
+        try:
+            return json.loads(migration_file.read_text(encoding="utf-8"))
+        except Exception:
+            return {"status": "completed"}
+
+    result = {
+        "version": 1,
+        "status": "completed",
+        "migrated_at": datetime.now().isoformat(),
+        "classified": 0,
+        "quarantined": 0,
+        "recovered_paths": 0,
+    }
+    indexed_working_dirs = _load_indexed_working_dirs(index_file)
+
+    for project_file in projects_dir.glob("*.json"):
+        if project_file.stem in {"__global__", "live-state"}:
+            continue
+        try:
+            memory = json.loads(project_file.read_text(encoding="utf-8"))
+            info = memory.setdefault("project_info", {})
+            name = info.get("name") or project_file.stem
+            working_dir = info.get("working_dir") or ""
+            indexed_working_dir = indexed_working_dirs.get(project_file.stem, "")
+            recovered_from_index = False
+            if not working_dir and indexed_working_dir and Path(indexed_working_dir).is_dir():
+                working_dir = indexed_working_dir
+                info["working_dir"] = working_dir
+                memory.setdefault("live_record", {}).setdefault("gps", {})["working_dir"] = working_dir
+                result["recovered_paths"] += 1
+                recovered_from_index = True
+                changed = True
+            else:
+                changed = False
+            provenance = infer_project_provenance(
+                name=name,
+                working_dir=working_dir,
+                explicit=info.get("provenance") or ("user" if recovered_from_index else None),
+            )
+            changed = changed or info.get("provenance") != provenance
+            info["provenance"] = provenance
+
+            project = {
+                "provenance": provenance,
+                "working_dir": working_dir,
+                "pinned_or_imported": _is_pinned_or_imported(info),
+            }
+            reason = _project_quarantine_reason(project)
+            if reason and not info.get("archived"):
+                info["archived"] = True
+                info["quarantine"] = {
+                    "reason": reason,
+                    "quarantined_at": result["migrated_at"],
+                    "migration_version": 1,
+                }
+                result["quarantined"] += 1
+                changed = True
+
+            if changed:
+                _write_project_record(project_file, memory)
+                result["classified"] += 1
+        except Exception as exc:
+            print(f"[MultiProject] Catalog migration skipped {project_file.name}: {exc}")
+
+    migration_file.parent.mkdir(parents=True, exist_ok=True)
+    if SAFE_FILE_AVAILABLE:
+        atomic_json_write(
+            str(migration_file),
+            result,
+            create_backup=False,
+        )
+    else:
+        migration_file.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    return result
+
+
 # ============================================================
 # ACTIVE PROJECT MANAGEMENT
 # ============================================================
@@ -344,11 +541,40 @@ def set_active_project(
         return active_info
 
 
+def ensure_dashboard_project(
+    project_id: str,
+    detected_from: str = "session_init",
+    display_name: str = None,
+    working_dir: str = None
+) -> Dict[str, Any]:
+    """
+    Select a project for the dashboard only when no selection exists.
+
+    AI sessions use their own project context for routing. Starting another
+    session must not move an already-open dashboard to a different project.
+    """
+    active = get_active_project()
+    if active and active.get("active_id"):
+        return active
+
+    return set_active_project(
+        project_id=project_id,
+        detected_from=detected_from,
+        display_name=display_name,
+        working_dir=working_dir,
+    )
+
+
 # ============================================================
 # PROJECT MEMORY CRUD
 # ============================================================
 
-def init_project_memory(project_id: str, display_name: str = None, working_dir: str = None) -> Dict[str, Any]:
+def init_project_memory(
+    project_id: str,
+    display_name: str = None,
+    working_dir: str = None,
+    provenance: str = None,
+) -> Dict[str, Any]:
     """Initialize memory for a new project. Syncs from .fixonce/ if exists (cloned repo)."""
     now = datetime.now().isoformat()
 
@@ -367,6 +593,11 @@ def init_project_memory(project_id: str, display_name: str = None, working_dir: 
         "project_info": {
             "name": display_name or project_id.split('_')[0],
             "working_dir": working_dir or "",
+            "provenance": infer_project_provenance(
+                display_name or project_id.split('_')[0],
+                working_dir or "",
+                provenance,
+            ),
             "stack": "",
             "status": "Active",
             "description": "",
@@ -592,6 +823,8 @@ def _build_memory_from_fixonce(working_dir: str, project_id: str, metadata: dict
             "project_id": project_id,
             "name": metadata.get("name", Path(working_dir).name),
             "working_dir": working_dir,
+            "provenance": "user",
+            "imported": True,
             "created_at": metadata.get("created_at", datetime.now().isoformat()),
             "source": "fixonce_portable"
         },
@@ -823,14 +1056,24 @@ def unarchive_project(project_id: str) -> Dict[str, Any]:
 # LIST PROJECTS
 # ============================================================
 
-def list_projects() -> List[Dict[str, Any]]:
-    """List all projects from V2 storage (deduplicated by working_dir/name)."""
+def list_projects(
+    user_visible_only: bool = True,
+    migrate: bool = True,
+    data_dir: Path = None,
+) -> List[Dict[str, Any]]:
+    """Return the canonical project catalog for APIs and dashboard selectors."""
     raw_projects = []
+    projects_dir = Path(data_dir) / "projects_v2" if data_dir else PROJECTS_V2_DIR
 
-    if not PROJECTS_V2_DIR.exists():
+    if not projects_dir.exists():
         return raw_projects
 
-    for project_file in PROJECTS_V2_DIR.glob("*.json"):
+    if migrate:
+        migrate_project_catalog_once(data_dir=data_dir)
+
+    for project_file in projects_dir.glob("*.json"):
+        if project_file.stem in {"__global__", "live-state"}:
+            continue
         try:
             with open(project_file, 'r', encoding='utf-8') as f:
                 memory = json.load(f)
@@ -841,8 +1084,15 @@ def list_projects() -> List[Dict[str, Any]]:
 
             raw_projects.append({
                 "id": project_file.stem,
+                "record_path": str(project_file),
                 "name": info.get('name', project_file.stem),
                 "working_dir": info.get('working_dir', ''),
+                "provenance": infer_project_provenance(
+                    info.get('name', project_file.stem),
+                    info.get('working_dir', ''),
+                    info.get('provenance'),
+                ),
+                "pinned_or_imported": _is_pinned_or_imported(info),
                 "stack": live_record.get('architecture', {}).get('stack', info.get('stack', '')),
                 "summary": live_record.get('architecture', {}).get('summary', ''),
                 "current_goal": live_record.get('intent', {}).get('current_goal', ''),
@@ -850,6 +1100,9 @@ def list_projects() -> List[Dict[str, Any]]:
                 "decisions_count": len(memory.get('decisions', [])),
                 "avoid_count": len(memory.get('avoid', [])),
                 "issues_count": len(memory.get('active_issues', [])),
+                "insights_count": len(
+                    live_record.get('lessons', {}).get('insights', [])
+                ),
                 "archived": info.get('archived', False)
             })
         except Exception as e:
@@ -865,6 +1118,13 @@ def list_projects() -> List[Dict[str, Any]]:
             return dt.timestamp()
         except Exception:
             return 0.0
+
+    if user_visible_only:
+        raw_projects = [
+            project for project in raw_projects
+            if not project.get("archived")
+            and _project_quarantine_reason(project) is None
+        ]
 
     # Canonicalize duplicates:
     # 1) primary key: working_dir (case-insensitive)
