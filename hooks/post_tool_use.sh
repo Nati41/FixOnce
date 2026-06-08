@@ -22,15 +22,15 @@ if [ -f "$RUNTIME_FILE" ]; then
   fi
 fi
 
-# Track if this is a code change (for reminder)
-IS_CODE_CHANGE=false
+# Track activity type for reminder
+ACTIVITY_TYPE=""
 
 # Only process file operations
 case "$TOOL_NAME" in
   Edit|Write|NotebookEdit)
     FILE_PATH=$(echo "$TOOL_INPUT" | jq -r '.file_path // empty')
     if [ -n "$FILE_PATH" ]; then
-      IS_CODE_CHANGE=true
+      ACTIVITY_TYPE="code"
       # Log to FixOnce (silent)
       curl -s -X POST "http://localhost:$FIXONCE_PORT/api/activity/log" \
         -H "Content-Type: application/json" \
@@ -45,6 +45,12 @@ case "$TOOL_NAME" in
     ;;
   Bash)
     COMMAND=$(echo "$TOOL_INPUT" | jq -r '.command // empty')
+    # Detect test/build commands
+    if echo "$COMMAND" | grep -qE "(pytest|jest|npm test|yarn test|go test|cargo test|make test)"; then
+      ACTIVITY_TYPE="test"
+    elif echo "$COMMAND" | grep -qE "(npm run|yarn |make |cargo build|go build)"; then
+      ACTIVITY_TYPE="build"
+    fi
     # Log significant commands (silent)
     if echo "$COMMAND" | grep -qE "^(npm|yarn|pip|python|node|git)"; then
       curl -s -X POST "http://localhost:$FIXONCE_PORT/api/activity/log" \
@@ -147,14 +153,19 @@ if [ -n "$PROJECT_PORT" ] || [ -n "$PROJECT_DIR" ]; then
 fi
 
 # ============================================
-# REMINDER: Update FixOnce after code changes
+# REMINDER: Update FixOnce after meaningful work
 # ============================================
-if [ "$IS_CODE_CHANGE" = true ]; then
-  echo ""
-  echo "📌 FixOnce: קוד השתנה. זכור לעדכן:"
-  echo "   fo_sync(last_change=\"...\", last_file=\"$FILE_PATH\")"
-  echo ""
-fi
+case "$ACTIVITY_TYPE" in
+  code)
+    echo "💾 FixOnce: fo_sync() after changes, fo_solved() after fixes, fo_decide() after decisions"
+    ;;
+  test)
+    echo "💾 FixOnce: fo_solved() if you fixed a bug, fo_sync() to record progress"
+    ;;
+  build)
+    echo "💾 FixOnce: fo_sync() to record progress"
+    ;;
+esac
 
 # Always allow (exit 0)
 exit 0
