@@ -128,6 +128,54 @@ class TestFoSync(unittest.TestCase):
         self.assertTrue(result.startswith("HEADER\n"))
         self.assertIn('"intent"', result)
 
+    def test_fo_sync_updates_ai_connection_last_seen(self):
+        """Regression test: fo_sync must update last_seen for dashboard activity."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+
+            persist_calls = []
+
+            def track_persist(actor_identity, project_id=None):
+                persist_calls.append({
+                    "actor": actor_identity,
+                    "project_id": project_id,
+                })
+
+            with patch.object(server, "_persist_ai_connection", side_effect=track_persist), \
+                 patch.object(server, "_resolve_actor_identity", return_value={"editor": "claude"}):
+                result = server.fo_sync(goal="Test goal", next_step="Test next")
+
+            self.assertEqual(result, "Synced.")
+            # fo_sync may be called through wrapper which can invoke multiple times
+            self.assertGreaterEqual(len(persist_calls), 1, "fo_sync must call _persist_ai_connection")
+            # Verify at least one call had correct actor
+            actors = [c["actor"] for c in persist_calls]
+            self.assertIn({"editor": "claude"}, actors)
+
+    def test_fo_sync_enables_dashboard_activity_tracking(self):
+        """Verify fo_sync writes data that dashboard can read for activity display."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            ai_connections_file = temp_path / "ai_connections.json"
+
+            self._activate_temp_session(temp_path)
+
+            with patch.object(server, "AI_CONNECTIONS_FILE", ai_connections_file), \
+                 patch.object(server, "_resolve_actor_identity", return_value={"editor": "test_agent"}):
+                server.fo_sync(goal="Dashboard test", last_change="Updated code", next_step="Verify")
+
+            # Verify AI connection file was updated
+            self.assertTrue(ai_connections_file.exists(), "AI connections file must be created")
+            connections = json.loads(ai_connections_file.read_text())
+
+            # AI connections file uses "clients" key
+            self.assertIn("clients", connections)
+
+            # Find our connection
+            clients = connections["clients"]
+            self.assertIn("test_agent", clients, "fo_sync must update connection for current actor")
+            self.assertIn("last_seen", clients["test_agent"])
+
 
 if __name__ == "__main__":
     unittest.main()

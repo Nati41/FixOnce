@@ -6313,6 +6313,10 @@ def _update_work_context_lightweight(
     )
 
     _save_project_lightweight(session.project_id, memory)
+
+    # Update AI connection activity so dashboard reflects ongoing work
+    _persist_ai_connection(_resolve_actor_identity(), project_id=session.project_id)
+
     return "Synced."
 
 
@@ -9518,6 +9522,10 @@ def _format_minimal_init(working_dir: str) -> str:
             lines.append("")
     except Exception:
         pass  # Silent fallback if committed knowledge unavailable
+
+    # Protocol reminder: encourage fo_sync usage during session
+    lines.append("💾 Call `fo_sync()` after changes")
+    lines.append("")
 
     lines.append("Ready.")
 
