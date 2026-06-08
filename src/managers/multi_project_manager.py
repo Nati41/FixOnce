@@ -1277,7 +1277,8 @@ def get_active_project_with_memory() -> Dict[str, Any]:
 def _get_last_activity_for_project(project_id: str, working_dir: str) -> Optional[str]:
     """Get last activity timestamp for a project from activity log."""
     try:
-        activity_file = DATA_DIR.parent / "activity_log.json"
+        # Canonical path: USER_DATA_DIR / "activity_log.json" (DATA_DIR = USER_DATA_DIR)
+        activity_file = DATA_DIR / "activity_log.json"
         if not activity_file.exists():
             return None
 

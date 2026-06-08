@@ -7275,9 +7275,9 @@ def get_latest_changes() -> str:
         "canonical": None
     }
 
-    # 1. Check activity log
+    # 1. Check activity log (canonical path: USER_DATA_DIR / "activity_log.json")
     try:
-        activity_file = DATA_DIR / "activity_log.json"
+        activity_file = USER_DATA_DIR / "activity_log.json"
         if activity_file.exists():
             with open(activity_file, 'r', encoding='utf-8') as f:
                 activity_data = json.load(f)

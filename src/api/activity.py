@@ -158,9 +158,10 @@ def _get_git_diff_stats(file_path: str, cwd: str = None) -> dict:
 
     return {}
 
-# Activity log file
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
-ACTIVITY_FILE = DATA_DIR / "activity_log.json"
+# Activity log file - canonical path: USER_DATA_DIR / "activity_log.json"
+# Must match dashboard reader in status.py (via config.DATA_DIR = USER_DATA_DIR)
+from config import USER_DATA_DIR
+ACTIVITY_FILE = USER_DATA_DIR / "activity_log.json"
 
 
 def _load_activity():
@@ -176,7 +177,7 @@ def _load_activity():
 
 def _save_activity(data):
     """Save activity log."""
-    DATA_DIR.mkdir(exist_ok=True)
+    USER_DATA_DIR.mkdir(exist_ok=True)
     with open(ACTIVITY_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 

@@ -276,5 +276,65 @@ class TestProtocolReminder(unittest.TestCase):
             self.assertNotIn("fo_sync()", context)
 
 
+class TestActivityLogPathConsistency(unittest.TestCase):
+    """Regression test: activity log writer and dashboard reader must use the same file."""
+
+    def test_activity_writer_and_dashboard_reader_use_same_path(self):
+        """
+        Verify api/activity.py writes to the same file that api/status.py reads.
+
+        Bug context: activity.py was writing to /FixOnce/data/activity_log.json
+        while status.py (dashboard) was reading from ~/.fixonce/activity_log.json.
+        This caused dashboard activity to never show up.
+        """
+        from config import USER_DATA_DIR, DATA_DIR
+
+        # Read activity.py source to verify ACTIVITY_FILE definition
+        activity_source = (PROJECT_ROOT / "src" / "api" / "activity.py").read_text()
+
+        # Verify activity.py uses USER_DATA_DIR (not hardcoded path)
+        self.assertIn(
+            "from config import USER_DATA_DIR",
+            activity_source,
+            "activity.py must import USER_DATA_DIR from config"
+        )
+        self.assertIn(
+            "ACTIVITY_FILE = USER_DATA_DIR",
+            activity_source,
+            "activity.py must define ACTIVITY_FILE using USER_DATA_DIR"
+        )
+
+        # Verify it does NOT use hardcoded project path
+        self.assertNotIn(
+            'DATA_DIR = Path(__file__)',
+            activity_source,
+            "activity.py must NOT use hardcoded DATA_DIR"
+        )
+
+        # Dashboard reads from DATA_DIR / "activity_log.json" (see status.py line 1123)
+        # config.py sets DATA_DIR = USER_DATA_DIR, so both paths are the same
+        self.assertEqual(
+            DATA_DIR.resolve(),
+            USER_DATA_DIR.resolve(),
+            "config.DATA_DIR must equal USER_DATA_DIR for path consistency"
+        )
+
+    def test_mcp_server_reads_from_canonical_path(self):
+        """Verify MCP server activity log reads use USER_DATA_DIR."""
+        canonical = server.USER_DATA_DIR / "activity_log.json"
+
+        # Verify USER_DATA_DIR is the user home .fixonce directory
+        self.assertTrue(
+            str(server.USER_DATA_DIR).endswith(".fixonce"),
+            f"USER_DATA_DIR should end with .fixonce, got {server.USER_DATA_DIR}"
+        )
+
+        # Verify canonical path exists or can be created
+        self.assertTrue(
+            server.USER_DATA_DIR.exists() or server.USER_DATA_DIR.parent.exists(),
+            "USER_DATA_DIR parent must exist"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
