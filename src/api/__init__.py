@@ -105,6 +105,9 @@ from .setup import setup_bp
 # Installer endpoints
 from .installer import installer_bp
 
+# Pending memories (Memory Review MVP)
+from .pending import pending_bp
+
 
 def register_blueprints(app):
     """Register all blueprints with the Flask app."""
@@ -117,3 +120,4 @@ def register_blueprints(app):
     app.register_blueprint(openai_bp)  # /openai/* endpoints
     app.register_blueprint(setup_bp)  # /api/setup/* endpoints
     app.register_blueprint(installer_bp)  # /install + /api/installer/* endpoints
+    app.register_blueprint(pending_bp)  # /api/pending/* endpoints (Memory Review)

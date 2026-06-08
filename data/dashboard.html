@@ -600,6 +600,213 @@ input:checked + .slider:before {
   display: none !important;
 }
 
+/* Memory Review Card */
+.memory-review-card {
+  border: 1px solid rgba(0, 230, 118, 0.15);
+  background: linear-gradient(180deg, rgba(0, 230, 118, 0.03) 0%, var(--surface) 100%);
+}
+
+.pending-list {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.pending-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.pending-group:last-child {
+  border-bottom: none;
+}
+
+.pending-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pending-group-header:hover {
+  background: rgba(255,255,255,0.02);
+}
+
+.pending-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pending-group-count {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: normal;
+}
+
+.pending-group-arrow {
+  font-size: 10px;
+  color: var(--text-dim);
+  transition: transform 0.2s;
+}
+
+.pending-group.collapsed .pending-group-arrow {
+  transform: rotate(-90deg);
+}
+
+.pending-group.collapsed .pending-group-items {
+  display: none;
+}
+
+.pending-group-items {
+  padding-left: 8px;
+  padding-bottom: 8px;
+}
+
+.pending-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.pending-item input[type="checkbox"] {
+  margin-top: 2px;
+  accent-color: var(--green);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pending-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.pending-item-text {
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.pending-item-reason {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.pending-empty {
+  text-align: center;
+  padding: 16px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.next-task-section {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.next-task-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.next-task-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 10px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 50px;
+}
+
+.next-task-input:focus {
+  outline: none;
+  border-color: var(--green);
+}
+
+.next-task-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.custom-memory-section {
+  margin: 12px 0;
+}
+
+.custom-memory-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.custom-memory-input:focus {
+  outline: none;
+  border-color: var(--green);
+}
+
+.memory-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.memory-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+}
+
+.memory-btn.primary {
+  background: var(--green);
+  color: #000;
+}
+
+.memory-btn.primary:hover {
+  background: #00ff88;
+}
+
+.memory-btn.secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.memory-btn.secondary:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+.pending-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
 .agent-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -806,6 +1013,31 @@ body.powered-off .card {
     </div>
   </div>
   <div class="context-time" id="syncTime"></div>
+</div>
+
+<!-- Memory Review Card -->
+<div class="card grid-full memory-review-card" id="memoryReviewCard" style="display: none;">
+  <div class="card-label">🧠 Proposed Memories</div>
+  <div id="pendingList" class="pending-list">
+    <div class="pending-empty">No pending memories</div>
+  </div>
+
+  <div class="next-task-section">
+    <div class="next-task-label">🎯 Next Task</div>
+    <textarea id="nextTaskInput" class="next-task-input"
+              placeholder="AI suggestion will appear here..."></textarea>
+    <div class="next-task-hint">✎ Edit if needed</div>
+  </div>
+
+  <div class="custom-memory-section">
+    <input type="text" id="customMemoryInput" class="custom-memory-input"
+           placeholder="+ Add custom memory (optional)">
+  </div>
+
+  <div class="memory-actions">
+    <button class="memory-btn secondary" id="clearMemoriesBtn" type="button">Clear</button>
+    <button class="memory-btn primary" id="saveMemoriesBtn" type="button">Save Selected</button>
+  </div>
 </div>
 
 <!-- AI Summary -->
@@ -1761,11 +1993,185 @@ function openInBrowser() {
   window.location.href = url;
 }
 
+// Memory Review
+let pendingMemoriesData = { pending: [], next_task: '' };
+
+async function loadPendingMemories() {
+  try {
+    const resp = await fetch(API + '/api/pending');
+    const data = await resp.json();
+
+    if (data.status !== 'ok') {
+      console.error('Failed to load pending memories:', data.message);
+      return;
+    }
+
+    pendingMemoriesData = data;
+    renderPendingMemories();
+  } catch (e) {
+    console.error('Failed to load pending memories:', e);
+  }
+}
+
+function renderPendingMemories() {
+  const card = document.getElementById('memoryReviewCard');
+  const list = document.getElementById('pendingList');
+  const nextTaskInput = document.getElementById('nextTaskInput');
+
+  const pending = pendingMemoriesData.pending || [];
+  const nextTask = pendingMemoriesData.next_task || '';
+
+  if (!pending.length && !nextTask) {
+    card.style.display = 'none';
+    return;
+  }
+
+  card.style.display = '';
+
+  if (!pending.length) {
+    list.innerHTML = '<div class="pending-empty">No pending memories</div>';
+  } else {
+    const groups = { decision: [], avoid: [], solution: [], note: [] };
+    const groupLabels = { decision: 'Decisions', avoid: 'Avoid', solution: 'Solutions', note: 'Notes' };
+    const groupOrder = ['decision', 'avoid', 'solution', 'note'];
+
+    pending.forEach((item, i) => {
+      const type = (item.type || 'note').toLowerCase();
+      const groupKey = groups[type] ? type : 'note';
+      groups[groupKey].push({ ...item, originalIndex: i });
+    });
+
+    const totalItems = pending.length;
+    const shouldCollapse = totalItems > 5;
+
+    let html = '';
+    groupOrder.forEach(groupKey => {
+      const items = groups[groupKey];
+      if (!items.length) return;
+
+      const checkedCount = items.filter(item => item.checked !== false).length;
+      const collapsedClass = shouldCollapse ? 'collapsed' : '';
+
+      html += `
+        <div class="pending-group ${collapsedClass}" data-group="${groupKey}">
+          <div class="pending-group-header" onclick="togglePendingGroup('${groupKey}')">
+            <span class="pending-group-title">
+              ${groupLabels[groupKey]}
+              <span class="pending-group-count">(${checkedCount}/${items.length})</span>
+            </span>
+            <span class="pending-group-arrow">▼</span>
+          </div>
+          <div class="pending-group-items">
+            ${items.map(item => {
+              const text = item.text || item.problem || item.decision || '';
+              const reason = item.reason || item.solution || '';
+              const checked = item.checked !== false ? 'checked' : '';
+              return `
+                <div class="pending-item">
+                  <input type="checkbox" data-index="${item.originalIndex}" ${checked}
+                         onchange="updateGroupCount('${groupKey}')">
+                  <div class="pending-item-content">
+                    <div class="pending-item-text">${escapeHtml(text)}</div>
+                    ${reason ? `<div class="pending-item-reason">${escapeHtml(reason)}</div>` : ''}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    });
+
+    list.innerHTML = html;
+  }
+
+  nextTaskInput.value = nextTask;
+}
+
+function togglePendingGroup(groupKey) {
+  const group = document.querySelector(`.pending-group[data-group="${groupKey}"]`);
+  if (group) {
+    group.classList.toggle('collapsed');
+  }
+}
+
+function updateGroupCount(groupKey) {
+  const group = document.querySelector(`.pending-group[data-group="${groupKey}"]`);
+  if (!group) return;
+
+  const checkboxes = group.querySelectorAll('input[type="checkbox"]');
+  const checkedCount = [...checkboxes].filter(cb => cb.checked).length;
+  const totalCount = checkboxes.length;
+
+  const countSpan = group.querySelector('.pending-group-count');
+  if (countSpan) {
+    countSpan.textContent = `(${checkedCount}/${totalCount})`;
+  }
+}
+
+async function savePendingMemories() {
+  const checkboxes = document.querySelectorAll('#pendingList input[type="checkbox"]');
+  const approvedIndices = [...checkboxes]
+    .filter(cb => cb.checked)
+    .map(cb => parseInt(cb.dataset.index, 10));
+
+  const nextTask = document.getElementById('nextTaskInput').value.trim();
+  const customMemory = document.getElementById('customMemoryInput').value.trim();
+
+  try {
+    const resp = await fetch(API + '/api/pending/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        approved_indices: approvedIndices,
+        next_task: nextTask,
+        custom_memory: customMemory
+      })
+    });
+
+    const data = await resp.json();
+
+    if (data.status === 'ok') {
+      showToast(`Saved ${data.total} memories`);
+      document.getElementById('customMemoryInput').value = '';
+      loadPendingMemories();
+    } else {
+      showToast('Save failed: ' + (data.message || 'Unknown error'));
+    }
+  } catch (e) {
+    console.error('Failed to save memories:', e);
+    showToast('Save failed');
+  }
+}
+
+async function clearPendingMemories() {
+  if (!confirm('Clear all pending memories without saving?')) return;
+
+  try {
+    const resp = await fetch(API + '/api/pending/clear', {
+      method: 'POST'
+    });
+
+    const data = await resp.json();
+
+    if (data.status === 'ok') {
+      showToast(`Cleared ${data.cleared} items`);
+      loadPendingMemories();
+    }
+  } catch (e) {
+    console.error('Failed to clear memories:', e);
+  }
+}
+
+document.getElementById('saveMemoriesBtn')?.addEventListener('click', savePendingMemories);
+document.getElementById('clearMemoriesBtn')?.addEventListener('click', clearPendingMemories);
+
 // Init
 loadPowerState();
 fetchData();
 fetchOnboarding();
 fetchActivity();
+loadPendingMemories();
 setInterval(() => { fetchData(); fetchOnboarding(); fetchActivity(); }, 5000);
 </script>
 </body>

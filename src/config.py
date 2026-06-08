@@ -112,3 +112,13 @@ MAX_ERROR_LOG_SIZE = 50  # Maximum errors to keep in memory
 # ---------------------------------------------------------------------------
 from version import VERSION
 APP_NAME = "FixOnce"
+
+# ---------------------------------------------------------------------------
+# Feature Flags
+# ---------------------------------------------------------------------------
+# Memory Review: When enabled, fo_decide/fo_solved write to pending queue
+# for user approval before saving to durable memory.
+# Set MEMORY_REVIEW_ENABLED=1 or MEMORY_REVIEW_ENABLED=true to enable.
+MEMORY_REVIEW_ENABLED = os.environ.get(
+    "MEMORY_REVIEW_ENABLED", ""
+).lower() in ("1", "true", "yes")
