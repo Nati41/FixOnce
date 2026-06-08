@@ -65,7 +65,7 @@ class TestInitOpening(unittest.TestCase):
             "Updated opener instructions and added home/root guard.\n"
             "Next:\n"
             "Verify a fresh session from a real project folder stays grounded.\n\n"
-            "💾 Call `fo_sync()` after changes\n\n"
+            "💾 Progress synced automatically\n\n"
             "Ready."
         )
         self.assertEqual(opener, expected)
@@ -148,8 +148,8 @@ class TestInitOpening(unittest.TestCase):
         self.assertIn("search_first", advisory_ids)
         self.assertIn("component_status", advisory_ids)
 
-    def test_format_minimal_init_includes_fo_sync_reminder(self):
-        """Regression test: fo_init must remind agent to call fo_sync during session."""
+    def test_format_minimal_init_includes_sync_status(self):
+        """Regression test: fo_init must inform user that progress is synced."""
         with patch.object(server, "_get_project_id", return_value="proj-1"), \
              patch.object(server, "_load_project", return_value={
                  "live_record": {
@@ -163,12 +163,12 @@ class TestInitOpening(unittest.TestCase):
              patch.object(server, "_resume_state_available", False):
             opener = server._format_minimal_init("/tmp/TestProject")
 
-        # Verify the fo_sync reminder is present
-        self.assertIn("fo_sync()", opener)
+        # Verify sync status is present (user-facing, not AI instruction)
+        self.assertIn("Progress synced automatically", opener)
         self.assertIn("💾", opener)
         # Verify it's not too noisy (single line)
-        reminder_lines = [line for line in opener.split("\n") if "fo_sync" in line]
-        self.assertEqual(len(reminder_lines), 1, "fo_sync reminder should be exactly one line")
+        reminder_lines = [line for line in opener.split("\n") if "synced" in line]
+        self.assertEqual(len(reminder_lines), 1, "sync status should be exactly one line")
         # Verify it ends with Ready.
         self.assertTrue(opener.strip().endswith("Ready."))
 

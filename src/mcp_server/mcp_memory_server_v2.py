@@ -9533,8 +9533,8 @@ def _format_minimal_init(working_dir: str) -> str:
     except Exception:
         pass  # Silent fallback if committed knowledge unavailable
 
-    # Protocol reminder: encourage fo_sync usage during session
-    lines.append("💾 Call `fo_sync()` after changes")
+    # Protocol reminder: inform user that progress is tracked
+    lines.append("💾 Progress synced automatically")
     lines.append("")
 
     lines.append("Ready.")
