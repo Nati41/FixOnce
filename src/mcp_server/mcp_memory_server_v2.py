@@ -4703,11 +4703,11 @@ def _do_init_session(working_dir: str) -> str:
     # Update active_ais for Multi-Active support
     _update_active_ai()
 
-    # CRITICAL FIX: Update dashboard's active project
-    # When AI explicitly calls auto_init_session(cwd), dashboard should follow
+    # Seed the dashboard selection once. Session routing remains workspace-local,
+    # so concurrent AIs cannot move an existing dashboard selection.
     try:
-        from managers.multi_project_manager import set_active_project
-        set_active_project(
+        from managers.multi_project_manager import ensure_dashboard_project
+        ensure_dashboard_project(
             project_id=project_id,
             detected_from="auto_init",
             display_name=Path(working_dir).name,
@@ -9498,6 +9498,19 @@ def _format_minimal_init(working_dir: str) -> str:
     elif not line2:
         lines.extend(["Ready to continue.", ""])
 
+    # Compact memory summary (counts only, no details)
+    try:
+        from core.committed_knowledge import read_committed_knowledge
+        ck = read_committed_knowledge(working_dir)
+        d_count = len(ck.get("decisions", []))
+        s_count = len(ck.get("solutions", []))
+        a_count = len(ck.get("avoid", []))
+        if d_count or s_count or a_count:
+            lines.append(f"📊 Memory: {d_count} Decisions · {s_count} Solved Bugs · {a_count} Avoid Patterns")
+            lines.append("")
+    except Exception:
+        pass  # Silent fallback if committed knowledge unavailable
+
     lines.append("Ready.")
 
     result = "\n".join(lines)
@@ -9559,21 +9572,21 @@ def fo_init(cwd: str = "") -> str:
         _mark_session_initialized()
         _fo_init_trace("FO_INIT_MARK_GLOBAL_INITIALIZED_AFTER")
 
-        # Update active project for dashboard
+        # Seed dashboard selection only when the user has not selected a project.
         try:
             _fo_init_trace("FO_INIT_ACTIVE_PROJECT_IMPORT_BEFORE")
-            from managers.multi_project_manager import set_active_project
+            from managers.multi_project_manager import ensure_dashboard_project
             _fo_init_trace("FO_INIT_ACTIVE_PROJECT_IMPORT_AFTER")
-            _fo_init_trace("ACTIVE_PROJECT_LOAD_OR_WRITE_BEFORE set_active_project")
+            _fo_init_trace("ACTIVE_PROJECT_LOAD_OR_WRITE_BEFORE ensure_dashboard_project")
             _fo_init_trace("FO_INIT_ACTIVE_PROJECT_SET_BEFORE")
-            set_active_project(
+            ensure_dashboard_project(
                 project_id=project_id,
                 detected_from="fo_init",
                 display_name=Path(working_dir).name,
                 working_dir=working_dir
             )
             _fo_init_trace("FO_INIT_ACTIVE_PROJECT_SET_AFTER")
-            _fo_init_trace("ACTIVE_PROJECT_LOAD_OR_WRITE_AFTER set_active_project")
+            _fo_init_trace("ACTIVE_PROJECT_LOAD_OR_WRITE_AFTER ensure_dashboard_project")
         except Exception as exc:
             _fo_init_trace(f"FO_INIT_ACTIVE_PROJECT_ERROR {type(exc).__name__}: {exc}", include_stack=True)
             pass
