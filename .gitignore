@@ -21,7 +21,15 @@ npm-debug.log
 
 # OS
 .DS_Store
+**/.DS_Store
 Thumbs.db
+
+# Test files
+tmp_*.txt
+
+# Binary installers (host on GitHub Releases / CDN instead)
+website/downloads/*.dmg
+website/downloads/*.exe
 
 # IDE
 .idea/

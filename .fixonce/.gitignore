@@ -16,3 +16,9 @@ decisions.json
 avoid.json
 solutions.json
 CONTEXT.md
+
+# Lock files - transient
+*.lock
+
+# Team memory - runtime user data
+team_memory.json

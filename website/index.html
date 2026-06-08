@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FixOnce — AI Memory You Control</title>
+<meta name="description" content="AI memory you control. FixOnce lets you review and approve what AI remembers. Decisions, solved bugs, and next steps persist across Claude, Cursor, and Codex.">
+<link rel="icon" type="image/x-icon" href="FixOnce.ico">
+<style>
+:root {
+  --bg: #0a0b0f;
+  --bg-2: #0f1117;
+  --surface: #14161e;
+  --surface-2: #1a1d28;
+  --border: #252a38;
+  --border-hover: #3a4158;
+  --green: #00e676;
+  --green-dim: rgba(0, 230, 118, 0.15);
+  --green-glow: rgba(0, 230, 118, 0.4);
+  --blue: #3b82f6;
+  --cyan: #06b6d4;
+  --text: #e8ecf4;
+  --text-dim: #8892a4;
+  --text-muted: #5a6478;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Typography */
+h1, h2, h3, h4 { font-weight: 600; line-height: 1.3; }
+h1 { font-size: clamp(2.5rem, 6vw, 4rem); letter-spacing: -0.03em; }
+h2 { font-size: clamp(1.75rem, 4vw, 2.5rem); letter-spacing: -0.02em; }
+h3 { font-size: 1.25rem; }
+
+.text-dim { color: var(--text-dim); }
+.text-muted { color: var(--text-muted); }
+.text-green { color: var(--green); }
+
+/* Layout */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+section {
+  padding: 100px 0;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.btn-primary {
+  background: var(--green);
+  color: #0a0b0f;
+}
+
+.btn-primary:hover {
+  background: #33eb91;
+  box-shadow: 0 0 30px var(--green-glow);
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  border-color: var(--border-hover);
+  background: var(--surface);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-dim);
+  padding: 10px 16px;
+}
+
+.btn-ghost:hover {
+  color: var(--text);
+}
+
+/* Nav */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 16px 0;
+  background: rgba(10, 11, 15, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.3s;
+}
+
+nav.scrolled {
+  border-bottom-color: var(--border);
+}
+
+nav .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.nav-logo svg {
+  width: 32px;
+  height: 32px;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  padding: 8px 14px;
+  font-size: 14px;
+  border-radius: 6px;
+  transition: color 0.2s;
+}
+
+.nav-links a:hover {
+  color: var(--text);
+}
+
+/* Hero */
+.hero {
+  padding-top: 160px;
+  padding-bottom: 100px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 600px;
+  background: radial-gradient(ellipse, var(--green-dim) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-content {
+  position: relative;
+  text-align: center;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 50px;
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 32px;
+}
+
+.hero-badge .dot {
+  width: 6px;
+  height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+}
+
+.hero h1 {
+  margin-bottom: 24px;
+}
+
+.hero h1 span {
+  background: linear-gradient(135deg, var(--green), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-subtitle {
+  font-size: clamp(1.1rem, 2.5vw, 1.35rem);
+  color: var(--text-dim);
+  max-width: 600px;
+  margin: 0 auto 40px;
+}
+
+.hero-ctas {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.hero-secondary-cta {
+  display: flex;
+  justify-content: center;
+}
+
+.hero-visual {
+  margin-top: 80px;
+  position: relative;
+}
+
+
+
+/* Problem */
+.problem {
+  background: var(--bg-2);
+}
+
+.problem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 24px;
+  margin-top: 60px;
+}
+
+.problem-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+}
+
+.problem-card-icon {
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 82, 82, 0.12);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+  color: #ff5252;
+  font-size: 20px;
+}
+
+.problem-card h3 {
+  margin-bottom: 10px;
+}
+
+.problem-card p {
+  color: var(--text-dim);
+  font-size: 15px;
+}
+
+.section-header {
+  text-align: center;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.section-header p {
+  color: var(--text-dim);
+  margin-top: 16px;
+  font-size: 1.1rem;
+}
+
+/* Solution */
+.solution-content {
+  display: grid;
+  grid-template-columns: 1fr 1.8fr;
+  gap: 50px;
+  align-items: center;
+  margin-top: 60px;
+}
+
+@media (max-width: 800px) {
+  .solution-content {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+}
+
+.solution-text h3 {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+}
+
+.solution-text p {
+  color: var(--text-dim);
+  font-size: 1.05rem;
+  margin-bottom: 16px;
+}
+
+.solution-list {
+  list-style: none;
+  margin-top: 24px;
+}
+
+.solution-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  font-size: 15px;
+}
+
+.solution-list li::before {
+  content: '→';
+  color: var(--green);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.solution-visual {
+  /* image container - no extra styling needed */
+}
+
+/* How it works */
+.how-it-works {
+  background: var(--bg-2);
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 32px;
+  margin-top: 60px;
+}
+
+.step {
+  text-align: center;
+  padding: 20px;
+}
+
+.step-number {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--blue), var(--cyan));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+  margin: 0 auto 20px;
+}
+
+.step h3 {
+  margin-bottom: 10px;
+}
+
+.step p {
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+/* Product proof */
+.product-proof {
+  background: var(--bg);
+}
+
+.proof-terminal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  max-width: 700px;
+  margin: 60px auto 0;
+  overflow: hidden;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.3);
+}
+
+.proof-terminal-header {
+  background: var(--surface-2);
+  padding: 12px 16px;
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.proof-terminal-header span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.proof-terminal-header span:first-child { background: #ff5f57; }
+.proof-terminal-header span:nth-child(2) { background: #febc2e; }
+.proof-terminal-header span:nth-child(3) { background: #28c840; }
+
+.proof-terminal-body {
+  padding: 24px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.proof-terminal-body .emoji { font-family: 'Apple Color Emoji', 'Segoe UI Emoji'; }
+.proof-terminal-body .green { color: var(--green); }
+.proof-terminal-body .dim { color: var(--text-dim); }
+.proof-terminal-body .cyan { color: var(--cyan); }
+
+/* Features */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+  margin-top: 60px;
+}
+
+.feature-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.feature-card:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-4px);
+}
+
+.feature-icon {
+  width: 44px;
+  height: 44px;
+  background: var(--green-dim);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+  font-size: 20px;
+}
+
+.feature-card h3 {
+  margin-bottom: 10px;
+}
+
+.feature-card p {
+  color: var(--text-dim);
+  font-size: 15px;
+}
+
+/* Privacy */
+.privacy {
+  background: var(--bg-2);
+}
+
+.privacy-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  margin-top: 60px;
+  align-items: center;
+}
+
+@media (max-width: 800px) {
+  .privacy-content {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+}
+
+.privacy-points {
+  list-style: none;
+}
+
+.privacy-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.privacy-check {
+  width: 24px;
+  height: 24px;
+  background: var(--green-dim);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--green);
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.privacy-points h4 {
+  margin-bottom: 4px;
+}
+
+.privacy-points p {
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.privacy-visual {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  text-align: center;
+}
+
+.privacy-visual svg {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 20px;
+}
+
+/* Download */
+.download {
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+  text-align: center;
+}
+
+.download-cards {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin: 50px 0 30px;
+}
+
+.download-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px 40px;
+  min-width: 280px;
+  transition: border-color 0.2s;
+}
+
+.download-card:hover {
+  border-color: var(--green);
+}
+
+.download-card-icon {
+  margin-bottom: 16px;
+  color: var(--text);
+}
+
+.download-card-icon svg {
+  width: 48px;
+  height: 48px;
+}
+
+.download-card h3 {
+  margin-bottom: 8px;
+}
+
+.download-card p {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.download-notice {
+  color: var(--text-muted);
+  font-size: 14px;
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+.download-notice strong {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+/* FAQ */
+.faq {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.faq-list {
+  margin-top: 60px;
+}
+
+.faq-item {
+  border-bottom: 1px solid var(--border);
+  padding: 24px 0;
+}
+
+.faq-question {
+  font-weight: 600;
+  font-size: 17px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.faq-question::after {
+  content: '+';
+  font-size: 24px;
+  color: var(--text-dim);
+  transition: transform 0.2s;
+}
+
+.faq-item.open .faq-question::after {
+  transform: rotate(45deg);
+}
+
+.faq-answer {
+  color: var(--text-dim);
+  font-size: 15px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+}
+
+.faq-item.open .faq-answer {
+  max-height: 500px;
+  padding-top: 16px;
+}
+
+/* Footer */
+footer {
+  padding: 60px 0 40px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.footer-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  font-weight: 700;
+}
+
+.footer-logo svg {
+  width: 28px;
+  height: 28px;
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 30px;
+}
+
+.footer-links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.footer-links a:hover {
+  color: var(--text);
+}
+
+.footer-copy {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  section { padding: 70px 0; }
+  .hero { padding-top: 120px; }
+  .hero-ctas { flex-direction: column; align-items: center; }
+  .nav-links { display: none; }
+}
+
+/* Utilities */
+.mono {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav>
+  <div class="container">
+    <a href="#" class="nav-logo">
+      <img src="FixOnce.ico" alt="FixOnce" width="32" height="32">
+      FixOnce
+    </a>
+    <div class="nav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#faq">FAQ</a>
+      <a href="#download" class="btn btn-secondary" style="padding: 8px 16px; font-size: 13px;">Download Beta</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="dot"></span>
+        Free Beta — Windows now, Mac soon
+      </div>
+      <h1>AI memory <span>you control</span></h1>
+      <p class="hero-subtitle">
+        AI proposes what to remember. You approve it. Decisions, solved bugs, and next steps persist across Claude, Cursor, Codex — every session.
+      </p>
+      <div class="hero-ctas">
+        <a href="/downloads/FixOnce_Setup_1.0.13.exe" class="btn btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download for Windows
+        </a>
+        <span class="btn btn-secondary" style="opacity: 0.6; cursor: default;">
+          Mac coming soon
+        </span>
+      </div>
+      <div class="hero-secondary-cta">
+        <!-- [VIDEO PLACEHOLDER] Add link to 90-second demo video -->
+        <a href="#demo" class="btn btn-ghost">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Watch 90-second demo
+        </a>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <img src="screenshot-dashboard.png" alt="FixOnce Dashboard showing Memory Review and session context" style="max-width: 900px; width: 100%; border-radius: 16px; box-shadow: 0 20px 80px rgba(0, 0, 0, 0.4);">
+    </div>
+  </div>
+</section>
+
+<!-- Problem -->
+<section class="problem">
+  <div class="container">
+    <div class="section-header">
+      <h2>AI forgets everything</h2>
+      <p>Every session starts from zero. Your AI assistant has no memory of what you built yesterday.</p>
+    </div>
+
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="problem-card-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </div>
+        <h3>Same bugs, different day</h3>
+        <p>You fixed this exact error last week. Now you're explaining it all over again.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-card-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <h3>Decisions evaporate</h3>
+        <p>"We chose Postgres for X reason" — gone. AI suggests SQLite again.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-card-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h3>Cold starts every time</h3>
+        <p>Re-explaining project context. Re-sharing constraints. Re-loading your brain into the machine.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-card-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="16" y1="3" x2="8" y2="21"/><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/></svg>
+        </div>
+        <h3>No cross-tool memory</h3>
+        <p>Cursor doesn't know what Claude decided. Context is siloed per tool.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Solution -->
+<section class="solution" id="solution">
+  <div class="container">
+    <div class="section-header">
+      <h2>One memory. Your control. Every AI tool.</h2>
+      <p>AI proposes memories as you work. You review and approve them in the dashboard.</p>
+    </div>
+
+    <div class="solution-content">
+      <div class="solution-text">
+        <h3>Memory you actually own</h3>
+        <p>FixOnce stores what matters: decisions you approved, bugs you solved, rules that must not break, and the next step you defined.</p>
+        <p>Every AI session — Claude, Cursor, Codex — starts with your approved context. No black box.</p>
+        <ul class="solution-list">
+          <li>AI proposes memories from your work</li>
+          <li>You review and approve in the dashboard</li>
+          <li>Approved memories persist forever</li>
+          <li>Rejected items are never stored</li>
+        </ul>
+      </div>
+
+      <div class="solution-visual">
+        <img src="screenshot-memory-review-1.png" alt="FixOnce Memory Review - AI proposes decisions, you approve" style="width: 100%; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="how-it-works" id="how-it-works">
+  <div class="container">
+    <div class="section-header">
+      <h2>How it works</h2>
+      <p>Install once. Review what AI proposes. Keep what matters.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h3>Install</h3>
+        <p>Mac or Windows. Takes 30 seconds.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <h3>Work with any AI</h3>
+        <p>Claude, Cursor, Codex — whatever you prefer.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h3>AI proposes memories</h3>
+        <p>Decisions, fixes, and rules surface as you work.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <h3>You approve</h3>
+        <p>Review in dashboard. Keep what matters. Reject the rest.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">5</div>
+        <h3>Next session continues</h3>
+        <p>AI starts from your approved context and next step.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Product Proof -->
+<section class="product-proof" id="demo">
+  <div class="container">
+    <div class="section-header">
+      <h2>See it in action</h2>
+      <p>This is what session continuity looks like.</p>
+    </div>
+
+    <div style="max-width: 800px; margin: 0 auto;">
+      <img src="screenshot-context.png" alt="FixOnce session context - Where You Left Off" style="width: 100%; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 20px 80px rgba(0, 0, 0, 0.3);">
+    </div>
+
+    <p style="text-align: center; color: var(--text-muted); margin-top: 24px; font-size: 14px;">
+      Every session starts with your approved context — last change, next step, full continuity.
+    </p>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="section-header">
+      <h2>Built for real engineering</h2>
+      <p>Practical memory for professional developers. Not a gimmick.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <h3>Memory Review</h3>
+        <p>AI proposes memories. You approve, edit, or reject in the dashboard. Nothing is saved without your consent.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+        </div>
+        <h3>Approved Next Steps</h3>
+        <p>Define the next task. Every new AI session starts exactly where you said to start.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+        </div>
+        <h3>Decisions That Stick</h3>
+        <p>Architecture choices, tool selections, constraints — remembered and surfaced when relevant.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        </div>
+        <h3>Solved Bugs Library</h3>
+        <p>Every fix becomes searchable. Never re-debug the same issue.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>Rules That Hold</h3>
+        <p>"Never use cloud storage" sticks forever. AI respects hard constraints.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.5 10.5L15.5 7M8.5 13.5l7 3"/></svg>
+        </div>
+        <h3>One Memory, All Tools</h3>
+        <p>Claude, Cursor, Codex, Windsurf — shared project memory across every AI.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Privacy -->
+<section class="privacy" id="privacy">
+  <div class="container">
+    <div class="section-header">
+      <h2>Your code stays yours</h2>
+      <p>FixOnce runs entirely on your machine. No cloud. No accounts. No tracking.</p>
+    </div>
+
+    <div class="privacy-content">
+      <ul class="privacy-points">
+        <li>
+          <span class="privacy-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+          </span>
+          <div>
+            <h4>You control what's remembered</h4>
+            <p>AI proposes. You review and approve. Nothing is saved without your consent.</p>
+          </div>
+        </li>
+        <li>
+          <span class="privacy-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+          </span>
+          <div>
+            <h4>100% local</h4>
+            <p>FixOnce runs on localhost. Memory never leaves your machine.</p>
+          </div>
+        </li>
+        <li>
+          <span class="privacy-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+          </span>
+          <div>
+            <h4>No account required</h4>
+            <p>Install and use immediately. No signup, no email, no payment for beta.</p>
+          </div>
+        </li>
+        <li>
+          <span class="privacy-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+          </span>
+          <div>
+            <h4>Delete anytime</h4>
+            <p>Remove <code class="mono" style="background: var(--surface-2); padding: 2px 6px; border-radius: 4px; font-size: 13px;">.fixonce/</code> to reset memory. Uninstall removes everything.</p>
+          </div>
+        </li>
+      </ul>
+
+      <div class="privacy-visual">
+        <svg viewBox="0 0 120 120" fill="none">
+          <circle cx="60" cy="60" r="55" stroke="var(--border)" stroke-width="2" stroke-dasharray="8 4"/>
+          <circle cx="60" cy="60" r="40" fill="var(--green-dim)"/>
+          <path d="M60 35 L80 45 L80 65 C80 80 60 90 60 90 C60 90 40 80 40 65 L40 45 Z" fill="var(--surface-2)" stroke="var(--green)" stroke-width="2"/>
+          <path d="M52 60 L57 65 L68 54" stroke="var(--green)" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h3 style="margin-bottom: 8px;">Local-first by design</h3>
+        <p style="color: var(--text-dim); font-size: 14px;">Your engineering memory is as private as your source code.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Download -->
+<section class="download" id="download">
+  <div class="container">
+    <div class="section-header">
+      <h2>Try the beta</h2>
+      <p>Free while in beta. Windows available now.</p>
+    </div>
+
+    <div class="download-cards">
+      <div class="download-card">
+        <div class="download-card-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 12V6.75l6-1.32v6.48L3 12zm17-9v8.75l-10 .15V5.21L20 3zM3 13l6 .09v6.81l-6-1.15V13zm17 .25V22l-10-1.91V13.1l10 .15z"/>
+          </svg>
+        </div>
+        <h3>Windows</h3>
+        <p>Windows 10 / 11</p>
+        <a href="/downloads/FixOnce_Setup_1.0.13.exe" class="btn btn-primary" style="width: 100%;">Download .exe</a>
+      </div>
+      <div class="download-card" style="opacity: 0.5;">
+        <div class="download-card-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+          </svg>
+        </div>
+        <h3>macOS</h3>
+        <p>Coming soon</p>
+        <span class="btn btn-secondary" style="width: 100%; cursor: default;">Coming Soon</span>
+      </div>
+    </div>
+
+    <div class="download-notice">
+      <strong>Windows Beta 1.0.13.</strong> Because FixOnce is not code-signed yet, Windows SmartScreen may show a warning — click "More info" then "Run anyway".<br><br>
+      <strong>Requirement:</strong> Open FixOnce from a real Git or project folder. Empty folders without project files will show a setup prompt.
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="container faq">
+    <div class="section-header">
+      <h2>Frequently asked questions</h2>
+    </div>
+
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-question">What is Memory Review?</div>
+        <div class="faq-answer">As you work, AI proposes memories — decisions, solutions, rules. These appear in your dashboard for review. You can approve, edit, or reject each one. Only approved memories persist across sessions.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question">How is this different from ChatGPT memory?</div>
+        <div class="faq-answer">ChatGPT memory is a black box — you don't see or control what it remembers. FixOnce gives you a dashboard to review, edit, and approve every memory. You decide what sticks.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question">Is my code uploaded anywhere?</div>
+        <div class="faq-answer">No. FixOnce runs entirely on your machine. Project memory is stored in a <code>.fixonce/</code> folder inside your project directory. Nothing is sent to any server.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question">Which AI tools are supported?</div>
+        <div class="faq-answer">FixOnce works with Claude Code, Cursor, Codex (via MCP), and Windsurf. Any tool that supports MCP (Model Context Protocol) can connect to FixOnce.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question">Does it work on Windows?</div>
+        <div class="faq-answer">Yes. The Windows installer is fully tested. It installs FixOnce, sets up the background service, and configures MCP integration for supported tools.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question">Does it work on Mac?</div>
+        <div class="faq-answer">Yes. Both Intel and Apple Silicon Macs are supported. The installer handles everything — server setup, auto-start configuration, and tool integration.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question">Why do I need a Git or project folder?</div>
+        <div class="faq-answer">FixOnce stores memory relative to your project. Opening from an empty folder or the home directory won't work — you need a real project context for memory to be meaningful.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question">What happens if I uninstall?</div>
+        <div class="faq-answer">The uninstaller removes FixOnce from your system. Project memory in <code>.fixonce/</code> folders is preserved unless you delete it manually — so you can reinstall and pick up where you left off.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question">What happens when multiple developers or AI agents work on the same project?</div>
+        <div class="faq-answer">Today, FixOnce focuses on helping individual developers maintain reliable project memory. Our long-term vision is larger: a shared memory layer where developers and AI agents can learn from previous decisions, solved bugs, project rules, and accumulated knowledge — instead of starting from zero. Team memory and shared project knowledge are among the most important directions we're actively exploring.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-question">Is this free?</div>
+        <div class="faq-answer">Yes, during the beta. We're focused on getting the core experience right. Pricing for future versions hasn't been decided yet.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div class="footer-logo">
+      <img src="FixOnce.ico" alt="FixOnce" width="28" height="28">
+      FixOnce
+    </div>
+    <div class="footer-links">
+      <a href="privacy.html">Privacy</a>
+      <a href="terms.html">Terms</a>
+      <a href="security.html">Security</a>
+      <a href="cookies.html">Cookies</a>
+      <a href="https://github.com/Nati41/FixOnce" target="_blank">GitHub</a>
+    </div>
+    <p class="footer-copy">
+      © 2026 FixOnce. Built for developers who don't want to repeat themselves.
+    </p>
+  </div>
+</footer>
+
+<script>
+// Nav scroll effect
+const nav = document.querySelector('nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 20);
+});
+
+// FAQ accordion
+document.querySelectorAll('.faq-question').forEach(q => {
+  q.addEventListener('click', () => {
+    const item = q.parentElement;
+    const wasOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+    if (!wasOpen) item.classList.add('open');
+  });
+});
+
+// Smooth scroll for anchor links
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+});
+</script>
+
+</body>
+</html>

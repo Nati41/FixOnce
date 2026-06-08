@@ -595,6 +595,63 @@ input:checked + .slider:before {
   margin-top: 8px;
 }
 
+/* AI Tools Detection */
+.ai-tools-list {
+  display: grid;
+  gap: 6px;
+}
+
+.ai-tool-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.ai-tool-icon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.ai-tool-name {
+  flex: 1;
+  font-size: 13px;
+}
+
+.ai-tool-status {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.ai-tool-status.connected {
+  color: var(--green);
+  background: rgba(0, 230, 118, 0.1);
+}
+
+.ai-tool-status.unprotected {
+  color: #ffc107;
+  background: rgba(255, 193, 7, 0.15);
+}
+
+.ai-tool-status.not-running {
+  color: var(--text-dim);
+}
+
+.ai-tools-warning {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #ffc107;
+}
+
 /* Hidden utility */
 .hidden {
   display: none !important;
@@ -636,7 +693,7 @@ input:checked + .slider:before {
 .pending-group-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--green);
+  color: var(--text);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -714,7 +771,7 @@ input:checked + .slider:before {
 .next-task-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--green);
+  color: var(--text);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
@@ -1017,13 +1074,13 @@ body.powered-off .card {
 
 <!-- Memory Review Card -->
 <div class="card grid-full memory-review-card" id="memoryReviewCard" style="display: none;">
-  <div class="card-label">🧠 Proposed Memories</div>
+  <div class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>Proposed Memories</div>
   <div id="pendingList" class="pending-list">
     <div class="pending-empty">No pending memories</div>
   </div>
 
   <div class="next-task-section">
-    <div class="next-task-label">🎯 Next Task</div>
+    <div class="next-task-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>Next Task</div>
     <textarea id="nextTaskInput" class="next-task-input"
               placeholder="AI suggestion will appear here..."></textarea>
     <div class="next-task-hint">✎ Edit if needed</div>
@@ -1090,13 +1147,13 @@ body.powered-off .card {
   </div>
 </div>
 
-<!-- Agents -->
-<div class="card" id="agentsCard">
-  <div class="card-label">Agents</div>
-  <div class="agents-list" id="agentsList">
-    <div class="agents-empty">No agents active</div>
+<!-- AI Tools Detection -->
+<div class="card" id="aiToolsCard">
+  <div class="card-label">AI Tools</div>
+  <div class="ai-tools-list" id="aiToolsList">
+    <div class="agents-empty">Checking...</div>
   </div>
-  <div class="agents-more" id="agentsMore" style="display: none;"></div>
+  <div class="ai-tools-warning" id="aiToolsWarning" style="display: none;"></div>
 </div>
 
 </div><!-- /dashboard-grid -->
@@ -1767,37 +1824,8 @@ function formatAgentsHeader(agents, fallbackPresence) {
 }
 
 function renderAgents(agents) {
-  const list = document.getElementById('agentsList');
-  const more = document.getElementById('agentsMore');
-  const active = Array.isArray(agents.active) ? agents.active : [];
-  const recent = Array.isArray(agents.recent) ? agents.recent : [];
-  const allAgents = [...active, ...recent];
-  const visibleLimit = Number(agents.visible_limit) || 3;
-  const visible = allAgents.slice(0, visibleLimit);
-
-  if (!visible.length) {
-    list.innerHTML = '<div class="agents-empty">No agents active</div>';
-    more.style.display = 'none';
-    return;
-  }
-
-  list.innerHTML = visible.map(agent => {
-    const isActive = agent.state === 'active';
-    const name = agent.display_name || formatActorName(agent.name) || 'AI';
-    const seen = relativeTime(agent.last_seen);
-    const state = `${isActive ? 'Active' : 'Recent'}${seen ? ` · ${seen}` : ''}`;
-    return `
-      <div class="agent-row">
-        <span class="agent-presence-dot${isActive ? '' : ' recent'}"></span>
-        <span class="agent-row-name">${escapeHtml(name)}</span>
-        <span class="agent-row-state">${escapeHtml(state)}</span>
-      </div>
-    `;
-  }).join('');
-
-  const remaining = allAgents.length - visible.length;
-  more.textContent = remaining > 0 ? `+${remaining} more` : '';
-  more.style.display = remaining > 0 ? '' : 'none';
+  // Disabled - replaced by loadAITools()
+  return;
 }
 
 function formatAgentPresence(activeAgent, setupFinalizing = false) {
@@ -2145,8 +2173,6 @@ async function savePendingMemories() {
 }
 
 async function clearPendingMemories() {
-  if (!confirm('Clear all pending memories without saving?')) return;
-
   try {
     const resp = await fetch(API + '/api/pending/clear', {
       method: 'POST'
@@ -2167,12 +2193,87 @@ document.getElementById('saveMemoriesBtn')?.addEventListener('click', savePendin
 document.getElementById('clearMemoriesBtn')?.addEventListener('click', clearPendingMemories);
 
 // Init
+// AI Tools Detection
+async function loadAITools() {
+  try {
+    const resp = await fetch(API + '/api/ai/detection');
+    const data = await resp.json();
+
+    if (data.status !== 'ok') return;
+
+    const list = document.getElementById('aiToolsList');
+    const warning = document.getElementById('aiToolsWarning');
+
+    if (!data.tools || data.tools.length === 0) {
+      list.innerHTML = '<div class="agents-empty">No AI tools detected</div>';
+      warning.style.display = 'none';
+      return;
+    }
+
+    // Show tools that are installed, running, or connected
+    const relevantTools = data.tools.filter(t =>
+      t.installed === true || t.running === true || t.status === 'connected' || t.status === 'unprotected'
+    );
+
+    if (relevantTools.length === 0) {
+      list.innerHTML = '<div class="agents-empty">No AI tools detected</div>';
+      warning.style.display = 'none';
+      return;
+    }
+
+    list.innerHTML = relevantTools.map(tool => {
+      let icon, statusClass, statusText;
+
+      if (tool.status === 'connected') {
+        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>';
+        statusClass = 'connected';
+        statusText = 'Connected';
+      } else if (tool.status === 'unprotected') {
+        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffc107" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+        statusClass = 'unprotected';
+        statusText = 'Not Protected';
+      } else {
+        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
+        statusClass = 'not-running';
+        statusText = 'Not Running';
+      }
+
+      return `
+        <div class="ai-tool-row">
+          <span class="ai-tool-icon">${icon}</span>
+          <span class="ai-tool-name">${escapeHtml(tool.name)}</span>
+          <span class="ai-tool-status ${statusClass}">${statusText}</span>
+        </div>
+      `;
+    }).join('');
+
+    // Show warning if there are unprotected tools
+    if (data.has_unprotected && data.unprotected_warning) {
+      warning.innerHTML = `
+        ${escapeHtml(data.unprotected_warning)}
+        <div style="margin-top: 8px; padding: 6px 10px; background: rgba(0,0,0,0.2); border-radius: 4px; display: flex; align-items: center; gap: 8px;">
+          <code style="font-family: monospace; font-size: 13px; color: #fff; user-select: all;">fo_init</code>
+          <button onclick="navigator.clipboard.writeText('fo_init'); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy', 1500);" style="background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 2px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;">Copy</button>
+          <span style="opacity: 0.7; font-size: 11px;">← paste in your AI chat to connect</span>
+        </div>
+      `;
+      warning.style.display = '';
+    } else {
+      warning.style.display = 'none';
+    }
+
+  } catch (e) {
+    console.error('Failed to load AI tools:', e);
+  }
+}
+
 loadPowerState();
 fetchData();
 fetchOnboarding();
 fetchActivity();
 loadPendingMemories();
-setInterval(() => { fetchData(); fetchOnboarding(); fetchActivity(); }, 5000);
+loadAITools();
+setInterval(() => { fetchData(); fetchOnboarding(); fetchActivity(); loadAITools(); }, 5000);
 </script>
 </body>
 </html>

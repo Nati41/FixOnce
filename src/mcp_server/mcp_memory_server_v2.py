@@ -6327,6 +6327,12 @@ def _update_work_context_lightweight(
     # Update AI connection activity so dashboard reflects ongoing work
     _persist_ai_connection(_resolve_actor_identity(), project_id=session.project_id)
 
+    # Log to activity feed for dashboard visibility
+    _log_mcp_activity(tool_name, {
+        "last_change": update_data.get("last_change", ""),
+        "next_step": update_data.get("next_step", ""),
+    })
+
     return "Synced."
 
 

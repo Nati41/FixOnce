@@ -571,6 +571,30 @@ def api_mcp_session_health():
         }), 500
 
 
+@status_bp.route("/ai/detection", methods=["GET"])
+def api_ai_detection():
+    """
+    Detect AI coding tools and their connection status to FixOnce.
+
+    Returns status for each known tool:
+    - connected: Running and connected to FixOnce
+    - unprotected: Running but NOT connected (warning state)
+    - not_running: Tool not currently running
+    - not_installed: Tool not found on system
+    """
+    try:
+        from core.ai_detector import detect_ai_tools_cached
+        result = detect_ai_tools_cached()
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"AI detection failed: {e}",
+            "tools": [],
+            "has_unprotected": False,
+        }), 500
+
+
 @status_bp.route("/system/mode", methods=["GET"])
 def api_get_system_mode():
     """Get global FixOnce operating mode."""
