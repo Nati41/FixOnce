@@ -2016,6 +2016,9 @@ def _universal_gate(tool_name: str) -> tuple:
     # tax. Deep resume and explicit diagnostic tools can still opt in.
     context = _build_context_header() if tool_name in _CONTEXT_HEADER_TOOLS else ""
 
+    # Periodic protocol reminder (every 10 tool calls)
+    context += _get_protocol_reminder()
+
     return (None, context)
 
 
@@ -2324,10 +2327,17 @@ def _get_ai_context_injection() -> Optional[str]:
 
 
 def _get_protocol_reminder() -> str:
-    """Protocol reminders stay silent during normal work."""
+    """Periodic reminder to use FixOnce tools during work."""
     session = _get_session()
     if not session.is_active():
         return ""
+
+    tool_count = len(session.tool_calls)
+
+    # Every 10 tool calls, subtle reminder
+    if tool_count > 0 and tool_count % 10 == 0:
+        return "\n💾 FixOnce: call fo_sync() after meaningful changes; fo_solved() after fixes"
+
     return ""
 
 

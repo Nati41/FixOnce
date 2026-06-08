@@ -177,5 +177,104 @@ class TestFoSync(unittest.TestCase):
             self.assertIn("last_seen", clients["test_agent"])
 
 
+class TestProtocolReminder(unittest.TestCase):
+    def _activate_temp_session(self, temp_root: Path, project_id: str = "proj-reminder"):
+        projects_dir = temp_root / "projects_v2"
+        projects_dir.mkdir()
+        project_file = projects_dir / f"{project_id}.json"
+        project_file.write_text(json.dumps({
+            "project_info": {"name": "Reminder Test"},
+            "live_record": {"intent": {}},
+            "decisions": [],
+        }), encoding="utf-8")
+
+        patches = [
+            patch.object(server, "DATA_DIR", projects_dir),
+            patch.object(server, "SESSION_FILE", temp_root / "mcp_session.json"),
+            patch.object(server, "COMPLIANCE_FILE", temp_root / "mcp_compliance.json"),
+            patch.object(server, "AI_CONNECTIONS_FILE", temp_root / "ai_connections.json"),
+            patch.object(server, "_session_registry_available", False),
+        ]
+        for item in patches:
+            item.start()
+            self.addCleanup(item.stop)
+
+        server._set_session(project_id, str(temp_root))
+        server._persist_session(project_id, str(temp_root))
+        server._mark_session_initialized()
+
+    def test_protocol_reminder_appears_at_10_calls(self):
+        """Reminder must appear exactly at tool call 10."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+            session = server._get_session()
+
+            # Simulate 9 prior tool calls
+            session.tool_calls = ["call"] * 9
+            reminder = server._get_protocol_reminder()
+            self.assertEqual(reminder, "", "No reminder at 9 calls")
+
+            # 10th call
+            session.tool_calls = ["call"] * 10
+            reminder = server._get_protocol_reminder()
+            self.assertIn("fo_sync()", reminder)
+            self.assertIn("fo_solved()", reminder)
+            self.assertIn("💾", reminder)
+
+    def test_protocol_reminder_appears_at_20_calls(self):
+        """Reminder must appear at multiples of 10."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+            session = server._get_session()
+
+            session.tool_calls = ["call"] * 20
+            reminder = server._get_protocol_reminder()
+            self.assertIn("fo_sync()", reminder)
+
+    def test_protocol_reminder_absent_at_non_multiples(self):
+        """Reminder must NOT appear at non-multiples of 10."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+            session = server._get_session()
+
+            for count in [1, 5, 7, 11, 15, 19, 21, 25]:
+                session.tool_calls = ["call"] * count
+                reminder = server._get_protocol_reminder()
+                self.assertEqual(reminder, "", f"Should be empty at {count} calls")
+
+    def test_protocol_reminder_injected_via_universal_gate(self):
+        """Universal gate must inject reminder at 10th call."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+            session = server._get_session()
+
+            # Set to 9 calls, gate will log the 10th
+            session.tool_calls = ["call"] * 9
+
+            with patch.object(server, "_resolve_actor_identity", return_value={"editor": "test"}), \
+                 patch.object(server, "_persist_ai_connection"):
+                error, context = server._universal_gate("fo_search")
+
+            self.assertIsNone(error)
+            self.assertIn("fo_sync()", context)
+            self.assertIn("fo_solved()", context)
+
+    def test_protocol_reminder_absent_at_9th_call_via_gate(self):
+        """Universal gate must NOT inject reminder before 10th call."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+            session = server._get_session()
+
+            # Set to 8 calls, gate will log the 9th
+            session.tool_calls = ["call"] * 8
+
+            with patch.object(server, "_resolve_actor_identity", return_value={"editor": "test"}), \
+                 patch.object(server, "_persist_ai_connection"):
+                error, context = server._universal_gate("fo_search")
+
+            self.assertIsNone(error)
+            self.assertNotIn("fo_sync()", context)
+
+
 if __name__ == "__main__":
     unittest.main()
