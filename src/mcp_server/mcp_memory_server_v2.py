@@ -3803,6 +3803,39 @@ _tool_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="fixonce-m
 _mcp_health_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="fixonce-mcp-health")
 _original_mcp_tool = mcp.tool
 
+# ============================================================
+# PUBLIC vs INTERNAL TOOLS
+# ============================================================
+# Only these tools are exposed to AI agents via MCP discovery.
+# All other tools remain as internal functions for dashboard/server use.
+#
+# Agent-facing tools (8 canonical):
+#   fo_init    - Initialize session
+#   fo_search  - Search past solutions
+#   fo_sync    - Sync progress
+#   fo_errors  - Get browser errors
+#   fo_decide  - Log decisions/avoid patterns
+#   fo_solved  - Log solutions
+#   fo_brief   - Get project brief
+#   fo_apply   - Apply auto-fixes
+#
+# Internal tools are still callable but not advertised to agents.
+
+PUBLIC_MCP_TOOLS = frozenset({
+    "fo_init",
+    "fo_search",
+    "fo_sync",
+    "fo_errors",
+    "fo_decide",
+    "fo_solved",
+    "fo_brief",
+    "fo_apply",
+})
+
+# Track which tools are registered for testing
+_registered_public_tools = set()
+_registered_internal_tools = set()
+
 
 def _mcp_error_log_file() -> Path:
     path = USER_DATA_DIR / "logs" / "mcp_errors.log"
@@ -3996,22 +4029,53 @@ def _safe_tool_handler(func):
 
 
 def _safe_mcp_tool(*tool_args, **tool_kwargs):
+    """
+    MCP tool decorator that filters public vs internal tools.
+
+    Only tools in PUBLIC_MCP_TOOLS are registered with MCP for agent discovery.
+    Internal tools still get the safe handler but are not advertised to agents.
+    """
     if tool_args and callable(tool_args[0]) and len(tool_args) == 1:
-        safe_func = _safe_tool_handler(tool_args[0])
-        _original_mcp_tool(safe_func, **tool_kwargs)
+        func = tool_args[0]
+        tool_name = getattr(func, "__name__", "unknown_tool")
+        safe_func = _safe_tool_handler(func)
+
+        if tool_name in PUBLIC_MCP_TOOLS:
+            _original_mcp_tool(safe_func, **tool_kwargs)
+            _registered_public_tools.add(tool_name)
+        else:
+            _registered_internal_tools.add(tool_name)
+
         return safe_func
 
     original_decorator = _original_mcp_tool(*tool_args, **tool_kwargs)
 
     def decorator(func):
+        tool_name = getattr(func, "__name__", "unknown_tool")
         safe_func = _safe_tool_handler(func)
-        original_decorator(safe_func)
+
+        if tool_name in PUBLIC_MCP_TOOLS:
+            original_decorator(safe_func)
+            _registered_public_tools.add(tool_name)
+        else:
+            _registered_internal_tools.add(tool_name)
+
         return safe_func
 
     return decorator
 
 
 mcp.tool = _safe_mcp_tool
+
+
+def get_public_tools() -> set:
+    """Return the set of public MCP tools (for testing)."""
+    return _registered_public_tools.copy()
+
+
+def get_internal_tools() -> set:
+    """Return the set of internal tools (for testing)."""
+    return _registered_internal_tools.copy()
 
 
 def _get_working_dir_from_port(port: int) -> Optional[str]:
