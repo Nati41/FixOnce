@@ -876,12 +876,15 @@ def save_project_memory(project_id: str, memory: Dict[str, Any] = None) -> bool:
     IMPORTANT: project_id is REQUIRED.
     Never falls back to active_project.json.
 
+    DATA INTEGRITY: Returns False if EITHER global OR local sync fails.
+    This prevents false-success scenarios where GLOBAL saves but LOCAL doesn't.
+
     Args:
         project_id: The project ID (REQUIRED)
         memory: The memory dict to save
 
     Returns:
-        True if saved successfully
+        True if BOTH global AND local saved successfully
 
     Raises:
         ValueError: If project_id is not provided
@@ -902,25 +905,26 @@ def save_project_memory(project_id: str, memory: Dict[str, Any] = None) -> bool:
         try:
             project_path = get_project_path(project_id)
 
-            # Use atomic write for crash safety
+            # Step 1: GLOBAL save
             try:
                 saved = durable_memory_write(
                     project_path,
                     updated=memory,
                     tool_name="save_project_memory",
                 )
-                success = saved is not None
+                global_success = saved is not None
             except ImportError:
                 # Fallback to regular write if safe_file not available
                 with open(project_path, 'w', encoding='utf-8') as f:
                     json.dump(memory, f, ensure_ascii=False, indent=2)
-                success = True
+                global_success = True
 
-            if not success:
-                print(f"[MultiProject] Atomic write failed for {project_id}")
+            if not global_success:
+                print(f"[MultiProject] GLOBAL save failed for {project_id}")
                 return False
 
-            # Update universal context file (.fixonce/CONTEXT.md)
+            # Step 2: Update universal context file (.fixonce/CONTEXT.md)
+            # Context update failure is non-fatal (informational only)
             try:
                 context_updater = _get_context_generator()
                 context_path = context_updater(project_id, memory)
@@ -929,19 +933,128 @@ def save_project_memory(project_id: str, memory: Dict[str, Any] = None) -> bool:
             except Exception as ctx_err:
                 print(f"[ContextGen] Warning: {ctx_err}")
 
-            # Update committed knowledge (.fixonce/decisions.json, avoid.json)
+            # Step 3: LOCAL sync (committed knowledge)
+            # LOCAL failure IS fatal - return False to prevent false-success
+            local_success = False
             try:
                 committed_updater = _get_committed_knowledge_updater()
                 committed_path = committed_updater(project_id, memory)
+                local_success = committed_path is not None
                 if committed_path:
                     print(f"[CommittedKnowledge] Updated: {committed_path}")
             except Exception as ck_err:
-                print(f"[CommittedKnowledge] Warning: {ck_err}")
+                print(f"[CommittedKnowledge] FAILED: {ck_err}")
+                local_success = False
+
+            if not local_success:
+                print(f"[MultiProject] LOCAL sync failed for {project_id} - returning False")
+                return False
 
             return True
         except Exception as e:
             print(f"[MultiProject] Error saving {project_id}: {e}")
             return False
+
+
+def save_project_memory_with_status(
+    project_id: str,
+    memory: Dict[str, Any] = None
+) -> Dict[str, Any]:
+    """
+    Save memory for a project with detailed status reporting.
+
+    Unlike save_project_memory(), this returns detailed status about
+    GLOBAL and LOCAL sync, allowing callers to handle partial failures.
+
+    Args:
+        project_id: The project ID (REQUIRED)
+        memory: The memory dict to save
+
+    Returns:
+        Dict with status:
+        {
+            "success": bool,        # True only if ALL operations succeeded
+            "global_saved": bool,   # GLOBAL projects_v2/ write succeeded
+            "local_synced": bool,   # LOCAL .fixonce/ write succeeded
+            "context_updated": bool, # CONTEXT.md updated
+            "error": str or None,   # Error message if any
+            "recovery_required": bool  # True if partial failure needs attention
+        }
+    """
+    result = {
+        "success": False,
+        "global_saved": False,
+        "local_synced": False,
+        "context_updated": False,
+        "error": None,
+        "recovery_required": False,
+    }
+
+    if not project_id:
+        result["error"] = "project_id is REQUIRED"
+        return result
+
+    if not memory:
+        result["error"] = "memory is empty"
+        return result
+
+    with _lock:
+        memory.setdefault('stats', {})['last_updated'] = datetime.now().isoformat()
+
+        try:
+            project_path = get_project_path(project_id)
+
+            # Step 1: GLOBAL save
+            try:
+                saved = durable_memory_write(
+                    project_path,
+                    updated=memory,
+                    tool_name="save_project_memory_with_status",
+                )
+                result["global_saved"] = saved is not None
+            except ImportError:
+                with open(project_path, 'w', encoding='utf-8') as f:
+                    json.dump(memory, f, ensure_ascii=False, indent=2)
+                result["global_saved"] = True
+
+            if not result["global_saved"]:
+                result["error"] = "GLOBAL save failed"
+                return result
+
+            # Step 2: Update CONTEXT.md
+            try:
+                context_updater = _get_context_generator()
+                context_path = context_updater(project_id, memory)
+                result["context_updated"] = context_path is not None
+            except Exception as ctx_err:
+                print(f"[ContextGen] Warning: {ctx_err}")
+                result["context_updated"] = False
+
+            # Step 3: LOCAL sync (committed knowledge)
+            try:
+                committed_updater = _get_committed_knowledge_updater()
+                committed_path = committed_updater(project_id, memory)
+                result["local_synced"] = committed_path is not None
+                if committed_path:
+                    print(f"[CommittedKnowledge] Updated: {committed_path}")
+            except Exception as ck_err:
+                print(f"[CommittedKnowledge] FAILED: {ck_err}")
+                result["local_synced"] = False
+                result["error"] = f"LOCAL sync failed: {ck_err}"
+                result["recovery_required"] = True
+
+            # Success only if BOTH global AND local succeeded
+            result["success"] = result["global_saved"] and result["local_synced"]
+
+            if result["global_saved"] and not result["local_synced"]:
+                result["recovery_required"] = True
+
+            return result
+
+        except Exception as e:
+            print(f"[MultiProject] Error saving {project_id}: {e}")
+            result["error"] = str(e)
+            return result
 
 
 def delete_project(project_id: str) -> Dict[str, Any]:

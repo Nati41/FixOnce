@@ -6485,7 +6485,13 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
     if is_review_enabled():
         session = _get_session()
         actor = getattr(session, 'actor_name', None) or "mcp"
-        add_pending_decision(decision, reason, actor=actor)
+        add_pending_decision(
+            decision,
+            reason,
+            actor=actor,
+            project_id=session.project_id,
+            project_path=session.working_dir,
+        )
         return context + f"Decision queued for review: {decision}"
 
     session = _get_session()
@@ -6604,7 +6610,13 @@ def log_avoid(what: str, reason: str) -> str:
     if is_review_enabled():
         session = _get_session()
         actor = getattr(session, 'actor_name', None) or "mcp"
-        add_pending_avoid(what, reason, actor=actor)
+        add_pending_avoid(
+            what,
+            reason,
+            actor=actor,
+            project_id=session.project_id,
+            project_path=session.working_dir,
+        )
         return context + f"Avoid pattern queued for review: {what}"
 
     session = _get_session()
@@ -7565,7 +7577,14 @@ def solution_applied(
         session = _get_session()
         actor = getattr(session, 'actor_name', None) or "mcp"
         files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
-        add_pending_solution(error_message, solution, files=files_list, actor=actor)
+        add_pending_solution(
+            error_message,
+            solution,
+            files=files_list,
+            actor=actor,
+            project_id=session.project_id,
+            project_path=session.working_dir,
+        )
         return "Solution queued for review."
 
     session = _get_session()
@@ -8713,6 +8732,9 @@ def get_memory_stats() -> str:
     """
     Get memory statistics for the current project.
 
+    Shows counts from LOCAL committed knowledge (same source as fo_init)
+    for consistency. Also shows GLOBAL project memory status.
+
     Shows:
     - Total insights (active vs archived)
     - Importance distribution
@@ -8730,15 +8752,35 @@ def get_memory_stats() -> str:
     insights = lessons.get('insights', [])
     archived = lessons.get('archived', [])
     failed = lessons.get('failed_attempts', [])
-    decisions = memory.get('decisions', [])
+
+    # Use committed knowledge as primary source (same as fo_init)
+    # This ensures consistent counts across all tools
+    try:
+        from core.committed_knowledge import read_committed_knowledge
+        ck = read_committed_knowledge(session.working_dir)
+        decisions_count = len(ck.get("decisions", []))
+        solutions_count = len(ck.get("solutions", []))
+        avoid_count = len(ck.get("avoid", []))
+        ck_available = True
+    except Exception:
+        # Fallback to GLOBAL project memory if LOCAL unavailable
+        decisions_count = len(memory.get('decisions', []))
+        solutions_count = len(memory.get('debug_sessions', []))
+        avoid_count = len(memory.get('avoid', []))
+        ck_available = False
 
     lines = ["## Memory Statistics\n"]
 
-    # Totals
+    # Primary counts (from committed knowledge for consistency with fo_init)
+    lines.append(f"**Decisions:** {decisions_count}")
+    lines.append(f"**Solved Bugs:** {solutions_count}")
+    lines.append(f"**Avoid Patterns:** {avoid_count}")
     lines.append(f"**Active Insights:** {len(insights)}")
     lines.append(f"**Archived Insights:** {len(archived)}")
     lines.append(f"**Failed Attempts:** {len(failed)}")
-    lines.append(f"**Decisions:** {len(decisions)}")
+
+    if not ck_available:
+        lines.append("\n_Note: Using GLOBAL counts (LOCAL committed knowledge unavailable)_")
 
     if insights:
         # Normalize for stats

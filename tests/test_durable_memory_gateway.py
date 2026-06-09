@@ -205,16 +205,24 @@ class TestDurableMemoryGateway(unittest.TestCase):
         self.assertTrue(conflicts[0]["timestamp"])
 
     def test_project_manager_save_uses_gateway_defaults(self):
+        def mock_committed_updater(project_id, memory):
+            return "/mock/committed/path"
+
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             with patch.object(multi_project_manager, "PROJECTS_V2_DIR", root):
-                saved = multi_project_manager.save_project_memory(
-                    "project-manager",
-                    {
-                        "project_info": {"name": "Demo"},
-                        "decisions": [{"decision": "Manager write"}],
-                    },
-                )
+                with patch.object(
+                    multi_project_manager,
+                    "_get_committed_knowledge_updater",
+                    return_value=mock_committed_updater
+                ):
+                    saved = multi_project_manager.save_project_memory(
+                        "project-manager",
+                        {
+                            "project_info": {"name": "Demo"},
+                            "decisions": [{"decision": "Manager write"}],
+                        },
+                    )
             memory = json.loads(
                 (root / "project-manager.json").read_text(encoding="utf-8")
             )
