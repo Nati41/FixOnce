@@ -652,6 +652,24 @@ input:checked + .slider:before {
   color: #ffc107;
 }
 
+.ai-tool-timestamps {
+  margin-left: 24px;
+  font-size: 10px;
+  color: var(--text-dim);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  padding: 4px 0;
+}
+
+.ai-tool-timestamps .ts-label {
+  opacity: 0.7;
+}
+
+.ai-tool-timestamps .ts-value {
+  font-family: monospace;
+}
+
 /* Hidden utility */
 .hidden {
   display: none !important;
@@ -1715,6 +1733,14 @@ function relativeTime(ts) {
   return `${Math.floor(diffHr / 24)}d ago`;
 }
 
+function formatLocalTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '';
+  const pad = n => n.toString().padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 }
@@ -2263,12 +2289,23 @@ async function loadAITools() {
         statusText = 'Idle';
       }
 
+      const ws = tool.work_state || {};
+      const hasTimestamps = ws.last_work_at || ws.last_sync_at || ws.dirty_since;
+      const timestampsHtml = hasTimestamps ? `
+        <div class="ai-tool-timestamps">
+          ${ws.last_work_at ? `<span class="ts-label">Last activity:</span><span class="ts-value">${formatLocalTime(ws.last_work_at)}</span>` : ''}
+          ${ws.last_sync_at ? `<span class="ts-label">Last sync:</span><span class="ts-value">${formatLocalTime(ws.last_sync_at)}</span>` : ''}
+          ${ws.dirty_since ? `<span class="ts-label">Dirty since:</span><span class="ts-value">${formatLocalTime(ws.dirty_since)}</span>` : ''}
+        </div>
+      ` : '';
+
       return `
         <div class="ai-tool-row">
           <span class="ai-tool-icon">${icon}</span>
           <span class="ai-tool-name">${escapeHtml(tool.name)}</span>
           <span class="ai-tool-status ${statusClass}">${statusText}</span>
         </div>
+        ${timestampsHtml}
       `;
     }).join('');
 

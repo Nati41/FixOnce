@@ -908,6 +908,14 @@ except ImportError as e:
 # Phase 0: Project isolation - central project context
 from core.project_context import ProjectContext, resolve_project_id
 
+# Memory Review: queue writes for user approval when enabled
+from core.pending_memories import (
+    is_review_enabled,
+    add_pending_decision,
+    add_pending_avoid,
+    add_pending_solution,
+)
+
 # Phase 1: Boundary detection imports
 try:
     from core.boundary_detector import (
@@ -6473,6 +6481,13 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
     if error:
         return error
 
+    # Memory Review: queue for user approval when enabled
+    if is_review_enabled():
+        session = _get_session()
+        actor = session.actor_name or "unknown"
+        add_pending_decision(decision, reason, actor=actor)
+        return context + f"Decision queued for review: {decision}"
+
     session = _get_session()
     memory = _load_project(session.project_id)
 
@@ -6584,6 +6599,13 @@ def log_avoid(what: str, reason: str) -> str:
     error, context = _universal_gate("log_avoid")
     if error:
         return error
+
+    # Memory Review: queue for user approval when enabled
+    if is_review_enabled():
+        session = _get_session()
+        actor = session.actor_name or "unknown"
+        add_pending_avoid(what, reason, actor=actor)
+        return context + f"Avoid pattern queued for review: {what}"
 
     session = _get_session()
     memory = _load_project(session.project_id)
@@ -7537,6 +7559,14 @@ def solution_applied(
     error, context = _universal_gate("solution_applied")
     if error:
         return error
+
+    # Memory Review: queue for user approval when enabled
+    if is_review_enabled():
+        session = _get_session()
+        actor = session.actor_name or "unknown"
+        files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
+        add_pending_solution(error_message, solution, files=files_list, actor=actor)
+        return "Solution queued for review."
 
     session = _get_session()
     memory = _load_project(session.project_id)

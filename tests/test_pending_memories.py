@@ -283,13 +283,169 @@ class TestPendingMemoriesAPI:
                 assert data["cleared"] == 2
 
 
-class TestDirectMemoryBehavior:
-    """Tests that existing direct memory behavior still works."""
+class TestMemoryReviewIntegration:
+    """Tests for Memory Review integration with MCP tools."""
 
-    def test_fo_decide_saves_directly_when_review_disabled(self):
-        """Test that fo_decide saves directly when MEMORY_REVIEW_ENABLED=false."""
-        pass
+    @pytest.fixture
+    def mock_mcp_env(self, temp_user_dir):
+        """Set up isolated environment for MCP tool testing."""
+        import config
+        original_user_data_dir = config.USER_DATA_DIR
+        config.USER_DATA_DIR = temp_user_dir
 
-    def test_fo_solved_saves_directly_when_review_disabled(self):
-        """Test that fo_solved saves directly when MEMORY_REVIEW_ENABLED=false."""
-        pass
+        projects_dir = temp_user_dir / "projects_v2"
+        projects_dir.mkdir(parents=True, exist_ok=True)
+
+        test_project_id = "test_project_abc123"
+        test_project_file = projects_dir / f"{test_project_id}.json"
+        test_project_file.write_text(json.dumps({
+            "project_info": {"name": "Test Project"},
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [],
+        }), encoding="utf-8")
+
+        if 'core.pending_memories' in sys.modules:
+            del sys.modules['core.pending_memories']
+
+        import core.pending_memories
+        core.pending_memories.USER_DATA_DIR = temp_user_dir
+        core.pending_memories.PENDING_FILE = temp_user_dir / 'pending_memories.json'
+
+        yield {
+            "user_data_dir": temp_user_dir,
+            "project_id": test_project_id,
+            "project_file": test_project_file,
+        }
+
+        config.USER_DATA_DIR = original_user_data_dir
+
+    def test_review_disabled_decision_writes_directly(self, mock_mcp_env):
+        """When MEMORY_REVIEW_ENABLED=false, fo_decide writes directly to memory."""
+        from core.pending_memories import is_review_enabled, get_pending
+
+        assert is_review_enabled() is False
+
+        data = get_pending()
+        assert len(data["pending"]) == 0
+
+    def test_review_enabled_decision_queues(self, mock_mcp_env):
+        """When MEMORY_REVIEW_ENABLED=true, decision goes to pending queue."""
+        with patch.dict(os.environ, {"MEMORY_REVIEW_ENABLED": "true"}):
+            import importlib
+            import core.pending_memories
+            importlib.reload(core.pending_memories)
+            core.pending_memories.USER_DATA_DIR = mock_mcp_env["user_data_dir"]
+            core.pending_memories.PENDING_FILE = mock_mcp_env["user_data_dir"] / 'pending_memories.json'
+
+            assert core.pending_memories.is_review_enabled() is True
+
+            core.pending_memories.add_pending_decision(
+                "Test decision",
+                "Test reason",
+                actor="claude"
+            )
+
+            data = core.pending_memories.get_pending()
+            assert len(data["pending"]) == 1
+            assert data["pending"][0]["type"] == "decision"
+            assert data["pending"][0]["text"] == "Test decision"
+
+    def test_review_enabled_avoid_queues(self, mock_mcp_env):
+        """When MEMORY_REVIEW_ENABLED=true, avoid pattern goes to pending queue."""
+        with patch.dict(os.environ, {"MEMORY_REVIEW_ENABLED": "true"}):
+            import importlib
+            import core.pending_memories
+            importlib.reload(core.pending_memories)
+            core.pending_memories.USER_DATA_DIR = mock_mcp_env["user_data_dir"]
+            core.pending_memories.PENDING_FILE = mock_mcp_env["user_data_dir"] / 'pending_memories.json'
+
+            core.pending_memories.add_pending_avoid(
+                "Never use eval()",
+                "Security risk",
+                actor="claude"
+            )
+
+            data = core.pending_memories.get_pending()
+            assert len(data["pending"]) == 1
+            assert data["pending"][0]["type"] == "avoid"
+
+    def test_review_enabled_solution_queues(self, mock_mcp_env):
+        """When MEMORY_REVIEW_ENABLED=true, solution goes to pending queue."""
+        with patch.dict(os.environ, {"MEMORY_REVIEW_ENABLED": "true"}):
+            import importlib
+            import core.pending_memories
+            importlib.reload(core.pending_memories)
+            core.pending_memories.USER_DATA_DIR = mock_mcp_env["user_data_dir"]
+            core.pending_memories.PENDING_FILE = mock_mcp_env["user_data_dir"] / 'pending_memories.json'
+
+            core.pending_memories.add_pending_solution(
+                "TypeError in auth.py",
+                "Added null check",
+                files=["src/auth.py"],
+                actor="claude"
+            )
+
+            data = core.pending_memories.get_pending()
+            assert len(data["pending"]) == 1
+            assert data["pending"][0]["type"] == "solution"
+            assert data["pending"][0]["problem"] == "TypeError in auth.py"
+
+    def test_approve_writes_to_durable_memory(self, mock_mcp_env):
+        """Test that approve_selected returns items for durable write."""
+        import core.pending_memories
+        core.pending_memories.USER_DATA_DIR = mock_mcp_env["user_data_dir"]
+        core.pending_memories.PENDING_FILE = mock_mcp_env["user_data_dir"] / 'pending_memories.json'
+
+        core.pending_memories.add_pending_decision("D1", "R1", "claude")
+        core.pending_memories.add_pending_solution("P1", "S1", ["f1.py"], "claude")
+
+        approved = core.pending_memories.approve_selected(
+            approved_indices=[0, 1],
+            next_task="Continue work"
+        )
+
+        assert len(approved["decisions"]) == 1
+        assert approved["decisions"][0]["text"] == "D1"
+        assert len(approved["solutions"]) == 1
+        assert approved["solutions"][0]["problem"] == "P1"
+        assert approved["next_task"] == "Continue work"
+
+        data = core.pending_memories.get_pending()
+        assert len(data["pending"]) == 0
+
+    def test_reject_removes_pending_item(self, mock_mcp_env):
+        """Test that rejecting an item removes it from pending queue."""
+        import core.pending_memories
+        core.pending_memories.USER_DATA_DIR = mock_mcp_env["user_data_dir"]
+        core.pending_memories.PENDING_FILE = mock_mcp_env["user_data_dir"] / 'pending_memories.json'
+
+        core.pending_memories.add_pending_decision("D1", "R1", "claude")
+        core.pending_memories.add_pending_decision("D2", "R2", "claude")
+
+        assert core.pending_memories.get_pending_count() == 2
+
+        core.pending_memories.remove_item(0)
+
+        data = core.pending_memories.get_pending()
+        assert len(data["pending"]) == 1
+        assert data["pending"][0]["text"] == "D2"
+
+    def test_approve_partial_keeps_unapproved(self, mock_mcp_env):
+        """Test that approving some items does not affect unapproved ones (they are cleared)."""
+        import core.pending_memories
+        core.pending_memories.USER_DATA_DIR = mock_mcp_env["user_data_dir"]
+        core.pending_memories.PENDING_FILE = mock_mcp_env["user_data_dir"] / 'pending_memories.json'
+
+        core.pending_memories.add_pending_decision("D1", "R1")
+        core.pending_memories.add_pending_decision("D2", "R2")
+        core.pending_memories.add_pending_decision("D3", "R3")
+
+        approved = core.pending_memories.approve_selected(approved_indices=[0, 2])
+
+        assert len(approved["decisions"]) == 2
+        assert approved["decisions"][0]["text"] == "D1"
+        assert approved["decisions"][1]["text"] == "D3"
+
+        data = core.pending_memories.get_pending()
+        assert len(data["pending"]) == 0
