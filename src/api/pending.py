@@ -45,6 +45,9 @@ def approve_pending():
     """
     Approve selected pending items and save to durable memory.
 
+    Uses save_project_memory() which writes to GLOBAL projects_v2/ AND
+    triggers update_committed_on_save() to sync LOCAL .fixonce/.
+
     Request body:
     {
         "approved_indices": [0, 1, 2],  // indices of items to approve
@@ -53,17 +56,20 @@ def approve_pending():
     }
     """
     try:
-        from core.pending_memories import approve_selected
-        from core.durable_memory import durable_memory_write
-        from config import USER_DATA_DIR
-        from managers.multi_project_manager import get_active_project_id
+        from core.pending_memories import extract_approved, clear_pending
+        from managers.multi_project_manager import (
+            get_active_project_id,
+            load_project_memory,
+            save_project_memory,
+        )
 
         data = request.get_json() or {}
         approved_indices = data.get("approved_indices", [])
         next_task = data.get("next_task", "")
         custom_memory = data.get("custom_memory", "")
 
-        approved = approve_selected(
+        # Step 1: Extract items WITHOUT clearing pending queue
+        approved = extract_approved(
             approved_indices=approved_indices,
             next_task=next_task,
             custom_memory=custom_memory,
@@ -76,79 +82,86 @@ def approve_pending():
                 "message": "No active project"
             }), 400
 
-        project_memory_path = USER_DATA_DIR / "projects_v2" / f"{project_id}.json"
+        # Step 2: Load current memory
+        memory = load_project_memory(project_id)
         saved_counts = {"decisions": 0, "avoid": 0, "solutions": 0, "custom": 0}
         attribution = _get_attribution()
 
-        def mutator(memory: Dict[str, Any]) -> Dict[str, Any]:
-            nonlocal saved_counts
+        # Step 3: Add approved items to memory
+        if not memory.get("decisions"):
+            memory["decisions"] = []
+        for item in approved.get("decisions", []):
+            memory["decisions"].append({
+                "decision": item.get("text", ""),
+                "reason": item.get("reason", ""),
+                "superseded": False,
+                "timestamp": item.get("timestamp"),
+                **attribution,
+            })
+            saved_counts["decisions"] += 1
 
-            if not memory.get("decisions"):
-                memory["decisions"] = []
-            for item in approved.get("decisions", []):
-                memory["decisions"].append({
-                    "decision": item.get("text", ""),
-                    "reason": item.get("reason", ""),
-                    "superseded": False,
+        if not memory.get("avoid"):
+            memory["avoid"] = []
+        for item in approved.get("avoid", []):
+            memory["avoid"].append({
+                "what": item.get("text", ""),
+                "reason": item.get("reason", ""),
+                "timestamp": item.get("timestamp"),
+                **attribution,
+            })
+            saved_counts["avoid"] += 1
+
+        if not memory.get("debug_sessions"):
+            memory["debug_sessions"] = []
+        for item in approved.get("solutions", []):
+            memory["debug_sessions"].append({
+                "problem": item.get("problem", ""),
+                "solution": item.get("solution", ""),
+                "files_changed": item.get("files", []),
+                "importance": "high",
+                "timestamp": item.get("timestamp"),
+                **attribution,
+            })
+            saved_counts["solutions"] += 1
+
+        if approved.get("custom"):
+            if not memory.get("live_record"):
+                memory["live_record"] = {}
+            if not memory["live_record"].get("lessons"):
+                memory["live_record"]["lessons"] = {}
+            if not memory["live_record"]["lessons"].get("insights"):
+                memory["live_record"]["lessons"]["insights"] = []
+            for item in approved.get("custom", []):
+                memory["live_record"]["lessons"]["insights"].append({
+                    "text": item.get("text", ""),
+                    "importance": "medium",
+                    "timestamp": item.get("timestamp"),
                     **attribution,
                 })
-                saved_counts["decisions"] += 1
+                saved_counts["custom"] += 1
 
-            if not memory.get("avoid"):
-                memory["avoid"] = []
-            for item in approved.get("avoid", []):
-                memory["avoid"].append({
-                    "what": item.get("text", ""),
-                    "reason": item.get("reason", ""),
-                    **attribution,
-                })
-                saved_counts["avoid"] += 1
+        if next_task:
+            if not memory.get("resume_state"):
+                memory["resume_state"] = {}
+            memory["resume_state"]["next_step"] = next_task
+            if not memory.get("live_record"):
+                memory["live_record"] = {}
+            if not memory["live_record"].get("intent"):
+                memory["live_record"]["intent"] = {}
+            memory["live_record"]["intent"]["next_step"] = next_task
 
-            if not memory.get("debug_sessions"):
-                memory["debug_sessions"] = []
-            for item in approved.get("solutions", []):
-                memory["debug_sessions"].append({
-                    "problem": item.get("problem", ""),
-                    "solution": item.get("solution", ""),
-                    "files_changed": item.get("files", []),
-                    "importance": "high",
-                    **attribution,
-                })
-                saved_counts["solutions"] += 1
+        # Step 4: Save using canonical path (GLOBAL + LOCAL sync)
+        success = save_project_memory(project_id, memory)
 
-            if approved.get("custom"):
-                if not memory.get("live_record"):
-                    memory["live_record"] = {}
-                if not memory["live_record"].get("lessons"):
-                    memory["live_record"]["lessons"] = {}
-                if not memory["live_record"]["lessons"].get("insights"):
-                    memory["live_record"]["lessons"]["insights"] = []
-                for item in approved.get("custom", []):
-                    memory["live_record"]["lessons"]["insights"].append({
-                        "text": item.get("text", ""),
-                        "importance": "medium",
-                        **attribution,
-                    })
-                    saved_counts["custom"] += 1
+        if not success:
+            # Don't clear pending if save failed
+            return jsonify({
+                "status": "error",
+                "message": "Failed to save to durable memory"
+            }), 500
 
-            if next_task:
-                if not memory.get("resume_state"):
-                    memory["resume_state"] = {}
-                memory["resume_state"]["next_step"] = next_task
-                if not memory.get("live_record"):
-                    memory["live_record"] = {}
-                if not memory["live_record"].get("intent"):
-                    memory["live_record"]["intent"] = {}
-                memory["live_record"]["intent"]["next_step"] = next_task
-
-            return memory
-
-        durable_memory_write(
-            project_memory_path,
-            mutator=mutator,
-            attribution=attribution,
-            tool_name="memory_review",
-        )
+        # Step 5: Only clear pending AFTER successful save
+        clear_pending()
 
         return jsonify({
             "status": "ok",

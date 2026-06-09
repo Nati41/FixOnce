@@ -6484,7 +6484,7 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
     # Memory Review: queue for user approval when enabled
     if is_review_enabled():
         session = _get_session()
-        actor = session.actor_name or "unknown"
+        actor = getattr(session, 'actor_name', None) or "mcp"
         add_pending_decision(decision, reason, actor=actor)
         return context + f"Decision queued for review: {decision}"
 
@@ -6603,7 +6603,7 @@ def log_avoid(what: str, reason: str) -> str:
     # Memory Review: queue for user approval when enabled
     if is_review_enabled():
         session = _get_session()
-        actor = session.actor_name or "unknown"
+        actor = getattr(session, 'actor_name', None) or "mcp"
         add_pending_avoid(what, reason, actor=actor)
         return context + f"Avoid pattern queued for review: {what}"
 
@@ -7563,7 +7563,7 @@ def solution_applied(
     # Memory Review: queue for user approval when enabled
     if is_review_enabled():
         session = _get_session()
-        actor = session.actor_name or "unknown"
+        actor = getattr(session, 'actor_name', None) or "mcp"
         files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
         add_pending_solution(error_message, solution, files=files_list, actor=actor)
         return "Solution queued for review."

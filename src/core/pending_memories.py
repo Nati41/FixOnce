@@ -166,19 +166,19 @@ def update_item_checked(index: int, checked: bool) -> bool:
     return False
 
 
-def approve_selected(
+def extract_approved(
     approved_indices: List[int],
     next_task: str = "",
     custom_memory: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Approve selected items and return them for saving to durable memory.
+    Extract approved items WITHOUT clearing the queue.
 
-    Does NOT actually save to durable memory - caller must do that.
-    This just extracts the approved items and clears the queue.
+    Use this to get items for saving, then call clear_pending() only after
+    the save succeeds. This ensures pending items are not lost if save fails.
 
     Args:
-        approved_indices: List of indices to approve
+        approved_indices: List of indices to extract
         next_task: The next task text (may be edited by user)
         custom_memory: Optional custom memory text to add
 
@@ -217,10 +217,22 @@ def approve_selected(
             "timestamp": datetime.now().isoformat(),
         })
 
-    data["pending"] = []
-    data["next_task"] = ""
-    _save(data)
+    return approved
 
+
+def approve_selected(
+    approved_indices: List[int],
+    next_task: str = "",
+    custom_memory: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    DEPRECATED: Use extract_approved() + clear_pending() instead.
+
+    Extract approved items AND clear the queue (legacy behavior).
+    This clears the queue before the caller saves, which can lose items if save fails.
+    """
+    approved = extract_approved(approved_indices, next_task, custom_memory)
+    clear_pending()
     return approved
 
 
@@ -236,5 +248,6 @@ __all__ = [
     "clear_pending",
     "remove_item",
     "update_item_checked",
+    "extract_approved",
     "approve_selected",
 ]

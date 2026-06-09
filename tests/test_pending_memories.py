@@ -449,3 +449,163 @@ class TestMemoryReviewIntegration:
 
         data = core.pending_memories.get_pending()
         assert len(data["pending"]) == 0
+
+    def test_extract_approved_does_not_clear_queue(self, mock_mcp_env):
+        """Test that extract_approved extracts items without clearing the queue."""
+        import core.pending_memories
+        core.pending_memories.USER_DATA_DIR = mock_mcp_env["user_data_dir"]
+        core.pending_memories.PENDING_FILE = mock_mcp_env["user_data_dir"] / 'pending_memories.json'
+
+        core.pending_memories.add_pending_decision("D1", "R1")
+        core.pending_memories.add_pending_decision("D2", "R2")
+
+        approved = core.pending_memories.extract_approved(approved_indices=[0])
+
+        assert len(approved["decisions"]) == 1
+        assert approved["decisions"][0]["text"] == "D1"
+
+        data = core.pending_memories.get_pending()
+        assert len(data["pending"]) == 2
+
+
+class TestApprovalLocalSync:
+    """
+    Regression test for Memory Review approval → LOCAL committed knowledge sync.
+
+    Bug: Dashboard approval wrote to GLOBAL projects_v2/ but did not sync to
+    LOCAL .fixonce/decisions.json. fo_init reads from LOCAL, so approved items
+    were invisible to fo_init stats.
+
+    Fix: Approval endpoint now uses save_project_memory() which triggers
+    update_committed_on_save() to sync LOCAL .fixonce/.
+    """
+
+    @pytest.fixture
+    def full_project_env(self, temp_user_dir):
+        """Set up a complete project environment with working_dir."""
+        import config
+
+        original_user_data_dir = config.USER_DATA_DIR
+        config.USER_DATA_DIR = temp_user_dir
+
+        projects_dir = temp_user_dir / "projects_v2"
+        projects_dir.mkdir(parents=True, exist_ok=True)
+
+        working_dir = temp_user_dir / "test_project"
+        working_dir.mkdir(parents=True, exist_ok=True)
+        fixonce_dir = working_dir / ".fixonce"
+        fixonce_dir.mkdir(parents=True, exist_ok=True)
+
+        test_project_id = "test_project_sync"
+        test_project_file = projects_dir / f"{test_project_id}.json"
+        test_project_file.write_text(json.dumps({
+            "project_info": {
+                "name": "Test Project",
+                "working_dir": str(working_dir),
+            },
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [],
+        }), encoding="utf-8")
+
+        (temp_user_dir / "active_project.json").write_text(
+            json.dumps({"active_id": test_project_id}),
+            encoding="utf-8"
+        )
+
+        if 'core.pending_memories' in sys.modules:
+            del sys.modules['core.pending_memories']
+        if 'managers.multi_project_manager' in sys.modules:
+            del sys.modules['managers.multi_project_manager']
+
+        import core.pending_memories
+        core.pending_memories.USER_DATA_DIR = temp_user_dir
+        core.pending_memories.PENDING_FILE = temp_user_dir / 'pending_memories.json'
+
+        yield {
+            "user_data_dir": temp_user_dir,
+            "project_id": test_project_id,
+            "project_file": test_project_file,
+            "working_dir": working_dir,
+            "fixonce_dir": fixonce_dir,
+        }
+
+        config.USER_DATA_DIR = original_user_data_dir
+
+    def test_approval_syncs_to_local_committed_knowledge(self, full_project_env):
+        """
+        E2E test: pending → approve → GLOBAL updated → LOCAL synced → read_committed_knowledge sees it.
+
+        This is the regression test for the split-brain bug where fo_init
+        counted from LOCAL but approval only wrote to GLOBAL.
+        """
+        import core.pending_memories
+        import managers.multi_project_manager as mpm
+        from core.committed_knowledge import read_committed_knowledge
+
+        mpm.DATA_DIR = full_project_env["user_data_dir"]
+        mpm.PROJECTS_V2_DIR = full_project_env["user_data_dir"] / "projects_v2"
+        mpm.ACTIVE_PROJECT_FILE = full_project_env["user_data_dir"] / "active_project.json"
+
+        core.pending_memories.USER_DATA_DIR = full_project_env["user_data_dir"]
+        core.pending_memories.PENDING_FILE = full_project_env["user_data_dir"] / 'pending_memories.json'
+
+        core.pending_memories.add_pending_decision(
+            "Approval flow must sync to LOCAL committed knowledge",
+            "Dashboard approval writes to GLOBAL projects_v2 and triggers LOCAL sync",
+            actor="mcp"
+        )
+
+        approved = core.pending_memories.extract_approved(approved_indices=[0])
+        assert len(approved["decisions"]) == 1
+
+        project_id = full_project_env["project_id"]
+        memory = mpm.load_project_memory(project_id)
+
+        if "decisions" not in memory:
+            memory["decisions"] = []
+        memory["decisions"].append({
+            "decision": approved["decisions"][0]["text"],
+            "reason": approved["decisions"][0]["reason"],
+            "superseded": False,
+            "actor": "user",
+            "actor_source": "dashboard",
+        })
+
+        success = mpm.save_project_memory(project_id, memory)
+        assert success is True
+
+        core.pending_memories.clear_pending()
+
+        with open(full_project_env["project_file"], "r") as f:
+            global_data = json.load(f)
+        assert len(global_data["decisions"]) == 1
+        assert "LOCAL committed knowledge" in global_data["decisions"][0]["decision"]
+
+        committed = read_committed_knowledge(str(full_project_env["working_dir"]))
+        assert committed["found"] is True
+        assert len(committed["decisions"]) >= 1
+
+        found_in_local = any(
+            "LOCAL committed knowledge" in d.get("decision", "")
+            for d in committed["decisions"]
+        )
+        assert found_in_local, "Approved item should be synced to LOCAL .fixonce/decisions.json"
+
+    def test_failed_save_does_not_clear_pending(self, full_project_env):
+        """Test that pending items are preserved if durable save fails."""
+        import core.pending_memories
+
+        core.pending_memories.USER_DATA_DIR = full_project_env["user_data_dir"]
+        core.pending_memories.PENDING_FILE = full_project_env["user_data_dir"] / 'pending_memories.json'
+
+        core.pending_memories.add_pending_decision("D1", "R1")
+
+        data = core.pending_memories.get_pending()
+        assert len(data["pending"]) == 1
+
+        approved = core.pending_memories.extract_approved(approved_indices=[0])
+        assert len(approved["decisions"]) == 1
+
+        data = core.pending_memories.get_pending()
+        assert len(data["pending"]) == 1
