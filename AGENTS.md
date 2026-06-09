@@ -59,3 +59,7 @@ After: Be proactive — suggest fix or offer to apply. Don't ask "מה צריך 
 ```bash
 python3 tests/stress_test.py --quick
 ```
+
+After changing Flask API or server modules, restart the local FixOnce server
+before manual validation. The development server does not reload code changes
+automatically.

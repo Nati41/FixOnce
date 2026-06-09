@@ -21,7 +21,7 @@ import json
 import os
 import re
 import subprocess
-import hashlib
+from core.project_context import ProjectContext
 from core.runtime_log import log_runtime_event
 from core.unreported_work import mark_work
 from core.windows_subprocess import no_window_creationflags
@@ -221,14 +221,12 @@ def _get_human_name(data: dict) -> str:
 
 
 def _get_project_id_from_cwd(cwd: str) -> str:
-    """Generate project_id from cwd (same logic as MCP server)."""
+    """Resolve project_id from cwd using the canonical project identity."""
     if not cwd:
         return "__global__"
     try:
-        path_hash = hashlib.md5(cwd.encode()).hexdigest()[:12]
-        name = Path(cwd).name
-        return f"{name}_{path_hash}"
-    except:
+        return ProjectContext.from_path(cwd)
+    except Exception:
         return "__global__"
 
 
