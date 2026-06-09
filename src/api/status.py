@@ -135,7 +135,7 @@ def _get_active_agent_status(session_health: dict, now: datetime = None) -> dict
     is_recent = age_seconds is not None and age_seconds <= ACTIVE_THRESHOLD_SECONDS
     is_connected = session_health.get("state") == "connected"
     is_active = is_connected and is_recent
-    behavior_status = "active_synced" if is_active else ("idle" if reliable_actor else "unknown")
+    behavior_status = "protected" if is_active else ("no_activity" if reliable_actor else "unknown")
 
     return {
         "name": reliable_actor if is_connected else None,
@@ -1340,7 +1340,7 @@ def api_dashboard_snapshot():
 
                 if work_state.get("dirty"):
                     behavior_status = (
-                        "unsynced_work" if _has_known_ai_connection(actor) else "unprotected"
+                        "unsynced" if _has_known_ai_connection(actor) else "unprotected"
                     )
                     snapshot["active_agent"].update({
                         "name": actor,
@@ -1359,7 +1359,7 @@ def api_dashboard_snapshot():
             active_agent = snapshot["active_agent"]
             snapshot["active_ai"] = active_agent.get("name") if (
                 active_agent.get("is_connected")
-                or active_agent.get("behavior_status") in {"unsynced_work", "unprotected"}
+                or active_agent.get("behavior_status") in {"unsynced", "unprotected"}
             ) else None
 
         except Exception:

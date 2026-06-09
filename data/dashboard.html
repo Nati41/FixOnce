@@ -1861,36 +1861,36 @@ function formatAgentPresence(activeAgent, setupFinalizing = false) {
     : '';
 
   if (activeAgent.is_active && knownName) {
-    if (activeAgent.behavior_status === 'unsynced_work') {
+    if (activeAgent.behavior_status === 'unsynced') {
       return {
-        name: `${knownName} has unsynced work`,
+        name: `${knownName} — work not reported`,
         detail: '',
-        summary: `${knownName} · unsynced work`,
+        summary: `${knownName} · work not reported`,
       };
     }
     if (activeAgent.behavior_status === 'unprotected') {
       return {
-        name: `${knownName} is not protected`,
+        name: `${knownName} — unprotected work`,
         detail: '',
-        summary: `${knownName} · not protected`,
+        summary: `${knownName} · unprotected`,
       };
     }
     return {
-      name: `${knownName} connected`,
+      name: `${knownName} — protected`,
       detail: seen ? `seen ${seen}` : '',
-      summary: `${knownName} connected${seen ? ` · seen ${seen}` : ''}`,
+      summary: `${knownName} · protected${seen ? ` · ${seen}` : ''}`,
     };
   }
-  if (activeAgent.behavior_status === 'idle' && knownName) {
+  if (activeAgent.behavior_status === 'no_activity' && knownName) {
     return {
-      name: `${knownName} idle`,
-      detail: seen ? `last activity ${seen}` : '',
-      summary: `${knownName} idle`,
+      name: `${knownName} — no activity`,
+      detail: seen ? `last seen ${seen}` : '',
+      summary: `${knownName} · no activity`,
     };
   }
   if (activeAgent.is_active) {
     return {
-      name: 'AI connected',
+      name: 'AI protected',
       detail: 'identity unknown',
       summary: 'AI connected · identity unknown',
     };
@@ -2257,9 +2257,9 @@ async function loadAITools() {
       return;
     }
 
-    // Show tools that are installed, running, or connected
+    // Show tools that are installed, running, or have behavioral state
     const relevantTools = data.tools.filter(t =>
-      t.installed === true || t.running === true || ['connected', 'active_synced', 'idle', 'not_running', 'unsynced_work', 'unprotected'].includes(t.status)
+      t.installed === true || t.running === true || ['connected', 'protected', 'no_activity', 'not_running', 'unsynced', 'unprotected'].includes(t.status)
     );
 
     if (relevantTools.length === 0) {
@@ -2271,22 +2271,22 @@ async function loadAITools() {
     list.innerHTML = relevantTools.map(tool => {
       let icon, statusClass, statusText;
 
-      if (tool.status === 'active_synced' || tool.status === 'connected') {
+      if (tool.status === 'protected' || tool.status === 'connected') {
         icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>';
         statusClass = 'connected';
-        statusText = 'Active / Synced';
-      } else if (tool.status === 'unsynced_work') {
+        statusText = 'Protected';
+      } else if (tool.status === 'unsynced') {
         icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffc107" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
         statusClass = 'unprotected';
-        statusText = 'Unsynced work';
+        statusText = 'Work Not Reported';
       } else if (tool.status === 'unprotected') {
-        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffc107" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
         statusClass = 'unprotected';
-        statusText = 'Not Protected';
+        statusText = 'Unprotected Work';
       } else {
         icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
         statusClass = 'not-running';
-        statusText = 'Idle';
+        statusText = 'No Activity';
       }
 
       const ws = tool.work_state || {};
@@ -2309,13 +2309,13 @@ async function loadAITools() {
       `;
     }).join('');
 
-    // Show warning if there are unprotected tools
-    const unsyncedTool = relevantTools.find(tool => tool.status === 'unsynced_work');
+    // Show warning if there are unprotected or unsynced tools
+    const unsyncedTool = relevantTools.find(tool => tool.status === 'unsynced');
     const warningText = data.has_unprotected
       ? data.unprotected_warning
-      : (unsyncedTool ? `${unsyncedTool.name} changed project files without reporting the work to FixOnce` : '');
+      : (unsyncedTool ? `${unsyncedTool.name} has work that hasn't been reported to FixOnce` : '');
     const recoveryTool = data.has_unprotected ? 'fo_init' : 'fo_sync';
-    const recoveryHint = data.has_unprotected ? 'connect FixOnce in the AI chat' : 'sync the completed work';
+    const recoveryHint = data.has_unprotected ? 'connect FixOnce in the AI chat' : 'report the completed work';
 
     if (warningText) {
       warning.innerHTML = `

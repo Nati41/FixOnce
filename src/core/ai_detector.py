@@ -268,21 +268,21 @@ def detect_ai_tools() -> Dict[str, Any]:
         )
         dirty = bool(work_state.get("dirty"))
 
-        # Determine status
+        # Determine status (behavioral states, not connection states)
         # Priority: MCP connection > process detection (process detection can have false negatives)
         if behavior_detection_enabled and dirty and not known_connection:
             status = "unprotected"
             summary["unprotected"] += 1
             unprotected_names.append(tool_config["display_name"])
         elif behavior_detection_enabled and dirty:
-            status = "unsynced_work"
+            status = "unsynced"
             summary["unsynced_work"] += 1
         elif connected:
-            status = "active_synced" if behavior_detection_enabled else "connected"
+            status = "protected" if behavior_detection_enabled else "connected"
             summary["connected"] += 1
             running = True  # If connected via MCP, it must be running
         elif behavior_detection_enabled and (running or installed or known_connection):
-            status = "idle"
+            status = "no_activity"
             summary["not_running"] += 1
         elif running:
             status = "unprotected"
