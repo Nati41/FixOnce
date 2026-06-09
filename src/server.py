@@ -695,9 +695,11 @@ def _run_flask(strict_port: bool = False):
         return
 
     # Save port to multiple locations for different consumers:
-    # 1. User-specific config (~/.fixonce/config.json) - for multi-user isolation
-    set_preferred_port(ACTUAL_PORT)
-    # 2. Project data dir (for legacy/backup)
+    # 1. User-specific config (~/.fixonce/config.json) - only for default port
+    #    Fallback ports are ephemeral and not persisted as preferences
+    if ACTUAL_PORT == DEFAULT_PORT:
+        set_preferred_port(ACTUAL_PORT)
+    # 2. Project data dir (for legacy/backup) - always write current port
     port_file = DATA_DIR / "current_port.txt"
     port_file.write_text(str(ACTUAL_PORT), encoding="utf-8")
 

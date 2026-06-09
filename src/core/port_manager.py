@@ -73,12 +73,45 @@ def get_preferred_port() -> Optional[int]:
         return None
 
 
-def set_preferred_port(port: int) -> None:
-    """Save user's preferred port to config."""
+def set_preferred_port(port: int, user_configured: bool = False) -> None:
+    """
+    Save port to config.
+
+    Args:
+        port: The port number
+        user_configured: If True, marks this as an explicit user choice (sticky).
+                        If False, just records last-used port (not sticky).
+    """
     config = load_user_config()
     config["port"] = port
     config["user"] = getpass.getuser()
+    if user_configured:
+        config["user_configured"] = True
+    elif "user_configured" in config:
+        del config["user_configured"]
     save_user_config(config)
+
+
+def set_user_configured_port(port: int) -> None:
+    """Explicitly set a custom port that will be preferred over 5000."""
+    set_preferred_port(port, user_configured=True)
+
+
+def clear_stale_port_preference() -> bool:
+    """
+    Clear non-user-configured port preferences.
+
+    Returns True if config was modified.
+    """
+    config = load_user_config()
+    if config.get("user_configured"):
+        return False
+    if "port" in config and config.get("port") != DEFAULT_PORT:
+        config.pop("port", None)
+        config.pop("user_configured", None)
+        save_user_config(config)
+        return True
+    return False
 
 
 def is_port_available(port: int) -> bool:
@@ -157,29 +190,39 @@ def get_port_status() -> Dict[str, Any]:
     return status
 
 
+def is_user_configured_port(port: int) -> bool:
+    """Check if a port was explicitly configured by the user (not a fallback)."""
+    config = load_user_config()
+    return config.get("user_configured") is True and config.get("port") == port
+
+
 def find_available_port(preferred: Optional[int] = None) -> int:
     """
-    Find an available port, preferring the user's saved port.
+    Find an available port.
 
     Priority:
-    1. User's preferred port (if available)
-    2. Default port 5000 (if available)
-    3. Next available in range
+    1. Default port 5000 (if available) — ALWAYS preferred
+    2. User-configured port (if explicitly set and available)
+    3. Next available in range (fallback, not persisted)
+
+    Fallback ports are NOT sticky — we always try 5000 first.
     """
-    # Try preferred port first
-    if preferred is None:
-        preferred = get_preferred_port()
-
-    if preferred and is_port_available(preferred):
-        return preferred
-
-    # Try default port
+    # Always try default port first
     if is_port_available(DEFAULT_PORT):
         return DEFAULT_PORT
 
-    # Find any available
+    # Try user-configured port (only if explicitly set by user, not a fallback)
+    if preferred is None:
+        saved_port = get_preferred_port()
+        if saved_port and is_user_configured_port(saved_port):
+            preferred = saved_port
+
+    if preferred and preferred != DEFAULT_PORT and is_port_available(preferred):
+        return preferred
+
+    # Find any available (fallback - will NOT be saved as preferred)
     for port in PORT_RANGE:
-        if is_port_available(port):
+        if port != DEFAULT_PORT and is_port_available(port):
             return port
 
     raise RuntimeError(f"No available port in range {DEFAULT_PORT}-{MAX_PORT}")
@@ -187,12 +230,16 @@ def find_available_port(preferred: Optional[int] = None) -> int:
 
 def allocate_and_save_port() -> int:
     """
-    Find an available port and save it as the user's preference.
+    Find an available port.
+
+    Only saves to config if using the default port (5000).
+    Fallback ports are ephemeral and not persisted.
 
     Returns the allocated port number.
     """
     port = find_available_port()
-    set_preferred_port(port)
+    if port == DEFAULT_PORT:
+        set_preferred_port(port)
     return port
 
 
