@@ -27,6 +27,7 @@ class _FakeFastMCP:
 sys.modules.setdefault("fastmcp", types.SimpleNamespace(FastMCP=_FakeFastMCP))
 
 import mcp_memory_server_v2 as server
+import core.unreported_work as unreported_work
 
 
 class TestFoSync(unittest.TestCase):
@@ -94,6 +95,25 @@ class TestFoSync(unittest.TestCase):
 
         self.assertEqual(result, "Synced.")
         self.assertLessEqual(len(result), 16)
+
+    def test_fo_sync_clears_unreported_work_for_current_actor(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            self._activate_temp_session(temp_path, project_id="project-1")
+
+            with patch.object(unreported_work, "STATE_FILE", temp_path / "unreported_work.json"), \
+                 patch.object(server, "_resolve_actor_identity", return_value={
+                     "editor": "codex",
+                     "source": "client_actor",
+                     "confidence": 1.0,
+                 }):
+                unreported_work.mark_work("project-1", "codex", "file_write")
+                result = server.fo_sync(goal="Sync work", next_step="Continue")
+                state = unreported_work.get_state("project-1", "codex")
+
+        self.assertEqual(result, "Synced.")
+        self.assertFalse(state["dirty"])
+        self.assertEqual(state["last_sync_tool"], "fo_sync")
 
     def test_fo_search_returns_concise_result_without_status_header(self):
         with tempfile.TemporaryDirectory() as temp_dir:

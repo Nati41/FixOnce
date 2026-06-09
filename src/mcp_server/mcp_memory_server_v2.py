@@ -1175,6 +1175,25 @@ def _persist_ai_connection(actor_identity: Dict[str, Any], project_id: Optional[
         _log(f"[MCP] Failed to persist AI connection: {e} (path: {AI_CONNECTIONS_FILE})")
 
 
+def _mark_unreported_work_synced(tool_name: str) -> None:
+    """Clear operational dirty state after an approved sync tool succeeds."""
+    if tool_name not in {"fo_sync", "fo_solved", "fo_decide"}:
+        return
+    try:
+        from core.unreported_work import mark_synced
+
+        session = _get_session()
+        actor = _resolve_actor_identity()
+        mark_synced(
+            session.project_id,
+            actor.get("editor", "unknown"),
+            tool_name,
+            session_id=str(getattr(session, "session_id", "") or ""),
+        )
+    except Exception as exc:
+        _log(f"[UnreportedWork] Failed to mark {tool_name} sync: {exc}")
+
+
 def _recover_session() -> Optional[tuple]:
     """Try to recover session from file. Returns (project_id, working_dir) or None."""
     try:
@@ -9654,7 +9673,7 @@ def fo_sync(
         next_step: Short continuation prompt (e.g., "Test the fix", "Check error flow")
                    NOT numbered lists - just one actionable next step
     """
-    return _run_tool_with_timeout(
+    result = _run_tool_with_timeout(
         "fo_sync",
         _update_work_context_lightweight,
         _FO_SYNC_TIMEOUT_SECONDS,
@@ -9666,6 +9685,9 @@ def fo_sync(
         why=why,
         next_step=next_step,
     )
+    if str(result).strip().endswith("Synced."):
+        _mark_unreported_work_synced("fo_sync")
+    return result
 
 
 @mcp.tool()
@@ -9685,22 +9707,25 @@ def fo_decide(text: str, reason: str, action: str = "add") -> str:
         fo_decide("Use MySQL", "Changed requirements", action="supersede:Use PostgreSQL")
     """
     if action == "avoid":
-        return log_avoid(text, reason)
+        result = log_avoid(text, reason)
     elif action.startswith("resolve:"):
         conflict_id = action[len("resolve:"):].strip()
         if not conflict_id:
             return "Error: conflict id is required."
-        return _resolve_decision_conflict_by_id(conflict_id, reason or text)
+        result = _resolve_decision_conflict_by_id(conflict_id, reason or text)
     elif action.startswith("supersede:"):
         old_text = action[10:]  # Remove "supersede:" prefix
-        return supersede_decision(
+        result = supersede_decision(
             old_decision=old_text,
             new_decision=text,
             new_reason=reason,
             supersede_reason=reason,
         )
     else:
-        return log_decision(text, reason)
+        result = log_decision(text, reason)
+    if "Error:" not in str(result) and "Decision NOT logged." not in str(result):
+        _mark_unreported_work_synced("fo_decide")
+    return result
 
 
 @mcp.tool()
@@ -9812,7 +9837,10 @@ def fo_solved(error: str, solution: str, files: str = "") -> str:
         solution: What you did to fix it (1-2 sentences)
         files: Comma-separated list of files changed
     """
-    return solution_applied(error_message=error, solution=solution, files_changed=files)
+    result = solution_applied(error_message=error, solution=solution, files_changed=files)
+    if str(result).strip() in {"Solution saved.", "Solution updated."}:
+        _mark_unreported_work_synced("fo_solved")
+    return result
 
 
 @mcp.tool()

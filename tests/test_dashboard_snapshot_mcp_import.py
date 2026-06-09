@@ -19,6 +19,21 @@ import core.mcp_session_health as session_health
 
 
 class TestDashboardSnapshotMcpImport(unittest.TestCase):
+    def test_known_ai_connection_does_not_expire_by_time(self):
+        with tempfile.TemporaryDirectory(prefix="fixonce-known-connection-") as temp_dir:
+            user_data_dir = Path(temp_dir)
+            (user_data_dir / "ai_connections.json").write_text(json.dumps({
+                "clients": {
+                    "codex": {
+                        "last_seen": (datetime.now() - timedelta(days=30)).isoformat(),
+                        "connected": True,
+                    }
+                }
+            }), encoding="utf-8")
+
+            with patch.object(status_module, "USER_DATA_DIR", user_data_dir):
+                self.assertTrue(status_module._has_known_ai_connection("codex"))
+
     def test_dashboard_snapshot_reads_compliance_without_importing_mcp_server(self):
         with tempfile.TemporaryDirectory(prefix="fixonce-compliance-") as temp_dir:
             user_data_dir = Path(temp_dir)
@@ -121,9 +136,10 @@ class TestDashboardSnapshotMcpImport(unittest.TestCase):
         })
 
         self.assertFalse(active_agent["is_active"])
-        self.assertIsNone(active_agent["name"])
+        self.assertTrue(active_agent["is_connected"])
+        self.assertEqual(active_agent["name"], "claude")
         self.assertEqual(active_agent["last_agent_name"], "claude")
-        self.assertEqual(active_agent["status"], "stale")
+        self.assertEqual(active_agent["status"], "idle")
 
     def test_recent_uncertain_identity_does_not_guess_agent_name(self):
         active_agent = status_module._get_active_agent_status({

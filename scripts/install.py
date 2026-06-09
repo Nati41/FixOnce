@@ -979,6 +979,7 @@ def sync_client_rules(client: str, fixonce_dir: Path | None = None) -> bool:
             return True
         if client == "codex":
             _write_managed_block(Path.home() / ".codex" / "AGENTS.md", shared_rules)
+            configure_codex_hooks(fixonce_dir)
             return True
         if client == "windsurf":
             _write_managed_block(Path.home() / ".codeium" / "windsurf" / "memories" / "global_rules.md", shared_rules)
@@ -1089,6 +1090,7 @@ def sync_rules() -> bool:
 
     try:
         _write_managed_block(Path.home() / ".codex" / "AGENTS.md", shared_rules)
+        configure_codex_hooks(fixonce_dir)
         print(f"  {Colors.GREEN}[OK]{Colors.END} Codex startup rules installed")
     except Exception as e:
         print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not update Codex rules: {e}")
@@ -1238,6 +1240,56 @@ def configure_claude_hooks(fixonce_dir: Path) -> bool:
 
     except Exception as e:
         print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not configure hooks: {e}")
+        return False
+
+
+def configure_codex_hooks(fixonce_dir: Path) -> bool:
+    """Configure Codex PostToolUse reporting without replacing other hooks."""
+    hooks_path = Path.home() / ".codex" / "hooks.json"
+    current_platform = get_platform()
+    hooks_dir = fixonce_dir / "hooks"
+    script_path = hooks_dir / ("post_tool_use.ps1" if current_platform == "windows" else "post_tool_use.sh")
+
+    if not script_path.exists():
+        return False
+
+    try:
+        hooks_path.parent.mkdir(parents=True, exist_ok=True)
+        existing = {}
+        if hooks_path.exists():
+            existing = json.loads(hooks_path.read_text(encoding="utf-8"))
+        hooks = existing.setdefault("hooks", {})
+        groups = hooks.setdefault("PostToolUse", [])
+
+        if current_platform == "windows":
+            command = (
+                f'powershell.exe -ExecutionPolicy Bypass -Command '
+                f'"$env:FIXONCE_ACTOR=\'codex\'; & \'{script_path}\'"'
+            )
+        else:
+            os.chmod(script_path, 0o755)
+            command = f'FIXONCE_ACTOR=codex "{script_path}"'
+
+        already_configured = any(
+            command == handler.get("command")
+            for group in groups
+            for handler in group.get("hooks", [])
+            if isinstance(group, dict) and isinstance(handler, dict)
+        )
+        if not already_configured:
+            groups.append({
+                "matcher": "Bash|apply_patch|Edit|Write",
+                "hooks": [{
+                    "type": "command",
+                    "command": command,
+                    "timeout": 5,
+                }],
+            })
+
+        hooks_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+        return True
+    except Exception as e:
+        print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not configure Codex hooks: {e}")
         return False
 
 # ============ Step 5: Start Server & Open Dashboard ============

@@ -1835,10 +1835,31 @@ function formatAgentPresence(activeAgent, setupFinalizing = false) {
     : '';
 
   if (activeAgent.is_active && knownName) {
+    if (activeAgent.behavior_status === 'unsynced_work') {
+      return {
+        name: `${knownName} has unsynced work`,
+        detail: '',
+        summary: `${knownName} · unsynced work`,
+      };
+    }
+    if (activeAgent.behavior_status === 'unprotected') {
+      return {
+        name: `${knownName} is not protected`,
+        detail: '',
+        summary: `${knownName} · not protected`,
+      };
+    }
     return {
       name: `${knownName} connected`,
       detail: seen ? `seen ${seen}` : '',
       summary: `${knownName} connected${seen ? ` · seen ${seen}` : ''}`,
+    };
+  }
+  if (activeAgent.behavior_status === 'idle' && knownName) {
+    return {
+      name: `${knownName} idle`,
+      detail: seen ? `last activity ${seen}` : '',
+      summary: `${knownName} idle`,
     };
   }
   if (activeAgent.is_active) {
@@ -2212,7 +2233,7 @@ async function loadAITools() {
 
     // Show tools that are installed, running, or connected
     const relevantTools = data.tools.filter(t =>
-      t.installed === true || t.running === true || t.status === 'connected' || t.status === 'unprotected'
+      t.installed === true || t.running === true || ['connected', 'active_synced', 'idle', 'not_running', 'unsynced_work', 'unprotected'].includes(t.status)
     );
 
     if (relevantTools.length === 0) {
@@ -2224,10 +2245,14 @@ async function loadAITools() {
     list.innerHTML = relevantTools.map(tool => {
       let icon, statusClass, statusText;
 
-      if (tool.status === 'connected') {
+      if (tool.status === 'active_synced' || tool.status === 'connected') {
         icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>';
         statusClass = 'connected';
-        statusText = 'Connected';
+        statusText = 'Active / Synced';
+      } else if (tool.status === 'unsynced_work') {
+        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffc107" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+        statusClass = 'unprotected';
+        statusText = 'Unsynced work';
       } else if (tool.status === 'unprotected') {
         icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffc107" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
         statusClass = 'unprotected';
@@ -2235,7 +2260,7 @@ async function loadAITools() {
       } else {
         icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
         statusClass = 'not-running';
-        statusText = 'Not Running';
+        statusText = 'Idle';
       }
 
       return `
@@ -2248,13 +2273,20 @@ async function loadAITools() {
     }).join('');
 
     // Show warning if there are unprotected tools
-    if (data.has_unprotected && data.unprotected_warning) {
+    const unsyncedTool = relevantTools.find(tool => tool.status === 'unsynced_work');
+    const warningText = data.has_unprotected
+      ? data.unprotected_warning
+      : (unsyncedTool ? `${unsyncedTool.name} changed project files without reporting the work to FixOnce` : '');
+    const recoveryTool = data.has_unprotected ? 'fo_init' : 'fo_sync';
+    const recoveryHint = data.has_unprotected ? 'connect FixOnce in the AI chat' : 'sync the completed work';
+
+    if (warningText) {
       warning.innerHTML = `
-        ${escapeHtml(data.unprotected_warning)}
+        ${escapeHtml(warningText)}
         <div style="margin-top: 8px; padding: 6px 10px; background: rgba(0,0,0,0.2); border-radius: 4px; display: flex; align-items: center; gap: 8px;">
-          <code style="font-family: monospace; font-size: 13px; color: #fff; user-select: all;">fo_init</code>
-          <button onclick="navigator.clipboard.writeText('fo_init'); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy', 1500);" style="background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 2px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;">Copy</button>
-          <span style="opacity: 0.7; font-size: 11px;">← paste in your AI chat to connect</span>
+          <code style="font-family: monospace; font-size: 13px; color: #fff; user-select: all;">${recoveryTool}</code>
+          <button onclick="navigator.clipboard.writeText('${recoveryTool}'); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy', 1500);" style="background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 2px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;">Copy</button>
+          <span style="opacity: 0.7; font-size: 11px;">← ${recoveryHint}</span>
         </div>
       `;
       warning.style.display = '';

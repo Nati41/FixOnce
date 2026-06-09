@@ -11,6 +11,8 @@ INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
 TOOL_INPUT=$(echo "$INPUT" | jq -r '.tool_input // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+FIXONCE_ACTOR="${FIXONCE_ACTOR:-claude}"
 
 # Get canonical port from runtime.json (SINGLE SOURCE OF TRUTH)
 FIXONCE_PORT=5000
@@ -27,21 +29,23 @@ ACTIVITY_TYPE=""
 
 # Only process file operations
 case "$TOOL_NAME" in
-  Edit|Write|NotebookEdit)
-    FILE_PATH=$(echo "$TOOL_INPUT" | jq -r '.file_path // empty')
-    if [ -n "$FILE_PATH" ]; then
-      ACTIVITY_TYPE="code"
-      # Log to FixOnce (silent)
-      curl -s -X POST "http://localhost:$FIXONCE_PORT/api/activity/log" \
-        -H "Content-Type: application/json" \
-        -d "{
-          \"type\": \"file_change\",
-          \"tool\": \"$TOOL_NAME\",
-          \"file\": \"$FILE_PATH\",
-          \"cwd\": \"$CWD\",
-          \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
-        }" >/dev/null 2>&1 || true
-    fi
+  Edit|Write|NotebookEdit|apply_patch)
+    FILE_PATH=$(echo "$TOOL_INPUT" | jq -r '.file_path // .path // empty')
+    ACTIVITY_TYPE="code"
+    # apply_patch may affect multiple files, so cwd is sufficient for project attribution.
+    PAYLOAD=$(jq -n \
+      --arg type "file_change" \
+      --arg tool "$TOOL_NAME" \
+      --arg file "$FILE_PATH" \
+      --arg cwd "$CWD" \
+      --arg editor "$FIXONCE_ACTOR" \
+      --arg session_id "$SESSION_ID" \
+      --arg source "PostToolUse" \
+      --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      '{type:$type, tool:$tool, file:$file, cwd:$cwd, editor:$editor, session_id:$session_id, source:$source, timestamp:$timestamp}')
+    curl -s -X POST "http://localhost:$FIXONCE_PORT/api/activity/log" \
+      -H "Content-Type: application/json" \
+      -d "$PAYLOAD" >/dev/null 2>&1 || true
     ;;
   Bash)
     COMMAND=$(echo "$TOOL_INPUT" | jq -r '.command // empty')
@@ -52,15 +56,19 @@ case "$TOOL_NAME" in
       ACTIVITY_TYPE="build"
     fi
     # Log significant commands (silent)
-    if echo "$COMMAND" | grep -qE "^(npm|yarn|pip|python|node|git)"; then
+    if echo "$COMMAND" | grep -qE "(^|[;&|][[:space:]]*)(npm|yarn|pip|python|node|git|rm|unlink|touch|cp|mv|install|tee)([[:space:]]|$)|>{1,2}"; then
+      PAYLOAD=$(jq -n \
+        --arg type "command" \
+        --arg command "$COMMAND" \
+        --arg cwd "$CWD" \
+        --arg editor "$FIXONCE_ACTOR" \
+        --arg session_id "$SESSION_ID" \
+        --arg source "PostToolUse" \
+        --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{type:$type, command:$command, cwd:$cwd, editor:$editor, session_id:$session_id, source:$source, timestamp:$timestamp}')
       curl -s -X POST "http://localhost:$FIXONCE_PORT/api/activity/log" \
         -H "Content-Type: application/json" \
-        -d "{
-          \"type\": \"command\",
-          \"command\": \"$COMMAND\",
-          \"cwd\": \"$CWD\",
-          \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
-        }" >/dev/null 2>&1 || true
+        -d "$PAYLOAD" >/dev/null 2>&1 || true
     fi
     ;;
 esac

@@ -98,8 +98,19 @@ def _agent_confidence(session_health: dict) -> float:
     return 0.0
 
 
+def _has_known_ai_connection(actor: str) -> bool:
+    actor_name = _known_agent_name(actor)
+    if not actor_name:
+        return False
+    try:
+        payload = json.loads((USER_DATA_DIR / "ai_connections.json").read_text(encoding="utf-8"))
+        return actor_name in payload.get("clients", {})
+    except Exception:
+        return False
+
+
 def _get_active_agent_status(session_health: dict, now: datetime = None) -> dict:
-    """Build current agent presence from the latest successful MCP heartbeat only."""
+    """Build agent presence without treating an old heartbeat as unsafe."""
     from core.mcp_health import ACTIVE_THRESHOLD_SECONDS
 
     current_time = now or datetime.now()
@@ -122,19 +133,23 @@ def _get_active_agent_status(session_health: dict, now: datetime = None) -> dict
     reliable_actor = actor if confidence >= RELIABLE_AGENT_CONFIDENCE else None
     age_seconds = max(0.0, (current_time - seen_at).total_seconds()) if seen_at else None
     is_recent = age_seconds is not None and age_seconds <= ACTIVE_THRESHOLD_SECONDS
-    is_active = session_health.get("state") == "connected" and is_recent
+    is_connected = session_health.get("state") == "connected"
+    is_active = is_connected and is_recent
+    behavior_status = "active_synced" if is_active else ("idle" if reliable_actor else "unknown")
 
     return {
-        "name": reliable_actor if is_active else None,
+        "name": reliable_actor if is_connected else None,
         "client": reliable_actor,
         "source": session_health.get("last_actor_source"),
         "tool": session_health.get("last_tool"),
         "last_seen": last_seen,
         "confidence": confidence,
         "is_active": is_active,
+        "is_connected": is_connected,
         "identity_known": bool(reliable_actor),
         "last_agent_name": reliable_actor,
-        "status": "active" if is_active else ("stale" if last_seen else "unknown"),
+        "status": behavior_status,
+        "behavior_status": behavior_status,
         "stale_after_seconds": ACTIVE_THRESHOLD_SECONDS,
     }
 
@@ -1304,13 +1319,48 @@ def api_dashboard_snapshot():
 
             try:
                 from core.mcp_session_health import get_session_health
+                from core.unreported_work import get_project_states, get_state
+
                 session_health = get_session_health()
                 snapshot["active_agent"] = _get_active_agent_status(session_health)
+                selected_project_id = snapshot.get("selected_project_id") or ""
+                actor = snapshot["active_agent"].get("last_agent_name")
+                work_state = get_state(selected_project_id, actor) if actor else {}
+                if not work_state and selected_project_id:
+                    dirty_states = [
+                        item for item in get_project_states(selected_project_id)
+                        if item.get("dirty")
+                    ]
+                    work_state = max(
+                        dirty_states,
+                        key=lambda item: item.get("last_work_at") or "",
+                        default={},
+                    )
+                    actor = work_state.get("actor")
+
+                if work_state.get("dirty"):
+                    behavior_status = (
+                        "unsynced_work" if _has_known_ai_connection(actor) else "unprotected"
+                    )
+                    snapshot["active_agent"].update({
+                        "name": actor,
+                        "client": actor,
+                        "last_agent_name": actor,
+                        "identity_known": bool(actor),
+                        "is_active": True,
+                        "is_connected": bool(snapshot["active_agent"].get("is_connected")),
+                        "status": behavior_status,
+                        "behavior_status": behavior_status,
+                        "work_state": work_state,
+                    })
             except Exception:
                 snapshot["active_agent"] = _get_active_agent_status({})
 
             active_agent = snapshot["active_agent"]
-            snapshot["active_ai"] = active_agent.get("name") if active_agent.get("is_active") else None
+            snapshot["active_ai"] = active_agent.get("name") if (
+                active_agent.get("is_connected")
+                or active_agent.get("behavior_status") in {"unsynced_work", "unprotected"}
+            ) else None
 
         except Exception:
             pass
@@ -1326,7 +1376,7 @@ def api_dashboard_snapshot():
 
             # AI presence comes only from the latest successful MCP heartbeat.
             active_agent = snapshot.get("active_agent") or {}
-            if active_agent.get("is_active"):
+            if active_agent.get("is_connected"):
                 system_status["ai"] = {
                     "name": active_agent.get("name"),
                     "source": active_agent.get("source"),

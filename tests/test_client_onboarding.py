@@ -176,6 +176,7 @@ class TestClientOnboarding(unittest.TestCase):
 
     def test_sync_rules_writes_global_rules_without_duplication(self):
         with patch.object(install, "configure_claude_hooks", return_value=True), \
+             patch.object(install, "configure_codex_hooks", return_value=True), \
              patch.object(install, "get_platform", return_value="mac"):
             first = install.sync_rules()
             second = install.sync_rules()
@@ -206,6 +207,24 @@ class TestClientOnboarding(unittest.TestCase):
         if settings_path.exists():
             settings = json.loads(settings_path.read_text(encoding="utf-8"))
             self.assertNotIn("hooks", settings)
+
+    def test_configure_codex_hooks_adds_post_tool_use_without_duplication(self):
+        with patch.object(install, "get_platform", return_value="mac"):
+            first = install.configure_codex_hooks(PROJECT_ROOT)
+            second = install.configure_codex_hooks(PROJECT_ROOT)
+
+        self.assertTrue(first)
+        self.assertTrue(second)
+        hooks_path = self.temp_home / ".codex" / "hooks.json"
+        payload = json.loads(hooks_path.read_text(encoding="utf-8"))
+        groups = payload["hooks"]["PostToolUse"]
+        fixonce_handlers = [
+            handler
+            for group in groups
+            for handler in group["hooks"]
+            if "FIXONCE_ACTOR=codex" in handler["command"]
+        ]
+        self.assertEqual(len(fixonce_handlers), 1)
 
     def test_system_status_detects_windsurf_configuration(self):
         windsurf_config = self.temp_home / ".codeium" / "windsurf" / "mcp_config.json"

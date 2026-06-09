@@ -19,9 +19,11 @@ from flask import Blueprint, jsonify, request
 from datetime import datetime
 import json
 import os
+import re
 import subprocess
 import hashlib
 from core.runtime_log import log_runtime_event
+from core.unreported_work import mark_work
 from core.windows_subprocess import no_window_creationflags
 
 # Boundary detection imports
@@ -315,6 +317,71 @@ def _update_session_registry(editor: str, project_id: str, project_path: str, to
         log_runtime_event(f"[Activity] Session registry update failed: {e}", e)
 
 
+def _is_git_commit(command: str) -> bool:
+    normalized = " ".join(str(command or "").strip().split())
+    return bool(re.search(r"(?:^|[;&|])\s*git(?:\s+-C\s+\S+)?\s+commit(?:\s|$)", normalized))
+
+
+def _is_file_delete(command: str) -> bool:
+    normalized = " ".join(str(command or "").strip().split())
+    return bool(re.search(r"(?:^|[;&|])\s*(?:rm|unlink|git\s+rm)(?:\s|$)", normalized))
+
+
+def _is_file_write_command(command: str) -> bool:
+    normalized = " ".join(str(command or "").strip().split())
+    return bool(
+        re.search(r"(?:^|[;&|])\s*(?:touch|cp|mv|install|tee)(?:\s|$)", normalized)
+        or re.search(r"(?:^|[^<])>{1,2}(?!=)", normalized)
+    )
+
+
+def _track_unreported_work(data: dict, project_id: str, editor: str) -> None:
+    activity_type = data.get("type")
+    tool = str(data.get("tool") or "")
+    file_path = str(data.get("file") or "")
+    command = str(data.get("command") or "")
+    event = str(data.get("event") or "")
+
+    if activity_type == "file_change" and tool in {
+        "Edit", "Write", "NotebookEdit", "apply_patch"
+    }:
+        mark_work(
+            project_id,
+            editor,
+            "file_delete" if event == "deleted" else "file_write",
+            file_path=file_path,
+            session_id=str(data.get("session_id") or ""),
+            source=str(data.get("source") or tool),
+        )
+    elif activity_type == "command" and _is_git_commit(command):
+        mark_work(
+            project_id,
+            editor,
+            "git_commit",
+            command=command,
+            session_id=str(data.get("session_id") or ""),
+            source=str(data.get("source") or tool or "PostToolUse"),
+        )
+    elif activity_type == "command" and _is_file_delete(command):
+        mark_work(
+            project_id,
+            editor,
+            "file_delete",
+            command=command,
+            session_id=str(data.get("session_id") or ""),
+            source=str(data.get("source") or tool or "PostToolUse"),
+        )
+    elif activity_type == "command" and _is_file_write_command(command):
+        mark_work(
+            project_id,
+            editor,
+            "file_write",
+            command=command,
+            session_id=str(data.get("session_id") or ""),
+            source=str(data.get("source") or tool or "PostToolUse"),
+        )
+
+
 @activity_bp.route("/log", methods=["POST"])
 def log_activity():
     """
@@ -367,7 +434,7 @@ def log_activity():
         diff_stats = _get_git_diff_stats(file_path, cwd) if file_path and data.get("tool") in ["Edit", "Write"] else {}
 
         # Get current editor - use provided editor for MCP activities
-        if is_mcp_activity and data.get("editor"):
+        if data.get("editor"):
             current_editor = data.get("editor")
         else:
             # Try to get from project memory
@@ -400,6 +467,7 @@ def log_activity():
             "human_name": _get_human_name(data),
             "file_context": file_context,
             "diff": diff_stats,
+            "event": data.get("event"),
             "boundary_transition": boundary_transition  # Phase 1: Track project switches
         }
 
@@ -413,6 +481,7 @@ def log_activity():
 
         # Update session registry so Active AI updates in dashboard
         _update_session_registry(current_editor, project_id, cwd, data.get("tool"))
+        _track_unreported_work(data, project_id, current_editor)
 
         log_runtime_event(f"[Activity] {activity['type']}: {activity.get('file') or (activity.get('command') or '')[:50] or activity.get('human_name', '')}")
 

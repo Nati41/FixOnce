@@ -13,11 +13,14 @@ try {
     $toolName = $hookInput.tool_name
     $toolInput = $hookInput.tool_input
     $cwd = $hookInput.cwd
+    $sessionId = $hookInput.session_id
 } catch {
     $toolName = ""
     $toolInput = $null
     $cwd = ""
+    $sessionId = ""
 }
+$fixonceActor = if ($env:FIXONCE_ACTOR) { $env:FIXONCE_ACTOR } else { "claude" }
 
 # Get canonical port from runtime.json (SINGLE SOURCE OF TRUTH)
 $fixoncePort = 5000
@@ -40,42 +43,50 @@ $filePath = ""
 
 # Only process file operations
 switch ($toolName) {
-    { $_ -in @("Edit", "Write", "NotebookEdit") } {
+    { $_ -in @("Edit", "Write", "NotebookEdit", "apply_patch") } {
         if ($toolInput -and $toolInput.file_path) {
             $filePath = $toolInput.file_path
-            $isCodeChange = $true
+        } elseif ($toolInput -and $toolInput.path) {
+            $filePath = $toolInput.path
+        }
+        $isCodeChange = $true
 
-            # Log to FixOnce (silent)
-            try {
-                $body = @{
-                    type = "file_change"
-                    tool = $toolName
-                    file = $filePath
-                    cwd = $cwd
-                    timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-                } | ConvertTo-Json
+        # Log to FixOnce (silent)
+        try {
+            $body = @{
+                type = "file_change"
+                tool = $toolName
+                file = $filePath
+                cwd = $cwd
+                editor = $fixonceActor
+                session_id = $sessionId
+                source = "PostToolUse"
+                timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            } | ConvertTo-Json
 
-                Invoke-RestMethod -Uri "http://localhost:$fixoncePort/api/activity/log" `
-                    -Method Post `
-                    -ContentType "application/json" `
-                    -Body $body `
-                    -TimeoutSec 2 `
-                    -ErrorAction SilentlyContinue | Out-Null
-            } catch {
-                # Silent fail
-            }
+            Invoke-RestMethod -Uri "http://localhost:$fixoncePort/api/activity/log" `
+                -Method Post `
+                -ContentType "application/json" `
+                -Body $body `
+                -TimeoutSec 2 `
+                -ErrorAction SilentlyContinue | Out-Null
+        } catch {
+            # Silent fail
         }
     }
     "Bash" {
         if ($toolInput -and $toolInput.command) {
             $command = $toolInput.command
             # Log significant commands (silent)
-            if ($command -match "^(npm|yarn|pip|python|node|git)") {
+            if ($command -match "(^|[;&|]\s*)(npm|yarn|pip|python|node|git|rm|unlink|touch|cp|mv|install|tee)(\s|$)|>{1,2}") {
                 try {
                     $body = @{
                         type = "command"
                         command = $command
                         cwd = $cwd
+                        editor = $fixonceActor
+                        session_id = $sessionId
+                        source = "PostToolUse"
                         timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
                     } | ConvertTo-Json
 

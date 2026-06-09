@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from config import USER_DATA_DIR
+from core.unreported_work import get_latest_actor_state
 
 
 # Connection freshness thresholds (seconds)
@@ -171,31 +172,32 @@ def _get_connection_status(tool_id: str) -> Dict[str, Any]:
 
     try:
         if not connections_file.exists():
-            return {"connected": False, "last_seen": None, "age_seconds": None}
+            return {"connected": False, "known_connection": False, "last_seen": None, "age_seconds": None}
 
         data = json.loads(connections_file.read_text(encoding="utf-8"))
         clients = data.get("clients", {})
 
         if tool_id not in clients:
-            return {"connected": False, "last_seen": None, "age_seconds": None}
+            return {"connected": False, "known_connection": False, "last_seen": None, "age_seconds": None}
 
         client = clients[tool_id]
         last_seen_str = client.get("last_seen")
 
         if not last_seen_str:
-            return {"connected": False, "last_seen": None, "age_seconds": None}
+            return {"connected": False, "known_connection": True, "last_seen": None, "age_seconds": None}
 
         try:
             last_seen = datetime.fromisoformat(last_seen_str.replace("Z", "+00:00"))
             now = datetime.now(last_seen.tzinfo) if last_seen.tzinfo else datetime.now()
             age_seconds = (now - last_seen).total_seconds()
         except (ValueError, TypeError):
-            return {"connected": False, "last_seen": last_seen_str, "age_seconds": None}
+            return {"connected": False, "known_connection": True, "last_seen": last_seen_str, "age_seconds": None}
 
         connected = age_seconds <= CONNECTED_THRESHOLD
 
         return {
             "connected": connected,
+            "known_connection": True,
             "last_seen": last_seen_str,
             "age_seconds": age_seconds,
             "confidence": client.get("actor_confidence", 0),
@@ -204,7 +206,7 @@ def _get_connection_status(tool_id: str) -> Dict[str, Any]:
         }
 
     except Exception:
-        return {"connected": False, "last_seen": None, "age_seconds": None}
+        return {"connected": False, "known_connection": False, "last_seen": None, "age_seconds": None}
 
 
 def detect_ai_tools() -> Dict[str, Any]:
@@ -241,6 +243,7 @@ def detect_ai_tools() -> Dict[str, Any]:
     summary = {
         "total": 0,
         "connected": 0,
+        "unsynced_work": 0,
         "unprotected": 0,
         "not_running": 0,
         "not_installed": 0,
@@ -256,25 +259,39 @@ def detect_ai_tools() -> Dict[str, Any]:
         running = _check_process_running(patterns) if patterns else False
         connection = _get_connection_status(tool_id)
         connected = connection.get("connected", False)
+        known_connection = connection.get("known_connection", False)
+        behavior_detection_enabled = tool_id in {"claude", "codex"}
+        work_state = (
+            get_latest_actor_state(tool_id, connection.get("project_id") or "")
+            if behavior_detection_enabled
+            else {}
+        )
+        dirty = bool(work_state.get("dirty"))
 
         # Determine status
         # Priority: MCP connection > process detection (process detection can have false negatives)
-        if connected:
-            # MCP says connected - trust it, regardless of process detection
-            status = "connected"
+        if behavior_detection_enabled and dirty and not known_connection:
+            status = "unprotected"
+            summary["unprotected"] += 1
+            unprotected_names.append(tool_config["display_name"])
+        elif behavior_detection_enabled and dirty:
+            status = "unsynced_work"
+            summary["unsynced_work"] += 1
+        elif connected:
+            status = "active_synced" if behavior_detection_enabled else "connected"
             summary["connected"] += 1
             running = True  # If connected via MCP, it must be running
+        elif behavior_detection_enabled and (running or installed or known_connection):
+            status = "idle"
+            summary["not_running"] += 1
         elif running:
-            # Process detected but not connected to FixOnce
             status = "unprotected"
             summary["unprotected"] += 1
             unprotected_names.append(tool_config["display_name"])
         elif installed:
-            # Installed but not running
             status = "not_running"
             summary["not_running"] += 1
         else:
-            # Not installed
             status = "not_installed"
             summary["not_installed"] += 1
 
@@ -284,10 +301,12 @@ def detect_ai_tools() -> Dict[str, Any]:
             "installed": installed,
             "running": running,
             "connected": connected,
+            "known_connection": known_connection,
             "status": status,
             "last_seen": connection.get("last_seen"),
             "age_seconds": connection.get("age_seconds"),
             "confidence": connection.get("confidence"),
+            "work_state": work_state,
         })
         summary["total"] += 1
 
@@ -295,14 +314,15 @@ def detect_ai_tools() -> Dict[str, Any]:
     warning = None
     if unprotected_names:
         if len(unprotected_names) == 1:
-            warning = f"{unprotected_names[0]} is running without FixOnce memory"
+            warning = f"{unprotected_names[0]} changed project files without a FixOnce connection"
         else:
-            warning = f"{', '.join(unprotected_names)} are running without FixOnce memory"
+            warning = f"{', '.join(unprotected_names)} changed project files without a FixOnce connection"
 
     return {
         "tools": tools,
         "summary": summary,
         "has_unprotected": len(unprotected_names) > 0,
+        "has_unsynced_work": summary["unsynced_work"] > 0,
         "unprotected_warning": warning,
         "timestamp": datetime.now().isoformat(),
     }

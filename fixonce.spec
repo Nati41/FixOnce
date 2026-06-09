@@ -68,6 +68,9 @@ ASSET_ALLOWLIST = [
 ]
 
 HOOK_ALLOWLIST = [
+    "hooks/session_start.sh",
+    "hooks/session_end.sh",
+    "hooks/post_tool_use.sh",
     "hooks/session_start.ps1",
     "hooks/session_end.ps1",
     "hooks/post_tool_use.ps1",
