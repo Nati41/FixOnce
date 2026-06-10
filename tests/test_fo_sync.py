@@ -65,8 +65,10 @@ class TestFoSync(unittest.TestCase):
         return project_file
 
     def test_fo_sync_uses_lightweight_impl_not_decorated_tool_object(self):
+        # Navigator V1: Mock returns rich format
+        mock_result = "✓ Context synced\n\nNext: Run regression tests\n\n→ Suggested: Run regression tests"
         with patch.object(server, "update_work_context", object()), \
-             patch.object(server, "_update_work_context_lightweight", return_value="Synced.") as impl_mock:
+             patch.object(server, "_update_work_context_lightweight", return_value=mock_result) as impl_mock:
             result = server.fo_sync(
                 goal="Close Stage 8 runtime wiring",
                 work_area="agent runtime",
@@ -85,16 +87,20 @@ class TestFoSync(unittest.TestCase):
             why="Keep agent state grounded",
             next_step="Run regression tests",
         )
-        self.assertEqual(result, "Synced.")
+        # Navigator V1: Check for sync confirmation and next_step
+        self.assertIn("Context synced", result)
+        self.assertIn("Run regression tests", result)
 
-    def test_fo_sync_result_stays_tiny(self):
+    def test_fo_sync_result_is_navigator_format(self):
+        """Navigator V1: fo_sync returns rich context with next_action."""
         with tempfile.TemporaryDirectory() as temp_dir:
             self._activate_temp_session(Path(temp_dir))
 
             result = server.fo_sync(goal="Tiny sync", next_step="Continue")
 
-        self.assertEqual(result, "Synced.")
-        self.assertLessEqual(len(result), 16)
+        # Navigator V1: Check for required sections
+        self.assertIn("Context synced", result)
+        self.assertIn("Suggested:", result)
 
     def test_fo_sync_clears_unreported_work_for_current_actor(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -111,21 +117,241 @@ class TestFoSync(unittest.TestCase):
                 result = server.fo_sync(goal="Sync work", next_step="Continue")
                 state = unreported_work.get_state("project-1", "codex")
 
-        self.assertEqual(result, "Synced.")
+        # Navigator V1: Check for sync confirmation (not exact match)
+        self.assertIn("Context synced", result)
         self.assertFalse(state["dirty"])
         self.assertEqual(state["last_sync_tool"], "fo_sync")
 
-    def test_fo_search_returns_concise_result_without_status_header(self):
+    def test_fo_search_returns_memory_first_format(self):
+        """Memory-First Navigator: fo_search prioritizes memory over code targets."""
         with tempfile.TemporaryDirectory() as temp_dir:
             self._activate_temp_session(Path(temp_dir))
 
             with patch.object(server, "_semantic_available", False):
                 result = server.fo_search("MCP Diet v2")
 
-        self.assertIn("Found 1 match(es). Best", result)
-        self.assertNotIn("📍 **", result)
-        self.assertNotIn("────────────────", result)
-        self.assertLess(len(result), 320)
+        # Memory-First: Check for required sections (case-insensitive)
+        result_lower = result.lower()
+        self.assertIn("navigation:", result_lower)
+        self.assertIn("next:", result_lower)
+        self.assertIn("alternatives:", result_lower)
+        self.assertIn("confidence:", result_lower)
+        # Should have memory context (relevant context, solved before, etc.) or code locations
+        self.assertTrue(
+            "code locations:" in result_lower or
+            "supporting code:" in result_lower or
+            "related memory:" in result_lower or
+            "relevant context" in result_lower or
+            "solved before" in result_lower or
+            "avoid pattern" in result_lower or
+            "active decision" in result_lower
+        )
+
+    def test_fo_search_memory_first_solution_match(self):
+        """Memory-First: Strong solution match shows SOLVED BEFORE header."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+
+            # Create a solved bug in memory
+            memory = server._load_project(server._get_session().project_id)
+            memory['debug_sessions'] = [{
+                'problem': 'TypeError map undefined test bug',
+                'solution': 'Add null check before .map()',
+                'root_cause': 'API returns null instead of empty array',
+                'files_changed': ['src/component.tsx'],
+                'reuse_count': 1,
+            }]
+            server._save_project(server._get_session().project_id, memory)
+
+            with patch.object(server, "_semantic_available", False):
+                result = server.fo_search("TypeError map undefined")
+
+        # Strong solution match should show SOLVED BEFORE (case-insensitive check)
+        result_lower = result.lower()
+        self.assertIn("solved before", result_lower)
+        self.assertIn("apply", result_lower)
+
+    def test_fo_search_memory_first_avoid_pattern(self):
+        """Memory-First: Avoid pattern match shows AVOID PATTERN header."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+
+            # Create an avoid pattern in memory
+            memory = server._load_project(server._get_session().project_id)
+            memory['avoid'] = [{
+                'what': 'Never use console.log in production code',
+                'reason': 'Clutters console and leaks debug info',
+            }]
+            server._save_project(server._get_session().project_id, memory)
+
+            with patch.object(server, "_semantic_available", False):
+                result = server.fo_search("console.log production")
+
+        # Strong avoid match should show AVOID PATTERN
+        self.assertIn("⛔ **AVOID PATTERN**", result)
+        self.assertIn("Do NOT", result)
+
+    def test_fo_search_memory_first_decision_match(self):
+        """Memory-First: Decision match shows ACTIVE DECISION header."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+
+            # Create a decision in memory
+            memory = server._load_project(server._get_session().project_id)
+            memory['decisions'] = [{
+                'decision': 'Use date-fns instead of moment.js',
+                'reason': 'Moment.js is deprecated and bloated',
+            }]
+            server._save_project(server._get_session().project_id, memory)
+
+            with patch.object(server, "_semantic_available", False):
+                result = server.fo_search("date-fns moment")
+
+        # Strong decision match should show ACTIVE DECISION
+        self.assertIn("🔒 **ACTIVE DECISION**", result)
+        self.assertIn("Follow", result)
+
+    def test_fo_search_weak_memory_shows_code_first(self):
+        """Memory-First: Weak memory match shows code locations first."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+
+            # Create a weak match (low similarity context)
+            memory = server._load_project(server._get_session().project_id)
+            memory['live_record'] = memory.get('live_record', {})
+            memory['live_record']['intent'] = {
+                'current_goal': 'Working on unrelated feature',
+            }
+            server._save_project(server._get_session().project_id, memory)
+
+            with patch.object(server, "_semantic_available", False):
+                # Search for something that won't match strongly
+                result = server.fo_search("fo_sync implementation")
+
+        # Weak match should show code locations or related memory, not SOLVED BEFORE
+        self.assertNotIn("✅ **SOLVED BEFORE**", result)
+
+    def test_fo_search_no_match_returns_fallback(self):
+        """Memory-First: No match still returns actionable next steps."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+
+            with patch.object(server, "_semantic_available", False):
+                result = server.fo_search("xyznonexistent123")
+
+        # Should still have navigation structure
+        self.assertIn("📍 **Navigation:", result)
+        self.assertIn("**Next:**", result)
+        self.assertIn("**Alternatives:**", result)
+        self.assertIn("Confidence:", result)
+        # Should indicate new territory
+        self.assertTrue(
+            "new territory" in result.lower() or
+            "no match" in result.lower() or
+            "grep" in result.lower()
+        )
+
+    def test_fo_search_generic_error_not_strong_match(self):
+        """Memory-First: Generic 'error' query must NOT trigger SOLVED BEFORE."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+
+            # Create a memory entry that contains 'error'
+            memory = server._load_project(server._get_session().project_id)
+            memory['debug_sessions'] = [{
+                'problem': 'Some error happened in the system',
+                'solution': 'Fixed the error by checking null',
+                'files_changed': ['src/fix.py'],
+                'reuse_count': 1,
+            }]
+            server._save_project(server._get_session().project_id, memory)
+
+            with patch.object(server, "_semantic_available", False):
+                result = server.fo_search("error")
+
+        # Generic single-word query should NOT trigger strong match
+        result_lower = result.lower()
+        self.assertNotIn("solved before", result_lower)
+        # Should fall back to code/alternatives
+        self.assertIn("next:", result_lower)
+
+    def test_fo_search_generic_project_not_strong_match(self):
+        """Memory-First: Generic 'the project' query must NOT trigger SOLVED BEFORE."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+
+            # Create a memory entry that contains 'project'
+            memory = server._load_project(server._get_session().project_id)
+            memory['debug_sessions'] = [{
+                'problem': 'Project configuration was wrong',
+                'solution': 'Fixed project settings',
+                'files_changed': ['config.json'],
+                'reuse_count': 1,
+            }]
+            server._save_project(server._get_session().project_id, memory)
+
+            with patch.object(server, "_semantic_available", False):
+                result = server.fo_search("the project")
+
+        # Generic phrase should NOT trigger strong match
+        result_lower = result.lower()
+        self.assertNotIn("solved before", result_lower)
+
+    def test_fo_search_specific_phrase_still_strong_match(self):
+        """Memory-First: Specific phrases like 'TypeError map undefined' still work."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+
+            memory = server._load_project(server._get_session().project_id)
+            memory['debug_sessions'] = [{
+                'problem': 'TypeError map undefined in UserList',
+                'solution': 'Add null check before .map()',
+                'root_cause': 'API returns null',
+                'files_changed': ['src/UserList.tsx'],
+                'reuse_count': 1,
+            }]
+            server._save_project(server._get_session().project_id, memory)
+
+            with patch.object(server, "_semantic_available", False):
+                result = server.fo_search("TypeError map undefined")
+
+        # Specific phrase should still trigger strong match
+        result_lower = result.lower()
+        self.assertIn("solved before", result_lower)
+        self.assertIn("apply", result_lower)
+
+    def test_fo_search_exact_decision_phrase_still_works(self):
+        """Memory-First: Exact decision phrases still trigger ACTIVE DECISION."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir))
+
+            memory = server._load_project(server._get_session().project_id)
+            memory['decisions'] = [{
+                'decision': 'Use PostgreSQL instead of MySQL',
+                'reason': 'Better JSON support and performance',
+            }]
+            server._save_project(server._get_session().project_id, memory)
+
+            with patch.object(server, "_semantic_available", False):
+                result = server.fo_search("PostgreSQL MySQL")
+
+        # Specific decision query should still work
+        result_lower = result.lower()
+        self.assertIn("active decision", result_lower)
+
+    def test_fo_search_function_name_meaningful(self):
+        """Memory-First: Function names with underscores are meaningful queries."""
+        # Test that _is_meaningful_query_for_strong_match returns True for function names
+        self.assertTrue(server._is_meaningful_query_for_strong_match("_nav_v2_format_response"))
+        self.assertTrue(server._is_meaningful_query_for_strong_match("def validate_token"))
+        self.assertTrue(server._is_meaningful_query_for_strong_match("handleClick()"))
+
+    def test_fo_search_generic_terms_not_meaningful(self):
+        """Memory-First: Generic terms alone are not meaningful queries."""
+        self.assertFalse(server._is_meaningful_query_for_strong_match("error"))
+        self.assertFalse(server._is_meaningful_query_for_strong_match("bug"))
+        self.assertFalse(server._is_meaningful_query_for_strong_match("the project"))
+        self.assertFalse(server._is_meaningful_query_for_strong_match("fix issue"))
 
     def test_repeated_tool_gate_omits_context_header_by_default(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -165,7 +391,8 @@ class TestFoSync(unittest.TestCase):
                  patch.object(server, "_resolve_actor_identity", return_value={"editor": "claude"}):
                 result = server.fo_sync(goal="Test goal", next_step="Test next")
 
-            self.assertEqual(result, "Synced.")
+            # Navigator V1: Check for sync confirmation
+            self.assertIn("Context synced", result)
             # fo_sync may be called through wrapper which can invoke multiple times
             self.assertGreaterEqual(len(persist_calls), 1, "fo_sync must call _persist_ai_connection")
             # Verify at least one call had correct actor

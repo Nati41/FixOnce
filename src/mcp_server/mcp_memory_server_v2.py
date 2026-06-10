@@ -3423,6 +3423,17 @@ def _format_do_not_repeat_digest(memory: Dict[str, Any], limit: int = 7, mode: s
 
 
 def _format_deep_project_brief(memory: Dict[str, Any], mode: str = "compact") -> str:
+    """
+    Navigator V1: Format project brief with priorities first.
+
+    Returns:
+        - Project summary
+        - Active priorities (blockers/warnings)
+        - Active decisions
+        - Avoid patterns
+        - Recent fixes
+        - Suggested first action
+    """
     expanded = (mode or "compact").lower() == "expanded"
     project_info = memory.get("project_info", {})
     live_record = memory.get("live_record", {})
@@ -3431,110 +3442,134 @@ def _format_deep_project_brief(memory: Dict[str, Any], mode: str = "compact") ->
     items = _collect_core_trust_items(memory, expanded=expanded)
 
     project_name = project_info.get("name") or "Unknown project"
-    project_goal = intent.get("current_goal") or architecture.get("summary") or project_info.get("summary") or "project goal unavailable"
-    work_area = intent.get("work_area") or "work area unavailable"
-    last_work = intent.get("last_change") or "last meaningful work unavailable"
-    next_step = intent.get("next_step") or "next step unavailable"
+    project_goal = intent.get("current_goal") or architecture.get("summary") or project_info.get("summary") or ""
+    work_area = intent.get("work_area") or ""
+    last_work = intent.get("last_change") or ""
+    next_step = intent.get("next_step") or ""
 
-    lines = [
-        f"# Deep Onboarding Brief: {project_name} ({'Expanded' if expanded else 'Compact'})",
-        "",
-        _format_project_vision(memory, mode=mode),
-        "",
-        "## Project Context",
-        f"- Project goal: {project_goal}",
-        f"- Current work area: {work_area}",
-        f"- Last meaningful work: {last_work}",
-        f"- Next step: {next_step}",
-        "",
-        "## Multi-Agent State",
-    ]
+    lines = []
 
-    active_agents = []
-    for name, state in memory.get("active_ais", {}).items():
-        if not isinstance(state, dict):
-            continue
-        active_agents.append(
-            f"{name} ({'primary' if state.get('is_primary') else 'active'}, "
-            f"source={state.get('actor_source', 'none')}, "
-            f"confidence={state.get('actor_confidence', 0.0)})"
-        )
-    lines.append(f"- Active agents: {', '.join(active_agents) if active_agents else 'None recorded.'}")
+    # Navigator V1: Project summary (one line)
+    lines.append(f"📋 **{project_name}**" + (f" — {project_goal[:60]}" if project_goal else ""))
+    lines.append("")
 
-    attributable_records = []
-    for collection in (
-        memory.get("decisions", []),
-        memory.get("avoid", []),
-        memory.get("debug_sessions", []),
-        live_record.get("lessons", {}).get("insights", []),
-    ):
-        attributable_records.extend(item for item in collection if isinstance(item, dict))
-    attributable_records.extend(
-        item for item in architecture.get("components", []) if isinstance(item, dict)
-    )
-    attributed = sum(
-        1 for item in attributable_records
-        if item.get("actor") or item.get("updated_by")
-    )
-    total = len(attributable_records)
-    coverage = int((attributed / total) * 100) if total else 100
-    lines.append(f"- Attribution coverage: {attributed}/{total} ({coverage}%)")
+    # Navigator V1: PRIORITIES FIRST (blockers/warnings)
+    priorities = []
+    suggested_action = None
+    suggested_reason = None
 
-    recent_handoffs = [
-        item for item in memory.get("ai_handoffs", [])
-        if isinstance(item, dict)
-    ][-3:]
-    lines.append(f"- Recent handoffs: {len(recent_handoffs)}")
-    for handoff in recent_handoffs:
-        lines.append(
-            f"  - {handoff.get('from_actor', handoff.get('from', 'unknown'))} -> "
-            f"{handoff.get('to_actor', handoff.get('to', 'unknown'))}: "
-            f"{handoff.get('next_action', handoff.get('next_step', 'No next action recorded.'))}"
-        )
+    # Check for live errors
+    live_errors = _get_live_errors()
+    if live_errors:
+        priorities.append(f"🔴 **Blocker:** {len(live_errors)} browser error(s) → fo_errors()")
+        if not suggested_action:
+            suggested_action = "fo_errors()"
+            suggested_reason = f"{len(live_errors)} error(s) need attention"
 
+    # Check for auto-fixes
+    auto_fixes = _get_auto_fixes()
+    if auto_fixes:
+        priorities.append(f"🔴 **Blocker:** {len(auto_fixes)} auto-fix(es) ready → fo_apply()")
+        if not suggested_action:
+            suggested_action = "fo_apply()"
+            suggested_reason = f"{len(auto_fixes)} fix(es) ready to apply"
+
+    # Check for unresolved conflicts
     severity_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
     unresolved_conflicts = [
         conflict for conflict in memory.get("decision_conflicts", [])
         if isinstance(conflict, dict)
         and conflict.get("status", "open") == "open"
     ]
-    unresolved_conflicts.sort(
-        key=lambda conflict: (
-            severity_rank.get(str(conflict.get("severity", "")).upper(), 0),
-            conflict.get("last_seen") or conflict.get("updated_at") or "",
-        ),
-        reverse=True,
-    )
-    lines.append(f"- Unresolved conflicts: {len(unresolved_conflicts)}")
-    for conflict in unresolved_conflicts[:3]:
-        existing = conflict.get("existing_decision", {})
-        proposed = conflict.get("proposed_decision", {})
-        lines.append(
-            f"  - {conflict.get('id', 'unknown-conflict')} "
-            f"[{conflict.get('severity', 'UNKNOWN')}]: "
-            f"existing=\"{_compact_text(existing.get('decision', ''), 100)}\" "
-            f"(actor={existing.get('actor', 'unknown')}) vs "
-            f"proposed=\"{_compact_text(proposed.get('decision', ''), 100)}\" "
-            f"(actor={proposed.get('actor', 'unknown')}). "
-            f"Recommended: supersede the existing decision, accept an override, "
-            f"or resolve this conflict explicitly."
-        )
+    if unresolved_conflicts:
+        priorities.append(f"🟠 **Warning:** {len(unresolved_conflicts)} decision conflict(s)")
 
-    sections = [
-        ("Decisions", items["decisions"]),
-        ("Do Not Repeat", items["do_not_repeat"]),
-        ("Solved Bugs", items["solved_bugs"]),
-        ("Risks", items["risks"]),
-        ("Recent Work", items["recent_work"]),
-        ("Handoffs", items["handoffs"]),
-    ]
-    for title, section_items in sections:
-        lines.extend(["", f"## {title}"])
-        if not section_items:
-            lines.append("- None recorded.")
-            continue
-        for item in section_items:
-            lines.append(_format_memory_item(item, mode=mode))
+    # Check for pending reviews
+    pending_reviews = 0
+    try:
+        from core.pending_memories import get_pending_count
+        pending_reviews = get_pending_count()
+    except:
+        pass
+    if pending_reviews:
+        priorities.append(f"🟡 **Info:** {pending_reviews} pending memory review(s) → Dashboard")
+
+    if priorities:
+        lines.append("⚠️ **PRIORITIES:**")
+        for p in priorities[:4]:
+            lines.append(f"  {p}")
+        lines.append("")
+
+    # Navigator V1: Context (compact)
+    if work_area or last_work:
+        lines.append("**Context:**")
+        if work_area:
+            lines.append(f"  Area: {work_area[:60]}")
+        if last_work:
+            lines.append(f"  Last: {last_work[:80]}")
+        if next_step:
+            lines.append(f"  Next: {next_step[:80]}")
+        lines.append("")
+
+    # Navigator V1: Active Decisions (most important)
+    decisions = [d for d in memory.get("decisions", []) if not d.get("superseded")][-5:]
+    if decisions:
+        lines.append("**ACTIVE DECISIONS:**")
+        for d in decisions:
+            dec_text = d.get("decision", "")[:70]
+            lines.append(f"  • {dec_text}")
+        lines.append("")
+
+    # Navigator V1: Avoid Patterns (critical guardrails)
+    avoids = memory.get("avoid", [])[-5:]
+    if avoids:
+        lines.append("**AVOID:**")
+        for a in avoids:
+            avoid_text = a.get("what", "")[:70]
+            lines.append(f"  ⛔ {avoid_text}")
+        lines.append("")
+
+    # Navigator V1: Recent Fixes (3 most recent)
+    debug_sessions = memory.get("debug_sessions", [])[-3:]
+    if debug_sessions:
+        lines.append("**RECENT FIXES:**")
+        for ds in debug_sessions:
+            problem = ds.get("problem", "")[:50]
+            solution = ds.get("solution", "")[:50]
+            lines.append(f"  • {problem} → {solution}")
+        lines.append("")
+
+    # Navigator V1: Memory stats (compact)
+    d_count = len([d for d in memory.get("decisions", []) if not d.get("superseded")])
+    s_count = len(memory.get("debug_sessions", []))
+    a_count = len(memory.get("avoid", []))
+    lines.append(f"📊 Memory: {d_count} Decisions · {s_count} Solutions · {a_count} Avoid")
+    lines.append("")
+
+    # Navigator V1: Suggested first action
+    if not suggested_action and next_step:
+        suggested_action = next_step
+        suggested_reason = "Continue from last session"
+    elif not suggested_action:
+        suggested_action = "Continue with current task"
+        suggested_reason = "No blockers found"
+
+    lines.append(f"→ **Suggested:** {suggested_action}")
+    lines.append(f"  ({suggested_reason})")
+    lines.append("")
+    lines.append("  Alternatives:")
+    lines.append("    • fo_search() — find past solutions")
+    lines.append("    • fo_sync() — update context")
+
+    # Confidence based on memory completeness
+    if d_count > 5 and s_count > 3:
+        confidence = "high"
+    elif d_count > 0 or s_count > 0:
+        confidence = "medium"
+    else:
+        confidence = "low"
+    lines.append("")
+    lines.append(f"Confidence: {confidence}")
 
     return "\n".join(lines)
 
@@ -6424,7 +6459,48 @@ def _update_work_context_lightweight(
         "next_step": update_data.get("next_step", ""),
     })
 
-    return "Synced."
+    # Navigator V1: Return context stats and next_action
+    lines = ["✓ Context synced"]
+    lines.append("")
+
+    # Show what was updated
+    if last_change:
+        lines.append(f"Last: {last_change[:80]}")
+    if next_step:
+        lines.append(f"Next: {next_step[:80]}")
+    if current_goal:
+        lines.append(f"Goal: {current_goal[:60]}")
+
+    # Session stats
+    live_errors = _get_live_errors()
+    pending_reviews = 0
+    try:
+        from core.pending_memories import get_pending_count
+        pending_reviews = get_pending_count()
+    except:
+        pass
+
+    if live_errors or pending_reviews:
+        lines.append("")
+        lines.append("Session status:")
+        if live_errors:
+            lines.append(f"  • {len(live_errors)} browser error(s)")
+        if pending_reviews:
+            lines.append(f"  • {pending_reviews} pending memory review(s)")
+
+    # Navigator V1: next_action based on state
+    lines.append("")
+    if live_errors:
+        lines.append(f"→ Suggested: fo_errors()")
+        lines.append(f"  ({len(live_errors)} error(s) need attention)")
+    elif next_step:
+        lines.append(f"→ Suggested: {next_step}")
+        lines.append(f"  (Continue with planned work)")
+    else:
+        lines.append(f"→ Suggested: Continue with current task")
+        lines.append(f"  (Context updated, no blockers)")
+
+    return "\n".join(lines)
 
 
 @mcp.tool()
@@ -6660,7 +6736,52 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
         except Exception as e:
             _log(f"[SemanticIndex] Failed to index decision: {e}")
 
-    return context + f"Logged decision: {decision}" + policy_message
+    # Navigator V1: Return impact analysis and next_action
+    lines = [f"✓ Decision recorded: {decision}"]
+    lines.append("")
+
+    # Count related decisions
+    active_decisions = [d for d in memory['decisions'] if not d.get('superseded')]
+    related = []
+    decision_words = set(decision.lower().split())
+    for d in active_decisions[:-1]:  # Exclude the one we just added
+        d_words = set(d.get('decision', '').lower().split())
+        if len(decision_words & d_words) >= 2:
+            related.append(d.get('decision', '')[:50])
+
+    # Impact analysis
+    if related:
+        lines.append(f"Related decisions: {len(related)}")
+        for r in related[:2]:
+            lines.append(f"  • {r}...")
+
+    # Check for conflicts
+    if policy_message:
+        lines.append(policy_message.strip())
+
+    lines.append("")
+
+    # Navigator V1: Suggest enforcement action
+    decision_lower = decision.lower()
+    if any(word in decision_lower for word in ['use', 'always', 'prefer', 'default']):
+        # This is a positive guideline - suggest finding places to apply
+        search_term = decision.split()[-1] if decision.split() else 'pattern'
+        lines.append(f"→ Suggested: grep -rn '{search_term}' src/")
+        lines.append(f"  (Find places to apply this decision)")
+    elif any(word in decision_lower for word in ['never', 'avoid', 'not', "don't"]):
+        # This sounds like an avoid pattern
+        lines.append(f"→ Suggested: Consider fo_decide(action='avoid')")
+        lines.append(f"  (This sounds like a pattern to avoid)")
+    else:
+        lines.append(f"→ Suggested: fo_sync()")
+        lines.append(f"  (Update context with this decision)")
+
+    lines.append("")
+    lines.append("  Alternatives:")
+    lines.append("    • Update CLAUDE.md with this guideline")
+    lines.append("    • No action needed — decision recorded")
+
+    return context + "\n".join(lines)
 
 
 @mcp.tool()
@@ -7744,8 +7865,47 @@ def solution_applied(
         fo_solved_called=True,
     )
 
-    # Minimal response (no context header noise)
-    return "Solution saved."
+    # Navigator V1: Return impact and next_action
+    lines = ["✓ Solution recorded"]
+    lines.append("")
+
+    # Extract keywords for future matching
+    error_words = [w for w in error_message.lower().split() if len(w) > 3][:5]
+    if error_words:
+        lines.append(f"Future triggers: {', '.join(error_words)}")
+
+    # Check for similar patterns in codebase
+    similar_in_codebase = []
+    try:
+        if files_list:
+            result = subprocess.run(
+                ['grep', '-rln', error_words[0] if error_words else 'error', '.'],
+                cwd=session.working_dir,
+                capture_output=True,
+                text=True,
+                timeout=2,
+                creationflags=no_window_creationflags(),
+            )
+            if result.returncode == 0:
+                found_files = [f for f in result.stdout.strip().split('\n') if f and not f.startswith('.git')]
+                # Exclude files we just fixed
+                similar_in_codebase = [f for f in found_files if f not in files_list][:3]
+    except:
+        pass
+
+    if similar_in_codebase:
+        lines.append(f"Similar in codebase: {len(similar_in_codebase)} file(s)")
+        for f in similar_in_codebase[:2]:
+            lines.append(f"  ⚠️ {f} — might need same fix")
+        lines.append("")
+        lines.append(f"→ Suggested: Read {similar_in_codebase[0]}")
+        lines.append(f"  (Check if same pattern exists)")
+    else:
+        lines.append("")
+        lines.append(f"→ Suggested: fo_sync()")
+        lines.append(f"  (Update context with what you learned)")
+
+    return "\n".join(lines)
 
 
 def _calculate_similarity(query: str, text: str) -> int:
@@ -8109,15 +8269,16 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
     query_words = query_words - noise_words
 
     for ds in debug_sessions:
-        problem = ds.get('problem', '').lower()
+        problem_original = ds.get('problem', '')
+        problem_lower = problem_original.lower()
         solution = ds.get('solution', '')
         root_cause = ds.get("root_cause", "")
         lesson_learned = ds.get("lesson_learned", "")
         symptoms = [s.lower() for s in ds.get('symptoms', [])]
-        combined = f"{problem} {root_cause} {solution} {lesson_learned} {' '.join(symptoms)}"
+        combined = f"{problem_lower} {root_cause} {solution} {lesson_learned} {' '.join(symptoms)}"
 
         # Check for keyword matches
-        problem_words = _memory_tokens(problem) - noise_words
+        problem_words = _memory_tokens(problem_lower) - noise_words
         keyword_matches = len(query_words & problem_words)
 
         # Also check symptoms
@@ -8125,7 +8286,8 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
 
         # Match if enough keyword overlap or symptom match
         if keyword_matches >= 2 or symptom_match or _memory_text_matches(query_lower, query_words, combined):
-            similarity = max(_calculate_similarity(query, problem), _calculate_similarity(query, solution))
+            # Use original text for similarity (preserves camelCase for token splitting)
+            similarity = max(_calculate_similarity(query, problem_original), _calculate_similarity(query, solution))
             text = f"🐛 **Problem:** {ds.get('problem', '')}"
             if root_cause:
                 text += f"\n🧭 **Root cause:** {root_cause}"
@@ -8260,10 +8422,9 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
     if matched_indices or memory_changed:
         _save_project_lightweight(session.project_id, memory)
 
+    # Sort matched insights for best match
     if matched_insights:
         _track_roi_event("solution_reused")
-
-        # Minimal output - just the best match
         matched_insights.sort(
             key=lambda item: (
                 _search_result_priority(item),
@@ -8273,21 +8434,20 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
             ),
             reverse=True,
         )
-        best = matched_insights[0]
-        expanded = (mode or "compact").lower() == "expanded"
-        lines = [f"Found {len(matched_insights)} match(es). Best ({best['similarity']}%, {best.get('type', 'memory')}):"]
-        lines.append(f"> {_format_search_result_text(best, mode)}")
-        lines.append(_format_search_provenance(best))
-        if expanded and len(matched_insights) > 1:
-            lines.append("")
-            lines.append("## Additional Matches")
-            for item in matched_insights[1:5]:
-                lines.append(f"- ({item.get('type', 'memory')}, {item.get('similarity', 0)}%) {_format_search_result_text(item, mode)}")
-                lines.append(f"  {_format_search_provenance(item)}")
-        return '\n'.join(lines)
 
-    else:
-        return "No matches. Investigate manually."
+    # === Navigator V2: Always get navigation targets ===
+    working_dir = session.working_dir if session else None
+    targets = _nav_v2_get_targets(query, working_dir, limit=5)
+    commits = _nav_v2_get_commits(query, working_dir, limit=2)
+
+    # === Navigator V2: Use unified response format ===
+    return _nav_v2_format_response(
+        query=query,
+        targets=targets,
+        memory_matches=matched_insights,
+        commits=commits,
+        working_dir=working_dir,
+    )
 
 
 @mcp.tool()
@@ -9520,6 +9680,869 @@ def clear_resume_state() -> str:
 
 
 # ============================================================
+# NAVIGATOR V1 - Response Format Helpers
+# ============================================================
+# Every tool returns: summary, context, next_action, alternatives, confidence
+# This transforms FixOnce from "Memory" to "Navigator"
+
+def _nav_response(
+    summary: str,
+    context: str = "",
+    next_action: str = "",
+    next_action_reason: str = "",
+    alternatives: List[str] = None,
+    confidence: str = "high"
+) -> str:
+    """
+    Format a Navigator V1 response.
+
+    Every tool answers: "What's next?" not just "What do we know?"
+
+    Args:
+        summary: What was found (always has something)
+        context: Why it matters / background
+        next_action: One clear action to take
+        next_action_reason: Why this action
+        alternatives: Other options (optional)
+        confidence: high | medium | low | unknown
+    """
+    lines = []
+
+    # Summary always first
+    if summary:
+        lines.append(summary)
+        lines.append("")
+
+    # Context if provided
+    if context:
+        lines.append(context)
+        lines.append("")
+
+    # Next action (the key Navigator V1 addition)
+    if next_action:
+        lines.append(f"→ Suggested: {next_action}")
+        if next_action_reason:
+            lines.append(f"  ({next_action_reason})")
+        lines.append("")
+
+    # Alternatives if provided
+    if alternatives:
+        lines.append("  Alternatives:")
+        for alt in alternatives[:3]:  # Max 3 alternatives
+            lines.append(f"    • {alt}")
+        lines.append("")
+
+    return "\n".join(lines).strip()
+
+
+def _nav_priorities(
+    auto_fixes: List[Dict] = None,
+    live_errors: List[Dict] = None,
+    pending_reviews: int = 0,
+    similar_issues: List[Dict] = None
+) -> List[Dict[str, Any]]:
+    """
+    Build priorities list for fo_init/fo_brief.
+    Returns list of {type, item, severity, action}
+    """
+    priorities = []
+
+    # Auto-fixes are highest priority
+    if auto_fixes:
+        priorities.append({
+            "type": "auto_fix",
+            "item": f"{len(auto_fixes)} auto-fix(es) ready",
+            "severity": "critical",
+            "action": "fo_apply()"
+        })
+
+    # Live errors
+    if live_errors:
+        priorities.append({
+            "type": "unresolved_error",
+            "item": f"{len(live_errors)} browser error(s)",
+            "severity": "high",
+            "action": "fo_errors()"
+        })
+
+    # Pending reviews
+    if pending_reviews > 0:
+        priorities.append({
+            "type": "pending_review",
+            "item": f"{pending_reviews} pending memory review(s)",
+            "severity": "medium",
+            "action": "Review in dashboard"
+        })
+
+    # Similar issues found
+    if similar_issues:
+        priorities.append({
+            "type": "similar_issue",
+            "item": f"{len(similar_issues)} similar issue(s) in codebase",
+            "severity": "low",
+            "action": f"Check: {similar_issues[0].get('file', 'related files')}"
+        })
+
+    return priorities
+
+
+def _nav_format_priorities(priorities: List[Dict]) -> str:
+    """Format priorities list for human-readable output."""
+    if not priorities:
+        return ""
+
+    severity_icons = {
+        "critical": "🔴",
+        "high": "🟠",
+        "medium": "🟡",
+        "low": "🔵"
+    }
+
+    lines = ["⚠️ PRIORITIES:"]
+    for p in priorities:
+        icon = severity_icons.get(p.get("severity", "medium"), "•")
+        lines.append(f"  {icon} {p['item']} → {p['action']}")
+
+    return "\n".join(lines)
+
+
+def _nav_search_fallback(query: str, working_dir: str = None) -> Dict[str, Any]:
+    """
+    When fo_search finds no matches, provide fallback navigation.
+    Returns related_files, recent_commits, suggested_grep.
+    """
+    fallback = {
+        "related_files": [],
+        "recent_commits": [],
+        "suggested_grep": f"grep -rn '{query}' src/",
+        "suggested_read": None
+    }
+
+    if not working_dir:
+        session = _get_session()
+        if session:
+            working_dir = session.working_dir
+
+    if not working_dir:
+        return fallback
+
+    # Find files mentioning the query
+    try:
+        result = subprocess.run(
+            ['grep', '-rl', query, '.'],
+            cwd=working_dir,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            creationflags=no_window_creationflags(),
+        )
+        if result.returncode == 0:
+            files = [f for f in result.stdout.strip().split('\n') if f and not f.startswith('.git')][:5]
+            fallback["related_files"] = files
+            if files:
+                fallback["suggested_read"] = f"Read {files[0]}"
+    except:
+        pass
+
+    # Find recent commits mentioning the query
+    try:
+        result = subprocess.run(
+            ['git', 'log', '--oneline', '-5', f'--grep={query}'],
+            cwd=working_dir,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            creationflags=no_window_creationflags(),
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            fallback["recent_commits"] = result.stdout.strip().split('\n')[:3]
+    except:
+        pass
+
+    return fallback
+
+
+# ============================================================
+# Navigator V2: Navigation-First Search
+# ============================================================
+
+def _nav_v2_get_targets(query: str, working_dir: str = None, limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Navigator V2: Get file:line targets for a query.
+
+    Returns list of targets with:
+    - file: relative file path
+    - line: line number
+    - context: the actual line content (trimmed)
+    - relevance: why this line matters
+    """
+    targets = []
+
+    if not working_dir:
+        session = _get_session()
+        if session:
+            working_dir = session.working_dir
+
+    if not working_dir:
+        return targets
+
+    # Build grep patterns - try exact match first, then word boundaries
+    patterns_to_try = [query]
+
+    # If query has multiple words, also try individual significant words
+    query_words = [w for w in query.lower().split() if len(w) > 3]
+    if len(query_words) > 1:
+        common_words = {'error', 'failed', 'cannot', 'undefined', 'null', 'not', 'the', 'and', 'for', 'with'}
+        distinctive = [w for w in query_words if w not in common_words]
+        if distinctive:
+            patterns_to_try.append(distinctive[0])
+
+    seen_locations = set()
+
+    # Search directories in order of priority (src first, then root)
+    search_dirs = ['src', 'tests', 'server', 'core', '.']
+
+    for pattern in patterns_to_try:
+        if len(targets) >= limit:
+            break
+
+        for search_dir in search_dirs:
+            if len(targets) >= limit:
+                break
+
+            search_path = os.path.join(working_dir, search_dir) if search_dir != '.' else working_dir
+            if not os.path.exists(search_path):
+                continue
+
+            try:
+                # Use git grep if available (faster, respects .gitignore)
+                result = subprocess.run(
+                    ['git', 'grep', '-n', '-i', '--no-color', pattern, '--', search_dir],
+                    cwd=working_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                    creationflags=no_window_creationflags(),
+                )
+
+                # Fallback to regular grep if git grep fails
+                if result.returncode != 0:
+                    result = subprocess.run(
+                        ['grep', '-rn', '-i', '--include=*.py', '--include=*.ts', '--include=*.js',
+                         '--include=*.tsx', '--include=*.jsx', pattern, search_dir],
+                        cwd=working_dir,
+                        capture_output=True,
+                        text=True,
+                        timeout=2,
+                        creationflags=no_window_creationflags(),
+                    )
+
+                if result.returncode == 0 and result.stdout.strip():
+                    for line in result.stdout.strip().split('\n')[:15]:
+                        if len(targets) >= limit:
+                            break
+
+                        # Parse grep output: file.py:123:content
+                        parts = line.split(':', 2)
+                        if len(parts) >= 3:
+                            file_path = parts[0].lstrip('./')
+                            try:
+                                line_num = int(parts[1])
+                            except ValueError:
+                                continue
+                            content = parts[2].strip()[:80]
+
+                            # Skip unwanted paths
+                            if any(skip in file_path for skip in ['.git', 'node_modules', '__pycache__', '.pyc', 'dist/', 'build/', '.egg']):
+                                continue
+
+                            # Dedupe by file:line
+                            loc_key = f"{file_path}:{line_num}"
+                            if loc_key in seen_locations:
+                                continue
+                            seen_locations.add(loc_key)
+
+                            # Determine relevance
+                            relevance = _nav_v2_classify_line(content, file_path)
+
+                            targets.append({
+                                "file": file_path,
+                                "line": line_num,
+                                "context": content,
+                                "relevance": relevance,
+                            })
+            except Exception:
+                pass
+
+    # Sort by relevance priority: definition > usage > test > other
+    relevance_order = {"definition": 0, "fix_location": 1, "usage": 2, "test": 3, "config": 4, "other": 5}
+    targets.sort(key=lambda t: relevance_order.get(t.get("relevance", "other"), 5))
+
+    return targets[:limit]
+
+
+def _nav_v2_classify_line(content: str, file_path: str) -> str:
+    """Classify a line to determine its relevance."""
+    content_lower = content.lower()
+
+    # Test file
+    if 'test' in file_path.lower():
+        return "test"
+
+    # Definition patterns
+    if any(p in content_lower for p in ['def ', 'function ', 'class ', 'const ', 'let ', 'var ', 'export ']):
+        return "definition"
+
+    # Fix markers
+    if any(p in content_lower for p in ['# fix', '// fix', '← fix', 'fixed']):
+        return "fix_location"
+
+    # Config files
+    if any(ext in file_path for ext in ['.json', '.yaml', '.yml', '.toml', '.ini', '.env']):
+        return "config"
+
+    return "usage"
+
+
+def _nav_v2_get_commits(query: str, working_dir: str = None, limit: int = 3) -> List[Dict[str, Any]]:
+    """
+    Navigator V2: Get relevant commits for a query.
+
+    Returns list of commits with:
+    - hash: short commit hash
+    - message: commit message
+    - files: files changed in commit
+    """
+    commits = []
+
+    if not working_dir:
+        session = _get_session()
+        if session:
+            working_dir = session.working_dir
+
+    if not working_dir:
+        return commits
+
+    try:
+        # Search commit messages
+        result = subprocess.run(
+            ['git', 'log', '--oneline', f'-{limit * 2}', f'--grep={query}', '--all'],
+            cwd=working_dir,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            creationflags=no_window_creationflags(),
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            for line in result.stdout.strip().split('\n')[:limit]:
+                parts = line.split(' ', 1)
+                if len(parts) >= 2:
+                    commit_hash = parts[0]
+                    message = parts[1]
+
+                    # Get files changed in this commit
+                    files_result = subprocess.run(
+                        ['git', 'diff-tree', '--no-commit-id', '--name-only', '-r', commit_hash],
+                        cwd=working_dir,
+                        capture_output=True,
+                        text=True,
+                        timeout=2,
+                        creationflags=no_window_creationflags(),
+                    )
+                    files = []
+                    if files_result.returncode == 0:
+                        files = [f for f in files_result.stdout.strip().split('\n') if f][:3]
+
+                    commits.append({
+                        "hash": commit_hash,
+                        "message": message,
+                        "files": files,
+                    })
+    except Exception:
+        pass
+
+    return commits
+
+
+# Generic terms that should not trigger strong memory match alone
+_GENERIC_QUERY_TERMS = {
+    # Common problem terms (too generic)
+    'error', 'bug', 'issue', 'problem', 'fix', 'broken', 'fail', 'failed',
+    'crash', 'exception', 'undefined', 'null', 'none', 'missing',
+    # Common project terms
+    'project', 'file', 'code', 'function', 'class', 'method', 'test', 'tests',
+    'memory', 'data', 'config', 'api', 'server', 'client', 'app', 'application',
+    # Common action terms
+    'add', 'remove', 'update', 'change', 'create', 'delete', 'get', 'set',
+    'read', 'write', 'load', 'save', 'check', 'run', 'start', 'stop',
+    # Common articles/prepositions (already filtered but extra safety)
+    'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from',
+}
+
+
+def _is_meaningful_query_for_strong_match(query: str) -> bool:
+    """
+    Check if query is specific enough to warrant a strong memory match.
+
+    Returns False for generic single-word queries like "error" or "bug"
+    that would match almost any memory entry.
+
+    A query is meaningful if:
+    1. It has at least 2 non-generic tokens, OR
+    2. It contains a file path, function name, or error code, OR
+    3. It's an exact phrase (3+ words suggesting intentional search)
+    """
+    query_lower = query.lower().strip()
+
+    # Check for specific identifiers (file paths, function names, error codes)
+    if any(indicator in query_lower for indicator in ['.py', '.ts', '.js', '.tsx', '.jsx', 'def ', 'function ', 'class ', '::', '->', '()', '_']):
+        return True
+
+    # Check for error codes or specific patterns
+    if any(c.isupper() for c in query) and any(c.islower() for c in query):
+        # Mixed case suggests specific identifier like "TypeError" or "ModuleNotFoundError"
+        # But only if it's a compound word (not just a sentence)
+        words = query.split()
+        if len(words) <= 3 and any(len(w) > 5 for w in words):
+            return True
+
+    # Tokenize and filter
+    tokens = _memory_tokens(query_lower)
+
+    # Remove generic terms
+    meaningful_tokens = tokens - _GENERIC_QUERY_TERMS
+
+    # Query is meaningful if it has at least 2 meaningful tokens
+    # OR if it's a multi-word phrase (3+ words) suggesting intentional search
+    word_count = len(query.split())
+
+    if len(meaningful_tokens) >= 2:
+        return True
+
+    if word_count >= 3 and len(tokens) >= 2:
+        # Multi-word query with at least 2 tokens (after stopword removal)
+        return True
+
+    # Single generic term or short generic phrase - not meaningful
+    return False
+
+
+def _nav_v2_format_response(
+    query: str,
+    targets: List[Dict[str, Any]],
+    memory_matches: List[Dict[str, Any]],
+    commits: List[Dict[str, Any]],
+    working_dir: str = None,
+) -> str:
+    """
+    Navigator V3 (Memory-First): Format search response with memory prioritized.
+
+    Ranking order:
+    1. Exact solved bug match
+    2. Exact avoid pattern match
+    3. Relevant decision
+    4. Similar past incident
+    5. Recent related commit/file
+    6. Code target fallback
+    7. Broad grep fallback
+
+    Structure (when strong memory match exists):
+    - Memory match (problem/solution/avoid/decision)
+    - Root cause (if known)
+    - Files from memory
+    - Supporting code locations
+    - Next action (based on memory)
+    - Alternatives
+    - Confidence
+    """
+    lines = [f"📍 **Navigation: {query}**", ""]
+
+    # Determine if we have a strong memory match
+    strong_memory = None
+    memory_type = None
+    memory_strength = "none"
+
+    # Check if query is meaningful enough for strong match
+    query_meaningful = _is_meaningful_query_for_strong_match(query)
+
+    if memory_matches:
+        best = memory_matches[0]
+        best_type = best.get('type', 'memory')
+        similarity = best.get('similarity', 0)
+
+        # Strong match criteria:
+        # 1. High similarity AND meaningful query (not just generic terms)
+        # 2. OR exact phrase match in memory text
+        if query_meaningful:
+            if best_type == 'solution' and similarity >= 60:
+                strong_memory = best
+                memory_type = 'solution'
+                memory_strength = "strong"
+            elif best_type == 'avoid' and similarity >= 60:
+                strong_memory = best
+                memory_type = 'avoid'
+                memory_strength = "strong"
+            elif best_type == 'decision' and similarity >= 65:
+                strong_memory = best
+                memory_type = 'decision'
+                memory_strength = "strong"
+            elif best_type == 'failed_attempt' and similarity >= 70:
+                strong_memory = best
+                memory_type = 'failed_attempt'
+                memory_strength = "strong"
+            elif similarity >= 75:
+                # High similarity on any type
+                strong_memory = best
+                memory_type = best_type
+                memory_strength = "medium"
+
+    # === MEMORY-FIRST: Show strong memory match at top ===
+    if strong_memory:
+        if memory_type == 'solution':
+            lines.append("✅ **SOLVED BEFORE**")
+            lines.append("")
+
+            # Extract structured info from solution
+            # Note: source data is stored directly in match dict, not in 'metadata'
+            text = strong_memory.get('text', '')
+
+            # Problem - try direct field first, then extract from text
+            problem = _extract_section(text, 'Problem')
+            if problem:
+                lines.append(f"**Problem:** {problem[:150]}")
+
+            # Root cause
+            root_cause = _extract_section(text, 'Root cause')
+            if root_cause:
+                lines.append(f"**Root cause:** {root_cause[:150]}")
+
+            # Solution
+            solution = _extract_section(text, 'Solution')
+            if solution:
+                lines.append(f"**Solution:** {solution[:200]}")
+
+            # Files from memory (passed as extra kwarg to _search_match)
+            files = strong_memory.get('files_changed', [])
+            if files:
+                lines.append(f"**Files:** {', '.join(files[:4])}")
+
+            # Lesson learned
+            lesson = _extract_section(text, 'Lesson')
+            if lesson:
+                lines.append(f"**Lesson:** {lesson[:100]}")
+
+            lines.append("")
+
+        elif memory_type == 'avoid':
+            lines.append("⛔ **AVOID PATTERN**")
+            lines.append("")
+
+            text = strong_memory.get('text', '')
+
+            # What to avoid - extract from formatted text
+            what = _extract_section(text, 'Avoid')
+            if what:
+                lines.append(f"**Do NOT:** {what[:150]}")
+
+            # Why
+            reason = _extract_section(text, 'Reason')
+            if reason:
+                lines.append(f"**Reason:** {reason[:150]}")
+
+            lines.append("")
+
+        elif memory_type == 'decision':
+            lines.append("🔒 **ACTIVE DECISION**")
+            lines.append("")
+
+            text = strong_memory.get('text', '')
+
+            # Decision
+            decision = _extract_section(text, 'Decision')
+            if decision:
+                lines.append(f"**Decision:** {decision[:150]}")
+
+            # Reason
+            reason = _extract_section(text, 'Reason')
+            if reason:
+                lines.append(f"**Reason:** {reason[:150]}")
+
+            lines.append("")
+
+        elif memory_type == 'failed_attempt':
+            lines.append("❌ **FAILED BEFORE**")
+            lines.append("")
+
+            text = strong_memory.get('text', '')
+            lines.append(f"**Attempted:** {_compact_text(text, 200)}")
+            lines.append("")
+
+        else:
+            # Generic strong match
+            lines.append("🎯 **RELEVANT CONTEXT**")
+            lines.append("")
+            text = strong_memory.get('text', '')
+            lines.append(f"{_compact_text(text, 200)}")
+            lines.append("")
+
+        # Show similarity
+        similarity = strong_memory.get('similarity', 0)
+        lines.append(f"Match: {similarity}% similar to query")
+        lines.append("")
+
+    # === SUPPORTING CODE LOCATIONS (when memory exists) or PRIMARY TARGETS (when no memory) ===
+    if targets:
+        if strong_memory:
+            lines.append("**Supporting code:**")
+        else:
+            lines.append("**Code locations:**")
+
+        for t in targets[:4]:
+            relevance_marker = ""
+            if t.get("relevance") == "definition":
+                relevance_marker = " ← definition"
+            elif t.get("relevance") == "fix_location":
+                relevance_marker = " ← fix applied"
+            elif t.get("relevance") == "test":
+                relevance_marker = " ← test"
+
+            ctx = t.get("context", "")[:45]
+            lines.append(f"  {t['file']}:{t['line']} — {ctx}{relevance_marker}")
+        lines.append("")
+
+    # === WEAK MEMORY (shown but not prioritized) ===
+    if memory_matches and not strong_memory:
+        lines.append("**Related memory:**")
+        best = memory_matches[0]
+        best_type = best.get('type', 'memory')
+        text = best.get('text', '')
+
+        if best_type == 'solution':
+            lines.append(f"  ✅ {_compact_text(text, 80)}")
+        elif best_type == 'decision':
+            lines.append(f"  🔒 {_compact_text(text, 80)}")
+        elif best_type == 'avoid':
+            lines.append(f"  ⛔ {_compact_text(text, 80)}")
+        else:
+            lines.append(f"  🎯 {_compact_text(text, 80)}")
+
+        if len(memory_matches) > 1:
+            lines.append(f"  (+{len(memory_matches) - 1} more)")
+        lines.append("")
+
+    # === NO MEMORY, NO TARGETS ===
+    if not memory_matches and not targets:
+        lines.append("**Memory:** No matches. This is new territory.")
+        lines.append("")
+
+    # === NEXT ACTION (memory-first) ===
+    lines.append("**Next:**")
+
+    if strong_memory:
+        # Memory-based next action
+        if memory_type == 'solution':
+            files = strong_memory.get('files_changed', [])
+            if files:
+                lines.append(f"  Read {files[0]}")
+                lines.append(f"  (Apply same fix pattern)")
+            elif targets:
+                t = targets[0]
+                lines.append(f"  Read {t['file']}:{t['line']}")
+                lines.append(f"  (Apply solution: check this location)")
+            else:
+                lines.append(f"  Apply the solution above")
+                lines.append(f"  ({strong_memory.get('similarity', 0)}% match to past fix)")
+
+        elif memory_type == 'avoid':
+            lines.append(f"  Do NOT repeat this pattern")
+            lines.append(f"  (Known failure — see reason above)")
+
+        elif memory_type == 'decision':
+            lines.append(f"  Follow this decision")
+            if targets:
+                t = targets[0]
+                lines.append(f"  (See implementation at {t['file']}:{t['line']})")
+            else:
+                lines.append(f"  (Active project guideline)")
+
+        elif memory_type == 'failed_attempt':
+            lines.append(f"  Try a different approach")
+            lines.append(f"  (This was attempted before and failed)")
+
+        else:
+            if targets:
+                t = targets[0]
+                lines.append(f"  Read {t['file']}:{t['line']}")
+                lines.append(f"  (With context from memory above)")
+            else:
+                lines.append(f"  Review the context above")
+                lines.append(f"  ({strong_memory.get('similarity', 0)}% relevant)")
+
+    elif targets:
+        # Code-based next action (no strong memory)
+        t = targets[0]
+        lines.append(f"  Read {t['file']}:{t['line']}")
+        if t.get("relevance") == "definition":
+            lines.append(f"  (Function/class definition)")
+        elif t.get("relevance") == "fix_location":
+            lines.append(f"  (Fix marker found)")
+        else:
+            lines.append(f"  (First match for '{query}')")
+
+    else:
+        # Fallback: broader search
+        query_words = [w for w in query.lower().split() if len(w) > 3]
+        if query_words:
+            broader = query_words[0]
+            lines.append(f"  grep -rn '{broader}' src/")
+            lines.append(f"  (Broader search — '{query}' not found)")
+        else:
+            lines.append(f"  ls src/")
+            lines.append(f"  (Orient to codebase)")
+
+    lines.append("")
+
+    # === ALTERNATIVES ===
+    lines.append("**Alternatives:**")
+    alternatives = []
+
+    # If we used memory for next action, offer code targets as alternatives
+    if strong_memory and targets:
+        for t in targets[:2]:
+            alternatives.append(f"Read {t['file']}:{t['line']} — code location")
+
+    # If we used code for next action, offer more code or grep
+    elif targets and len(targets) > 1:
+        for t in targets[1:3]:
+            alternatives.append(f"Read {t['file']}:{t['line']} — {t.get('relevance', 'usage')}")
+
+    # Add commit if available
+    if commits:
+        c = commits[0]
+        alternatives.append(f"git show {c['hash']} — {c['message'][:35]}")
+
+    # Add grep fallback
+    if targets:
+        alternatives.append(f"grep -rn '{query}' . — all matches")
+
+    # Standard fallbacks
+    if not alternatives:
+        alternatives.append(f"fo_errors() — check browser errors")
+        alternatives.append(f"git log --oneline -10 — recent commits")
+
+    for alt in alternatives[:3]:
+        lines.append(f"  • {alt}")
+    lines.append("")
+
+    # === CONFIDENCE ===
+    if strong_memory and memory_strength == "strong":
+        if targets:
+            confidence = "high"
+            reason = f"{memory_type} match + code located"
+        else:
+            confidence = "high"
+            reason = f"strong {memory_type} match"
+    elif strong_memory:
+        confidence = "medium"
+        reason = f"partial {memory_type} match"
+    elif memory_matches and targets:
+        confidence = "medium"
+        reason = "weak memory + code located"
+    elif targets:
+        confidence = "medium"
+        reason = f"{len(targets)} file(s), no memory"
+    elif memory_matches:
+        confidence = "low"
+        reason = "weak memory, no code"
+    else:
+        confidence = "low"
+        reason = "new territory"
+
+    lines.append(f"Confidence: {confidence} ({reason})")
+
+    return "\n".join(lines)
+
+
+def _extract_section(text: str, section_name: str) -> str:
+    """Extract a section from formatted text like '**Problem:** ...'"""
+    import re
+    # Try to find **Section:** pattern
+    pattern = rf'\*\*{section_name}:\*\*\s*([^\n*]+)'
+    match = re.search(pattern, text, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+
+    # Try emoji + Section: pattern
+    pattern = rf'[🐛✅🧭🧠⛔🔒📝]\s*\*\*{section_name}:\*\*\s*([^\n*]+)'
+    match = re.search(pattern, text, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+
+    return ""
+
+
+def _nav_error_investigation(error_msg: str, working_dir: str = None) -> Dict[str, Any]:
+    """
+    Build investigation path for an error.
+    Returns source_guess, similar_fix, diagnostic.
+    """
+    investigation = {
+        "source_guess": {"file": None, "line_range": None, "confidence": "low"},
+        "similar_fix": None,
+        "diagnostic": None,
+        "status": "needs_investigation"
+    }
+
+    # Try to extract file reference from error
+    import re
+    file_patterns = [
+        r'at\s+(\S+\.(?:js|ts|py|html)):(\d+)',
+        r'File "([^"]+)", line (\d+)',
+        r'in\s+(\S+\.(?:js|ts|py|html)):(\d+)',
+    ]
+
+    for pattern in file_patterns:
+        match = re.search(pattern, error_msg)
+        if match:
+            investigation["source_guess"] = {
+                "file": match.group(1),
+                "line_range": f"{match.group(2)}-{int(match.group(2))+20}",
+                "confidence": "high"
+            }
+            break
+
+    # Check for similar fix in memory
+    try:
+        from core.pending_fixes import get_auto_fixes
+        auto_fixes = get_auto_fixes()
+        for fix in auto_fixes:
+            if any(word in error_msg.lower() for word in fix.get("error_message", "").lower().split()[:3]):
+                investigation["similar_fix"] = {
+                    "found": True,
+                    "commit": fix.get("commit"),
+                    "pattern": fix.get("solution_text", "")[:80]
+                }
+                investigation["status"] = "auto_fix_ready"
+                break
+    except:
+        pass
+
+    # Build diagnostic suggestion based on error type
+    error_lower = error_msg.lower()
+    if "typeerror" in error_lower or "cannot read" in error_lower:
+        investigation["diagnostic"] = "Check: null/undefined value, wrong selector"
+    elif "fetch" in error_lower or "network" in error_lower:
+        investigation["diagnostic"] = "Check: server running? CORS? endpoint exists?"
+    elif "reference" in error_lower:
+        investigation["diagnostic"] = "Check: variable defined? typo in name?"
+    elif "syntax" in error_lower:
+        investigation["diagnostic"] = "Check: missing bracket, quote, or comma"
+
+    return investigation
+
+
+# ============================================================
 # SIMPLIFIED API - 8 Core Tools (v2.0)
 # ============================================================
 # These 8 tools replace the 45+ tools for a cleaner AI experience.
@@ -9558,13 +10581,31 @@ def _format_minimal_init(working_dir: str) -> str:
     )
     _fo_init_trace(f"FORMAT_INIT_ERROR_GATE_AFTER level={gate_result.level!r}")
 
+    # Navigator V1: Build priorities
+    pending_reviews = 0
+    try:
+        from core.pending_memories import get_pending_count
+        pending_reviews = get_pending_count()
+    except:
+        pass
+
+    priorities = _nav_priorities(
+        auto_fixes=auto_fixes,
+        live_errors=live_errors,
+        pending_reviews=pending_reviews
+    )
+
     if gate_result.level == "block":
         _fo_init_trace("FORMAT_INIT_RETURN action_required_fo_apply")
-        return f"🧠 Back to {project_name}\n\nACTION_REQUIRED: fo_apply\n\nReady."
+        # Navigator V1: Show priorities with action
+        priorities_text = _nav_format_priorities(priorities) if priorities else ""
+        return f"🧠 Back to {project_name}\n\n{priorities_text}\n\n→ Suggested: fo_apply()\n  ({len(auto_fixes)} auto-fix(es) ready)\n\nReady."
 
     if gate_result.level == "warn":
         _fo_init_trace("FORMAT_INIT_RETURN action_required_fo_errors")
-        return f"🧠 Back to {project_name}\n\nACTION_REQUIRED: fo_errors\n\nReady."
+        # Navigator V1: Show priorities with action
+        priorities_text = _nav_format_priorities(priorities) if priorities else ""
+        return f"🧠 Back to {project_name}\n\n{priorities_text}\n\n→ Suggested: fo_errors()\n  ({len(live_errors)} error(s) need attention)\n\nReady."
 
     # Get both data sources
     resume_state = None
@@ -9672,6 +10713,14 @@ def _format_minimal_init(working_dir: str) -> str:
         detail_lines.append(f"Next:\n{next_thing}.")
 
     lines = [line1, ""]
+
+    # Navigator V1: Show non-critical priorities if any
+    if priorities and not gate_result.level in ("block", "warn"):
+        priorities_text = _nav_format_priorities(priorities)
+        if priorities_text:
+            lines.append(priorities_text)
+            lines.append("")
+
     if line2:
         lines.append(line2)
         lines.append("")
@@ -9697,6 +10746,16 @@ def _format_minimal_init(working_dir: str) -> str:
     # Protocol reminder: inform user that progress is tracked
     lines.append("💾 Progress synced automatically")
     lines.append("")
+
+    # Navigator V1: Add suggested next action based on context
+    if next_thing:
+        lines.append(f"→ Suggested: {next_thing}")
+        lines.append("")
+    elif priorities:
+        top_priority = priorities[0]
+        lines.append(f"→ Suggested: {top_priority['action']}")
+        lines.append(f"  ({top_priority['item']})")
+        lines.append("")
 
     lines.append("Ready.")
 
@@ -9821,7 +10880,8 @@ def fo_sync(
         why=why,
         next_step=next_step,
     )
-    if str(result).strip().endswith("Synced."):
+    # Navigator V1: Check for successful sync (starts with ✓)
+    if "Context synced" in str(result):
         _mark_unreported_work_synced("fo_sync")
     return result
 
@@ -9987,11 +11047,15 @@ def fo_errors(limit: int = 5) -> str:
     Call this proactively when working on web projects.
     Returns errors AND any auto-fixes ready to apply.
 
+    Navigator V1: Each error includes investigation path.
+
     Args:
         limit: Max errors to return (default 5)
     """
     lines = []
     auto_fixes = []
+    suggested_fixes = []
+    has_auto_fix = False
 
     # Check for auto-fixes first
     try:
@@ -9999,28 +11063,105 @@ def fo_errors(limit: int = 5) -> str:
 
         auto_fixes = get_auto_fixes()
         suggested_fixes = get_suggested_fixes()
-
-        if auto_fixes:
-            lines.append(f"**AUTO-FIX READY** — call `fo_apply()` now (mandatory)")
-            for fix in auto_fixes[:3]:
-                lines.append(f"• {fix['error_message'][:50]}...")
-            lines.append("")
-
-        if suggested_fixes:
-            lines.append(f"**{len(suggested_fixes)} suggested fix(es):**")
-            for fix in suggested_fixes[:3]:
-                lines.append(f"• {fix['error_message'][:60]} ({fix['confidence']}%)")
-            lines.append("")
+        has_auto_fix = bool(auto_fixes)
 
     except Exception as e:
         _log(f"[fo_errors] pending_fixes error: {e}")
 
     # Get browser errors
-    errors_output = get_browser_errors(limit=limit)
+    try:
+        browser_errors = _get_live_errors()
+    except:
+        browser_errors = []
 
-    if lines:
-        return "\n".join(lines) + errors_output
-    return errors_output
+    # Navigator V1: Summary with counts
+    total_errors = len(browser_errors)
+    auto_fix_count = len(auto_fixes)
+    similar_count = len(suggested_fixes)
+
+    if total_errors == 0 and auto_fix_count == 0:
+        # Navigator V1: No errors - still provide context
+        return _nav_response(
+            summary="✓ No browser errors",
+            context="Last check: now · Extension: checking",
+            next_action="Continue with current task",
+            next_action_reason="System healthy",
+            confidence="high"
+        )
+
+    # Build summary line
+    summary_parts = [f"⚠️ {total_errors} browser error(s)"]
+    if auto_fix_count:
+        summary_parts.append(f"{auto_fix_count} with auto-fix")
+    if similar_count:
+        summary_parts.append(f"{similar_count} with similar solution")
+
+    lines.append(" — ".join(summary_parts))
+    lines.append("")
+
+    # Navigator V1: Process each error with investigation path
+    error_num = 0
+    for error in browser_errors[:limit]:
+        error_num += 1
+        error_msg = error.get("message", str(error))[:100]
+
+        # Get investigation path for this error
+        session = _get_session()
+        working_dir = session.working_dir if session else None
+        investigation = _nav_error_investigation(error_msg, working_dir)
+
+        lines.append(f"#{error_num} {error_msg}")
+
+        # Source guess
+        source = investigation.get("source_guess", {})
+        if source.get("file"):
+            confidence = source.get("confidence", "low")
+            lines.append(f"   📍 {source['file']}:{source.get('line_range', '?')} ({confidence} confidence)")
+
+        # Similar fix
+        similar = investigation.get("similar_fix")
+        if similar and similar.get("found"):
+            lines.append(f"   🔗 Similar: {similar.get('commit', 'past fix')} — {similar.get('pattern', '')[:50]}")
+
+        # Status and diagnostic
+        status = investigation.get("status", "needs_investigation")
+        if status == "auto_fix_ready":
+            lines.append(f"   ✅ AUTO-FIX READY")
+        elif investigation.get("diagnostic"):
+            lines.append(f"   💡 {investigation['diagnostic']}")
+
+        lines.append("")
+
+    # Navigator V1: next_action based on what we found
+    if has_auto_fix:
+        next_action = "fo_apply()"
+        next_reason = f"{auto_fix_count} auto-fix(es) ready"
+        alternatives = ["Investigate manually first", "fo_search() for more context"]
+    elif browser_errors:
+        first_error = browser_errors[0]
+        first_investigation = _nav_error_investigation(first_error.get("message", ""), working_dir)
+        source = first_investigation.get("source_guess", {})
+        if source.get("file"):
+            next_action = f"Read {source['file']}:{source.get('line_range', '1-50')}"
+            next_reason = "Investigate first error"
+        else:
+            next_action = "fo_search() with error keywords"
+            next_reason = "Find similar past solutions"
+        alternatives = ["Check browser console for stack trace", "grep for error message"]
+    else:
+        next_action = "Continue with current task"
+        next_reason = "No blocking errors"
+        alternatives = []
+
+    lines.append(f"→ Suggested: {next_action}")
+    lines.append(f"  ({next_reason})")
+    if alternatives:
+        lines.append("")
+        lines.append("  Alternatives:")
+        for alt in alternatives[:2]:
+            lines.append(f"    • {alt}")
+
+    return "\n".join(lines)
 
 
 @mcp.tool()
@@ -10031,11 +11172,13 @@ def fo_apply(fix_id: str = "") -> str:
     Call this after fo_errors() shows auto-fixes ready.
     Without fix_id, applies ALL auto-fixes (confidence ≥90%).
 
+    Navigator V1: Returns guided fix with verification step.
+
     Args:
         fix_id: Specific fix ID to apply, or empty for all auto-fixes
 
     Returns:
-        Instructions for what to fix
+        Guided fix instructions with next_action
     """
     error, _ = _universal_gate("fo_apply")
     if error:
@@ -10052,34 +11195,104 @@ def fo_apply(fix_id: str = "") -> str:
         )
 
         if not auto_fixes or repeat_gate_result.level == "silent":
-            return "No auto-fixes pending. Run `fo_errors()` first."
+            # Navigator V1: No fixes - provide alternatives
+            return _nav_response(
+                summary="No auto-fixes pending",
+                context="Run fo_errors() first to check for fixable errors",
+                next_action="fo_errors()",
+                next_action_reason="Check for browser errors",
+                alternatives=["fo_search() for past solutions", "Continue with current task"],
+                confidence="high"
+            )
 
         # Filter by fix_id if provided
         if fix_id:
             auto_fixes = [f for f in auto_fixes if f["id"] == fix_id]
             if not auto_fixes:
-                return f"Fix '{fix_id}' not found or not auto-applicable."
+                return _nav_response(
+                    summary=f"Fix '{fix_id}' not found",
+                    context="The specified fix ID is not available or already applied",
+                    next_action="fo_errors()",
+                    next_action_reason="Check available fixes",
+                    confidence="high"
+                )
 
         lines = []
 
-        for fix in auto_fixes:
-            # Concise fix format
-            lines.append(f"**Fix:** {fix['solution_text'][:100]}")
-            if fix.get("files"):
-                files_str = ", ".join(fix["files"]) if isinstance(fix["files"], list) else fix["files"]
-                lines.append(f"**File:** {files_str}")
+        # Navigator V1: Summary
+        lines.append(f"🔧 {len(auto_fixes)} fix(es) ready to apply")
+        lines.append("")
+
+        for i, fix in enumerate(auto_fixes, 1):
+            # Navigator V1: Structured fix output
+            error_msg = fix.get("error_message", "Unknown error")[:80]
+            solution = fix.get("solution_text", "")
+            confidence = fix.get("confidence", 90)
+            based_on = fix.get("based_on_commit") or fix.get("matched_solution_id") or "past solution"
+
+            lines.append(f"## Fix #{i}: {error_msg}")
             lines.append("")
+
+            # Root cause (if available)
+            root_cause = fix.get("root_cause") or fix.get("pattern")
+            if root_cause:
+                lines.append(f"**Root cause:** {root_cause[:100]}")
+
+            # Solution
+            lines.append(f"**Solution:** {solution[:150]}")
+
+            # File and location
+            if fix.get("files"):
+                files_list = fix["files"] if isinstance(fix["files"], list) else [fix["files"]]
+                lines.append(f"**File:** {', '.join(files_list)}")
+                if fix.get("line"):
+                    lines.append(f"**Line:** {fix['line']}")
+
+            # Before/After if available
+            if fix.get("before") and fix.get("after"):
+                lines.append("")
+                lines.append("**Before:**")
+                lines.append(f"```\n{fix['before'][:200]}\n```")
+                lines.append("**After:**")
+                lines.append(f"```\n{fix['after'][:200]}\n```")
+
+            # Confidence and basis
+            lines.append("")
+            lines.append(f"**Confidence:** {confidence}%")
+            lines.append(f"**Based on:** {based_on}")
 
             # Mark as applied
             mark_fix_applied(fix["id"], success=True)
+            lines.append("")
 
-        completion_gate_result = _evaluate_current_completion_gate(
-            tool_name="fo_apply",
-            bug_fix_completed=True,
-            fo_solved_called=False,
-        )
-        if completion_gate_result.level == "warn":
-            lines.append("Run `fo_solved(error, solution)` when done.")
+        # Navigator V1: Verification step
+        lines.append("---")
+        lines.append("**Verification:**")
+        first_fix = auto_fixes[0]
+        if first_fix.get("files"):
+            files_list = first_fix["files"] if isinstance(first_fix["files"], list) else [first_fix["files"]]
+            lines.append(f"  1. Apply the change to {files_list[0]}")
+            lines.append(f"  2. Refresh browser / re-run to verify fix")
+            lines.append(f"  3. Call fo_solved() when confirmed")
+        else:
+            lines.append(f"  1. Apply the suggested change")
+            lines.append(f"  2. Test the fix")
+            lines.append(f"  3. Call fo_solved() when confirmed")
+
+        # Navigator V1: next_action
+        lines.append("")
+        if first_fix.get("files"):
+            files_list = first_fix["files"] if isinstance(first_fix["files"], list) else [first_fix["files"]]
+            lines.append(f"→ Suggested: Edit {files_list[0]}")
+            lines.append(f"  (Apply fix #{1})")
+        else:
+            lines.append(f"→ Suggested: Apply the fix above")
+            lines.append(f"  (Then verify and call fo_solved)")
+
+        lines.append("")
+        lines.append("  Alternatives:")
+        lines.append("    • fo_errors() — see full error context")
+        lines.append("    • fo_search() — find related solutions")
 
         return "\n".join(lines)
 
