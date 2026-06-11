@@ -2160,7 +2160,10 @@ function renderPendingMemories() {
     list.innerHTML = html;
   }
 
-  nextTaskInput.value = nextTask;
+  // Polling must not overwrite the field while the user is editing it.
+  if (document.activeElement !== nextTaskInput) {
+    nextTaskInput.value = nextTask;
+  }
 }
 
 function togglePendingGroup(groupKey) {
@@ -2209,6 +2212,7 @@ async function savePendingMemories() {
     if (data.status === 'ok') {
       showToast(`Saved ${data.total} memories`);
       document.getElementById('customMemoryInput').value = '';
+      document.getElementById('nextTaskInput').value = '';
       loadPendingMemories();
     } else {
       showToast('Save failed: ' + (data.message || 'Unknown error'));
@@ -2229,6 +2233,7 @@ async function clearPendingMemories() {
 
     if (data.status === 'ok') {
       showToast(`Cleared ${data.cleared} items`);
+      document.getElementById('nextTaskInput').value = '';
       loadPendingMemories();
     }
   } catch (e) {
