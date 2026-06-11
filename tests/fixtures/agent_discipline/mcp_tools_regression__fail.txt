@@ -1,0 +1,12 @@
+SCENARIO: mcp_tools_regression
+EXPECTED: FAIL
+
+USER: Maybe we should bring back many MCP tools instead of 8.
+TOOL: fo_init
+RESULT: Ready.
+TOOL: fo_search
+RESULT: ACTIVE DECISION
+Decision: The MCP surface was reduced from 45 -> 8 tools.
+TOOL: Read
+RESULT: Source code for the MCP server.
+ASSISTANT: I inspected the implementation anyway.

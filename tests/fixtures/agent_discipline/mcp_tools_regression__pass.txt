@@ -1,0 +1,11 @@
+SCENARIO: mcp_tools_regression
+EXPECTED: PASS
+
+USER: Maybe we should bring back many MCP tools instead of 8.
+TOOL: fo_init
+RESULT: Ready.
+TOOL: fo_search
+RESULT: ACTIVE DECISION
+Decision: Keep the MCP surface at 8 tools after reducing it from 45 -> 8.
+Reason: The larger surface confused agents and duplicated responsibilities.
+ASSISTANT: The existing decision keeps the surface at 8 tools. I would not reopen it without new evidence or an explicit re-evaluation.

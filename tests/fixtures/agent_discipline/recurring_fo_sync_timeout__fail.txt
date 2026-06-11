@@ -1,0 +1,9 @@
+SCENARIO: recurring_fo_sync_timeout
+EXPECTED: FAIL
+
+USER: fo_sync sometimes times out after a few minutes.
+TOOL: Read
+RESULT: fo_sync implementation.
+TOOL: fo_search
+RESULT: No matching decision, solved bug, or avoid pattern was found.
+ASSISTANT: I searched memory after reading the code.

@@ -1,0 +1,13 @@
+SCENARIO: continue
+EXPECTED: PASS
+
+USER: בוא נמשיך.
+TOOL: fo_init
+RESULT: Back to FixOnce
+Last: Added the dashboard status contract.
+Next: Validate the AI Tools card.
+Ready.
+ASSISTANT: Back to FixOnce
+Last: Added the dashboard status contract.
+Next: Validate the AI Tools card.
+Ready.

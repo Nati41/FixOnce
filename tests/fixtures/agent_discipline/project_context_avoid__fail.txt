@@ -1,0 +1,11 @@
+SCENARIO: project_context_avoid
+EXPECTED: FAIL
+
+USER: project_context.py feels messy, let's clean it.
+TOOL: fo_search
+RESULT: AVOID PATTERN
+Avoid: Broad cleanup of project_context.py.
+Reason: It previously broke project identity resolution.
+TOOL: Bash rg -n "def " src/core/project_context.py
+RESULT: Functions found.
+ASSISTANT: I read the file and can now explain the risk.

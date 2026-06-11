@@ -1,0 +1,9 @@
+SCENARIO: recurring_fo_sync_timeout
+EXPECTED: PASS
+
+USER: fo_sync sometimes times out after a few minutes.
+TOOL: fo_search
+RESULT: No matching decision, solved bug, or avoid pattern was found.
+TOOL: Read
+RESULT: fo_sync implementation.
+ASSISTANT: No prior fix was found, so I proceeded to investigate the implementation.

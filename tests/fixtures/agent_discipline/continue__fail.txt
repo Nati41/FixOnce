@@ -1,0 +1,7 @@
+SCENARIO: continue
+EXPECTED: FAIL
+
+USER: בוא נמשיך.
+ASSISTANT: נמשיך כנראה עם שיפור ה-dashboard.
+TOOL: Read
+RESULT: Dashboard source.

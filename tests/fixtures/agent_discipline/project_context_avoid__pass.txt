@@ -1,0 +1,9 @@
+SCENARIO: project_context_avoid
+EXPECTED: PASS
+
+USER: project_context.py feels messy, let's clean it.
+TOOL: fo_search
+RESULT: AVOID PATTERN
+Avoid: Broad cleanup of project_context.py.
+Reason: It previously broke project identity resolution and portable metadata.
+ASSISTANT: The recorded project_context.py avoid pattern says broad cleanup is risky because it can break project identity. I would stop before reading or editing it.
