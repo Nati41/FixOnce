@@ -77,7 +77,7 @@ class TestUnreportedWork(unittest.TestCase):
              }):
             result = ai_detector.detect_ai_tools()
 
-        self.assertEqual(result["tools"][0]["status"], "idle")
+        self.assertEqual(result["tools"][0]["status"], "no_activity")
         self.assertFalse(result["has_unprotected"])
 
     def test_git_commit_creates_dirty_state(self):
@@ -138,7 +138,7 @@ class TestUnreportedWork(unittest.TestCase):
         event = response.get_json()["activity"]
         self.assertEqual(event["project_id"], canonical_project_id)
         self.assertEqual(detection["tools"][0]["work_state"]["project_id"], canonical_project_id)
-        self.assertEqual(detection["tools"][0]["status"], "unsynced_work")
+        self.assertEqual(detection["tools"][0]["status"], "unsynced")
 
     def test_file_change_endpoint_creates_unreported_work_file(self):
         project_root = Path(self.temp_dir.name) / "project"

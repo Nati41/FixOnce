@@ -16,6 +16,7 @@ import server as server_module
 import api.status as status_module
 import core.mcp_health as mcp_health
 import core.mcp_session_health as session_health
+import core.unreported_work as unreported_work
 
 
 class TestDashboardSnapshotMcpImport(unittest.TestCase):
@@ -61,6 +62,7 @@ class TestDashboardSnapshotMcpImport(unittest.TestCase):
             with patch.object(status_module, "USER_DATA_DIR", user_data_dir), \
                  patch.object(session_health, "STATE_FILE", user_data_dir / "mcp_session_health.json"), \
                  patch.object(session_health, "LOG_FILE", user_data_dir / "logs" / "mcp_session_health.jsonl"), \
+                 patch.object(unreported_work, "STATE_FILE", user_data_dir / "unreported_work.json"), \
                  patch.object(builtins, "__import__", side_effect=tracking_import):
                 response = client.get("/api/dashboard_snapshot")
 
@@ -139,7 +141,7 @@ class TestDashboardSnapshotMcpImport(unittest.TestCase):
         self.assertTrue(active_agent["is_connected"])
         self.assertEqual(active_agent["name"], "claude")
         self.assertEqual(active_agent["last_agent_name"], "claude")
-        self.assertEqual(active_agent["status"], "idle")
+        self.assertEqual(active_agent["status"], "no_activity")
 
     def test_recent_uncertain_identity_does_not_guess_agent_name(self):
         active_agent = status_module._get_active_agent_status({
