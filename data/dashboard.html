@@ -670,6 +670,63 @@ input:checked + .slider:before {
   font-family: monospace;
 }
 
+/* Activity Panel V1 */
+.ai-tool-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 8px;
+}
+
+.ai-tool-header-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ai-tool-indicator {
+  font-size: 10px;
+}
+
+.ai-tool-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.ai-tool-activity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-tool-activity-row .activity-icon {
+  margin-right: 4px;
+}
+
+.ai-tool-activity-row .activity-time {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.ai-tool-sync-status {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  font-size: 11px;
+}
+
+.ai-tool-sync-status.synced {
+  color: var(--green);
+}
+
+.ai-tool-sync-status.unsynced {
+  color: #ffc107;
+}
+
 /* Hidden utility */
 .hidden {
   display: none !important;
@@ -2262,55 +2319,79 @@ async function loadAITools() {
       return;
     }
 
-    // Show tools that are installed, running, or have behavioral state
+    // Show only tools that are currently active or have unsynced work
     const relevantTools = data.tools.filter(t =>
-      t.installed === true || t.running === true || ['connected', 'protected', 'no_activity', 'not_running', 'unsynced', 'unprotected'].includes(t.status)
+      t.status === 'connected' || t.status === 'protected' || t.status === 'unsynced' || t.status === 'unprotected'
     );
 
     if (relevantTools.length === 0) {
-      list.innerHTML = '<div class="agents-empty">No AI tools detected</div>';
+      list.innerHTML = '<div class="agents-empty">No active agents</div>';
       warning.style.display = 'none';
       return;
     }
 
-    list.innerHTML = relevantTools.map(tool => {
-      let icon, statusClass, statusText;
+    // Sync tool labels
+    const SYNC_LABELS = {
+      'fo_sync': '💾 Saved progress',
+      'fo_solved': '📝 Recorded solution',
+      'fo_decide': '📌 Recorded decision'
+    };
 
-      if (tool.status === 'protected' || tool.status === 'connected') {
-        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>';
-        statusClass = 'connected';
-        statusText = 'Protected';
-      } else if (tool.status === 'unsynced') {
-        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffc107" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
-        statusClass = 'unprotected';
-        statusText = 'Working...';
-      } else if (tool.status === 'unprotected') {
-        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
-        statusClass = 'unprotected';
-        statusText = 'Unprotected Work';
-      } else {
-        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
-        statusClass = 'not-running';
-        statusText = 'No Activity';
+    list.innerHTML = relevantTools.map(tool => {
+      const ws = tool.work_state || {};
+      const isActive = tool.status === 'protected' || tool.status === 'connected' || tool.status === 'unsynced';
+      const isUnsynced = tool.status === 'unsynced' || ws.dirty;
+      const isIdle = tool.status === 'no_activity' || tool.status === 'not_running';
+
+      // Status indicator
+      let indicator = '⚪';
+      if (tool.status === 'unprotected') {
+        indicator = '🔴';
+      } else if (isUnsynced) {
+        indicator = '🟡';
+      } else if (isActive) {
+        indicator = '🟢';
       }
 
-      const ws = tool.work_state || {};
-      const hasTimestamps = ws.last_work_at || ws.last_sync_at || ws.dirty_since;
-      const timestampsHtml = hasTimestamps ? `
-        <div class="ai-tool-timestamps">
-          ${ws.last_work_at ? `<span class="ts-label">Last activity:</span><span class="ts-value">${formatLocalTime(ws.last_work_at)}</span>` : ''}
-          ${ws.last_sync_at ? `<span class="ts-label">Last sync:</span><span class="ts-value">${formatLocalTime(ws.last_sync_at)}</span>` : ''}
-          ${ws.dirty_since ? `<span class="ts-label">Dirty since:</span><span class="ts-value">${formatLocalTime(ws.dirty_since)}</span>` : ''}
-        </div>
-      ` : '';
+      // Activity rows
+      const activityRows = [];
+
+      // Last sync action
+      if (ws.last_sync_tool && ws.last_sync_at) {
+        const label = SYNC_LABELS[ws.last_sync_tool] || '💾 Synced';
+        activityRows.push(`
+          <div class="ai-tool-activity-row">
+            <span>${label}</span>
+            <span class="activity-time">${relativeTime(ws.last_sync_at)}</span>
+          </div>
+        `);
+      }
+
+      // Files changed (if dirty)
+      const filesCount = (ws.files || []).length;
+      if (filesCount > 0 && ws.dirty) {
+        activityRows.push(`
+          <div class="ai-tool-activity-row">
+            <span>📂 ${filesCount} file${filesCount > 1 ? 's' : ''} changed</span>
+            ${ws.last_work_at ? `<span class="activity-time">${relativeTime(ws.last_work_at)}</span>` : ''}
+          </div>
+        `);
+      }
+
+      // Sync status
+      const syncStatus = isUnsynced
+        ? '<div class="ai-tool-sync-status unsynced">⚠ Progress not saved</div>'
+        : (ws.last_sync_at ? '<div class="ai-tool-sync-status synced">✓ Memory in sync</div>' : '');
 
       return `
-        <div class="ai-tool-row">
-          <span class="ai-tool-icon">${icon}</span>
-          <span class="ai-tool-name">${escapeHtml(tool.name)}</span>
-          <span class="ai-tool-status ${statusClass}">${statusText}</span>
+        <div class="ai-tool-header">
+          <span class="ai-tool-header-name">${escapeHtml(tool.name)}</span>
+          <span class="ai-tool-indicator">${indicator}</span>
         </div>
-        ${timestampsHtml}
+        <div class="ai-tool-activity">
+          ${activityRows.length > 0 ? activityRows.join('') : '<div class="ai-tool-activity-row" style="color: var(--text-dim);">No recent activity</div>'}
+          ${syncStatus}
+        </div>
       `;
     }).join('');
 
