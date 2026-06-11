@@ -2283,7 +2283,7 @@ async function loadAITools() {
       } else if (tool.status === 'unsynced') {
         icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffc107" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
         statusClass = 'unprotected';
-        statusText = 'Work Not Reported';
+        statusText = 'Working...';
       } else if (tool.status === 'unprotected') {
         icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
         statusClass = 'unprotected';
@@ -2318,9 +2318,9 @@ async function loadAITools() {
     const unsyncedTool = relevantTools.find(tool => tool.status === 'unsynced');
     const warningText = data.has_unprotected
       ? data.unprotected_warning
-      : (unsyncedTool ? `${unsyncedTool.name} has work that hasn't been reported to FixOnce` : '');
+      : (unsyncedTool ? `${unsyncedTool.name} is working — progress not synced yet` : '');
     const recoveryTool = data.has_unprotected ? 'fo_init' : 'fo_sync';
-    const recoveryHint = data.has_unprotected ? 'connect FixOnce in the AI chat' : 'report the completed work';
+    const recoveryHint = data.has_unprotected ? 'connect FixOnce in the AI chat' : 'save progress';
 
     if (warningText) {
       warning.innerHTML = `
