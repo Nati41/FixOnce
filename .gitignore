@@ -77,3 +77,4 @@ data/global/*
 
 .mcp.json
 src/.fixonce/
+website/.fixonce/
