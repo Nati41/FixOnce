@@ -8,6 +8,39 @@ Say "no fixonce" to disable. Otherwise, FixOnce is mandatory.
 
 ---
 
+## Working Contract
+
+When connected to FixOnce, you work inside persistent project memory.
+
+**Principles:**
+1. Never start from zero — check what the project knows first.
+2. Knowledge belongs to the project — solutions and decisions must be recorded.
+3. No work outside memory — use existing memory or contribute new memory.
+4. Context is deliverable — next session continues without "where were we?"
+5. Known fix first — when AUTO-FIX exists, apply before investigating.
+
+---
+
+## Vision V1
+
+Use these statements to judge future decisions.
+
+| # | Vision | Key |
+|---|--------|-----------|
+| 1 | **Memory belongs to the project, not the AI.** A new agent inherits what the previous one learned. | Ownership |
+| 2 | **Memory is the primary authority.** If a decision exists, it's the source of truth — not code, not git. | Authority |
+| 3 | **Context is deliverable.** Next session continues without "where were we?" | Continuity |
+| 4 | **What's not saved didn't happen.** Every fix, decision, avoid must enter memory. | Recording |
+| 5 | **Simple beats comprehensive.** 8 tools, not 45. Minimal surface. | Simplicity |
+| 6 | **Failures are as valuable as successes.** Avoid patterns prevent repeated mistakes. | Learning |
+
+**How to use:**
+- When choosing between approaches → check which aligns with Vision
+- When adding features → does it support or contradict these statements?
+- When in doubt → simpler is better, recorded is better, memory-first is better
+
+---
+
 ## Opening
 
 1. Call `fo_init(cwd="project-path")` silently — ONCE only
@@ -73,7 +106,7 @@ fo_sync()    → update context
 | `fo_init(cwd)` | Start of conversation |
 | `fo_errors()` | Check browser errors |
 | `fo_apply()` | **When AUTO-FIX READY** (mandatory) |
-| `fo_search(query)` | Before fixing unknown errors |
+| `fo_search(query)` | Before Read/Bash — check project history first |
 | `fo_solved(error, solution)` | After fixing any error |
 | `fo_sync(last_change, next_step)` | After meaningful progress |
 | `fo_decide(text, reason)` | Record decision |
@@ -85,28 +118,17 @@ fo_sync()    → update context
 
 1. **Init first** — `fo_init()` before anything
 2. **Auto-fix first** — if AUTO-FIX READY, use `fo_apply()` immediately
-3. **Search before investigating** — call `fo_search(query)` BEFORE using Read/Bash to debug errors or unfamiliar behavior
-4. **Save fixes** — `fo_solved()` after every fix
-5. **Record decisions** — `fo_decide()` after important project decisions
-6. **Sync on progress** — `fo_sync()` after meaningful work (code changes, decisions, direction changes)
-7. **Specific next_step** — must be actionable: "Fix validation in api/endpoints.py:203" not "Continue work"
-
----
-
-## Voice & Behavior
-
-**NEVER say:**
-- "Let's test...", "Checking tools...", "The format works"
-- "Do you want me to...?" (for obvious actions)
-
-**ALWAYS:**
-- Act immediately on known fixes
-- Speak like a working assistant, not a validator
-- Execute API calls silently, show only results
-
-**When fo_apply returns a fix:**
-1. Apply it to code immediately
-2. Respond: "🔧 Fixed [brief description]"
+3. **Search before investigating** — call `fo_search(query)` BEFORE using Read/Bash. Applies to:
+   - Errors and bugs (check if solved before)
+   - Refactors and architecture changes (check past decisions)
+   - Critical files: project_context.py, MCP tools, timeout/sync logic
+   - "Why did we do it this way" questions
+4. **Stop on AVOID** — when fo_search returns AVOID PATTERN, summarize risks and ask before proceeding
+5. **Use search answers** — if fo_search returns a complete answer (decision, solved bug, explicit reasoning), use it directly — don't verify against code. Search results are authority, not hints.
+6. **Save fixes** — `fo_solved()` after every fix
+7. **Record decisions** — `fo_decide()` after important project decisions
+8. **Sync on progress** — `fo_sync()` after meaningful work (code changes, decisions, direction changes)
+9. **Specific next_step** — must be actionable: "Fix validation in api/endpoints.py:203" not "Continue work"
 
 ---
 
