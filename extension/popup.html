@@ -22,23 +22,19 @@
     }
 
     .logo {
-      font-size: 1.1rem;
-      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #f7f8ff;
+      font-size: 1.05rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
     }
 
-    .logo-o {
-      color: #5e81ac;
-      position: relative;
-    }
-
-    .logo-o::after {
-      content: '✓';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 0.5rem;
-      color: #81b29a;
+    .logo img {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
     }
 
     .domain-badge {
@@ -267,11 +263,61 @@
     .whitelist-info.auto {
       color: #81b29a;
     }
+
+    /* FixOnce approved brand */
+    body {
+      background:
+        radial-gradient(circle at 100% 0%, rgba(48, 217, 112, 0.13), transparent 180px),
+        linear-gradient(145deg, #08131f 0%, #0b1a2a 52%, #0b2031 100%);
+    }
+
+    .domain-badge {
+      margin-left: auto;
+      border: 1px solid rgba(45, 164, 226, 0.18);
+      color: #8aa6bc;
+      background: rgba(45, 164, 226, 0.08);
+    }
+
+    .status-indicator.active {
+      border-color: rgba(48, 217, 112, 0.25);
+      background: rgba(48, 217, 112, 0.09);
+    }
+
+    .status-dot.active {
+      background: #30d970;
+      box-shadow: 0 0 0 3px rgba(48, 217, 112, 0.12);
+    }
+
+    .status-text.active,
+    .whitelist-info.auto {
+      color: #55de8a;
+    }
+
+    .enable-btn,
+    .action-btn {
+      border-color: rgba(45, 164, 226, 0.35);
+      background: linear-gradient(135deg, rgba(31, 103, 196, 0.34), rgba(45, 164, 226, 0.23));
+    }
+
+    .enable-btn:hover,
+    .action-btn:hover {
+      border-color: rgba(45, 164, 226, 0.55);
+      background: linear-gradient(135deg, rgba(31, 103, 196, 0.46), rgba(45, 164, 226, 0.32));
+    }
+
+    .picker-btn {
+      border-color: rgba(48, 217, 112, 0.3);
+      background: linear-gradient(135deg, rgba(45, 164, 226, 0.27), rgba(48, 217, 112, 0.17));
+    }
+
+    .footer a {
+      color: #2fa6e8;
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="logo">Fix<span class="logo-o">O</span>nce</div>
+    <div class="logo"><img src="icon128.png" alt="">FixOnce</div>
     <div class="domain-badge" id="domain-badge">loading...</div>
   </div>
 
