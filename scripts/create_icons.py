@@ -10,7 +10,7 @@ import struct
 import io
 
 FIXONCE_DIR = Path(__file__).parent.parent
-APP_ICON_SOURCE = FIXONCE_DIR / "data" / "fixonce_icon_1024.png"
+APP_ICON_SOURCE = FIXONCE_DIR / "data" / "app-icon.png"
 
 # Colors
 BLUE = (66, 133, 244)      # Google Blue

@@ -68,7 +68,6 @@ copy_data_allowlist() {
         "dashboard.html"
         "dashboard_app.html"
         "dashboard_minimal.html"
-        "fixonce_icon_1024.png"
         "fixonce_logo.svg"
         "global-agent-rules.md"
         "global-claude-md.md"
@@ -205,11 +204,7 @@ create_app_icon() {
     local output_icns="$1"
 
     if [ ! -f "$source_png" ]; then
-        source_png="$PROJECT_ROOT/data/fixonce_icon_1024.png"
-    fi
-
-    if [ ! -f "$source_png" ]; then
-        echo "Missing FixOnce icon asset."
+        echo "Missing FixOnce icon asset: $source_png"
         exit 1
     fi
 

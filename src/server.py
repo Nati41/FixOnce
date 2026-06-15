@@ -327,6 +327,15 @@ def serve_app_icon():
     return "App icon not found", 404
 
 
+@flask_app.route("/favicon.ico")
+def serve_favicon():
+    """Serve the FixOnce favicon (uses app-icon.png)."""
+    icon_path = _asset_path("app-icon.png")
+    if icon_path.exists():
+        return send_file(icon_path, mimetype='image/png')
+    return "Favicon not found", 404
+
+
 @flask_app.route("/fixonce-logo.svg")
 def serve_fixonce_logo():
     """Serve the FixOnce SVG logo."""

@@ -34,7 +34,6 @@ DATA_ALLOWLIST = [
     "data/security.html",
     "data/logo.png",
     "data/app-icon.png",
-    "data/fixonce_icon_1024.png",
     "data/fixonce_logo.svg",
     "data/project_memory.template.json",
     "data/active_project.template.json",
