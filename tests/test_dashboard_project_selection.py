@@ -295,6 +295,49 @@ class TestCanonicalProjectCatalog(unittest.TestCase):
 
             self.assertEqual(projects, [])
 
+    def test_user_folder_testproject_is_not_classified_as_test(self):
+        """C:\\TestProject should NOT be classified as test provenance."""
+        provenance = multi_project_manager.infer_project_provenance(
+            name="TestProject",
+            working_dir="C:\\TestProject",
+            explicit=None,
+        )
+        self.assertEqual(provenance, "user")
+
+    def test_user_folder_testproject_is_not_quarantined(self):
+        """A user folder named TestProject should NOT be quarantined."""
+        with isolated_project_catalog() as (data_dir, projects_dir):
+            # Create real directory outside temp to avoid temporary provenance
+            real_dir = Path.home() / ".fixonce-test-TestProject"
+            real_dir.mkdir(exist_ok=True)
+            try:
+                write_project(
+                    projects_dir,
+                    "TestProjecte5e5d39b",
+                    "TestProject",
+                    str(real_dir),
+                )
+
+                projects = multi_project_manager.list_projects()
+
+                self.assertEqual(len(projects), 1)
+                self.assertEqual(projects[0]["name"], "TestProject")
+                self.assertEqual(projects[0]["provenance"], "user")
+                self.assertIsNone(
+                    multi_project_manager._project_quarantine_reason(projects[0])
+                )
+            finally:
+                real_dir.rmdir()
+
+    def test_fixture_testproject_underscore_is_still_classified_as_test(self):
+        """testproject_abc123 fixture path should still be classified as test."""
+        provenance = multi_project_manager.infer_project_provenance(
+            name="testproject_abc123",
+            working_dir="/tmp/testproject_abc123",
+            explicit=None,
+        )
+        self.assertEqual(provenance, "test")
+
 
 if __name__ == "__main__":
     unittest.main()

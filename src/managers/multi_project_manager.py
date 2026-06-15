@@ -89,7 +89,7 @@ TEST_PROJECT_NAME_MARKERS = (
     "fixonce_boundary_test_",
     "fixonce_stress_test_project",
     "stress_test_project",
-    "testproject",
+    "testproject_",
 )
 
 # Installation data dir (for templates only)
@@ -264,7 +264,7 @@ def infer_project_provenance(
     if (
         normalized_name == "test"
         or normalized_name.startswith(TEST_PROJECT_NAME_MARKERS)
-        or "testproject" in normalized_name
+        or "testproject_" in normalized_name
         or any(marker in lowered_path for marker in TEST_PROJECT_NAME_MARKERS)
     ):
         return "test"
