@@ -47,6 +47,7 @@ DEFAULT_PORT = 5000
 PORT_RANGE = range(DEFAULT_PORT, DEFAULT_PORT + 10)
 START_TIMEOUT_SECONDS = 12.0
 BOOTSTRAP_HEALTH_TIMEOUT_SECONDS = 45.0
+AUTOSTART_SUBPROCESS_TIMEOUT_SECONDS = 30.0
 SPLASH_STEPS = {
     "starting": "Starting FixOnce...",
     "checking": "Checking server...",
@@ -542,12 +543,16 @@ Register-ScheduledTask `
   -Principal $principal `
   -Force | Out-Null
 """
-    result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
-        capture_output=True,
-        text=True,
-        creationflags=no_window_creationflags(),
-    )
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            timeout=AUTOSTART_SUBPROCESS_TIMEOUT_SECONDS,
+            creationflags=no_window_creationflags(),
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"PowerShell timed out after {AUTOSTART_SUBPROCESS_TIMEOUT_SECONDS}s"
     if result.returncode == 0:
         return True, ""
     detail = (result.stderr or result.stdout or "").strip()
@@ -559,24 +564,28 @@ def _register_user_logon_task_schtasks(
     command: list[str],
 ) -> tuple[bool, str]:
     """Fallback per-user task registration without /IT (avoids elevation quirks)."""
-    result = subprocess.run(
-        [
-            "schtasks",
-            "/create",
-            "/tn",
-            task_name,
-            "/tr",
-            subprocess.list2cmdline(command),
-            "/sc",
-            "onlogon",
-            "/rl",
-            "LIMITED",
-            "/f",
-        ],
-        capture_output=True,
-        text=True,
-        creationflags=no_window_creationflags(),
-    )
+    try:
+        result = subprocess.run(
+            [
+                "schtasks",
+                "/create",
+                "/tn",
+                task_name,
+                "/tr",
+                subprocess.list2cmdline(command),
+                "/sc",
+                "onlogon",
+                "/rl",
+                "LIMITED",
+                "/f",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=AUTOSTART_SUBPROCESS_TIMEOUT_SECONDS,
+            creationflags=no_window_creationflags(),
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"schtasks timed out after {AUTOSTART_SUBPROCESS_TIMEOUT_SECONDS}s"
     if result.returncode == 0:
         return True, ""
     detail = (result.stderr or result.stdout or "").strip()
@@ -671,12 +680,17 @@ $iconPath = Join-Path {_powershell_single_quote(working_directory)} 'FixOnce.exe
 if (Test-Path $iconPath) {{ $shortcut.IconLocation = "$iconPath,0" }}
 $shortcut.Save()
 """
-    result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
-        capture_output=True,
-        text=True,
-        creationflags=no_window_creationflags(),
-    )
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            timeout=AUTOSTART_SUBPROCESS_TIMEOUT_SECONDS,
+            creationflags=no_window_creationflags(),
+        )
+    except subprocess.TimeoutExpired:
+        write_log(f"Startup shortcut setup timed out after {AUTOSTART_SUBPROCESS_TIMEOUT_SECONDS}s")
+        return False
     if result.returncode == 0 and shortcut_path.exists():
         write_log(f"Startup shortcut ready: {shortcut_path}")
         return True
