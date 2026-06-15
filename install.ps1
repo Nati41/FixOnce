@@ -27,6 +27,9 @@ if (-not (Test-Path $PackagedExe)) {
     if (Test-Path $DistExe) { $PackagedExe = $DistExe }
 }
 
+# Packaged mode: FixOnce.exe exists beside install.ps1 (skip Python, use --bootstrap)
+$PackagedMode = Test-Path $PackagedExe
+
 function Test-FixOnceInstalled {
     if (Test-Path $InstalledExe) { return $true }
 
@@ -226,99 +229,106 @@ function Install-Shortcuts {
     }
 }
 
-# ============ Step 1: Check Python ============
-Write-Step "Checking Python..."
-
-$pythonCmd = $null
-foreach ($cmd in @("python", "python3", "py")) {
-    $found = Get-Command $cmd -ErrorAction SilentlyContinue
-    if ($found) {
-        $pythonCmd = $found.Source
-        break
-    }
-}
-
-if (-not $pythonCmd) {
-    Write-Err "Python not found!"
-    Write-Host ""
-    Write-Host "  Please install Python 3.9+ from:" -ForegroundColor Yellow
-    Write-Host "  https://www.python.org/downloads/" -ForegroundColor White
-    Write-Host ""
-    Write-Host "  IMPORTANT: Check 'Add Python to PATH' during installation!" -ForegroundColor Yellow
-    Write-Host ""
-    Read-Host "Press Enter to exit"
-    exit 1
-}
-
-# Check Python version
-$versionOutput = & $pythonCmd --version 2>&1
-$versionMatch = [regex]::Match($versionOutput, "(\d+)\.(\d+)")
-if ($versionMatch.Success) {
-    $major = [int]$versionMatch.Groups[1].Value
-    $minor = [int]$versionMatch.Groups[2].Value
-
-    if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 9)) {
-        Write-Err "Python $major.$minor is too old. Need Python 3.9+"
-        Write-Host "  Download from: https://www.python.org/downloads/"
-        Read-Host "Press Enter to exit"
-        exit 1
-    }
-    Write-OK "Python $major.$minor"
+# ============ Step 1-3: Python/pip/dependencies (source mode only) ============
+if ($PackagedMode) {
+    Write-Host "`n[1-3/5] Packaged mode detected - skipping Python/pip setup" -ForegroundColor Green
+    $script:step = 4
 } else {
-    Write-Warn "Could not determine Python version, continuing..."
-}
+    Write-Step "Checking Python..."
 
-# ============ Step 2: Check pip ============
-Write-Step "Checking pip..."
-
-try {
-    $pipCheck = & $pythonCmd -m pip --version 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "pip not found"
+    $pythonCmd = $null
+    foreach ($cmd in @("python", "python3", "py")) {
+        $found = Get-Command $cmd -ErrorAction SilentlyContinue
+        if ($found) {
+            $pythonCmd = $found.Source
+            break
+        }
     }
-    Write-OK "pip available"
-} catch {
-    Write-Warn "pip not found, attempting to install..."
-    try {
-        & $pythonCmd -m ensurepip --upgrade 2>&1 | Out-Null
-        Write-OK "pip installed"
-    } catch {
-        Write-Err "Could not install pip. Please run: python -m ensurepip"
+
+    if (-not $pythonCmd) {
+        Write-Err "Python not found!"
+        Write-Host ""
+        Write-Host "  Please install Python 3.9+ from:" -ForegroundColor Yellow
+        Write-Host "  https://www.python.org/downloads/" -ForegroundColor White
+        Write-Host ""
+        Write-Host "  IMPORTANT: Check 'Add Python to PATH' during installation!" -ForegroundColor Yellow
+        Write-Host ""
         Read-Host "Press Enter to exit"
         exit 1
     }
-}
 
-# ============ Step 3: Install Dependencies ============
-Write-Step "Installing dependencies..."
+    # Check Python version
+    $versionOutput = & $pythonCmd --version 2>&1
+    $versionMatch = [regex]::Match($versionOutput, "(\d+)\.(\d+)")
+    if ($versionMatch.Success) {
+        $major = [int]$versionMatch.Groups[1].Value
+        $minor = [int]$versionMatch.Groups[2].Value
 
-$requirementsPath = Join-Path $ScriptDir "requirements.txt"
-if (-not (Test-Path $requirementsPath)) {
-    Write-Err "requirements.txt not found at $requirementsPath"
-    Read-Host "Press Enter to exit"
-    exit 1
-}
-
-try {
-    $pipOutput = & $pythonCmd -m pip install -r $requirementsPath 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        # Check for common errors
-        if ($pipOutput -match "Microsoft Visual C\+\+") {
-            Write-Err "VC++ Build Tools required for some packages"
-            Write-Host ""
-            Write-Host "  Download from:" -ForegroundColor Yellow
-            Write-Host "  https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor White
-            Write-Host ""
-            Write-Host "  Install 'Desktop development with C++'" -ForegroundColor Yellow
+        if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 9)) {
+            Write-Err "Python $major.$minor is too old. Need Python 3.9+"
+            Write-Host "  Download from: https://www.python.org/downloads/"
             Read-Host "Press Enter to exit"
             exit 1
         }
-        throw $pipOutput
+        Write-OK "Python $major.$minor"
+    } else {
+        Write-Warn "Could not determine Python version, continuing..."
     }
-    Write-OK "Dependencies installed"
-} catch {
-    Write-Warn "Some dependencies may have failed: $_"
-    Write-Host "  Try running manually: pip install -r requirements.txt"
+
+    # ============ Step 2: Check pip ============
+    Write-Step "Checking pip..."
+
+    try {
+        $pipCheck = & $pythonCmd -m pip --version 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "pip not found"
+        }
+        Write-OK "pip available"
+    } catch {
+        Write-Warn "pip not found, attempting to install..."
+        try {
+            & $pythonCmd -m ensurepip --upgrade 2>&1 | Out-Null
+            Write-OK "pip installed"
+        } catch {
+            Write-Err "Could not install pip. Please run: python -m ensurepip"
+            Read-Host "Press Enter to exit"
+            exit 1
+        }
+    }
+}
+
+# ============ Step 3: Install Dependencies (source mode only) ============
+if (-not $PackagedMode) {
+    Write-Step "Installing dependencies..."
+
+    $requirementsPath = Join-Path $ScriptDir "requirements.txt"
+    if (-not (Test-Path $requirementsPath)) {
+        Write-Err "requirements.txt not found at $requirementsPath"
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
+
+    try {
+        $pipOutput = & $pythonCmd -m pip install -r $requirementsPath 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            # Check for common errors
+            if ($pipOutput -match "Microsoft Visual C\+\+") {
+                Write-Err "VC++ Build Tools required for some packages"
+                Write-Host ""
+                Write-Host "  Download from:" -ForegroundColor Yellow
+                Write-Host "  https://visualstudio.microsoft.com/visual-cpp-build-tools/" -ForegroundColor White
+                Write-Host ""
+                Write-Host "  Install 'Desktop development with C++'" -ForegroundColor Yellow
+                Read-Host "Press Enter to exit"
+                exit 1
+            }
+            throw $pipOutput
+        }
+        Write-OK "Dependencies installed"
+    } catch {
+        Write-Warn "Some dependencies may have failed: $_"
+        Write-Host "  Try running manually: pip install -r requirements.txt"
+    }
 }
 
 # ============ Step 4: Install Application Files ============
@@ -345,22 +355,39 @@ try {
     exit 1
 }
 
-# ============ Step 6: Configure AI App Connections ============
-Write-Step "Connecting FixOnce to your AI apps..."
+# ============ Step 6-7: Configure MCP + Auto-Start ============
+if ($PackagedMode) {
+    Write-Step "Running bootstrap (MCP + auto-start)..."
 
-$mcpServerPath = Join-Path $ScriptDir "src\mcp_server\mcp_memory_server_v2.py"
-$srcPath = Join-Path $ScriptDir "src"
-$mcpConfig = @{
-    mcpServers = @{
-        fixonce = @{
-            command = $pythonCmd
-            args = @($mcpServerPath)
-            env = @{
-                PYTHONPATH = $srcPath
+    $bootstrapExe = Join-Path $InstallDir "FixOnce.exe"
+    try {
+        $bootstrapResult = Start-Process -FilePath $bootstrapExe -ArgumentList "--bootstrap" -Wait -PassThru -NoNewWindow
+        if ($bootstrapResult.ExitCode -eq 0) {
+            Write-OK "Bootstrap completed (MCP + auto-start configured)"
+        } else {
+            Write-Warn "Bootstrap returned exit code $($bootstrapResult.ExitCode)"
+            Write-Host "  MCP or auto-start may need manual configuration."
+        }
+    } catch {
+        Write-Warn "Could not run bootstrap: $_"
+        Write-Host "  Run FixOnce.exe --bootstrap manually to complete setup."
+    }
+} else {
+    Write-Step "Connecting FixOnce to your AI apps..."
+
+    $mcpServerPath = Join-Path $ScriptDir "src\mcp_server\mcp_memory_server_v2.py"
+    $srcPath = Join-Path $ScriptDir "src"
+    $mcpConfig = @{
+        mcpServers = @{
+            fixonce = @{
+                command = $pythonCmd
+                args = @($mcpServerPath)
+                env = @{
+                    PYTHONPATH = $srcPath
+                }
             }
         }
     }
-}
 
 # Claude Code config
 $claudeConfig = Join-Path $env:USERPROFILE ".claude.json"
@@ -526,6 +553,7 @@ if ($existingTask) {
         Write-Host "  You can still launch FixOnce from the app icon."
     }
 }
+}  # End of source mode (else block for MCP/autostart)
 
 # ============ Step 8: Chrome Extension ============
 Write-Step "Optional browser extension setup..."
