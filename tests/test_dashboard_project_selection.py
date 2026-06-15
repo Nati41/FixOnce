@@ -67,7 +67,38 @@ def write_project(
 
 
 class TestDashboardProjectSelection(unittest.TestCase):
-    def test_existing_dashboard_selection_is_not_replaced_by_session_init(self):
+    def test_fo_init_updates_dashboard_to_current_ai_project(self):
+        """When AI connects to a different project, dashboard should update to show it."""
+        existing = {
+            "active_id": "fixonce_abc123",
+            "display_name": "FixOnce",
+            "working_dir": "/projects/fixonce",
+        }
+        expected = {
+            "active_id": "testproject_def456",
+            "display_name": "TestProject",
+            "working_dir": "C:\\TestProject",
+        }
+
+        with patch.object(multi_project_manager, "get_active_project", return_value=existing), \
+             patch.object(multi_project_manager, "set_active_project", return_value=expected) as set_active:
+            result = multi_project_manager.ensure_dashboard_project(
+                "testproject_def456",
+                detected_from="fo_init",
+                display_name="TestProject",
+                working_dir="C:\\TestProject",
+            )
+
+        self.assertEqual(result, expected)
+        set_active.assert_called_once_with(
+            project_id="testproject_def456",
+            detected_from="fo_init",
+            display_name="TestProject",
+            working_dir="C:\\TestProject",
+        )
+
+    def test_fo_init_same_project_returns_early(self):
+        """When AI is already connected to the displayed project, no update needed."""
         selected = {
             "active_id": "project-x",
             "display_name": "Project X",
@@ -77,10 +108,10 @@ class TestDashboardProjectSelection(unittest.TestCase):
         with patch.object(multi_project_manager, "get_active_project", return_value=selected), \
              patch.object(multi_project_manager, "set_active_project") as set_active:
             result = multi_project_manager.ensure_dashboard_project(
-                "project-y",
+                "project-x",
                 detected_from="fo_init",
-                display_name="Project Y",
-                working_dir="/projects/y",
+                display_name="Project X",
+                working_dir="/projects/x",
             )
 
         self.assertEqual(result, selected)

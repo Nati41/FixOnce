@@ -548,15 +548,19 @@ def ensure_dashboard_project(
     working_dir: str = None
 ) -> Dict[str, Any]:
     """
-    Select a project for the dashboard only when no selection exists.
+    Update dashboard to show the project where AI is currently working.
 
-    AI sessions use their own project context for routing. Starting another
-    session must not move an already-open dashboard to a different project.
+    When fo_init connects to a project, the dashboard should reflect that
+    project - users expect the dashboard to show where AI is active.
     """
     active = get_active_project()
-    if active and active.get("active_id"):
+    current_id = active.get("active_id") if active else None
+
+    # Already showing the correct project
+    if current_id == project_id:
         return active
 
+    # Update dashboard to show the AI's current project
     return set_active_project(
         project_id=project_id,
         detected_from=detected_from,
