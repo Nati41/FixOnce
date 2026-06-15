@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from config import USER_DATA_DIR
-from core.unreported_work import get_latest_actor_state
+from core.unreported_work import get_latest_actor_state, should_show_unsynced_warning
 
 
 # Connection freshness thresholds (seconds)
@@ -266,15 +266,15 @@ def detect_ai_tools() -> Dict[str, Any]:
             if behavior_detection_enabled
             else {}
         )
-        dirty = bool(work_state.get("dirty"))
+        has_significant_unsynced = should_show_unsynced_warning(work_state)
 
         # Determine status (behavioral states, not connection states)
         # Priority: MCP connection > process detection (process detection can have false negatives)
-        if behavior_detection_enabled and dirty and not known_connection:
+        if behavior_detection_enabled and has_significant_unsynced and not known_connection:
             status = "unprotected"
             summary["unprotected"] += 1
             unprotected_names.append(tool_config["display_name"])
-        elif behavior_detection_enabled and dirty:
+        elif behavior_detection_enabled and has_significant_unsynced:
             status = "unsynced"
             summary["unsynced_work"] += 1
         elif connected:

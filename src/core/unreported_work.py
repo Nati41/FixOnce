@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import threading
 import time
@@ -17,6 +18,45 @@ from config import USER_DATA_DIR
 STATE_FILE = USER_DATA_DIR / "unreported_work.json"
 SUPPORTED_ACTORS = {"claude", "codex"}
 SYNC_TOOLS = {"fo_sync", "fo_solved", "fo_decide"}
+
+# Files that don't represent meaningful project work
+INSIGNIFICANT_PATH_PATTERNS = [
+    r"\.claude\.json$",
+    r"\.claude/",
+    r"claude_desktop_config\.json$",
+    r"\.cursor/",
+    r"\.codex/",
+    r"website/",
+    r"screenshots?/",
+    r"\.png$",
+    r"\.jpg$",
+    r"\.jpeg$",
+    r"\.gif$",
+    r"\.ico$",
+    r"\.svg$",
+    r"\.webp$",
+    r"package-lock\.json$",
+    r"yarn\.lock$",
+    r"pnpm-lock\.yaml$",
+    r"\.min\.(js|css)$",
+    r"dist/",
+    r"build/",
+    r"node_modules/",
+    r"__pycache__/",
+    r"\.pyc$",
+    r"\.DS_Store$",
+]
+_INSIGNIFICANT_RE = re.compile("|".join(INSIGNIFICANT_PATH_PATTERNS), re.IGNORECASE)
+
+# Minimum significant files before showing warning
+SIGNIFICANCE_THRESHOLD = 3
+
+
+def is_significant_path(file_path: str) -> bool:
+    """Check if a file path represents meaningful project work."""
+    if not file_path:
+        return False
+    return not bool(_INSIGNIFICANT_RE.search(file_path))
 _LOCK = threading.Lock()
 _PROCESS_LOCK_TIMEOUT_SECONDS = 0.25
 
@@ -123,6 +163,7 @@ def mark_work(
 
     timestamp = _now()
     result = {}
+    path_is_significant = is_significant_path(file_path)
 
     def mutate(payload):
         nonlocal result
@@ -130,8 +171,12 @@ def mark_work(
         entry = entries.get(_key(project_id, normalized_actor), {})
         sequence = int(entry.get("last_work_seq") or 0) + 1
         files = list(entry.get("files") or [])
+        significant_files = list(entry.get("significant_files") or [])
+
         if file_path and file_path not in files:
             files.append(file_path)
+        if file_path and path_is_significant and file_path not in significant_files:
+            significant_files.append(file_path)
 
         entry.update({
             "project_id": project_id,
@@ -146,6 +191,7 @@ def mark_work(
             "last_sync_tool": entry.get("last_sync_tool"),
             "last_sync_seq": int(entry.get("last_sync_seq") or 0),
             "files": files[-20:],
+            "significant_files": significant_files[-20:],
             "command": command[:500],
             "source": source,
         })
@@ -184,6 +230,7 @@ def mark_synced(
             "actor": normalized_actor,
             "last_work_seq": 0,
             "files": [],
+            "significant_files": [],
         })
         entry.update({
             "session_id": session_id or entry.get("session_id", ""),
@@ -193,6 +240,7 @@ def mark_synced(
             "last_sync_tool": tool_name,
             "last_sync_seq": int(entry.get("last_work_seq") or 0),
             "files": [],
+            "significant_files": [],
             "command": "",
         })
         entries[_key(project_id, normalized_actor)] = entry
@@ -200,6 +248,18 @@ def mark_synced(
 
     _update_payload(mutate)
     return result
+
+
+def should_show_unsynced_warning(work_state: Dict[str, Any]) -> bool:
+    """Check if work state warrants showing an unsynced warning to the user."""
+    if not work_state.get("dirty"):
+        return False
+
+    significant_files = work_state.get("significant_files") or []
+    if len(significant_files) >= SIGNIFICANCE_THRESHOLD:
+        return True
+
+    return False
 
 
 def get_state(project_id: str, actor: str) -> Dict[str, Any]:

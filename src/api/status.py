@@ -1319,7 +1319,7 @@ def api_dashboard_snapshot():
 
             try:
                 from core.mcp_session_health import get_session_health
-                from core.unreported_work import get_project_states, get_state
+                from core.unreported_work import get_project_states, get_state, should_show_unsynced_warning
 
                 session_health = get_session_health()
                 snapshot["active_agent"] = _get_active_agent_status(session_health)
@@ -1329,7 +1329,7 @@ def api_dashboard_snapshot():
                 if not work_state and selected_project_id:
                     dirty_states = [
                         item for item in get_project_states(selected_project_id)
-                        if item.get("dirty")
+                        if should_show_unsynced_warning(item)
                     ]
                     work_state = max(
                         dirty_states,
@@ -1338,7 +1338,7 @@ def api_dashboard_snapshot():
                     )
                     actor = work_state.get("actor")
 
-                if work_state.get("dirty"):
+                if should_show_unsynced_warning(work_state):
                     behavior_status = (
                         "unsynced" if _has_known_ai_connection(actor) else "unprotected"
                     )
