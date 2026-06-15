@@ -25,7 +25,7 @@ import uuid
 from typing import Optional, Tuple
 from dataclasses import dataclass
 
-from core.windows_subprocess import no_window_creationflags
+from core.windows_subprocess import run_git_command_safe
 
 
 # Enable verbose logging for debugging
@@ -70,6 +70,9 @@ class ProjectContext:
     # Cache for resolved projects (avoid repeated git calls)
     _cache: dict = {}
 
+    # Timeout for each git command (seconds)
+    _GIT_COMMAND_TIMEOUT = 2.0
+
     @classmethod
     def _get_git_info(cls, project_root: str) -> Tuple[Optional[str], Optional[str]]:
         """
@@ -78,59 +81,54 @@ class ProjectContext:
         IMPORTANT: Works from ANY subdirectory within the repo.
         Uses `git rev-parse` to find the actual repo root first.
 
+        Uses run_git_command_safe() to avoid subprocess.run() timeout hang
+        on Windows where communicate() is called twice after timeout.
+
         Returns:
             (remote_url, repo_root) - Either can be None
         """
         try:
             root_path = Path(project_root).resolve()
+            cwd = str(root_path)
 
             # First, try to find the repo root from this path
-            # This works from ANY subdirectory
-            result = subprocess.run(
+            repo_root, success = run_git_command_safe(
                 ['git', 'rev-parse', '--show-toplevel'],
-                cwd=str(root_path),
-                capture_output=True, text=True, timeout=5,
-                creationflags=no_window_creationflags()
+                cwd=cwd,
+                timeout_seconds=cls._GIT_COMMAND_TIMEOUT,
             )
 
-            if result.returncode != 0:
-                # Not inside a git repo
+            if not success or not repo_root:
+                # Not inside a git repo or timeout
                 return (None, None)
 
-            repo_root = result.stdout.strip()
-
             # Get remote URL (prefer origin, fall back to first remote)
-            result = subprocess.run(
+            origin_url, success = run_git_command_safe(
                 ['git', 'remote', 'get-url', 'origin'],
-                cwd=str(root_path),
-                capture_output=True, text=True, timeout=5,
-                creationflags=no_window_creationflags()
+                cwd=cwd,
+                timeout_seconds=cls._GIT_COMMAND_TIMEOUT,
             )
 
-            if result.returncode == 0 and result.stdout.strip():
-                remote_url = result.stdout.strip()
-                # Normalize URL (remove .git suffix, handle SSH vs HTTPS)
-                remote_url = cls._normalize_git_url(remote_url)
+            if success and origin_url:
+                remote_url = cls._normalize_git_url(origin_url)
                 return (remote_url, repo_root)
 
             # No origin, try any remote
-            result = subprocess.run(
+            remotes_output, success = run_git_command_safe(
                 ['git', 'remote'],
-                cwd=str(root_path),
-                capture_output=True, text=True, timeout=5,
-                creationflags=no_window_creationflags()
+                cwd=cwd,
+                timeout_seconds=cls._GIT_COMMAND_TIMEOUT,
             )
 
-            if result.returncode == 0 and result.stdout.strip():
-                first_remote = result.stdout.strip().split('\n')[0]
-                result = subprocess.run(
+            if success and remotes_output:
+                first_remote = remotes_output.split('\n')[0]
+                remote_url_output, success = run_git_command_safe(
                     ['git', 'remote', 'get-url', first_remote],
-                    cwd=str(root_path),
-                    capture_output=True, text=True, timeout=5,
-                    creationflags=no_window_creationflags()
+                    cwd=cwd,
+                    timeout_seconds=cls._GIT_COMMAND_TIMEOUT,
                 )
-                if result.returncode == 0 and result.stdout.strip():
-                    remote_url = cls._normalize_git_url(result.stdout.strip())
+                if success and remote_url_output:
+                    remote_url = cls._normalize_git_url(remote_url_output)
                     return (remote_url, repo_root)
 
             # Git repo but no remote
