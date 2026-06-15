@@ -57,9 +57,7 @@ MAC_ONLY = [
     "Install-Mac.icns",
 ]
 
-WINDOWS_ONLY = [
-    "FixOnce-Icon.png",
-]
+WINDOWS_ONLY = []
 
 
 def copy_file(src_rel: str, dst_root: Path) -> None:
@@ -238,4 +236,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

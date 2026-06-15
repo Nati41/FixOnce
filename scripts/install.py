@@ -1448,8 +1448,6 @@ def add_to_dock_or_desktop():
 
             # Use PowerShell to create shortcut
             bat_path = fixonce_dir / 'FixOnce.bat'
-            icon_path = fixonce_dir / 'FixOnce-Icon.png'
-
             ps_script = f'''
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
