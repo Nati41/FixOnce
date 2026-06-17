@@ -46,6 +46,20 @@ fi
 CONTEXT=$(echo "$RESPONSE" | jq -r '.context // empty')
 COUNT=$(echo "$RESPONSE" | jq -r '.count // 0')
 
+if echo "$CONTEXT" | grep -q "FIXONCE_BLOCKING_WARNING"; then
+  REASON=$(echo "$CONTEXT" | jq -Rs '.')
+  cat <<EOF
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": $REASON
+  }
+}
+EOF
+  exit 0
+fi
+
 if [ -z "$CONTEXT" ] || [ "$COUNT" = "0" ]; then
   echo '{"continue": true}'
   exit 0
