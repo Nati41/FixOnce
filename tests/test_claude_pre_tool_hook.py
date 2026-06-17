@@ -88,6 +88,64 @@ class TestClaudePreToolHook(unittest.TestCase):
         self.assertIn("WINDOWS SUBPROCESS RISK", hook_output["additionalContext"])
         self.assertIn("path=src/core/windows_subprocess.py", curl_args)
 
+    def test_blocks_bash_cat_on_protected_file(self):
+        output, curl_args = self.run_hook(
+            {
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": "cat src/core/project_context.py"},
+            },
+            {
+                "count": 0,
+                "warnings_count": 1,
+                "context": "FIXONCE_BLOCKING_WARNING\nseverity: blocking\nscope: src/core/project_context.py",
+            },
+        )
+
+        hook_output = output["hookSpecificOutput"]
+        self.assertEqual(hook_output["permissionDecision"], "deny")
+        self.assertIn("FIXONCE_BLOCKING_WARNING", hook_output["permissionDecisionReason"])
+        self.assertIn("path=src/core/project_context.py", curl_args)
+
+    def test_blocks_bash_head_with_flags_on_protected_file(self):
+        output, curl_args = self.run_hook(
+            {
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": "head -n 10 src/core/project_context.py"},
+            },
+            {
+                "count": 0,
+                "warnings_count": 1,
+                "context": "FIXONCE_BLOCKING_WARNING\nseverity: blocking",
+            },
+        )
+
+        hook_output = output["hookSpecificOutput"]
+        self.assertEqual(hook_output["permissionDecision"], "deny")
+        self.assertIn("path=src/core/project_context.py", curl_args)
+
+    def test_allows_bash_non_read_commands(self):
+        env = os.environ.copy()
+        env["PATH"] = f"{self.fake_bin}{os.pathsep}{env.get('PATH', '')}"
+        env["HOME"] = str(self.temp_path)
+
+        result = subprocess.run(
+            [str(HOOK)],
+            input=json.dumps({
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": "ls -la"},
+            }),
+            text=True,
+            capture_output=True,
+            cwd=PROJECT_ROOT,
+            env=env,
+            check=True,
+        )
+        output = json.loads(result.stdout)
+        self.assertTrue(output["continue"])
+
 
 if __name__ == "__main__":
     unittest.main()
