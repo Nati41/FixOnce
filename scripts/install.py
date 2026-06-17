@@ -1244,13 +1244,14 @@ def configure_claude_hooks(fixonce_dir: Path) -> bool:
 
 
 def configure_codex_hooks(fixonce_dir: Path) -> bool:
-    """Configure Codex PostToolUse reporting without replacing other hooks."""
+    """Configure Codex hooks without replacing other hooks."""
     hooks_path = Path.home() / ".codex" / "hooks.json"
     current_platform = get_platform()
     hooks_dir = fixonce_dir / "hooks"
-    script_path = hooks_dir / ("post_tool_use.ps1" if current_platform == "windows" else "post_tool_use.sh")
+    post_script_path = hooks_dir / ("post_tool_use.ps1" if current_platform == "windows" else "post_tool_use.sh")
+    pre_script_path = hooks_dir / ("pre_tool_context_codex.ps1" if current_platform == "windows" else "pre_tool_context_codex.sh")
 
-    if not script_path.exists():
+    if not post_script_path.exists():
         return False
 
     try:
@@ -1259,32 +1260,51 @@ def configure_codex_hooks(fixonce_dir: Path) -> bool:
         if hooks_path.exists():
             existing = json.loads(hooks_path.read_text(encoding="utf-8"))
         hooks = existing.setdefault("hooks", {})
-        groups = hooks.setdefault("PostToolUse", [])
 
-        if current_platform == "windows":
-            command = (
-                f'powershell.exe -ExecutionPolicy Bypass -Command '
-                f'"$env:FIXONCE_ACTOR=\'codex\'; & \'{script_path}\'"'
-            )
-        else:
+        def build_command(script_path: Path) -> str:
+            if current_platform == "windows":
+                return (
+                    f'powershell.exe -ExecutionPolicy Bypass -Command '
+                    f'"$env:FIXONCE_ACTOR=\'codex\'; & \'{script_path}\'"'
+                )
             os.chmod(script_path, 0o755)
-            command = f'FIXONCE_ACTOR=codex "{script_path}"'
+            return f'FIXONCE_ACTOR=codex "{script_path}"'
 
-        already_configured = any(
-            command == handler.get("command")
-            for group in groups
-            for handler in group.get("hooks", [])
-            if isinstance(group, dict) and isinstance(handler, dict)
-        )
-        if not already_configured:
+        def append_hook_once(event_name: str, matcher: str, command: str, timeout: int) -> None:
+            groups = hooks.setdefault(event_name, [])
+            already_configured = any(
+                command == handler.get("command")
+                for group in groups
+                for handler in group.get("hooks", [])
+                if isinstance(group, dict) and isinstance(handler, dict)
+            )
+            if already_configured:
+                return
             groups.append({
-                "matcher": "Bash|apply_patch|Edit|Write",
+                "matcher": matcher,
                 "hooks": [{
                     "type": "command",
                     "command": command,
-                    "timeout": 5,
+                    "timeout": timeout,
                 }],
             })
+
+        post_command = build_command(post_script_path)
+        append_hook_once(
+            "PostToolUse",
+            "Bash|exec|exec_command|apply_patch|Edit|Write",
+            post_command,
+            5,
+        )
+
+        if pre_script_path.exists():
+            pre_command = build_command(pre_script_path)
+            append_hook_once(
+                "PreToolUse",
+                "exec|exec_command|apply_patch|Read|Edit|Write|view_file|str_replace_editor",
+                pre_command,
+                3,
+            )
 
         hooks_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
         return True

@@ -1,0 +1,30 @@
+{
+  "warnings": [
+    {
+      "area": "core",
+      "file_pattern": "project_context",
+      "severity": "blocking",
+      "warning": "Previous broad cleanup caused project ID fragmentation (2026-03-28). Three different IDs were generated for the same folder, breaking user memory continuity.",
+      "blocked_actions": ["refactor suggestions", "implementation plans", "code edits", "cleanup proposals"],
+      "allowed_actions": ["explain risk", "read-only inspection", "ask user for scope"]
+    },
+    {
+      "area": "core",
+      "file_pattern": "windows_subprocess",
+      "warning": "WINDOWS SUBPROCESS RISK\nPrevious bug: subprocess.run(timeout=...) with git/processes caused hangs on Windows due to inherited handles.\nUse the safe wrapper from core/windows_subprocess.py.\nDo not introduce raw subprocess.run(..., timeout=...) for git/process orchestration without Windows QA.",
+      "severity": "high"
+    },
+    {
+      "area": "managers",
+      "file_pattern": "multi_project",
+      "warning": "DASHBOARD PROJECT SWITCH RISK\nPrevious bug: dashboard showed stale project after AI switched project context.\nWhen changing active_project / selected_project_id logic, verify dashboard updates to the current AI project, not just any active project.\nRun dashboard project selection tests.",
+      "severity": "high"
+    },
+    {
+      "area": "managers",
+      "file_pattern": "project_manager",
+      "warning": "PROJECT CLASSIFICATION RISK\nPrevious bug: real user project named TestProject was incorrectly classified as test provenance and hidden from dashboard.\nDo not classify by broad substring like 'testproject'.\nRun classification/dashboard tests after changes.",
+      "severity": "high"
+    }
+  ]
+}

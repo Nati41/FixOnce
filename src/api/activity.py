@@ -532,3 +532,237 @@ def get_activity_feed():
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def _extract_area(path: str) -> str:
+    """
+    Extract area from a file path.
+
+    Examples:
+        /Users/.../src/auth/login.py → "auth"
+        /Users/.../src/api/status.py → "api"
+        /Users/.../tests/test_auth.py → "tests"
+        /Users/.../hooks/session_start.sh → "hooks"
+    """
+    if not path:
+        return ""
+
+    # Normalize path
+    path = path.replace("\\", "/")
+
+    # Directories that are themselves areas (not containers)
+    direct_areas = ["/tests/", "/hooks/", "/scripts/"]
+    for marker in direct_areas:
+        if marker in path:
+            return marker.strip("/")
+
+    # Container directories - look for subdirectory as area
+    containers = ["/src/", "/lib/", "/app/", "/packages/"]
+    for marker in containers:
+        if marker in path:
+            after_marker = path.split(marker)[1]
+            parts = after_marker.split("/")
+            if parts:
+                area = parts[0]
+                # If it's a file directly in src/, use the filename stem
+                if "." in area:
+                    return Path(area).stem
+                return area
+
+    # Fallback: use parent directory name
+    parent = Path(path).parent.name
+    if parent and parent not in [".", ".."]:
+        return parent
+
+    return ""
+
+
+def _path_matches_area(path: str, area: str) -> bool:
+    """Check if a path belongs to an area."""
+    if not path or not area:
+        return False
+    path_lower = path.lower().replace("\\", "/")
+    area_lower = area.lower()
+    # Match /area/ or /area. patterns
+    return f"/{area_lower}/" in path_lower or f"/{area_lower}." in path_lower
+
+
+def _load_area_warnings():
+    """Load area-specific warnings from config."""
+    warnings_file = Path(__file__).parent.parent.parent / "data" / "area_warnings.json"
+    if warnings_file.exists():
+        try:
+            with open(warnings_file, 'r', encoding='utf-8') as f:
+                return json.load(f).get("warnings", [])
+        except Exception:
+            pass
+    return []
+
+
+def _get_warnings_for_file(path: str, area: str) -> list:
+    """Get applicable warnings for a file path."""
+    warnings = _load_area_warnings()
+    applicable = []
+    filename = Path(path).stem.lower()
+
+    for w in warnings:
+        if w.get("area", "").lower() != area.lower():
+            continue
+        pattern = w.get("file_pattern", "").lower()
+        if pattern and pattern in filename:
+            applicable.append(w)
+
+    return applicable
+
+
+def _format_blocking_warning(warning: dict, file_path: str) -> str:
+    """Format a blocking warning as operational STOP_AND_CONFIRM."""
+    blocked = warning.get("blocked_actions", [])
+    allowed = warning.get("allowed_actions", [])
+    reason = warning.get("warning", "")
+
+    blocked_lines = "\n".join(f"  • {action}" for action in blocked)
+    allowed_lines = "\n".join(f"  • {action}" for action in allowed)
+
+    return f"""🚨 FIXONCE_BLOCKING_WARNING
+severity: blocking
+action: stop_and_confirm
+
+scope: {file_path}
+
+reason:
+{reason}
+
+blocked_until_confirmation:
+{blocked_lines}
+
+allowed_without_confirmation:
+{allowed_lines}
+
+Required user choice:
+1. Targeted fix only
+2. Read-only review
+3. Proceed with confirmation
+4. Stop"""
+
+
+def _is_noise_command(command: str) -> bool:
+    """Check if a command is low-value noise."""
+    if not command:
+        return False
+    cmd_lower = command.lower().strip()
+    noise_prefixes = (
+        "curl ", "grep ", "ls ", "cat ", "head ", "tail ",
+        "find ", "wc ", "echo ", "pwd", "cd ", "which ",
+    )
+    return cmd_lower.startswith(noise_prefixes)
+
+
+@activity_bp.route("/area-context", methods=["GET"])
+def get_area_context():
+    """
+    Get relevant activity history for a file/area.
+
+    This is the core of the "code remembers" feature.
+    When an agent touches a file, we return recent history for that area.
+
+    Query params:
+        path: file path being accessed
+        limit: max events to return (default 10, max 30)
+
+    Returns:
+        Recent activities in the same area, formatted for context injection.
+        Warnings appear first, then filtered high-value events.
+    """
+    try:
+        path = request.args.get("path", "")
+        limit = min(request.args.get("limit", 10, type=int), 30)
+
+        if not path:
+            return jsonify(None)
+
+        # Extract area from path
+        area = _extract_area(path)
+        if not area:
+            return jsonify(None)
+
+        # Get warnings for this file (high-signal, always shown first)
+        file_warnings = _get_warnings_for_file(path, area)
+
+        # Load activities
+        log = _load_activity()
+        all_activities = log.get("activities", [])
+
+        # Filter activities that match this area AND are high-value
+        area_activities = []
+        for act in all_activities:
+            act_file = act.get("file", "")
+            act_command = act.get("command", "")
+            act_cwd = act.get("cwd", "")
+            act_type = act.get("type", "")
+
+            # Skip noise commands
+            if act_type == "command" and _is_noise_command(act_command):
+                continue
+
+            # Check if activity touches this area
+            matches = False
+            if act_file and _path_matches_area(act_file, area):
+                matches = True
+            elif act_command and area.lower() in act_command.lower():
+                matches = True
+            elif act_cwd and _path_matches_area(act_cwd, area):
+                matches = f"/{area}/" in act_cwd.lower() or act_cwd.lower().endswith(f"/{area}")
+
+            if matches:
+                area_activities.append(act)
+
+        # Build context: warnings first, then recent activity
+        context_lines = []
+
+        # Add warnings at top (high-signal)
+        for w in file_warnings:
+            if w.get("severity") == "blocking":
+                context_lines.append(_format_blocking_warning(w, path))
+            else:
+                context_lines.append(f"⚠️ {w['warning']}")
+
+        # Add separator if we have both warnings and activities
+        if file_warnings and area_activities:
+            context_lines.append("")
+
+        # Add recent activity (if any non-noise events)
+        if area_activities:
+            recent = area_activities[:limit]
+            context_lines.append(f"📁 Area: {area} — Recent:")
+            for act in recent:
+                ts = act.get("timestamp", "")[:10]
+                act_type = act.get("type", "")
+
+                if act_type == "file_change":
+                    tool = act.get("tool", "Edit")
+                    file_name = Path(act.get("file", "")).name
+                    context_lines.append(f"  • [{ts}] {tool}: {file_name}")
+                elif act_type == "command":
+                    cmd = act.get("command", "")[:60]
+                    context_lines.append(f"  • [{ts}] $ {cmd}")
+                elif act_type == "mcp_tool":
+                    tool = act.get("tool", "")
+                    context_lines.append(f"  • [{ts}] {tool}")
+
+        # Return null if no warnings and no activities
+        if not context_lines:
+            return jsonify(None)
+
+        context_text = "\n".join(context_lines)
+
+        return jsonify({
+            "area": area,
+            "count": len(area_activities[:limit]) if area_activities else 0,
+            "warnings_count": len(file_warnings),
+            "context": context_text,
+            "activities": area_activities[:limit] if area_activities else []
+        })
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500

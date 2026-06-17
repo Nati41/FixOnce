@@ -208,7 +208,7 @@ class TestClientOnboarding(unittest.TestCase):
             settings = json.loads(settings_path.read_text(encoding="utf-8"))
             self.assertNotIn("hooks", settings)
 
-    def test_configure_codex_hooks_adds_post_tool_use_without_duplication(self):
+    def test_configure_codex_hooks_adds_pre_and_post_tool_use_without_duplication(self):
         with patch.object(install, "get_platform", return_value="mac"):
             first = install.configure_codex_hooks(PROJECT_ROOT)
             second = install.configure_codex_hooks(PROJECT_ROOT)
@@ -225,6 +225,18 @@ class TestClientOnboarding(unittest.TestCase):
             if "FIXONCE_ACTOR=codex" in handler["command"]
         ]
         self.assertEqual(len(fixonce_handlers), 1)
+
+        pre_groups = payload["hooks"]["PreToolUse"]
+        pre_handlers = [
+            handler
+            for group in pre_groups
+            for handler in group["hooks"]
+            if "pre_tool_context_codex.sh" in handler["command"]
+        ]
+        self.assertEqual(len(pre_handlers), 1)
+        self.assertIn("exec", pre_groups[0]["matcher"])
+        self.assertIn("exec_command", pre_groups[0]["matcher"])
+        self.assertIn("apply_patch", pre_groups[0]["matcher"])
 
     def test_system_status_detects_windsurf_configuration(self):
         windsurf_config = self.temp_home / ".codeium" / "windsurf" / "mcp_config.json"
