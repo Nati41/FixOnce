@@ -29,6 +29,7 @@ sys.modules.setdefault("fastmcp", types.SimpleNamespace(FastMCP=_FakeFastMCP))
 
 from core.agent_context import AgentContext
 from core.policy_engine import detect_conflicts, validate_decision
+from core.policy_engine import extract_topics
 from core.safe_file import atomic_json_update
 import mcp_memory_server_v2 as server
 
@@ -237,6 +238,42 @@ class TestTeamMemoryFoundation(unittest.TestCase):
                 len(high_conflicts), 0,
                 f"Compatible statements should not conflict: {existing} vs {proposed}"
             )
+
+    def test_generic_not_provide_reason_does_not_conflict_with_provide_policy(self):
+        existing = {
+            "decision": "Dashboard snapshot now exposes a policy object with non-invasive fallback derivation",
+            "reason": "Policy Pulse UI expected snapshot.policy while API did not provide it; deriving from intent/project",
+        }
+        proposed = (
+            "FixOnce default behavior is context-before-action. The primary goal is to "
+            "provide project memory, history, decisions, solved bugs, and avoid patterns "
+            "before action. Hard-blocking is reserved for proven-danger protected paths "
+            "and runtimes that support reliable enforcement. Codex CLI 0.140.0 "
+            "exec_command reads are a known limitation."
+        )
+
+        conflicts = detect_conflicts(proposed, "", [existing])
+
+        high_conflicts = [c for c in conflicts if c["severity"] == "HIGH"]
+        self.assertEqual(
+            len(high_conflicts), 0,
+            f"Generic 'did not provide it' reason should not block policy wording: {conflicts}",
+        )
+
+    def test_do_not_provide_specific_target_still_conflicts(self):
+        conflicts = detect_conflicts(
+            "Do not provide API access",
+            "",
+            [{"decision": "Provide API access", "reason": ""}],
+        )
+
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0]["severity"], "HIGH")
+
+    def test_requirement_does_not_extract_ui_topic(self):
+        topics = extract_topics("Preserving the requirement that agents use FixOnce")
+
+        self.assertNotIn("ui", topics)
 
     def test_persistent_audit_is_bounded_and_portable(self):
         with tempfile.TemporaryDirectory() as temp_dir:

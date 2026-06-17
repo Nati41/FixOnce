@@ -87,7 +87,12 @@ def extract_topics(text: str) -> set:
     text_lower = text.lower()
     topics = set()
     for topic, keywords in TOPIC_KEYWORDS.items():
-        if any(kw in text_lower for kw in keywords):
+        if any(
+            re.search(rf'\b{re.escape(kw)}\b', text_lower)
+            if len(kw) <= 3 and re.match(r'^\w+$', kw)
+            else kw in text_lower
+            for kw in keywords
+        ):
             topics.add(topic)
     return topics
 
@@ -135,7 +140,7 @@ def detect_antonym_conflict(text1: str, text2: str) -> Optional[Tuple[str, str, 
     # Stop words that should not be considered as negation targets
     STOP_WORDS = {"the", "a", "an", "to", "in", "on", "at", "is", "are", "be", "we", "it",
                   "use", "store", "do", "for", "with", "from", "by", "as", "of", "and", "or",
-                  "mvp", "v1", "v2", "phase", "version"}  # Also exclude version/phase markers
+                  "provide", "mvp", "v1", "v2", "phase", "version"}  # Also exclude version/phase markers
 
     def _get_negated_target(text: str, neg_word: str) -> Optional[str]:
         """Get the primary substantive word being negated (first 1-3 words after negation)."""
