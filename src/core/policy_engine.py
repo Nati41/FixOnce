@@ -106,6 +106,19 @@ def calculate_similarity(text1: str, text2: str) -> float:
     return len(intersection) / len(union)
 
 
+def _matches_related_decision(existing_decision: str, related_decision_text: str) -> bool:
+    """Return True when relation metadata explicitly targets this decision."""
+    existing_normalized = " ".join(re.findall(r'\w+', existing_decision.lower()))
+    related_normalized = " ".join(re.findall(r'\w+', (related_decision_text or "").lower()))
+    if not existing_normalized or not related_normalized:
+        return False
+    return (
+        existing_normalized == related_normalized
+        or existing_normalized in related_normalized
+        or related_normalized in existing_normalized
+    )
+
+
 def detect_antonym_conflict(text1: str, text2: str) -> Optional[Tuple[str, str, str]]:
     """
     Check if two texts contain semantic conflicts.
@@ -280,7 +293,9 @@ def detect_conflicts(
     existing_decisions: List[Dict[str, Any]],
     non_negotiables: Optional[List[Dict[str, Any]]] = None,
     avoid_patterns: Optional[List[Dict[str, Any]]] = None,
-    threshold: float = 0.3
+    threshold: float = 0.3,
+    relation: str = "",
+    related_decision_text: str = "",
 ) -> List[Dict[str, Any]]:
     """
     Detect potential conflicts between new decision and existing ones,
@@ -291,6 +306,8 @@ def detect_conflicts(
     conflicts = []
     new_text = f"{new_decision} {new_reason}"
     new_topics = extract_topics(new_text)
+    relation = (relation or "").lower()
+    relation_relaxes_target = relation in {"refines", "clarifies"}
 
     # Check non-negotiable violations first (highest priority)
     if non_negotiables:
@@ -310,10 +327,16 @@ def detect_conflicts(
         existing_text = f"{existing.get('decision', '')} {existing.get('reason', '')}"
         existing_topics = extract_topics(existing_text)
         topic_overlap = new_topics & existing_topics
+        is_related_target = (
+            relation_relaxes_target
+            and _matches_related_decision(existing.get("decision", ""), related_decision_text)
+        )
 
         # Check for semantic conflicts
         conflict_result = detect_antonym_conflict(new_text, existing_text)
         if conflict_result:
+            if is_related_target:
+                continue
             term1, term2, strength = conflict_result
             # HIGH strength = explicit negation conflict (block)
             # For HIGH conflicts, the shared word IS the topic (e.g., "postgresql")
@@ -360,6 +383,8 @@ def detect_conflicts(
         # Check similarity (medium severity)
         similarity = calculate_similarity(new_text, existing_text)
         if similarity > threshold:
+            if is_related_target:
+                continue
             conflicts.append({
                 "type": "SIMILAR",
                 "severity": "MEDIUM",
@@ -388,6 +413,8 @@ def validate_decision(
     avoid_patterns: Optional[List[Dict[str, Any]]] = None,
     force: bool = False,
     gate_evaluator: Optional[Callable[[InterventionContext], Any]] = None,
+    relation: str = "",
+    related_decision_text: str = "",
 ) -> Tuple[bool, str, List[Dict[str, Any]]]:
     """
     Validate a decision before logging.
@@ -402,6 +429,8 @@ def validate_decision(
         decision, reason, existing_decisions,
         non_negotiables=non_negotiables,
         avoid_patterns=avoid_patterns,
+        relation=relation,
+        related_decision_text=related_decision_text,
     )
 
     if not conflicts:

@@ -828,6 +828,7 @@ from fastmcp import FastMCP
 from core.agent_context import AgentContext, classify_agent_intent
 from core.conflict_lifecycle import (
     bound_conflicts,
+    decision_fingerprint,
     resolve_decision_conflicts,
     upsert_decision_conflicts,
 )
@@ -6605,7 +6606,13 @@ def get_live_record() -> str:
 
 
 @mcp.tool()
-def log_decision(decision: str, reason: str, force: bool = False) -> str:
+def log_decision(
+    decision: str,
+    reason: str,
+    force: bool = False,
+    relation: str = "",
+    related_decision: str = "",
+) -> str:
     """
     Log an architectural decision. Decisions NEVER decay - they are permanent.
 
@@ -6613,6 +6620,8 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
         decision: The decision text
         reason: Why this decision was made
         force: If True, override conflict detection and log anyway
+        relation: Optional relation to an existing decision ("refines" or "clarifies")
+        related_decision: Existing decision text this relation targets
 
     Returns:
         Success message or BLOCK message if conflict detected
@@ -6663,7 +6672,9 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
             decision, reason, active_decisions,
             non_negotiables=non_negotiables,
             avoid_patterns=avoid_patterns,
-            force=force, gate_evaluator=decision_gate_evaluator
+            force=force, gate_evaluator=decision_gate_evaluator,
+            relation=relation,
+            related_decision_text=related_decision,
         )
 
         _log(f"[PolicyEngine] Validating: {decision[:50]}...")
@@ -6710,6 +6721,23 @@ def log_decision(decision: str, reason: str, force: bool = False) -> str:
         "importance": "permanent",
         "forced": force if force else None
     }
+    relation = (relation or "").lower()
+    if relation in {"refines", "clarifies"} and related_decision:
+        decision_record["relation"] = relation
+        decision_record["related_decision"] = related_decision
+        for existing in memory.get("decisions", []):
+            if existing.get("superseded"):
+                continue
+            existing_text = existing.get("decision", "")
+            if (
+                existing_text.lower() == related_decision.lower()
+                or related_decision.lower() in existing_text.lower()
+                or existing_text.lower() in related_decision.lower()
+            ):
+                decision_record["related_decision_fingerprint"] = decision_fingerprint(existing)
+                break
+        else:
+            decision_record["related_decision_fingerprint"] = decision_fingerprint(related_decision)
     decision_record.update(_new_record_attribution("fo_decide"))
     memory['decisions'].append(_attach_memory_quality_audit("decision", decision_record))
     _maybe_record_solved_bug_from_memory_event(
@@ -10894,7 +10922,8 @@ def fo_decide(text: str, reason: str, action: str = "add") -> str:
     Args:
         text: The decision or avoid text
         reason: Why this decision was made
-        action: "add" (default), "avoid", "supersede:OLD_TEXT", or
+        action: "add" (default), "avoid", "refine:OLD_TEXT",
+                "clarify:OLD_TEXT", "supersede:OLD_TEXT", or
                 "resolve:CONFLICT_ID"
 
     Examples:
@@ -10916,6 +10945,26 @@ def fo_decide(text: str, reason: str, action: str = "add") -> str:
             new_decision=text,
             new_reason=reason,
             supersede_reason=reason,
+        )
+    elif action.startswith("refine:"):
+        old_text = action[len("refine:"):].strip()
+        if not old_text:
+            return "Error: related decision text is required."
+        result = log_decision(
+            text,
+            reason,
+            relation="refines",
+            related_decision=old_text,
+        )
+    elif action.startswith("clarify:"):
+        old_text = action[len("clarify:"):].strip()
+        if not old_text:
+            return "Error: related decision text is required."
+        result = log_decision(
+            text,
+            reason,
+            relation="clarifies",
+            related_decision=old_text,
         )
     else:
         result = log_decision(text, reason)

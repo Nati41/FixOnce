@@ -385,7 +385,7 @@ class TestLogDecisionWithNonNegotiables(unittest.TestCase):
             )
             saved = json.loads(project_file.read_text(encoding="utf-8"))
 
-        self.assertIn("Logged decision", result)
+        self.assertIn("Decision recorded", result)
         self.assertEqual(len(saved["decisions"]), 1)
 
     def test_force_override_records_conflict(self):
@@ -410,7 +410,7 @@ class TestLogDecisionWithNonNegotiables(unittest.TestCase):
             )
             saved = json.loads(project_file.read_text(encoding="utf-8"))
 
-        self.assertIn("Logged decision", result)
+        self.assertIn("Decision recorded", result)
         self.assertEqual(len(saved["decisions"]), 1)
         self.assertTrue(saved["decisions"][0].get("forced"))
         self.assertIn("decision_conflicts", saved)
@@ -485,7 +485,75 @@ class TestExistingConflictLifecyclePreserved(unittest.TestCase):
             )
             saved = json.loads(project_file.read_text(encoding="utf-8"))
 
-        self.assertIn("Logged decision", result)
+        self.assertIn("Decision recorded", result)
+        self.assertEqual(len(saved["decisions"]), 2)
+
+    def test_refine_action_allows_dogfooding_policy_clarification(self):
+        """Explicit refinements should not be blocked as contradictions."""
+        old_decision = "Dogfooding: AI must use FixOnce MCP tools in real-time to demonstrate the product"
+        new_refinement = (
+            "FixOnce default behavior is context-before-action, not hard-blocking. "
+            "Hard-blocking is reserved for proven-danger protected paths and tool runtimes "
+            "that support enforcement. Codex CLI 0.140.0 has a known limitation: "
+            "exec_command reads are not caught by PreToolUse hooks."
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project_file = self._activate(root, {
+                "decisions": [{
+                    "decision": old_decision,
+                    "reason": (
+                        "If the AI doesn't use FixOnce correctly, how can we expect users to? "
+                        "Every session = auto_init + update_work_context"
+                    ),
+                    "timestamp": "2026-03-17T11:35:34.897953",
+                }],
+            })
+
+            result = server.fo_decide(
+                new_refinement,
+                "Clarifies dogfooding enforcement scope without replacing the policy.",
+                action=f"refine:{old_decision}",
+            )
+            saved = json.loads(project_file.read_text(encoding="utf-8"))
+
+        self.assertIn("Decision recorded", result)
+        self.assertNotIn("Decision NOT logged", result)
+        self.assertEqual(len(saved["decisions"]), 2)
+        recorded = saved["decisions"][1]
+        self.assertEqual(recorded["relation"], "refines")
+        self.assertEqual(recorded["related_decision"], old_decision)
+        self.assertTrue(recorded.get("related_decision_fingerprint"))
+        self.assertFalse(recorded.get("forced"))
+
+    def test_refine_action_does_not_bypass_unrelated_contradictions(self):
+        """Refine only relaxes conflicts against the explicitly related decision."""
+        old_decision = "Dogfooding: AI must use FixOnce MCP tools in real-time to demonstrate the product"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project_file = self._activate(root, {
+                "decisions": [
+                    {
+                        "decision": old_decision,
+                        "reason": "Existing dogfooding policy",
+                    },
+                    {
+                        "decision": "Always store API data in English",
+                        "reason": "Integration consistency",
+                    },
+                ],
+            })
+
+            result = server.fo_decide(
+                "Never store API data in English",
+                "Localization requirement",
+                action=f"refine:{old_decision}",
+            )
+            saved = json.loads(project_file.read_text(encoding="utf-8"))
+
+        self.assertIn("Decision NOT logged", result)
         self.assertEqual(len(saved["decisions"]), 2)
 
 
