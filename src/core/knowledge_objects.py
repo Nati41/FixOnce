@@ -339,3 +339,179 @@ def get_object_count(project_id: str) -> Dict[str, int]:
 
     index = _load_index(project_id)
     return index.get("counters", {})
+
+
+# =============================================================================
+# KNOWLEDGE COMMITS
+# =============================================================================
+
+def _get_commits_dir(project_id: str) -> Path:
+    """Get the commits directory for a project."""
+    return _get_v2_dir(project_id) / "commits"
+
+
+def _ensure_commits_dir(project_id: str) -> Path:
+    """Ensure commits directory exists."""
+    commits_dir = _get_commits_dir(project_id)
+    commits_dir.mkdir(parents=True, exist_ok=True)
+    return commits_dir
+
+
+def _get_latest_commit_id(project_id: str) -> Optional[str]:
+    """Get the ID of the most recent commit, or None if no commits exist."""
+    commits_dir = _get_commits_dir(project_id)
+    if not commits_dir.exists():
+        return None
+
+    commit_files = sorted(commits_dir.glob("fo_commit_*.json"))
+    if not commit_files:
+        return None
+
+    # Extract ID from filename: fo_commit_001.json -> fo_commit_001
+    return commit_files[-1].stem
+
+
+def _next_commit_id(project_id: str) -> str:
+    """Generate the next commit ID."""
+    latest = _get_latest_commit_id(project_id)
+    if not latest:
+        return "fo_commit_001"
+
+    # Extract number from fo_commit_XXX
+    num = int(latest.split("_")[-1])
+    return f"fo_commit_{num + 1:03d}"
+
+
+def get_commit(project_id: str, commit_id: str) -> Optional[Dict[str, Any]]:
+    """Load a commit by ID."""
+    commits_dir = _get_commits_dir(project_id)
+    commit_path = commits_dir / f"{commit_id}.json"
+
+    if not commit_path.exists():
+        return None
+
+    with open(commit_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def list_commits(project_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """List recent commits, newest first."""
+    commits_dir = _get_commits_dir(project_id)
+    if not commits_dir.exists():
+        return []
+
+    commit_files = sorted(commits_dir.glob("fo_commit_*.json"), reverse=True)
+    commits = []
+
+    for commit_path in commit_files[:limit]:
+        with open(commit_path, "r", encoding="utf-8") as f:
+            commits.append(json.load(f))
+
+    return commits
+
+
+def create_commit(
+    project_id: str,
+    message: str,
+    actor: str = "unknown",
+) -> Optional[Dict[str, Any]]:
+    """
+    Create a knowledge commit from pending changes.
+
+    Returns the commit dict, or None if nothing to commit.
+
+    The commit bundles all pending changes into an atomic unit:
+    - Decisions added
+    - Bugs solved
+    - Avoid patterns added
+    - Questions added/closed
+
+    After commit, pending_changes.json is cleared.
+    Objects remain immutable - commits only reference them.
+    """
+    _ensure_v2_structure(project_id)
+    _ensure_commits_dir(project_id)
+
+    # Get pending changes
+    pending = get_pending_changes(project_id)
+    total = sum(len(v) for v in pending.values())
+
+    if total == 0:
+        return None  # Nothing to commit
+
+    # Get parent (previous commit)
+    parent = _get_latest_commit_id(project_id)
+
+    # Generate commit ID
+    commit_id = _next_commit_id(project_id)
+
+    # Create commit record
+    commit = {
+        "id": commit_id,
+        "parent": parent,
+        "timestamp": datetime.now().isoformat(),
+        "actor": actor,
+        "message": message,
+        "changes": {
+            "decisions": pending.get("decisions", []),
+            "bugs": pending.get("bugs", []),
+            "avoids": pending.get("avoids", []),
+            "questions": pending.get("questions", []),
+        },
+        "stats": {
+            "total": total,
+            "decisions": len(pending.get("decisions", [])),
+            "bugs": len(pending.get("bugs", [])),
+            "avoids": len(pending.get("avoids", [])),
+            "questions": len(pending.get("questions", [])),
+        },
+    }
+
+    # Save commit
+    commits_dir = _get_commits_dir(project_id)
+    commit_path = commits_dir / f"{commit_id}.json"
+
+    with open(commit_path, "w", encoding="utf-8") as f:
+        json.dump(commit, f, ensure_ascii=False, indent=2)
+
+    # Clear pending changes
+    clear_pending(project_id)
+
+    return commit
+
+
+def generate_commit_message(project_id: str) -> str:
+    """
+    Generate a suggested commit message from pending changes.
+
+    Returns a human-readable summary of what's being committed.
+    """
+    pending = get_pending_objects(project_id)
+
+    parts = []
+
+    decisions = pending.get("decisions", [])
+    if decisions:
+        if len(decisions) == 1:
+            # Use first decision's text as base
+            text = decisions[0].get("text", "")[:50]
+            parts.append(text)
+        else:
+            parts.append(f"{len(decisions)} decisions")
+
+    bugs = pending.get("bugs", [])
+    if bugs:
+        parts.append(f"{len(bugs)} bug{'s' if len(bugs) > 1 else ''} solved")
+
+    avoids = pending.get("avoids", [])
+    if avoids:
+        parts.append(f"{len(avoids)} avoid pattern{'s' if len(avoids) > 1 else ''}")
+
+    questions = pending.get("questions", [])
+    if questions:
+        parts.append(f"{len(questions)} question{'s' if len(questions) > 1 else ''}")
+
+    if not parts:
+        return "Empty commit"
+
+    return ", ".join(parts)

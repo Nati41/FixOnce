@@ -24,7 +24,7 @@ def get_pending_knowledge():
     This is a preview for the future fo_commit feature.
     """
     try:
-        from core.knowledge_objects import get_pending_objects, get_pending_changes
+        from core.knowledge_objects import get_pending_objects, get_pending_changes, generate_commit_message
 
         # Priority: request arg > active project
         project_id = request.args.get("project_id")
@@ -58,12 +58,18 @@ def get_pending_knowledge():
         }
         total = sum(counts.values())
 
+        # Generate suggested commit message if there's pending content
+        suggested_message = ""
+        if total > 0:
+            suggested_message = generate_commit_message(project_id)
+
         return jsonify({
             "status": "ok",
             "project_id": project_id,
             "pending": pending_objects,
             "counts": counts,
             "total": total,
+            "suggested_message": suggested_message,
         })
 
     except ImportError as e:
@@ -132,4 +138,157 @@ def get_knowledge_stats():
             "message": str(e),
             "total_objects": 0,
             "pending_count": 0,
+        })
+
+
+@knowledge_bp.route('/api/knowledge/commit/preview', methods=['GET'])
+def get_commit_preview():
+    """
+    Get a preview of what would be committed.
+
+    Returns pending objects and a suggested commit message.
+    """
+    try:
+        from core.knowledge_objects import (
+            get_pending_objects,
+            get_pending_changes,
+            generate_commit_message,
+        )
+
+        project_id = request.args.get("project_id")
+
+        if not project_id:
+            from managers.multi_project_manager import get_active_project
+            active = get_active_project()
+            if active:
+                project_id = active.get("project_id") or active.get("active_id")
+
+        if not project_id:
+            return jsonify({
+                "status": "no_project",
+                "message": "No project ID",
+            })
+
+        pending_ids = get_pending_changes(project_id)
+        pending_objects = get_pending_objects(project_id)
+        total = sum(len(v) for v in pending_ids.values())
+
+        if total == 0:
+            return jsonify({
+                "status": "empty",
+                "message": "Nothing to commit",
+                "total": 0,
+            })
+
+        suggested_message = generate_commit_message(project_id)
+
+        return jsonify({
+            "status": "ok",
+            "project_id": project_id,
+            "total": total,
+            "pending": pending_objects,
+            "suggested_message": suggested_message,
+        })
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+        })
+
+
+@knowledge_bp.route('/api/knowledge/commit', methods=['POST'])
+def create_knowledge_commit():
+    """
+    Create a knowledge commit from pending changes.
+
+    Request body:
+        message: Commit message (optional, will use generated if missing)
+
+    Returns the created commit.
+    """
+    try:
+        from core.knowledge_objects import create_commit, generate_commit_message
+
+        data = request.get_json() or {}
+        project_id = data.get("project_id") or request.args.get("project_id")
+
+        if not project_id:
+            from managers.multi_project_manager import get_active_project
+            active = get_active_project()
+            if active:
+                project_id = active.get("project_id") or active.get("active_id")
+
+        if not project_id:
+            return jsonify({
+                "status": "no_project",
+                "message": "No project ID",
+            })
+
+        # Get message from request or generate one
+        message = data.get("message", "").strip()
+        if not message:
+            message = generate_commit_message(project_id)
+
+        # Get actor from request or default
+        actor = data.get("actor", "dashboard")
+
+        # Create commit
+        commit = create_commit(project_id, message, actor)
+
+        if not commit:
+            return jsonify({
+                "status": "empty",
+                "message": "Nothing to commit",
+            })
+
+        return jsonify({
+            "status": "ok",
+            "commit": commit,
+        })
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+        })
+
+
+@knowledge_bp.route('/api/knowledge/commits', methods=['GET'])
+def list_knowledge_commits():
+    """
+    List recent knowledge commits.
+    """
+    try:
+        from core.knowledge_objects import list_commits
+
+        project_id = request.args.get("project_id")
+        limit = request.args.get("limit", 10, type=int)
+
+        if not project_id:
+            from managers.multi_project_manager import get_active_project
+            active = get_active_project()
+            if active:
+                project_id = active.get("project_id") or active.get("active_id")
+
+        if not project_id:
+            return jsonify({
+                "status": "no_project",
+                "commits": [],
+            })
+
+        commits = list_commits(project_id, limit)
+
+        return jsonify({
+            "status": "ok",
+            "project_id": project_id,
+            "commits": commits,
+            "count": len(commits),
+        })
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "commits": [],
         })

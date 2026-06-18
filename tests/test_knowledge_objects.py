@@ -312,5 +312,120 @@ class TestKnowledgeObjectsImmutability(unittest.TestCase):
         self.assertEqual(loaded["text"], "Original")
 
 
+class TestKnowledgeCommits(unittest.TestCase):
+    """Test knowledge commit functionality."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.test_project_id = "commit_test_project"
+
+        def mock_get_v2_dir(project_id):
+            return Path(self.temp_dir) / project_id
+
+        self.patcher = patch(
+            "core.knowledge_objects._get_v2_dir",
+            side_effect=mock_get_v2_dir
+        )
+        self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_commit_created_from_pending(self):
+        """Commit should bundle all pending changes."""
+        from core.knowledge_objects import create_object, create_commit, get_commit
+
+        # Create some pending objects
+        create_object(self.test_project_id, "decision", "D1", "R1")
+        create_object(self.test_project_id, "bug", "B1", "S1")
+
+        # Create commit
+        commit = create_commit(self.test_project_id, "Test commit", "test_user")
+
+        self.assertIsNotNone(commit)
+        self.assertEqual(commit["id"], "fo_commit_001")
+        self.assertEqual(commit["message"], "Test commit")
+        self.assertEqual(commit["actor"], "test_user")
+        self.assertIn("dec_001", commit["changes"]["decisions"])
+        self.assertIn("bug_001", commit["changes"]["bugs"])
+        self.assertEqual(commit["stats"]["total"], 2)
+
+        # Verify commit file exists
+        loaded = get_commit(self.test_project_id, "fo_commit_001")
+        self.assertEqual(loaded["message"], "Test commit")
+
+    def test_pending_cleared_after_commit(self):
+        """Pending changes should be cleared after commit."""
+        from core.knowledge_objects import create_object, create_commit, get_pending_changes
+
+        create_object(self.test_project_id, "decision", "D1", "R1")
+
+        # Verify pending has content
+        pending = get_pending_changes(self.test_project_id)
+        self.assertEqual(len(pending["decisions"]), 1)
+
+        # Commit
+        create_commit(self.test_project_id, "Clear test")
+
+        # Pending should be empty
+        pending = get_pending_changes(self.test_project_id)
+        self.assertEqual(len(pending["decisions"]), 0)
+
+    def test_empty_pending_does_not_create_commit(self):
+        """No commit should be created if pending is empty."""
+        from core.knowledge_objects import create_commit, _ensure_v2_structure
+
+        _ensure_v2_structure(self.test_project_id)
+
+        commit = create_commit(self.test_project_id, "Empty commit")
+
+        self.assertIsNone(commit)
+
+    def test_parent_chain_works(self):
+        """Second commit should have first commit as parent."""
+        from core.knowledge_objects import create_object, create_commit
+
+        # First commit
+        create_object(self.test_project_id, "decision", "D1", "R1")
+        commit1 = create_commit(self.test_project_id, "First commit")
+
+        self.assertEqual(commit1["id"], "fo_commit_001")
+        self.assertIsNone(commit1["parent"])
+
+        # Second commit
+        create_object(self.test_project_id, "decision", "D2", "R2")
+        commit2 = create_commit(self.test_project_id, "Second commit")
+
+        self.assertEqual(commit2["id"], "fo_commit_002")
+        self.assertEqual(commit2["parent"], "fo_commit_001")
+
+    def test_list_commits_returns_newest_first(self):
+        """list_commits should return commits newest first."""
+        from core.knowledge_objects import create_object, create_commit, list_commits
+
+        # Create three commits
+        for i in range(3):
+            create_object(self.test_project_id, "decision", f"D{i}", f"R{i}")
+            create_commit(self.test_project_id, f"Commit {i}")
+
+        commits = list_commits(self.test_project_id)
+
+        self.assertEqual(len(commits), 3)
+        self.assertEqual(commits[0]["id"], "fo_commit_003")
+        self.assertEqual(commits[1]["id"], "fo_commit_002")
+        self.assertEqual(commits[2]["id"], "fo_commit_001")
+
+    def test_generate_commit_message(self):
+        """generate_commit_message should summarize pending changes."""
+        from core.knowledge_objects import create_object, generate_commit_message
+
+        create_object(self.test_project_id, "decision", "Use bcrypt for passwords", "Security")
+
+        msg = generate_commit_message(self.test_project_id)
+
+        self.assertIn("bcrypt", msg.lower())
+
+
 if __name__ == "__main__":
     unittest.main()

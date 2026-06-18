@@ -1012,6 +1012,40 @@ input:checked + .slider:before {
   text-align: center;
 }
 
+.pending-knowledge-commit-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.commit-message-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.commit-message-input:focus {
+  outline: none;
+  border-color: #8ab4f8;
+}
+
+.commit-message-input::placeholder {
+  color: var(--text-dim);
+}
+
+#commitKnowledgeBtn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .agent-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2694,8 +2728,16 @@ body.native-app .header-btn {
   <div id="pendingKnowledgeList" class="pending-knowledge-list">
     <div class="pending-knowledge-empty">No pending changes</div>
   </div>
-  <div class="pending-knowledge-footer">
-    Objects created this session. Future: fo_commit will bundle these.
+  <div class="pending-knowledge-commit-section" id="pendingKnowledgeCommitSection">
+    <input type="text" id="commitMessageInput" class="commit-message-input"
+           placeholder="Commit message (auto-generated if empty)">
+    <button class="memory-btn primary" id="commitKnowledgeBtn" type="button">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+      Commit Knowledge
+    </button>
   </div>
 </div>
 
@@ -3910,10 +3952,61 @@ async function loadPendingKnowledge() {
     });
 
     list.innerHTML = html;
+
+    // Update commit message placeholder with suggested message
+    const commitInput = document.getElementById('commitMessageInput');
+    if (commitInput && data.suggested_message) {
+      commitInput.placeholder = data.suggested_message;
+    }
   } catch (e) {
     logPollingError('Pending knowledge fetch error:', e);
   }
 }
+
+async function commitKnowledge() {
+  const btn = document.getElementById('commitKnowledgeBtn');
+  const input = document.getElementById('commitMessageInput');
+
+  if (!btn) return;
+
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = 'Committing...';
+
+  try {
+    const message = input?.value?.trim() || '';
+
+    const resp = await fetch(API + '/api/knowledge/commit', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Dashboard': 'true'
+      },
+      body: JSON.stringify({ message })
+    });
+
+    const data = await resp.json();
+
+    if (data.status === 'ok') {
+      const commit = data.commit;
+      showToast(`Committed: ${commit.id} (${commit.stats.total} items)`);
+      if (input) input.value = '';
+      loadPendingKnowledge();
+    } else if (data.status === 'empty') {
+      showToast('Nothing to commit');
+    } else {
+      showToast('Commit failed: ' + (data.message || 'Unknown error'), true);
+    }
+  } catch (e) {
+    console.error('Commit failed:', e);
+    showToast('Commit failed', true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
+}
+
+document.getElementById('commitKnowledgeBtn')?.addEventListener('click', commitKnowledge);
 
 // Init
 // AI Tools Detection
