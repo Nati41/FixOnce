@@ -7939,7 +7939,7 @@ def solution_applied(
             short_error += '...'
 
         requests.post(
-            "http://localhost:5000/api/activity/log",
+            f"{_get_api_url()}/api/activity/log",
             json={
                 "type": "mcp_tool",
                 "tool": "fo_solved",

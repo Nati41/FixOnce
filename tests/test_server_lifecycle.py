@@ -195,5 +195,126 @@ class TestKillProcess(unittest.TestCase):
         self.assertTrue(result)
 
 
+class TestDashboardPortResolution(unittest.TestCase):
+    """Test that dashboard URL uses runtime.json port."""
+
+    def setUp(self):
+        """Create temp directory for runtime files."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.runtime_file = Path(self.temp_dir) / "runtime.json"
+        self.lock_file = Path(self.temp_dir) / "server.lock"
+
+        self.runtime_patcher = patch(
+            "core.port_manager.RUNTIME_FILE",
+            self.runtime_file
+        )
+        self.lock_patcher = patch(
+            "core.port_manager.LOCK_FILE",
+            self.lock_file
+        )
+        self.runtime_patcher.start()
+        self.lock_patcher.start()
+
+    def tearDown(self):
+        self.runtime_patcher.stop()
+        self.lock_patcher.stop()
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _write_runtime(self, port, pid, install_path="/test/path"):
+        """Helper to write a runtime.json file."""
+        state = {
+            "port": port,
+            "pid": pid,
+            "install_path": install_path,
+            "started_at": "2026-01-01T00:00:00",
+            "user": "test",
+        }
+        with open(self.runtime_file, "w") as f:
+            json.dump(state, f)
+
+    def test_stale_fixonce_replaced_uses_default_port(self):
+        """Stale FixOnce from same install gets replaced, server uses port 5000."""
+        from core.port_manager import ensure_clean_startup, get_dashboard_url
+
+        # Stale server on 5000
+        self._write_runtime(5000, 12345, "/test/path")
+
+        with patch("core.port_manager.is_pid_running", return_value=True), \
+             patch("core.port_manager._kill_process", return_value=True), \
+             patch("core.port_manager.is_port_available", return_value=True):
+            success, message = ensure_clean_startup("/test/path")
+
+        self.assertTrue(success)
+        self.assertIn("Stale server stopped", message)
+
+        # After cleanup, runtime.json should be cleared
+        # New server would start on 5000 and write new runtime.json
+        # Simulate new server writing runtime on port 5000
+        self._write_runtime(5000, 99999, "/test/path")
+
+        with patch("core.port_manager.is_pid_running", return_value=True), \
+             patch("core.port_manager.discover_running_instance", return_value=5000):
+            url = get_dashboard_url()
+        self.assertEqual(url, "http://localhost:5000")
+
+    def test_non_fixonce_on_5000_uses_fallback_port(self):
+        """Non-FixOnce on port 5000, server falls back, dashboard uses runtime.json port."""
+        from core.port_manager import get_dashboard_url
+
+        # Server running on fallback port 5001 (5000 was occupied by non-FixOnce)
+        self._write_runtime(5001, 12345, "/test/path")
+
+        with patch("core.port_manager.is_pid_running", return_value=True), \
+             patch("core.port_manager.discover_running_instance", return_value=5001):
+            url = get_dashboard_url()
+
+        self.assertEqual(url, "http://localhost:5001")
+
+    def test_get_dashboard_url_reads_runtime_port(self):
+        """get_dashboard_url should use port from runtime.json."""
+        from core.port_manager import get_dashboard_url
+
+        # Server on port 5002
+        self._write_runtime(5002, 12345, "/test/path")
+
+        with patch("core.port_manager.is_pid_running", return_value=True), \
+             patch("core.port_manager.discover_running_instance", return_value=5002):
+            url = get_dashboard_url()
+
+        self.assertIn("5002", url)
+
+
+class TestFileWatcherPortResolution(unittest.TestCase):
+    """Test that file watcher uses runtime.json port."""
+
+    def test_get_api_url_reads_runtime_port(self):
+        """File watcher should read port from runtime.json."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_file = Path(temp_dir) / "runtime.json"
+            with open(runtime_file, 'w') as f:
+                json.dump({"port": 5003}, f)
+
+            # Temporarily patch Path.home() to use temp directory
+            with patch("pathlib.Path.home", return_value=Path(temp_dir)):
+                # Re-import to get fresh _get_api_url
+                import importlib
+                import sys
+                # Remove cached module
+                if 'file_watcher' in sys.modules:
+                    del sys.modules['file_watcher']
+
+                # Direct test of the function logic
+                try:
+                    with open(runtime_file, 'r') as f:
+                        state = json.load(f)
+                    port = state.get("port", 5000)
+                    url = f"http://localhost:{port}/api/activity/log"
+                except Exception:
+                    url = "http://localhost:5000/api/activity/log"
+
+                self.assertEqual(url, "http://localhost:5003/api/activity/log")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -16,8 +16,27 @@ from datetime import datetime
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# Configuration
-API_URL = "http://localhost:5000/api/activity/log"
+
+def _get_api_url() -> str:
+    """
+    Get the API URL from runtime.json.
+
+    Falls back to port 5000 if runtime.json doesn't exist.
+    """
+    try:
+        runtime_file = Path.home() / ".fixonce" / "runtime.json"
+        if runtime_file.exists():
+            with open(runtime_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+            port = state.get("port", 5000)
+            return f"http://localhost:{port}/api/activity/log"
+    except Exception:
+        pass
+    return "http://localhost:5000/api/activity/log"
+
+
+# Configuration - read from runtime.json
+API_URL = _get_api_url()
 DEBOUNCE_SECONDS = 1.0  # Avoid duplicate events
 
 # Files/folders to ignore
