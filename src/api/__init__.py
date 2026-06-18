@@ -108,6 +108,9 @@ from .installer import installer_bp
 # Pending memories (Memory Review MVP)
 from .pending import pending_bp
 
+# Knowledge V2 (Git-style knowledge objects)
+from .knowledge import knowledge_bp
+
 
 def register_blueprints(app):
     """Register all blueprints with the Flask app."""
@@ -121,3 +124,4 @@ def register_blueprints(app):
     app.register_blueprint(setup_bp)  # /api/setup/* endpoints
     app.register_blueprint(installer_bp)  # /install + /api/installer/* endpoints
     app.register_blueprint(pending_bp)  # /api/pending/* endpoints (Memory Review)
+    app.register_blueprint(knowledge_bp)  # /api/knowledge/* endpoints (V2)
