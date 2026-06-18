@@ -33,7 +33,7 @@ def get_pending_knowledge():
             from managers.multi_project_manager import get_active_project
             active = get_active_project()
             if active:
-                project_id = active.get("project_id")
+                project_id = active.get("project_id") or active.get("active_id")
 
         if not project_id:
             return jsonify({
@@ -101,7 +101,7 @@ def get_knowledge_stats():
             from managers.multi_project_manager import get_active_project
             active = get_active_project()
             if active:
-                project_id = active.get("project_id")
+                project_id = active.get("project_id") or active.get("active_id")
 
         if not project_id:
             return jsonify({
