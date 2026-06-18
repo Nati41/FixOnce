@@ -658,6 +658,90 @@ def _is_noise_command(command: str) -> bool:
     return cmd_lower.startswith(noise_prefixes)
 
 
+def _get_relevant_project_memory(file_path: str, area: str) -> dict:
+    """
+    Get relevant project memory for a file/area.
+
+    Returns decisions, solved bugs, and avoid patterns that match
+    the file path, filename, or area name.
+
+    Fails open: returns empty dict on any error.
+    """
+    result = {"decisions": [], "solved": [], "avoid": []}
+
+    try:
+        project_id = _get_project_id_from_file(file_path)
+        if not project_id or project_id == "__global__":
+            return result
+
+        filename = Path(file_path).name if file_path else ""
+        query_terms = [t for t in [area, filename, Path(file_path).stem] if t]
+        if not query_terms:
+            return result
+
+        query = " ".join(query_terms)
+
+        try:
+            from core.project_semantic import search_project
+
+            decisions = search_project(project_id, query, k=2, doc_type="decision", min_score=0.25)
+            for r in decisions[:2]:
+                result["decisions"].append({
+                    "text": r.text[:120] + ("..." if len(r.text) > 120 else ""),
+                    "score": int(r.score * 100)
+                })
+
+            errors = search_project(project_id, query, k=2, doc_type="error", min_score=0.25)
+            for r in errors[:2]:
+                result["solved"].append({
+                    "text": r.text[:120] + ("..." if len(r.text) > 120 else ""),
+                    "score": int(r.score * 100)
+                })
+
+            avoids = search_project(project_id, query, k=2, doc_type="avoid", min_score=0.25)
+            for r in avoids[:2]:
+                result["avoid"].append({
+                    "text": r.text[:120] + ("..." if len(r.text) > 120 else ""),
+                    "score": int(r.score * 100)
+                })
+
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+    except Exception:
+        pass
+
+    return result
+
+
+def _format_project_memory_section(memory: dict) -> list:
+    """Format project memory as context lines."""
+    lines = []
+
+    has_content = any([memory.get("decisions"), memory.get("solved"), memory.get("avoid")])
+    if not has_content:
+        return lines
+
+    lines.append("")
+    lines.append("📋 Relevant Project Memory:")
+
+    if memory.get("decisions"):
+        for d in memory["decisions"]:
+            lines.append(f"  📌 Decision ({d['score']}%): {d['text']}")
+
+    if memory.get("solved"):
+        for s in memory["solved"]:
+            lines.append(f"  ✅ Solved ({s['score']}%): {s['text']}")
+
+    if memory.get("avoid"):
+        for a in memory["avoid"]:
+            lines.append(f"  🚫 Avoid ({a['score']}%): {a['text']}")
+
+    return lines
+
+
 @activity_bp.route("/area-context", methods=["GET"])
 def get_area_context():
     """
@@ -717,7 +801,7 @@ def get_area_context():
             if matches:
                 area_activities.append(act)
 
-        # Build context: warnings first, then recent activity
+        # Build context: warnings first, then recent activity, then project memory
         context_lines = []
 
         # Add warnings at top (high-signal)
@@ -750,7 +834,12 @@ def get_area_context():
                     tool = act.get("tool", "")
                     context_lines.append(f"  • [{ts}] {tool}")
 
-        # Return null if no warnings and no activities
+        # Add relevant project memory (decisions, solved bugs, avoid patterns)
+        project_memory = _get_relevant_project_memory(path, area)
+        memory_lines = _format_project_memory_section(project_memory)
+        context_lines.extend(memory_lines)
+
+        # Return null if no content at all
         if not context_lines:
             return jsonify(None)
 
@@ -760,6 +849,7 @@ def get_area_context():
             "area": area,
             "count": len(area_activities[:limit]) if area_activities else 0,
             "warnings_count": len(file_warnings),
+            "memory_count": sum(len(v) for v in project_memory.values()),
             "context": context_text,
             "activities": area_activities[:limit] if area_activities else []
         })
