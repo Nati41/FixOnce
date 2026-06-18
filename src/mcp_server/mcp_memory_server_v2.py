@@ -6764,6 +6764,27 @@ def log_decision(
         except Exception as e:
             _log(f"[SemanticIndex] Failed to index decision: {e}")
 
+    # V2: Create immutable knowledge object
+    try:
+        from core.knowledge_objects import create_object
+        actor = decision_record.get("actor", "unknown")
+        actor_source = decision_record.get("actor_source", "unknown")
+        links = {}
+        if relation and related_decision:
+            links[relation] = related_decision
+        create_object(
+            project_id=session.project_id,
+            obj_type="decision",
+            text=decision,
+            reason=reason,
+            actor=actor,
+            actor_source=actor_source,
+            links=links,
+        )
+        _log(f"[KnowledgeV2] Created decision object: {decision[:50]}...")
+    except Exception as e:
+        _log(f"[KnowledgeV2] Failed to create decision object: {e}")
+
     # Navigator V1: Return impact analysis and next_action
     lines = [f"✓ Decision recorded: {decision}"]
     lines.append("")
@@ -6863,6 +6884,23 @@ def log_avoid(what: str, reason: str) -> str:
             semantic["index_avoid"](session.project_id, what, reason)
         except Exception as e:
             _log(f"[SemanticIndex] Failed to index avoid: {e}")
+
+    # V2: Create immutable knowledge object
+    try:
+        from core.knowledge_objects import create_object
+        actor = avoid_record.get("actor", "unknown")
+        actor_source = avoid_record.get("actor_source", "unknown")
+        create_object(
+            project_id=session.project_id,
+            obj_type="avoid",
+            text=what,
+            reason=reason,
+            actor=actor,
+            actor_source=actor_source,
+        )
+        _log(f"[KnowledgeV2] Created avoid object: {what[:50]}...")
+    except Exception as e:
+        _log(f"[KnowledgeV2] Failed to create avoid object: {e}")
 
     return context + f"Logged avoid: {what}"
 
@@ -7870,6 +7908,24 @@ def solution_applied(
         _log(f"[fo_solved] Indexed to project semantic: {error_message[:50]}...")
     except Exception as e:
         _log(f"[fo_solved] Project semantic index failed: {e}")
+
+    # V2: Create immutable knowledge object
+    try:
+        from core.knowledge_objects import create_object
+        actor = attribution.get("actor", "unknown")
+        actor_source = attribution.get("actor_source", "unknown")
+        create_object(
+            project_id=session.project_id,
+            obj_type="bug",
+            text=f"Error: {error_message}",
+            reason=f"Solution: {solution}",
+            actor=actor,
+            actor_source=actor_source,
+            links={"files": files_list} if files_list else {},
+        )
+        _log(f"[KnowledgeV2] Created bug object: {error_message[:50]}...")
+    except Exception as e:
+        _log(f"[KnowledgeV2] Failed to create bug object: {e}")
 
     # Track ROI
     _track_roi_event("solution_saved")
