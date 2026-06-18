@@ -437,3 +437,219 @@ def release_server_lock() -> None:
             LOCK_FILE.unlink()
         except IOError:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Stale Server Cleanup
+# ---------------------------------------------------------------------------
+
+def _kill_process(pid: int) -> bool:
+    """
+    Kill a process by PID.
+
+    Returns True if killed successfully or process was already dead.
+    """
+    import signal
+    import time
+
+    if not is_pid_running(pid):
+        return True
+
+    try:
+        # First try SIGTERM (graceful)
+        os.kill(pid, signal.SIGTERM)
+
+        # Wait up to 3 seconds for graceful shutdown
+        for _ in range(30):
+            time.sleep(0.1)
+            if not is_pid_running(pid):
+                return True
+
+        # Force kill with SIGKILL
+        os.kill(pid, signal.SIGKILL)
+        time.sleep(0.2)
+        return not is_pid_running(pid)
+
+    except (OSError, ProcessLookupError):
+        return True  # Process already dead
+
+
+def _is_fixonce_server_responding(port: int) -> bool:
+    """Check if a FixOnce server is responding on the given port."""
+    try:
+        url = f"http://localhost:{port}/api/ping"
+        req = urllib.request.urlopen(url, timeout=2)
+        if req.status == 200:
+            data = json.loads(req.read().decode())
+            return data.get("service") == "fixonce"
+    except Exception:
+        pass
+    return False
+
+
+def _get_server_install_path(port: int) -> Optional[str]:
+    """Get the install_path of a running FixOnce server."""
+    try:
+        url = f"http://localhost:{port}/api/ping"
+        req = urllib.request.urlopen(url, timeout=2)
+        if req.status == 200:
+            data = json.loads(req.read().decode())
+            if data.get("service") == "fixonce":
+                return data.get("install_path")
+    except Exception:
+        pass
+    return None
+
+
+def cleanup_stale_runtime() -> bool:
+    """
+    Clean up stale runtime.json if the PID is not running.
+
+    Returns True if cleanup was performed.
+    """
+    if not RUNTIME_FILE.exists():
+        return False
+
+    try:
+        with open(RUNTIME_FILE, 'r', encoding='utf-8') as f:
+            state = json.load(f)
+
+        pid = state.get("pid")
+        if pid and not is_pid_running(pid):
+            # PID is dead, clean up
+            RUNTIME_FILE.unlink()
+            if LOCK_FILE.exists():
+                LOCK_FILE.unlink()
+            return True
+
+    except (json.JSONDecodeError, IOError):
+        # Corrupted file, clean up
+        if RUNTIME_FILE.exists():
+            RUNTIME_FILE.unlink()
+        if LOCK_FILE.exists():
+            LOCK_FILE.unlink()
+        return True
+
+    return False
+
+
+def ensure_clean_startup(current_install_path: str) -> Tuple[bool, str]:
+    """
+    Ensure a clean startup by handling stale servers.
+
+    This function should be called at the very beginning of server startup.
+    It handles:
+    1. Stale runtime.json with dead PID → cleanup
+    2. Old FixOnce server from same install_path → kill and restart
+    3. FixOnce server from different install_path → error (user has multiple installs)
+    4. Port occupied by non-FixOnce process → error
+
+    Args:
+        current_install_path: Path to the current FixOnce installation
+
+    Returns:
+        (success, message) - True if startup can proceed, False with error message
+    """
+    # Step 1: Clean up stale runtime.json
+    cleanup_stale_runtime()
+
+    # Step 2: Check if there's still a running server in runtime.json
+    state = get_runtime_state()
+    if state:
+        old_pid = state.get("pid")
+        old_port = state.get("port")
+        old_install_path = state.get("install_path", "")
+
+        if is_pid_running(old_pid):
+            # Server is running - check if it's from the same install
+            if old_install_path == current_install_path:
+                # Same install path - this is a stale code scenario
+                # Kill the old server so we can start fresh
+                print(f"[FixOnce] Stopping stale server (PID {old_pid}) to reload code...")
+                if _kill_process(old_pid):
+                    # Clean up state files
+                    clear_runtime_state()
+                    release_server_lock()
+                    return True, "Stale server stopped, proceeding with clean startup"
+                else:
+                    return False, f"Failed to stop stale server (PID {old_pid}). Please kill it manually."
+            else:
+                # Different install path - user has multiple installs
+                return False, (
+                    f"Another FixOnce server is running from a different location:\n"
+                    f"  Running: {old_install_path}\n"
+                    f"  Current: {current_install_path}\n"
+                    f"Please stop the other server first (PID {old_pid})."
+                )
+
+    # Step 3: Check if the default port is available
+    if not is_port_available(DEFAULT_PORT):
+        # Port is busy - check if it's a FixOnce server
+        if _is_fixonce_server_responding(DEFAULT_PORT):
+            server_path = _get_server_install_path(DEFAULT_PORT)
+            if server_path == current_install_path:
+                # Our server is running but runtime.json was cleaned up somehow
+                # This shouldn't happen, but handle it gracefully
+                return False, (
+                    f"FixOnce server already running on port {DEFAULT_PORT}.\n"
+                    f"If you need to restart, stop the existing server first."
+                )
+            else:
+                return False, (
+                    f"Another FixOnce server is running on port {DEFAULT_PORT}:\n"
+                    f"  Install path: {server_path or 'unknown'}\n"
+                    f"Please stop it first or use a different port."
+                )
+        else:
+            # Port occupied by non-FixOnce process
+            # Don't block - the server will fall back to another port
+            pass
+
+    return True, "Clean startup"
+
+
+def get_stale_server_info() -> Optional[Dict[str, Any]]:
+    """
+    Get information about a potentially stale server.
+
+    Returns dict with server info if a stale server is detected, None otherwise.
+    """
+    if not RUNTIME_FILE.exists():
+        return None
+
+    try:
+        with open(RUNTIME_FILE, 'r', encoding='utf-8') as f:
+            state = json.load(f)
+
+        pid = state.get("pid")
+        port = state.get("port")
+
+        # Check if PID is dead
+        if pid and not is_pid_running(pid):
+            return {
+                "status": "dead_pid",
+                "pid": pid,
+                "port": port,
+                "install_path": state.get("install_path"),
+                "started_at": state.get("started_at"),
+                "message": f"Server PID {pid} is not running (stale runtime.json)",
+            }
+
+        # Check if server is responding
+        if port and not _is_fixonce_server_responding(port):
+            return {
+                "status": "not_responding",
+                "pid": pid,
+                "port": port,
+                "install_path": state.get("install_path"),
+                "started_at": state.get("started_at"),
+                "message": f"Server PID {pid} exists but not responding on port {port}",
+            }
+
+        return None
+
+    except (json.JSONDecodeError, IOError):
+        return {
+            "status": "corrupted",
+            "message": "runtime.json is corrupted",
+        }
