@@ -22,6 +22,26 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -z "$FILE_PATH" ]; then
   # Extract last argument from cat/head/tail/less/bat commands (typically the file)
   if echo "$COMMAND" | grep -qE '^(cat|head|tail|less|bat)[[:space:]]'; then
     FILE_PATH=$(echo "$COMMAND" | cut -d'|' -f1 | cut -d'&' -f1 | cut -d';' -f1 | awk '{print $NF}')
+  # Detect python -c / python3 -c with file read patterns
+  elif echo "$COMMAND" | grep -qE '^python3? -c '; then
+    # Pattern: open("path") or open('path')
+    EXTRACTED=$(echo "$COMMAND" | sed -n "s/.*open(['\"]\\([^'\"]*\\)['\"]).*$/\\1/p" | head -1)
+    if [ -n "$EXTRACTED" ]; then
+      FILE_PATH="$EXTRACTED"
+    else
+      # Pattern: Path("path").read_text() or Path('path').read_text()
+      EXTRACTED=$(echo "$COMMAND" | sed -n "s/.*Path(['\"]\\([^'\"]*\\)['\"]).*$/\\1/p" | head -1)
+      if [ -n "$EXTRACTED" ]; then
+        FILE_PATH="$EXTRACTED"
+      fi
+    fi
+  # Detect git show <rev>:<path> that reads file contents
+  elif echo "$COMMAND" | grep -qE '^git show [^[:space:]]*:[^[:space:]]+'; then
+    # Pattern: git show HEAD:path, git show :path, git show abc123:path
+    EXTRACTED=$(echo "$COMMAND" | sed -n 's/^git show [^:]*:\([^[:space:]]*\).*/\1/p' | head -1)
+    if [ -n "$EXTRACTED" ]; then
+      FILE_PATH="$EXTRACTED"
+    fi
   fi
 fi
 
@@ -60,23 +80,20 @@ fi
 
 # Extract context text
 CONTEXT=$(echo "$RESPONSE" | jq -r '.context // empty')
+WARNINGS_COUNT=$(echo "$RESPONSE" | jq -r '.warnings_count // 0')
 COUNT=$(echo "$RESPONSE" | jq -r '.count // 0')
 
-if echo "$CONTEXT" | grep -q "FIXONCE_BLOCKING_WARNING"; then
-  REASON=$(echo "$CONTEXT" | jq -Rs '.')
-  cat <<EOF
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "deny",
-    "permissionDecisionReason": $REASON
-  }
-}
-EOF
+# Protected file warnings are injected as context, not blocked
+# FixOnce is a memory layer, not a permission system
+
+# Skip only if no context at all (no warnings AND no activity)
+if [ -z "$CONTEXT" ]; then
+  echo '{"continue": true}'
   exit 0
 fi
 
-if [ -z "$CONTEXT" ] || [ "$COUNT" = "0" ]; then
+# Skip if no warnings and no activity
+if [ "$WARNINGS_COUNT" = "0" ] && [ "$COUNT" = "0" ]; then
   echo '{"continue": true}'
   exit 0
 fi

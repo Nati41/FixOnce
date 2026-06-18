@@ -615,35 +615,28 @@ def _get_warnings_for_file(path: str, area: str) -> list:
     return applicable
 
 
-def _format_blocking_warning(warning: dict, file_path: str) -> str:
-    """Format a blocking warning as operational STOP_AND_CONFIRM."""
-    blocked = warning.get("blocked_actions", [])
-    allowed = warning.get("allowed_actions", [])
+def _format_protected_file_warning(warning: dict, file_path: str) -> str:
+    """Format a protected file warning with history context."""
+    high_risk = warning.get("blocked_actions", [])
+    lower_risk = warning.get("allowed_actions", [])
     reason = warning.get("warning", "")
 
-    blocked_lines = "\n".join(f"  • {action}" for action in blocked)
-    allowed_lines = "\n".join(f"  • {action}" for action in allowed)
+    high_risk_lines = "\n".join(f"  • {action}" for action in high_risk)
+    lower_risk_lines = "\n".join(f"  • {action}" for action in lower_risk)
 
-    return f"""🚨 FIXONCE_BLOCKING_WARNING
-severity: blocking
-action: stop_and_confirm
-
+    return f"""⚠️ FIXONCE_PROTECTED_FILE
 scope: {file_path}
 
-reason:
+history:
 {reason}
 
-blocked_until_confirmation:
-{blocked_lines}
+high_risk_actions:
+{high_risk_lines}
 
-allowed_without_confirmation:
-{allowed_lines}
+lower_risk_actions:
+{lower_risk_lines}
 
-Required user choice:
-1. Targeted fix only
-2. Read-only review
-3. Proceed with confirmation
-4. Stop"""
+Review project memory above before proceeding."""
 
 
 def _is_noise_command(command: str) -> bool:
@@ -684,21 +677,21 @@ def _get_relevant_project_memory(file_path: str, area: str) -> dict:
         try:
             from core.project_semantic import search_project
 
-            decisions = search_project(project_id, query, k=2, doc_type="decision", min_score=0.25)
+            decisions = search_project(project_id, query, k=2, doc_type="decision", min_score=0.60)
             for r in decisions[:2]:
                 result["decisions"].append({
                     "text": r.text[:120] + ("..." if len(r.text) > 120 else ""),
                     "score": int(r.score * 100)
                 })
 
-            errors = search_project(project_id, query, k=2, doc_type="error", min_score=0.25)
+            errors = search_project(project_id, query, k=2, doc_type="error", min_score=0.60)
             for r in errors[:2]:
                 result["solved"].append({
                     "text": r.text[:120] + ("..." if len(r.text) > 120 else ""),
                     "score": int(r.score * 100)
                 })
 
-            avoids = search_project(project_id, query, k=2, doc_type="avoid", min_score=0.25)
+            avoids = search_project(project_id, query, k=2, doc_type="avoid", min_score=0.60)
             for r in avoids[:2]:
                 result["avoid"].append({
                     "text": r.text[:120] + ("..." if len(r.text) > 120 else ""),
@@ -807,7 +800,7 @@ def get_area_context():
         # Add warnings at top (high-signal)
         for w in file_warnings:
             if w.get("severity") == "blocking":
-                context_lines.append(_format_blocking_warning(w, path))
+                context_lines.append(_format_protected_file_warning(w, path))
             else:
                 context_lines.append(f"⚠️ {w['warning']}")
 

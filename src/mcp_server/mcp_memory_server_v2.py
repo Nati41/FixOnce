@@ -7858,6 +7858,19 @@ def solution_applied(
     except Exception as e:
         _log(f"[fo_solved] Semantic engine save failed: {e}")
 
+    # Index to project semantic index for area-context injection
+    try:
+        from core.project_semantic import index_error
+        full_text = f"Error: {error_message}. Solution: {solution}"
+        index_error(session.project_id, full_text, {
+            "error": error_message,
+            "solution": solution,
+            "files": files,
+        })
+        _log(f"[fo_solved] Indexed to project semantic: {error_message[:50]}...")
+    except Exception as e:
+        _log(f"[fo_solved] Project semantic index failed: {e}")
+
     # Track ROI
     _track_roi_event("solution_saved")
 

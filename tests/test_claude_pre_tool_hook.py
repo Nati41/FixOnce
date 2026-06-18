@@ -48,7 +48,7 @@ class TestClaudePreToolHook(unittest.TestCase):
         )
         return json.loads(result.stdout), self.args_file.read_text(encoding="utf-8")
 
-    def test_blocks_on_fixonce_warning_even_when_count_is_zero(self):
+    def test_injects_warning_for_protected_file(self):
         output, curl_args = self.run_hook(
             {
                 "cwd": str(PROJECT_ROOT),
@@ -58,15 +58,15 @@ class TestClaudePreToolHook(unittest.TestCase):
             {
                 "count": 0,
                 "warnings_count": 1,
-                "context": "FIXONCE_BLOCKING_WARNING\nseverity: blocking\nscope: src/core/project_context.py",
+                "context": "FIXONCE_PROTECTED_FILE\nscope: src/core/project_context.py\nhistory: Critical file",
             },
         )
 
+        self.assertTrue(output["continue"])
         hook_output = output["hookSpecificOutput"]
         self.assertEqual(hook_output["hookEventName"], "PreToolUse")
-        self.assertEqual(hook_output["permissionDecision"], "deny")
-        self.assertIn("FIXONCE_BLOCKING_WARNING", hook_output["permissionDecisionReason"])
-        self.assertIn("src/core/project_context.py", hook_output["permissionDecisionReason"])
+        self.assertIn("FIXONCE_PROTECTED_FILE", hook_output["additionalContext"])
+        self.assertIn("src/core/project_context.py", hook_output["additionalContext"])
         self.assertIn("path=src/core/project_context.py", curl_args)
 
     def test_injects_context_for_normal_area_context(self):
@@ -88,7 +88,7 @@ class TestClaudePreToolHook(unittest.TestCase):
         self.assertIn("WINDOWS SUBPROCESS RISK", hook_output["additionalContext"])
         self.assertIn("path=src/core/windows_subprocess.py", curl_args)
 
-    def test_blocks_bash_cat_on_protected_file(self):
+    def test_warns_bash_cat_on_protected_file(self):
         output, curl_args = self.run_hook(
             {
                 "cwd": str(PROJECT_ROOT),
@@ -98,16 +98,16 @@ class TestClaudePreToolHook(unittest.TestCase):
             {
                 "count": 0,
                 "warnings_count": 1,
-                "context": "FIXONCE_BLOCKING_WARNING\nseverity: blocking\nscope: src/core/project_context.py",
+                "context": "FIXONCE_PROTECTED_FILE\nscope: src/core/project_context.py",
             },
         )
 
+        self.assertTrue(output["continue"])
         hook_output = output["hookSpecificOutput"]
-        self.assertEqual(hook_output["permissionDecision"], "deny")
-        self.assertIn("FIXONCE_BLOCKING_WARNING", hook_output["permissionDecisionReason"])
+        self.assertIn("FIXONCE_PROTECTED_FILE", hook_output["additionalContext"])
         self.assertIn("path=src/core/project_context.py", curl_args)
 
-    def test_blocks_bash_head_with_flags_on_protected_file(self):
+    def test_warns_bash_head_with_flags_on_protected_file(self):
         output, curl_args = self.run_hook(
             {
                 "cwd": str(PROJECT_ROOT),
@@ -117,12 +117,13 @@ class TestClaudePreToolHook(unittest.TestCase):
             {
                 "count": 0,
                 "warnings_count": 1,
-                "context": "FIXONCE_BLOCKING_WARNING\nseverity: blocking",
+                "context": "FIXONCE_PROTECTED_FILE\nscope: project_context.py",
             },
         )
 
+        self.assertTrue(output["continue"])
         hook_output = output["hookSpecificOutput"]
-        self.assertEqual(hook_output["permissionDecision"], "deny")
+        self.assertIn("FIXONCE_PROTECTED_FILE", hook_output["additionalContext"])
         self.assertIn("path=src/core/project_context.py", curl_args)
 
     def test_allows_bash_non_read_commands(self):
@@ -136,6 +137,195 @@ class TestClaudePreToolHook(unittest.TestCase):
                 "cwd": str(PROJECT_ROOT),
                 "tool_name": "Bash",
                 "tool_input": {"command": "ls -la"},
+            }),
+            text=True,
+            capture_output=True,
+            cwd=PROJECT_ROOT,
+            env=env,
+            check=True,
+        )
+        output = json.loads(result.stdout)
+        self.assertTrue(output["continue"])
+
+    def test_warns_python_open_read_on_protected_file(self):
+        """Python one-liner with open().read() gets warning on protected files."""
+        output, curl_args = self.run_hook(
+            {
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": 'python3 -c "print(open(\'/Users/haimdayan/Desktop/FixOnce/src/core/project_context.py\').read())"'},
+            },
+            {
+                "count": 0,
+                "warnings_count": 1,
+                "context": "FIXONCE_PROTECTED_FILE\nscope: src/core/project_context.py",
+            },
+        )
+
+        self.assertTrue(output["continue"])
+        hook_output = output["hookSpecificOutput"]
+        self.assertIn("FIXONCE_PROTECTED_FILE", hook_output["additionalContext"])
+        self.assertIn("project_context.py", curl_args)
+
+    def test_warns_python_pathlib_read_on_protected_file(self):
+        """Python one-liner with Path().read_text() gets warning on protected files."""
+        output, curl_args = self.run_hook(
+            {
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": "python3 -c \"from pathlib import Path; print(Path('/Users/haimdayan/Desktop/FixOnce/src/core/project_context.py').read_text())\""},
+            },
+            {
+                "count": 0,
+                "warnings_count": 1,
+                "context": "FIXONCE_PROTECTED_FILE\nscope: src/core/project_context.py",
+            },
+        )
+
+        self.assertTrue(output["continue"])
+        hook_output = output["hookSpecificOutput"]
+        self.assertIn("FIXONCE_PROTECTED_FILE", hook_output["additionalContext"])
+        self.assertIn("project_context.py", curl_args)
+
+    def test_allows_python_command_without_file_read(self):
+        """Python commands without file reads should be allowed."""
+        env = os.environ.copy()
+        env["PATH"] = f"{self.fake_bin}{os.pathsep}{env.get('PATH', '')}"
+        env["HOME"] = str(self.temp_path)
+
+        result = subprocess.run(
+            [str(HOOK)],
+            input=json.dumps({
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": "python3 -c \"print('hello world')\""},
+            }),
+            text=True,
+            capture_output=True,
+            cwd=PROJECT_ROOT,
+            env=env,
+            check=True,
+        )
+        output = json.loads(result.stdout)
+        self.assertTrue(output["continue"])
+
+
+    def test_warns_git_show_head_on_protected_file(self):
+        """git show HEAD:path gets warning on protected files."""
+        output, curl_args = self.run_hook(
+            {
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": "git show HEAD:src/core/project_context.py"},
+            },
+            {
+                "count": 0,
+                "warnings_count": 1,
+                "context": "FIXONCE_PROTECTED_FILE\nscope: src/core/project_context.py",
+            },
+        )
+
+        self.assertTrue(output["continue"])
+        hook_output = output["hookSpecificOutput"]
+        self.assertIn("FIXONCE_PROTECTED_FILE", hook_output["additionalContext"])
+        self.assertIn("path=src/core/project_context.py", curl_args)
+
+    def test_warns_git_show_index_on_protected_file(self):
+        """git show :path (index version) gets warning on protected files."""
+        output, curl_args = self.run_hook(
+            {
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": "git show :src/core/project_context.py"},
+            },
+            {
+                "count": 0,
+                "warnings_count": 1,
+                "context": "FIXONCE_PROTECTED_FILE\nscope: project_context.py",
+            },
+        )
+
+        self.assertTrue(output["continue"])
+        hook_output = output["hookSpecificOutput"]
+        self.assertIn("FIXONCE_PROTECTED_FILE", hook_output["additionalContext"])
+        self.assertIn("path=src/core/project_context.py", curl_args)
+
+    def test_warns_git_show_commit_on_protected_file(self):
+        """git show <commit>:path gets warning on protected files."""
+        output, curl_args = self.run_hook(
+            {
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": "git show abc123def:src/core/project_context.py"},
+            },
+            {
+                "count": 0,
+                "warnings_count": 1,
+                "context": "FIXONCE_PROTECTED_FILE\nscope: project_context.py",
+            },
+        )
+
+        self.assertTrue(output["continue"])
+        hook_output = output["hookSpecificOutput"]
+        self.assertIn("FIXONCE_PROTECTED_FILE", hook_output["additionalContext"])
+        self.assertIn("path=src/core/project_context.py", curl_args)
+
+    def test_allows_git_status(self):
+        """Normal git commands like git status should be allowed."""
+        env = os.environ.copy()
+        env["PATH"] = f"{self.fake_bin}{os.pathsep}{env.get('PATH', '')}"
+        env["HOME"] = str(self.temp_path)
+
+        result = subprocess.run(
+            [str(HOOK)],
+            input=json.dumps({
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": "git status"},
+            }),
+            text=True,
+            capture_output=True,
+            cwd=PROJECT_ROOT,
+            env=env,
+            check=True,
+        )
+        output = json.loads(result.stdout)
+        self.assertTrue(output["continue"])
+
+    def test_allows_git_log(self):
+        """git log commands should be allowed."""
+        env = os.environ.copy()
+        env["PATH"] = f"{self.fake_bin}{os.pathsep}{env.get('PATH', '')}"
+        env["HOME"] = str(self.temp_path)
+
+        result = subprocess.run(
+            [str(HOOK)],
+            input=json.dumps({
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": "git log --oneline -10"},
+            }),
+            text=True,
+            capture_output=True,
+            cwd=PROJECT_ROOT,
+            env=env,
+            check=True,
+        )
+        output = json.loads(result.stdout)
+        self.assertTrue(output["continue"])
+
+    def test_allows_git_diff_stat(self):
+        """git diff --stat should be allowed."""
+        env = os.environ.copy()
+        env["PATH"] = f"{self.fake_bin}{os.pathsep}{env.get('PATH', '')}"
+        env["HOME"] = str(self.temp_path)
+
+        result = subprocess.run(
+            [str(HOOK)],
+            input=json.dumps({
+                "cwd": str(PROJECT_ROOT),
+                "tool_name": "Bash",
+                "tool_input": {"command": "git diff --stat"},
             }),
             text=True,
             capture_output=True,

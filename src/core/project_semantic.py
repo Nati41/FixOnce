@@ -226,6 +226,20 @@ def rebuild_project_index(project_id: str) -> Dict[str, Any]:
             })
             docs_added += 1
 
+    # Index solved bugs (debug_sessions)
+    for session in memory.get('debug_sessions', []):
+        error = session.get('error', '')
+        solution = session.get('solution', '')
+        if error and solution:
+            # Format: "Error: X. Solution: Y" for semantic matching
+            full_text = f"Error: {error}. Solution: {solution}"
+            index.add("error", full_text, {
+                "error": error,
+                "solution": solution,
+                "files": session.get('files', ''),
+            })
+            docs_added += 1
+
     return {
         "status": "ok",
         "project_id": project_id,

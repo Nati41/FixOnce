@@ -138,9 +138,21 @@ def detect_antonym_conflict(text1: str, text2: str) -> Optional[Tuple[str, str, 
     text2_lower = text2.lower()
 
     # Stop words that should not be considered as negation targets
-    STOP_WORDS = {"the", "a", "an", "to", "in", "on", "at", "is", "are", "be", "we", "it",
-                  "use", "store", "do", "for", "with", "from", "by", "as", "of", "and", "or",
-                  "provide", "mvp", "v1", "v2", "phase", "version"}  # Also exclude version/phase markers
+    # Includes: articles, prepositions, verbs, adjectives/adverbs that modify but aren't the target
+    STOP_WORDS = {
+        # Articles and prepositions
+        "the", "a", "an", "to", "in", "on", "at", "for", "with", "from", "by", "as", "of", "and", "or",
+        # Common verbs
+        "is", "are", "be", "we", "it", "use", "store", "do", "have", "has", "get", "set", "call",
+        # Adjectives/adverbs that modify but aren't the target (false positive sources)
+        "manual", "manually", "explicit", "explicitly", "automatic", "automatically", "auto",
+        "only", "just", "also", "even", "still", "already", "directly", "immediately",
+        "specific", "specifically", "actual", "actually", "real", "really",
+        # Project-specific terms that appear everywhere
+        "fixonce", "memory", "project", "decision", "context", "session", "agent",
+        # Version/phase markers
+        "provide", "mvp", "v1", "v2", "phase", "version",
+    }
 
     def _get_negated_target(text: str, neg_word: str) -> Optional[str]:
         """Get the primary substantive word being negated (first 1-3 words after negation)."""
