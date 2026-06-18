@@ -14,25 +14,27 @@ knowledge_bp = Blueprint('knowledge', __name__)
 @knowledge_bp.route('/api/knowledge/pending', methods=['GET'])
 def get_pending_knowledge():
     """
-    Get pending knowledge objects for the active project.
+    Get pending knowledge objects.
+
+    Args (query params):
+        project_id: Optional. If provided, use this project.
+                   Otherwise, fall back to active/selected project.
 
     Returns objects that have been created but not yet committed.
     This is a preview for the future fo_commit feature.
     """
     try:
-        from managers.multi_project_manager import get_active_project
         from core.knowledge_objects import get_pending_objects, get_pending_changes
 
-        active = get_active_project()
-        if not active:
-            return jsonify({
-                "status": "no_project",
-                "message": "No active project",
-                "pending": {},
-                "counts": {},
-            })
+        # Priority: request arg > active project
+        project_id = request.args.get("project_id")
 
-        project_id = active.get("project_id")
+        if not project_id:
+            from managers.multi_project_manager import get_active_project
+            active = get_active_project()
+            if active:
+                project_id = active.get("project_id")
+
         if not project_id:
             return jsonify({
                 "status": "no_project",
@@ -83,21 +85,24 @@ def get_pending_knowledge():
 @knowledge_bp.route('/api/knowledge/stats', methods=['GET'])
 def get_knowledge_stats():
     """
-    Get knowledge object statistics for the active project.
+    Get knowledge object statistics.
+
+    Args (query params):
+        project_id: Optional. If provided, use this project.
+                   Otherwise, fall back to active/selected project.
     """
     try:
-        from managers.multi_project_manager import get_active_project
         from core.knowledge_objects import get_object_count, get_pending_changes
 
-        active = get_active_project()
-        if not active:
-            return jsonify({
-                "status": "no_project",
-                "total_objects": 0,
-                "pending_count": 0,
-            })
+        # Priority: request arg > active project
+        project_id = request.args.get("project_id")
 
-        project_id = active.get("project_id")
+        if not project_id:
+            from managers.multi_project_manager import get_active_project
+            active = get_active_project()
+            if active:
+                project_id = active.get("project_id")
+
         if not project_id:
             return jsonify({
                 "status": "no_project",
