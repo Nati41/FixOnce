@@ -940,6 +940,78 @@ input:checked + .slider:before {
   font-size: 13px;
 }
 
+/* Pending Knowledge Card (V2) */
+.pending-knowledge-card {
+  border: 1px solid rgba(138, 180, 248, 0.15);
+  background: linear-gradient(180deg, rgba(138, 180, 248, 0.03) 0%, var(--surface) 100%);
+}
+
+.pending-knowledge-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.pending-knowledge-group {
+  margin-bottom: 12px;
+}
+
+.pending-knowledge-group-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pending-knowledge-group-count {
+  background: rgba(138, 180, 248, 0.15);
+  color: #8ab4f8;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.pending-knowledge-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.pending-knowledge-item-text {
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.pending-knowledge-item-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.pending-knowledge-empty {
+  text-align: center;
+  padding: 16px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.pending-knowledge-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
 .agent-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2609,6 +2681,24 @@ body.native-app .header-btn {
   </div>
 </div>
 
+<!-- Pending Knowledge (V2) -->
+<div class="card grid-full pending-knowledge-card" id="pendingKnowledgeCard" style="display: none;">
+  <div class="card-label">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;">
+      <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+      <path d="M2 17l10 5 10-5"/>
+      <path d="M2 12l10 5 10-5"/>
+    </svg>
+    Pending Knowledge
+  </div>
+  <div id="pendingKnowledgeList" class="pending-knowledge-list">
+    <div class="pending-knowledge-empty">No pending changes</div>
+  </div>
+  <div class="pending-knowledge-footer">
+    Objects created this session. Future: fo_commit will bundle these.
+  </div>
+</div>
+
 <!-- AI Summary -->
 <div class="card" id="aiSummaryCard" style="display: none;">
   <div class="card-label">AI</div>
@@ -3770,6 +3860,61 @@ async function clearPendingMemories() {
 document.getElementById('saveMemoriesBtn')?.addEventListener('click', savePendingMemories);
 document.getElementById('clearMemoriesBtn')?.addEventListener('click', clearPendingMemories);
 
+// Pending Knowledge (V2)
+async function loadPendingKnowledge() {
+  try {
+    const resp = await fetch(API + '/api/knowledge/pending', {
+      headers: { 'X-Dashboard': 'true' },
+      signal: AbortSignal.timeout(3000)
+    });
+    if (!resp.ok) return;
+
+    const data = await resp.json();
+    const card = document.getElementById('pendingKnowledgeCard');
+    const list = document.getElementById('pendingKnowledgeList');
+
+    if (!card || !list) return;
+
+    const total = data.total || 0;
+
+    if (total === 0) {
+      card.style.display = 'none';
+      return;
+    }
+
+    card.style.display = '';
+
+    const groups = [
+      { key: 'decisions', label: 'Decisions', items: data.pending?.decisions || [] },
+      { key: 'bugs', label: 'Solved Bugs', items: data.pending?.bugs || [] },
+      { key: 'avoids', label: 'Avoid Patterns', items: data.pending?.avoids || [] },
+      { key: 'questions', label: 'Questions', items: data.pending?.questions || [] },
+    ].filter(g => g.items.length > 0);
+
+    let html = '';
+    groups.forEach(group => {
+      html += `
+        <div class="pending-knowledge-group">
+          <div class="pending-knowledge-group-header">
+            ${group.label}
+            <span class="pending-knowledge-group-count">${group.items.length}</span>
+          </div>
+          ${group.items.map(item => `
+            <div class="pending-knowledge-item">
+              <div class="pending-knowledge-item-text">${escapeHtml(item.text || '')}</div>
+              <div class="pending-knowledge-item-meta">${item.id} · ${item.actor || 'unknown'}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    });
+
+    list.innerHTML = html;
+  } catch (e) {
+    logPollingError('Pending knowledge fetch error:', e);
+  }
+}
+
 // Init
 // AI Tools Detection
 async function loadAITools() {
@@ -3896,8 +4041,9 @@ fetchData();
 fetchOnboarding();
 fetchActivity();
 loadPendingMemories();
+loadPendingKnowledge();
 loadAITools();
-setInterval(() => { fetchData(); fetchOnboarding(); fetchActivity(); loadAITools(); loadPendingMemories(); }, 5000);
+setInterval(() => { fetchData(); fetchOnboarding(); fetchActivity(); loadAITools(); loadPendingMemories(); loadPendingKnowledge(); }, 5000);
 </script>
 </body>
 </html>
