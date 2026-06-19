@@ -654,7 +654,7 @@ def _run_flask(strict_port: bool = False):
     _startup_log(f"_run_flask enter pid={current_pid} strict_port={strict_port}")
 
     # Ensure clean startup - handle stale servers automatically
-    current_install_path = str(PROJECT_ROOT)
+    current_install_path = str(PROJECT_DIR)
     success, message = ensure_clean_startup(current_install_path)
     if not success:
         print()

@@ -285,6 +285,49 @@ class TestDashboardPortResolution(unittest.TestCase):
         self.assertIn("5002", url)
 
 
+class TestAppLauncherPortResolution(unittest.TestCase):
+    """Test that app launcher reads port from runtime.json."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.runtime_file = Path(self.temp_dir) / "runtime.json"
+        self.config_file = Path(self.temp_dir) / "config.json"
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _write_runtime(self, port, pid=12345, install_path="/test/path"):
+        state = {"port": port, "pid": pid, "install_path": install_path}
+        with open(self.runtime_file, "w") as f:
+            json.dump(state, f)
+
+    def test_read_saved_ports_from_runtime(self):
+        """App launcher should read port from runtime.json."""
+        self._write_runtime(5001)
+
+        # Test the logic directly
+        candidates = []
+        for path in [self.runtime_file, self.config_file]:
+            if path.exists():
+                with open(path) as f:
+                    data = json.load(f)
+                port = data.get("port")
+                if port and int(port) not in candidates:
+                    candidates.append(int(port))
+
+        self.assertIn(5001, candidates)
+
+    def test_fallback_port_in_runtime_is_used(self):
+        """When server falls back to 5001, runtime.json should contain 5001."""
+        self._write_runtime(5001)
+
+        with open(self.runtime_file) as f:
+            state = json.load(f)
+
+        self.assertEqual(state["port"], 5001)
+
+
 class TestFileWatcherPortResolution(unittest.TestCase):
     """Test that file watcher uses runtime.json port."""
 

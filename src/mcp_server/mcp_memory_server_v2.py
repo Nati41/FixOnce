@@ -6644,110 +6644,52 @@ def log_decision(
         return context + f"Decision queued for review: {decision}"
 
     session = _get_session()
+
+    # Get actor attribution from MCP session
+    attribution = _new_record_attribution("fo_decide")
+    actor = attribution.get("actor", "mcp")
+    actor_source = attribution.get("actor_source", "mcp_session")
+
+    # Load memory using MCP's loader (allows test patching)
     memory = _load_project(session.project_id)
 
-    if 'decisions' not in memory:
-        memory['decisions'] = []
+    # Call core business logic (transport-independent)
+    from core.decisions import record_decision
+    result = record_decision(
+        project_id=session.project_id,
+        text=decision,
+        reason=reason,
+        actor=actor,
+        actor_source=actor_source,
+        force=force,
+        relation=relation,
+        related_decision=related_decision,
+        _memory=memory,
+        _save_fn=lambda pid, mem: _save_project(pid, mem),
+    )
 
-    # POLICY ENFORCEMENT: Check for conflicts
-    policy_message = ""
-    if _policy_available:
-        # Filter to active decisions only for validation
-        active_decisions = [d for d in memory['decisions'] if not d.get('superseded')]
-
-        # Extract vision non-negotiables and avoid patterns for validation
-        vision = _ensure_vision_store(memory)
-        non_negotiables = _active_vision_items(vision, "non_negotiables")
-        avoid_patterns = [p for p in memory.get("avoid", []) if isinstance(p, dict)]
-
-        decision_gate_evaluator = None
-        if _intervention_policy_available:
-            decision_gate_evaluator = lambda ctx: _evaluate_current_decision_conflict_gate(
-                tool_name="log_decision",
-                decision_conflict_severity=ctx.decision_conflict_severity,
-                conflicts=ctx.extra.get("conflicts", []),
-                intent=decision,
-            )
-        is_valid, message, conflicts = validate_decision(
-            decision, reason, active_decisions,
-            non_negotiables=non_negotiables,
-            avoid_patterns=avoid_patterns,
-            force=force, gate_evaluator=decision_gate_evaluator,
-            relation=relation,
-            related_decision_text=related_decision,
-        )
-
-        _log(f"[PolicyEngine] Validating: {decision[:50]}...")
-        _log(f"[PolicyEngine] Against {len(active_decisions)} active decisions")
-        _log(f"[PolicyEngine] Result: is_valid={is_valid}, conflicts={len(conflicts)}")
-
-        if conflicts:
+    # Handle blocked decisions
+    if not result.success:
+        if result.conflicts:
+            # Persist conflicts for resolution UI
             _persist_detected_decision_conflicts(
                 session.project_id,
-                conflicts,
+                result.conflicts,
                 decision,
                 reason,
                 resolve_as_override=bool(force),
             )
+        return context + f"\n{result.message}\n\nDecision NOT logged."
 
-        if not is_valid:
-            # BLOCK the decision - return error
-            return context + f"\n{message}\n\nDecision NOT logged."
-
-        if conflicts:
-            policy_message = f"\n{message}"
-
-    else:
-        # Fallback: simple word overlap check
-        decision_lower = decision.lower()
-        for existing in memory['decisions']:
-            if existing.get("superseded"):
-                continue
-            existing_text = existing.get('decision', '').lower()
-            decision_words = set(decision_lower.split())
-            existing_words = set(existing_text.split())
-            overlap = decision_words & existing_words
-            if len(overlap) >= 3:
-                policy_message = f"\n⚠️ **Similar decision exists:** {existing.get('decision', '')[:60]}..."
-                break
-
-    # Log the decision
-    decision_record = {
-        "type": "decision",
-        "decision": decision,
-        "reason": reason,
-        "expected_benefit": "",
-        "timestamp": datetime.now().isoformat(),
-        "importance": "permanent",
-        "forced": force if force else None
-    }
-    relation = (relation or "").lower()
-    if relation in {"refines", "clarifies"} and related_decision:
-        decision_record["relation"] = relation
-        decision_record["related_decision"] = related_decision
-        for existing in memory.get("decisions", []):
-            if existing.get("superseded"):
-                continue
-            existing_text = existing.get("decision", "")
-            if (
-                existing_text.lower() == related_decision.lower()
-                or related_decision.lower() in existing_text.lower()
-                or existing_text.lower() in related_decision.lower()
-            ):
-                decision_record["related_decision_fingerprint"] = decision_fingerprint(existing)
-                break
-        else:
-            decision_record["related_decision_fingerprint"] = decision_fingerprint(related_decision)
-    decision_record.update(_new_record_attribution("fo_decide"))
-    memory['decisions'].append(_attach_memory_quality_audit("decision", decision_record))
-    _maybe_record_solved_bug_from_memory_event(
-        memory,
-        source="auto_classified:decision",
-        problem=decision,
-        solution=reason or decision,
-    )
-
-    _save_project(session.project_id, memory)
+    # Persist conflicts even for successful force overrides
+    if result.conflicts and force:
+        _persist_detected_decision_conflicts(
+            session.project_id,
+            result.conflicts,
+            decision,
+            reason,
+            resolve_as_override=True,
+        )
 
     # Log MCP activity for dashboard
     _log_mcp_activity("log_decision", {
@@ -6756,69 +6698,46 @@ def log_decision(
         "forced": force
     })
 
-    # Auto-index for semantic search
-    semantic = _load_project_semantic()
-    if semantic:
-        try:
-            semantic["index_decision"](session.project_id, decision, reason)
-        except Exception as e:
-            _log(f"[SemanticIndex] Failed to index decision: {e}")
+    # MCP-specific: auto-classify as solved bug if applicable
+    memory = _load_project(session.project_id)
+    _maybe_record_solved_bug_from_memory_event(
+        memory,
+        source="auto_classified:decision",
+        problem=decision,
+        solution=reason or decision,
+    )
 
-    # V2: Create immutable knowledge object
-    try:
-        from core.knowledge_objects import create_object
-        actor = decision_record.get("actor", "unknown")
-        actor_source = decision_record.get("actor_source", "unknown")
-        links = {}
-        if relation and related_decision:
-            links[relation] = related_decision
-        create_object(
-            project_id=session.project_id,
-            obj_type="decision",
-            text=decision,
-            reason=reason,
-            actor=actor,
-            actor_source=actor_source,
-            links=links,
-        )
-        _log(f"[KnowledgeV2] Created decision object: {decision[:50]}...")
-    except Exception as e:
-        _log(f"[KnowledgeV2] Failed to create decision object: {e}")
-
-    # Navigator V1: Return impact analysis and next_action
+    # Format MCP response with Navigator suggestions
     lines = [f"✓ Decision recorded: {decision}"]
     lines.append("")
 
-    # Count related decisions
-    active_decisions = [d for d in memory['decisions'] if not d.get('superseded')]
-    related = []
+    # Count related decisions for response
+    active_decisions = [d for d in memory.get('decisions', []) if not d.get('superseded')]
+    related_list = []
     decision_words = set(decision.lower().split())
-    for d in active_decisions[:-1]:  # Exclude the one we just added
+    for d in active_decisions[:-1]:
         d_words = set(d.get('decision', '').lower().split())
         if len(decision_words & d_words) >= 2:
-            related.append(d.get('decision', '')[:50])
+            related_list.append(d.get('decision', '')[:50])
 
-    # Impact analysis
-    if related:
-        lines.append(f"Related decisions: {len(related)}")
-        for r in related[:2]:
+    if related_list:
+        lines.append(f"Related decisions: {len(related_list)}")
+        for r in related_list[:2]:
             lines.append(f"  • {r}...")
 
-    # Check for conflicts
-    if policy_message:
-        lines.append(policy_message.strip())
+    # Show warning from core if any
+    if result.warning:
+        lines.append(result.warning.strip())
 
     lines.append("")
 
     # Navigator V1: Suggest enforcement action
     decision_lower = decision.lower()
     if any(word in decision_lower for word in ['use', 'always', 'prefer', 'default']):
-        # This is a positive guideline - suggest finding places to apply
         search_term = decision.split()[-1] if decision.split() else 'pattern'
         lines.append(f"→ Suggested: grep -rn '{search_term}' src/")
         lines.append(f"  (Find places to apply this decision)")
     elif any(word in decision_lower for word in ['never', 'avoid', 'not', "don't"]):
-        # This sounds like an avoid pattern
         lines.append(f"→ Suggested: Consider fo_decide(action='avoid')")
         lines.append(f"  (This sounds like a pattern to avoid)")
     else:
@@ -6854,53 +6773,35 @@ def log_avoid(what: str, reason: str) -> str:
         return context + f"Avoid pattern queued for review: {what}"
 
     session = _get_session()
+
+    # Get actor attribution from MCP session
+    attribution = _new_record_attribution("fo_decide")
+    actor = attribution.get("actor", "mcp")
+    actor_source = attribution.get("actor_source", "mcp_session")
+
+    # Load memory using MCP's loader (allows test patching)
     memory = _load_project(session.project_id)
 
-    if 'avoid' not in memory:
-        memory['avoid'] = []
+    # Call core business logic (transport-independent)
+    from core.decisions import record_avoid
+    result = record_avoid(
+        project_id=session.project_id,
+        text=what,
+        reason=reason,
+        actor=actor,
+        actor_source=actor_source,
+        _memory=memory,
+        _save_fn=lambda pid, mem: _save_project(pid, mem),
+    )
 
-    avoid_record = {
-        "type": "avoid",  # Marked as avoid - will NEVER be archived
-        "what": what,
-        "reason": reason,
-        "timestamp": datetime.now().isoformat(),
-        "importance": "permanent"  # Avoid patterns never decay
-    }
-    avoid_record.update(_new_record_attribution("fo_decide"))
-    memory['avoid'].append(_attach_memory_quality_audit("avoid", avoid_record))
-
-    _save_project(session.project_id, memory)
+    if not result.success:
+        return context + f"Error: {result.message}"
 
     # Log MCP activity for dashboard
     _log_mcp_activity("log_avoid", {
         "what": what[:50],
         "reason": reason[:50]
     })
-
-    # Auto-index for semantic search
-    semantic = _load_project_semantic()
-    if semantic:
-        try:
-            semantic["index_avoid"](session.project_id, what, reason)
-        except Exception as e:
-            _log(f"[SemanticIndex] Failed to index avoid: {e}")
-
-    # V2: Create immutable knowledge object
-    try:
-        from core.knowledge_objects import create_object
-        actor = avoid_record.get("actor", "unknown")
-        actor_source = avoid_record.get("actor_source", "unknown")
-        create_object(
-            project_id=session.project_id,
-            obj_type="avoid",
-            text=what,
-            reason=reason,
-            actor=actor,
-            actor_source=actor_source,
-        )
-        _log(f"[KnowledgeV2] Created avoid object: {what[:50]}...")
-    except Exception as e:
-        _log(f"[KnowledgeV2] Failed to create avoid object: {e}")
 
     return context + f"Logged avoid: {what}"
 
