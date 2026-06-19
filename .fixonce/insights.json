@@ -1,33 +1,63 @@
 {
   "fixonce_version": "1.0",
   "project_id": "FixOnce_34592c5b",
-  "updated_at": "2026-05-25T11:36:25.622298",
-  "count": 7,
+  "updated_at": "2026-06-19T10:04:49.339777",
+  "count": 18,
   "filter_criteria": "importance=high OR use_count>=3",
   "insights": [
     {
       "text": "Protocol Rule #9: After fixing browser errors, AI must clear error log via POST /api/clear-logs so dashboard Orb returns to green",
       "timestamp": "2026-03-01T21:02:02.171107",
       "importance": "high",
-      "use_count": 8
+      "use_count": 31
+    },
+    {
+      "text": "MCP Diet implemented: get_live_record returns summarized data (5 recent insights, components as name+status only). Requires Claude Code restart to load new MCP code.",
+      "timestamp": "2026-03-01T21:20:39.402101",
+      "importance": "high",
+      "use_count": 5
+    },
+    {
+      "text": "MCP Diet v2: get_live_record reduced from ~1466 to ~682 tokens (53% more savings). Changes: 1) Components show only non-stable/non-done, 2) Insights without metadata, 3) Goal history limited to 3",
+      "timestamp": "2026-03-01T21:28:44.200492",
+      "importance": "high",
+      "use_count": 7
     },
     {
       "text": "Flask prints need flush=True to appear immediately in terminal. Without it, output is buffered and may not show.",
       "timestamp": "2026-03-01T23:15:16.340026",
-      "importance": "medium",
-      "use_count": 3
+      "importance": "high",
+      "use_count": 5
+    },
+    {
+      "text": "8px Grid System: CSS variables for spacing (sp-1 to sp-12), typography (fs-xs to fs-2xl), and border-radius (radius-sm/md/lg). Consistent values across dashboard.",
+      "timestamp": "2026-03-01T23:25:46.094013",
+      "importance": "high",
+      "use_count": 7
+    },
+    {
+      "text": "Quality filtering for committed knowledge: 35→19 decisions. Filter by AI-relevance (must contain semantic/atomic/session/mcp/etc keywords), skip UI details (dashboard html, cache headers), require reason >30 chars.",
+      "timestamp": "2026-03-07T20:34:35.247700",
+      "importance": "high",
+      "use_count": 18
     },
     {
       "text": "Committed knowledge format v1.0: fixonce_version + project_id at root level for forward compatibility and clone sync identification",
       "timestamp": "2026-03-07T22:06:32.612935",
-      "importance": "medium",
-      "use_count": 4
+      "importance": "high",
+      "use_count": 17
+    },
+    {
+      "text": "Committed knowledge now includes insights.json with strict filter: importance=high OR use_count>=3. Decisions, Avoid, and Insights all support Committed/All toggle in dashboard.",
+      "timestamp": "2026-03-07T22:22:02.188791",
+      "importance": "high",
+      "use_count": 7
     },
     {
       "text": "BUGFIX: search_past_solutions now searches debug_sessions. Previously only searched insights, missing all solutions saved via solution_applied().",
       "timestamp": "2026-03-10T11:16:27.612816",
       "importance": "medium",
-      "use_count": 3
+      "use_count": 4
     },
     {
       "text": "Opening message UX: ההבדל בין 'דוח' ל'סיפור'. במקום bullet points טכניים (משימה, סטטוס, הבא), לספר סיפור קצר: מה עשינו, למה עצרנו, מה רצינו לבדוק, מה התוצאה. זה יוצר תחושת המשכיות אמיתית.",
@@ -38,14 +68,60 @@
     {
       "text": "Opening message v2: שלושה שיפורים - (1) 'איפה עצרנו' צריך להיות ספציפי טכנית, לא כללי (2) סטטיסטיקות כמו '40 החלטות' הן קרות - להחליף במשפט אנושי על מה המערכת זוכרת (3) לסיים עם הצעד הבא הספציפי, לא רק 'רוצה שנמשיך?'",
       "timestamp": "2026-03-10T12:02:10.110341",
-      "importance": "medium",
-      "use_count": 3
+      "importance": "high",
+      "use_count": 5
     },
     {
       "text": "הדשבורד הראשי הוא http://localhost:5000/lite (dashboard_lite.html), לא vnext או app",
       "timestamp": "2026-03-11T17:39:44.842763",
       "importance": "high",
-      "use_count": 6
+      "use_count": 7
+    },
+    {
+      "text": "Session 11-Mar: בדיקות מקיפות הושלמו (17 אוטומטיות + ידניות). תוקן: Safety Point endpoint, Toast במקום alert, Pending sync badge במקום Notify AI. נוקו 12K שורות קוד ישן. Commit 78a5284.",
+      "timestamp": "2026-03-11T21:11:48.122279",
+      "importance": "medium",
+      "use_count": 4
+    },
+    {
+      "text": "Port sync test - MCP now reads canonical port from ~/.fixonce/runtime.json",
+      "timestamp": "2026-03-22T11:19:28.005737",
+      "importance": "high",
+      "use_count": 13
+    },
+    {
+      "text": "Wizard decision: core install success stays separate from AI app connection; dashboard first-run screen will show Claude, Cursor, Codex, and Windsurf with Connected / Needs restart / Not installed / Failed / Retry states.",
+      "timestamp": "2026-05-25T11:30:40.258627",
+      "importance": "high",
+      "use_count": 20,
+      "actor": "codex",
+      "actor_source": "client_actor",
+      "actor_confidence": 1.0,
+      "session_id": "0becc2a9",
+      "tool_name": "update_live_record"
+    },
+    {
+      "text": "TODO for pre-release hardening: detect missing or incomplete Python runtime environment during local server startup. Context: manual restart with `python src/server.py --strict-port` failed with `ModuleNotFoundError: No module named 'flask'` because the active Python environment lacked FixOnce dependencies. Desired future behavior: launcher/repair/diagnostics clearly report 'Python environment missing or incomplete. Install dependencies or recreate the virtual environment.' Not urgent; do not implement now.",
+      "timestamp": "2026-05-31T11:03:46.265518",
+      "importance": "high",
+      "use_count": 37
+    },
+    {
+      "text": "2026-06-02 Windows runtime QA harness was created to end the build-install-TestUser debugging loop. Use scripts/windows_runtime_qa.ps1, scripts/windows_runtime_qa.py, and scripts/windows_runtime_audit.py to validate MCP startup, fo_init, fo_search, fo_errors, and Windows subprocess risks before creating an installer. TestUser installer testing is final customer validation, not the primary debugging environment. Validated in TestUser: MCP connected, fo_init succeeds, fo_errors succeeds, fo_search succeeds, previous 120-second fo_search timeout resolved, and dashboard shows MCP connected. Remaining issue: dashboard agent detection still shows Agent=unknown even though Codex successfully executes FixOnce MCP tools.",
+      "timestamp": "2026-06-02T19:53:33.965369",
+      "importance": "high",
+      "use_count": 71
+    },
+    {
+      "text": "Users prefer Hebrew UI but English error codes",
+      "timestamp": "2026-06-08T11:47:02.887137",
+      "importance": "medium",
+      "use_count": 3,
+      "actor": "claude",
+      "actor_source": "parent_process",
+      "actor_confidence": 0.9,
+      "session_id": "d51a1b33",
+      "tool_name": "update_live_record"
     }
   ]
 }

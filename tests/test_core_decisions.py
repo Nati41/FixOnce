@@ -334,5 +334,161 @@ class TestPendingKnowledgeWithoutMCP(unittest.TestCase):
         self.assertEqual(loaded_commit['message'], "Architecture decision")
 
 
+class TestRESTDecisionEndpoint(unittest.TestCase):
+    """
+    Test POST /api/decisions creates V1 + V2 via core.
+
+    This proves the REST path no longer bypasses core.decisions.record_decision.
+    """
+
+    def setUp(self):
+        """Set up Flask test client and temp directories."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.test_project_id = "test_rest_decision_api"
+        self.test_project_path = Path(self.temp_dir) / "test_project"
+        self.test_project_path.mkdir(parents=True)
+
+        # Projects directory for V1
+        self.projects_dir = Path(self.temp_dir) / "projects"
+        self.projects_dir.mkdir(parents=True)
+
+        self.project_file = self.projects_dir / f"{self.test_project_id}.json"
+        self.project_file.write_text(json.dumps({
+            "decisions": [],
+            "avoid": [],
+        }))
+
+        # V2 directory
+        self.v2_dir = Path(self.temp_dir) / "projects_v2" / self.test_project_id
+        self.v2_patcher = patch(
+            "core.knowledge_objects._get_v2_dir",
+            return_value=self.v2_dir
+        )
+        self.v2_patcher.start()
+
+        # Patch ProjectContext.from_path to return our test project ID
+        self.project_context_patcher = patch(
+            "core.project_context.ProjectContext.from_path",
+            return_value=self.test_project_id
+        )
+        self.project_context_patcher.start()
+
+        # Patch project path resolution
+        self.project_path_patcher = patch(
+            "managers.multi_project_manager.get_project_path",
+            return_value=self.project_file
+        )
+        self.project_path_patcher.start()
+
+    def tearDown(self):
+        self.v2_patcher.stop()
+        self.project_context_patcher.stop()
+        self.project_path_patcher.stop()
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _get_flask_client(self):
+        """Create Flask test client."""
+        from server import flask_app
+        flask_app.config['TESTING'] = True
+        return flask_app.test_client()
+
+    def test_post_decision_creates_v1_and_v2(self):
+        """POST /api/decisions creates both V1 and V2 objects."""
+        from core.knowledge_objects import _ensure_v2_structure, get_pending_changes
+
+        _ensure_v2_structure(self.test_project_id)
+
+        client = self._get_flask_client()
+
+        # Make POST request with X-Project-Root header
+        response = client.post(
+            '/api/memory/decisions',
+            json={
+                "decision": "REST API uses core function",
+                "reason": "Architecture rule: transport-independent core"
+            },
+            headers={
+                'Content-Type': 'application/json',
+                'X-Project-Root': str(self.test_project_path),
+            }
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['status'], 'ok')
+        self.assertIn('id', data)
+        self.assertTrue(data['id'].startswith('dec_'))
+
+        # Verify V1 was updated
+        memory = json.loads(self.project_file.read_text())
+        self.assertEqual(len(memory['decisions']), 1)
+        self.assertEqual(memory['decisions'][0]['decision'], "REST API uses core function")
+        self.assertEqual(memory['decisions'][0]['actor'], "dashboard")
+        self.assertEqual(memory['decisions'][0]['actor_source'], "rest_api")
+
+        # Verify V2 pending was created
+        pending = get_pending_changes(self.test_project_id)
+        self.assertEqual(len(pending['decisions']), 1)
+        self.assertIn(data['id'], pending['decisions'])
+
+    def test_post_decision_without_project_header_fails(self):
+        """POST /api/decisions without X-Project-Root and no active project fails."""
+        client = self._get_flask_client()
+
+        # Stop the project context patcher to test missing header
+        self.project_context_patcher.stop()
+
+        # Also patch the dashboard fallback to return None
+        with patch("managers.multi_project_manager.get_active_project_id", return_value=None):
+            response = client.post(
+                '/api/memory/decisions',
+                json={
+                    "decision": "Some decision",
+                    "reason": "Some reason"
+                },
+                headers={
+                    'Content-Type': 'application/json',
+                    # No X-Project-Root header, no active project
+                }
+            )
+
+            self.assertEqual(response.status_code, 400)
+            data = response.get_json()
+            self.assertEqual(data['status'], 'error')
+
+        # Restart patcher for tearDown
+        self.project_context_patcher = patch(
+            "core.project_context.ProjectContext.from_path",
+            return_value=self.test_project_id
+        )
+        self.project_context_patcher.start()
+
+    def test_post_decision_missing_fields_fails(self):
+        """POST /api/decisions without decision or reason fails."""
+        client = self._get_flask_client()
+
+        # Missing reason
+        response = client.post(
+            '/api/memory/decisions',
+            json={"decision": "Some decision"},
+            headers={
+                'Content-Type': 'application/json',
+                'X-Project-Root': str(self.test_project_path),
+            }
+        )
+        self.assertEqual(response.status_code, 400)
+
+        # Missing decision
+        response = client.post(
+            '/api/memory/decisions',
+            json={"reason": "Some reason"},
+            headers={
+                'Content-Type': 'application/json',
+                'X-Project-Root': str(self.test_project_path),
+            }
+        )
+        self.assertEqual(response.status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()

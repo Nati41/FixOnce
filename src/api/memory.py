@@ -51,7 +51,7 @@ def api_get_decisions():
 
 @memory_bp.route("/decisions", methods=["POST"])
 def api_add_decision():
-    """Add a new decision."""
+    """Add a new decision via core (V1 + V2)."""
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"status": "error", "message": "No JSON body"}), 400
@@ -62,17 +62,33 @@ def api_add_decision():
     if not decision or not reason:
         return jsonify({"status": "error", "message": "Decision and reason required"}), 400
 
+    # Get project_id from request headers
+    project_id, error = get_project_from_request()
+    if error:
+        return jsonify({"status": "error", "message": error}), 400
+
     try:
-        from managers.project_memory_manager import log_decision
-        result = log_decision(
-            decision,
-            reason,
-            context=data.get("context", ""),
-            modules=data.get("modules"),
-            files=data.get("files"),
-            tags=data.get("tags")
+        from core.decisions import record_decision
+        result = record_decision(
+            project_id=project_id,
+            text=decision,
+            reason=reason,
+            actor="dashboard",
+            actor_source="rest_api",
         )
-        return jsonify(result)
+
+        if result.success:
+            return jsonify({
+                "status": "ok",
+                "message": result.message,
+                "id": result.decision_id,
+            })
+        else:
+            return jsonify({
+                "status": "blocked",
+                "message": result.message,
+                "conflicts": result.conflicts,
+            }), 409
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
