@@ -7724,11 +7724,12 @@ def solution_applied(
     if error:
         return error
 
+    session = _get_session()
+    files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
+
     # Memory Review: queue for user approval when enabled
     if is_review_enabled():
-        session = _get_session()
         actor = getattr(session, 'actor_name', None) or "mcp"
-        files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
         add_pending_solution(
             error_message,
             solution,
@@ -7739,94 +7740,27 @@ def solution_applied(
         )
         return "Solution queued for review."
 
-    session = _get_session()
-    memory = _load_project(session.project_id)
-
-    # Initialize debug_sessions if needed
-    if 'debug_sessions' not in memory:
-        memory['debug_sessions'] = []
-
-    # Parse files
-    files_list = [f.strip() for f in files_changed.split(",") if f.strip()] if files_changed else []
-    # Create solution record (same structure as debug_session for compatibility)
-    solution_record = {
-        "id": f"fix_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        "problem": error_message[:200],  # Truncate long errors
-        "root_cause": "",  # Not required for quick fixes
-        "solution": solution,
-        "lesson_learned": "",
-        "symptoms": [error_message[:100]],  # Use error as symptom for matching
-        "files_changed": files_list,
-        "resolved_at": datetime.now().isoformat(),
-        "importance": "high",  # All fixes are important
-        "reuse_count": 0
-    }
+    # Get attribution for MCP-specific tracking
     attribution = _new_record_attribution("fo_solved")
-    solution_record.update(attribution)
-    _attach_memory_quality_audit("solution", solution_record)
 
-    # Check for duplicate (same error already solved)
-    error_lower = error_message.lower()[:100]
-    for existing in memory['debug_sessions']:
-        existing_problem = existing.get('problem', '').lower()[:100]
-        if error_lower in existing_problem or existing_problem in error_lower:
-            # Update reuse_count instead of creating duplicate
-            existing['reuse_count'] = existing.get('reuse_count', 0) + 1
-            existing['solution'] = solution  # Update with latest solution
-            existing['files_changed'] = files_list or existing.get('files_changed', [])
-            existing.setdefault("actor", attribution["actor"])
-            existing.setdefault("actor_source", attribution["actor_source"])
-            existing.setdefault("actor_confidence", attribution["actor_confidence"])
-            existing.setdefault("session_id", attribution["session_id"])
-            existing.setdefault("tool_name", attribution["tool_name"])
-            _attach_memory_quality_audit("solution", existing)
-            _save_project(session.project_id, memory)
-            # Minimal response
-            return "Solution updated."
+    # Call core function - handles V1, V2, semantic indexing
+    from core.solutions import record_solution
+    core_result = record_solution(
+        project_id=session.project_id,
+        error_message=error_message,
+        solution=solution,
+        files_changed=files_list,
+        actor=attribution.get("actor", "unknown"),
+        actor_source=attribution.get("actor_source", "unknown"),
+        _memory=_load_project(session.project_id),
+        _save_fn=lambda pid, mem: _save_project(pid, mem),
+    )
 
-    memory['debug_sessions'].append(solution_record)
-    _save_project(session.project_id, memory)
+    if not core_result.success:
+        return core_result.message
 
-    # Also save to semantic engine for auto-apply matching
-    try:
-        from core.semantic_engine import get_engine
-        from config import PERSONAL_DB_PATH
-        engine = get_engine(PERSONAL_DB_PATH)
-        engine.save_solution(error_message, solution)
-        _log(f"[fo_solved] Saved to semantic engine: {error_message[:50]}...")
-    except Exception as e:
-        _log(f"[fo_solved] Semantic engine save failed: {e}")
-
-    # Index to project semantic index for area-context injection
-    try:
-        from core.project_semantic import index_error
-        full_text = f"Error: {error_message}. Solution: {solution}"
-        index_error(session.project_id, full_text, {
-            "error": error_message,
-            "solution": solution,
-            "files": files,
-        })
-        _log(f"[fo_solved] Indexed to project semantic: {error_message[:50]}...")
-    except Exception as e:
-        _log(f"[fo_solved] Project semantic index failed: {e}")
-
-    # V2: Create immutable knowledge object
-    try:
-        from core.knowledge_objects import create_object
-        actor = attribution.get("actor", "unknown")
-        actor_source = attribution.get("actor_source", "unknown")
-        create_object(
-            project_id=session.project_id,
-            obj_type="bug",
-            text=f"Error: {error_message}",
-            reason=f"Solution: {solution}",
-            actor=actor,
-            actor_source=actor_source,
-            links={"files": files_list} if files_list else {},
-        )
-        _log(f"[KnowledgeV2] Created bug object: {error_message[:50]}...")
-    except Exception as e:
-        _log(f"[KnowledgeV2] Failed to create bug object: {e}")
+    if core_result.is_update:
+        return "Solution updated."
 
     # Track ROI
     _track_roi_event("solution_saved")
