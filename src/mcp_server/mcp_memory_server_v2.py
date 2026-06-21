@@ -31,6 +31,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 
 from core.windows_subprocess import no_window_creationflags
+from core.search import search_memory as core_search_memory, SearchMatch
 
 _MCP_WINDOWS_CTRL_HANDLER = None
 _fo_init_trace_local = threading.local()
@@ -8091,281 +8092,63 @@ def _format_search_result_text(item: Dict[str, Any], mode: str = "compact") -> s
     return _compact_text(text, 420)
 
 
+def _convert_core_match_to_mcp(match: SearchMatch) -> Dict[str, Any]:
+    """Convert core.search.SearchMatch to MCP dict format for Navigator V2."""
+    timestamp_keys = ["resolved_at", "created_at", "timestamp", "updated_at"]
+    timestamp = _coalesce_timestamp(match.metadata, *timestamp_keys)
+    return {
+        "text": match.text,
+        "type": match.match_type,
+        "similarity": match.similarity,
+        "confidence": match.confidence,
+        "timestamp": timestamp,
+        "date": timestamp[:10] if timestamp else "unknown",
+        "actor": _memory_actor(match.metadata),
+        "status": _trust_status(match.match_type, match.metadata),
+        "use_count": match.use_count,
+        "files_changed": match.files_changed,
+    }
+
+
 @mcp.tool()
 def search_past_solutions(query: str, mode: str = "compact") -> str:
-    """Search for past solutions matching the query."""
+    """Search for past solutions matching the query.
+
+    Delegates to core.search.search_memory() for search logic.
+    MCP handles: gating, session, Navigator V2, response formatting.
+    """
     error = _lightweight_tool_gate("search_past_solutions", sync_compliance=False)
     if error:
         return error
-    context = ""
 
     session = _get_session()
     memory = _load_project_lightweight(session.project_id)
 
-    # Search in lessons
-    lessons = memory.get('live_record', {}).get('lessons', {})
-    insights = lessons.get('insights', [])
-    failed = lessons.get('failed_attempts', [])
-
-    query_lower = query.lower()
-    query_words = _memory_tokens(query_lower)
-    matched_insights = []
-    matched_indices = []
-    memory_changed = False
-
-    # === SEMANTIC SEARCH (if available) ===
-    semantic_results = []
+    # === CORE SEARCH: Delegate to transport-independent search module ===
+    # Get semantic search function if available (for optional integration)
+    semantic_search_fn = None
     semantic = _load_project_semantic(allow_cold_start=False)
     if semantic:
         try:
-            future = _tool_executor.submit(
-                semantic["search_project"],
-                session.project_id,
-                query,
-                k=5,
-                min_score=0.3,
-            )
-            semantic_results = future.result(timeout=_SEMANTIC_SEARCH_TIMEOUT_SECONDS)
-            if isinstance(semantic_results, str):
-                _log(f"[SemanticSearch] Error result: {semantic_results}")
-                semantic_results = []
-            _log(f"[SemanticSearch] Found {len(semantic_results)} results for '{query}'")
-        except FutureTimeoutError:
-            _log(f"[SemanticSearch] Timeout after {_SEMANTIC_SEARCH_TIMEOUT_SECONDS}s, falling back to string match")
-            semantic_results = []
-        except Exception as e:
-            _log(f"[SemanticSearch] Error: {e}, falling back to string match")
-            semantic_results = []
+            semantic_search_fn = semantic.get("search_project")
+        except Exception:
+            pass
 
-    # If semantic search found results, use them
-    if semantic_results:
-        for result in semantic_results:
-            # Find the original insight to update use count
-            for i, insight in enumerate(insights):
-                normalized = _normalize_insight(insight)
-                if normalized.get('text', '') == result.text:
-                    override = _format_smart_override(normalized, query)
-                    # Add semantic score
-                    override['similarity'] = int(result.score * 100)
-                    matched_insights.append(override)
-                    matched_indices.append(i)
-                    _mark_insight_used(normalized)
-                    insights[i] = normalized
-                    break
-            else:
-                # Result from index but not in current insights (decision/avoid)
-                matched_insights.append(_search_match(
-                    result.text,
-                    result.metadata.get('doc_type', 'insight'),
-                    int(result.score * 100),
-                    80,
-                    result.metadata,
-                    timestamp_keys=["created_at", "timestamp", "updated_at"],
-                    use_count=0,
-                ))
+    # Call core search module
+    search_result = core_search_memory(
+        memory=memory,
+        query=query,
+        semantic_search_fn=semantic_search_fn,
+        project_id=session.project_id,
+        limit=20,
+    )
 
-    # === FALLBACK: String matching (if no semantic results) ===
-    if not matched_insights:
-        for i, insight in enumerate(insights):
-            normalized = _normalize_insight(insight)
-            insight_text = normalized.get('text', '')
+    # Convert core SearchMatch objects to MCP dict format
+    matched_insights = [_convert_core_match_to_mcp(m) for m in search_result.matches]
 
-            if _memory_text_matches(query_lower, query_words, insight_text):
-                override = _format_smart_override(normalized, query)
-                matched_insights.append(override)
-                matched_indices.append(i)
-                _mark_insight_used(normalized)
-                insights[i] = normalized
-
-    # Search failed attempts (always string match) - add to matched_insights for visibility
-    for attempt in failed:
-        normalized = _normalize_insight(attempt)
-        attempt_text = normalized.get('text', '')
-
-        if _memory_text_matches(query_lower, query_words, attempt_text):
-            # Exact substring match = high similarity (beats semantic guesses)
-            matched_insights.append(_search_match(
-                f"❌ **Failed attempt:** {attempt_text}",
-                "failed_attempt",
-                85,  # Exact match beats semantic
-                90,
-                normalized,
-                use_count=normalized.get('use_count', 0),
-            ))
-
-    # === CRITICAL: Search debug_sessions (solutions from solution_applied) ===
-    debug_sessions = memory.get('debug_sessions', [])
-    noise_words = {'error', 'failed', 'cannot', 'undefined', 'null', 'is', 'not',
-                   'the', 'a', 'an', 'to', 'of', 'in', 'at', 'on', 'for', 'with',
-                   'file', 'found', 'could', 'was', 'been', 'has', 'have', 'from'}
-    query_words = query_words - noise_words
-
-    for ds in debug_sessions:
-        problem_original = ds.get('problem', '')
-        problem_lower = problem_original.lower()
-        solution = ds.get('solution', '')
-        root_cause = ds.get("root_cause", "")
-        lesson_learned = ds.get("lesson_learned", "")
-        symptoms = [s.lower() for s in ds.get('symptoms', [])]
-        combined = f"{problem_lower} {root_cause} {solution} {lesson_learned} {' '.join(symptoms)}"
-
-        # Check for keyword matches
-        problem_words = _memory_tokens(problem_lower) - noise_words
-        keyword_matches = len(query_words & problem_words)
-
-        # Also check symptoms
-        symptom_match = any(s in query_lower for s in symptoms if s)
-
-        # Match if enough keyword overlap or symptom match
-        if keyword_matches >= 2 or symptom_match or _memory_text_matches(query_lower, query_words, combined):
-            # Use original text for similarity (preserves camelCase for token splitting)
-            similarity = max(_calculate_similarity(query, problem_original), _calculate_similarity(query, solution))
-            text = f"🐛 **Problem:** {ds.get('problem', '')}"
-            if root_cause:
-                text += f"\n🧭 **Root cause:** {root_cause}"
-            text += f"\n✅ **Solution:** {solution}"
-            if lesson_learned:
-                text += f"\n🧠 **Lesson learned:** {lesson_learned}"
-            matched_insights.append(_search_match(
-                text,
-                "solution",
-                max(similarity, 70 if symptom_match else 50),
-                90,
-                ds,
-                timestamp_keys=["resolved_at", "timestamp", "created_at", "updated_at"],
-                use_count=ds.get('reuse_count', 1),
-                files_changed=ds.get('files_changed', []),
-            ))
-            # Update reuse count
-            ds['reuse_count'] = ds.get('reuse_count', 0) + 1
-            memory_changed = True
-
-    # === Search DECISIONS ===
-    decisions = memory.get('decisions', [])
-    for dec in decisions:
-        if dec.get('superseded'):
-            continue  # Skip superseded decisions
-
-        dec_text = dec.get('decision', '').lower()
-        dec_reason = dec.get('reason', '').lower()
-        combined = f"{dec_text} {dec_reason}"
-
-        # Check for keyword matches in decision or reason
-        if _memory_text_matches(query_lower, query_words, combined):
-            # Exact substring match = high similarity (beats semantic guesses)
-            matched_insights.append(_search_match(
-                f"🔒 **Decision:** {dec.get('decision', '')}\n📝 **Reason:** {dec.get('reason', '')}",
-                "decision",
-                max(70, _calculate_similarity(query, combined)),
-                95,
-                dec,
-                use_count=0,
-            ))
-
-    # === Search AVOID patterns ===
-    avoids = memory.get('avoid', [])
-    for av in avoids:
-        av_text = av.get('what', '').lower()
-        av_reason = av.get('reason', '').lower()
-        combined = f"{av_text} {av_reason}"
-
-        if _memory_text_matches(query_lower, query_words, combined):
-            # Exact substring match = high similarity (beats semantic guesses)
-            matched_insights.append(_search_match(
-                f"⛔ **Avoid:** {av.get('what', '')}\n📝 **Reason:** {av.get('reason', '')}",
-                "avoid",
-                max(70, _calculate_similarity(query, combined)),
-                95,
-                av,
-                use_count=0,
-            ))
-
-    # === Search current intent and goal history ===
-    intent = memory.get('live_record', {}).get('intent', {})
-    intent_parts = [
-        intent.get('current_goal', ''),
-        intent.get('work_area', ''),
-        intent.get('why', ''),
-        intent.get('last_change', ''),
-        intent.get('last_file', ''),
-        intent.get('next_step', ''),
-    ]
-    for item in intent.get('goal_history', []):
-        if isinstance(item, dict):
-            intent_parts.append(item.get('goal', ''))
-    intent_text = " ".join(str(part or "") for part in intent_parts)
-    if _memory_text_matches(query_lower, query_words, intent_text):
-        matched_insights.append(_search_match(
-            f"🎯 **Context update:** {intent_text[:300]}",
-            "context_update",
-            max(55, _calculate_similarity(query, intent_text)),
-            75,
-            intent,
-            timestamp_keys=["updated_at", "timestamp", "created_at"],
-            use_count=0,
-        ))
-
-    # === Search component history ===
-    components = memory.get('live_record', {}).get('architecture', {}).get('components', [])
-    for comp in components:
-        comp_parts = [comp.get('name', ''), comp.get('status', ''), comp.get('desc', '')]
-        for hist in comp.get('history', []):
-            if isinstance(hist, dict):
-                comp_parts.extend([hist.get('action', ''), hist.get('desc', '')])
-        comp_text = " ".join(str(part or "") for part in comp_parts)
-        if _memory_text_matches(query_lower, query_words, comp_text):
-            matched_insights.append(_search_match(
-                f"🧩 **Component history:** {comp.get('name', '')}\n{comp.get('desc', '')}",
-                "component_history",
-                max(60, _calculate_similarity(query, comp_text)),
-                80,
-                comp,
-                timestamp_keys=["updated_at", "timestamp", "created_at"],
-                use_count=0,
-            ))
-
-    # === Search recent activity without converting it into solved bugs ===
-    activity_items = memory.get('activity_log', [])
-    try:
-        activity_file = USER_DATA_DIR / "activity_log.json"
-        if activity_file.exists():
-            with activity_file.open("r", encoding="utf-8") as handle:
-                activity_items.extend(json.load(handle).get("activities", [])[:100])
-    except Exception:
-        activity_items = memory.get('activity_log', [])
-    for activity in activity_items[:100]:
-        if not isinstance(activity, dict):
-            continue
-        activity_text = " ".join(
-            str(activity.get(key, "") or "")
-            for key in ("human_name", "tool", "file", "cwd", "command", "file_context")
-        )
-        if _memory_text_matches(query_lower, query_words, activity_text):
-            matched_insights.append(_search_match(
-                f"📌 **Activity:** {activity_text[:300]}",
-                "activity",
-                max(50, _calculate_similarity(query, activity_text)),
-                65,
-                activity,
-                use_count=0,
-            ))
-
-    # Save updated use counts
-    if matched_indices or memory_changed:
-        _save_project_lightweight(session.project_id, memory)
-
-    # Sort matched insights for best match
+    # Track ROI if matches found
     if matched_insights:
         _track_roi_event("solution_reused")
-        matched_insights.sort(
-            key=lambda item: (
-                _search_result_priority(item),
-                _search_specificity_score(query_words, item),
-                item.get('similarity', 0),
-                item.get('confidence', 0),
-            ),
-            reverse=True,
-        )
 
     # === Navigator V2: Always get navigation targets ===
     working_dir = session.working_dir if session else None
