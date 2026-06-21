@@ -32,6 +32,7 @@ from typing import Dict, Any, Optional, List
 
 from core.windows_subprocess import no_window_creationflags
 from core.search import search_memory as core_search_memory, SearchMatch
+from core.memory_categories import format_header, should_show_as_fix
 
 _MCP_WINDOWS_CTRL_HANDLER = None
 _fo_init_trace_local = threading.local()
@@ -8107,6 +8108,9 @@ def _convert_core_match_to_mcp(match: SearchMatch) -> Dict[str, Any]:
         "status": _trust_status(match.match_type, match.metadata),
         "use_count": match.use_count,
         "files_changed": match.files_changed,
+        # V1 Memory Quality fields
+        "category": getattr(match, 'category', 'unknown'),
+        "quality": getattr(match, 'quality', 'unknown'),
     }
 
 
@@ -9964,8 +9968,17 @@ def _nav_v2_format_response(
 
     # === MEMORY-FIRST: Show strong memory match at top ===
     if strong_memory:
+        # V1 Memory Quality: Use category for display header
+        category = strong_memory.get('category', 'unknown')
+        quality = strong_memory.get('quality', 'unknown')
+
         if memory_type == 'solution':
-            lines.append("✅ **SOLVED BEFORE**")
+            # Only show "SOLVED BEFORE" for actual fixes with decent quality
+            if should_show_as_fix(category, strong_memory):
+                lines.append("✅ **SOLVED BEFORE**")
+            else:
+                # Downgrade: show as related work or context
+                lines.append(format_header(category))
             lines.append("")
 
             # Extract structured info from solution
