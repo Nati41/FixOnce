@@ -154,3 +154,123 @@ class TestBackwardCompatibility:
     def test_unknown_type_maps_to_unknown(self):
         """Unknown match_type maps to 'unknown'."""
         assert category_from_match_type("some_new_type") == "unknown"
+
+
+# V1.1 Tests: Product Work Detection
+class TestProductWorkDetection:
+    """Test V1.1 content-based product work detection."""
+
+    def test_expanded_terms_is_product_work(self):
+        """'Expanded _ERROR_INVESTIGATION_TERMS' is product work."""
+        from core.memory_categories import is_product_work
+        metadata = {
+            "solution": "Expanded _ERROR_INVESTIGATION_TERMS with connection/refused, timeout/timeouterror"
+        }
+        assert is_product_work(metadata) is True
+
+    def test_added_tests_is_product_work(self):
+        """'Added regression tests' is product work."""
+        from core.memory_categories import is_product_work
+        metadata = {"solution": "Added regression tests for error handling"}
+        assert is_product_work(metadata) is True
+
+    def test_improved_ranking_is_product_work(self):
+        """'Improved ranking' is product work."""
+        from core.memory_categories import is_product_work
+        metadata = {"solution": "Improved ranking algorithm for search results"}
+        assert is_product_work(metadata) is True
+
+    def test_added_support_is_product_work(self):
+        """'Added synonym support' is product work."""
+        from core.memory_categories import is_product_work
+        metadata = {"solution": "Added support for synonym matching"}
+        assert is_product_work(metadata) is True
+
+    def test_check_before_is_actionable(self):
+        """'Check status before parsing' is actionable."""
+        from core.memory_categories import has_actionable_guidance
+        metadata = {"solution": "Check response status before parsing JSON"}
+        assert has_actionable_guidance(metadata) is True
+
+    def test_add_null_check_is_actionable(self):
+        """'Add null check' is actionable."""
+        from core.memory_categories import has_actionable_guidance
+        metadata = {"solution": "Add null check before accessing property"}
+        assert has_actionable_guidance(metadata) is True
+
+    def test_use_optional_chaining_is_actionable(self):
+        """'Use optional chaining' is actionable."""
+        from core.memory_categories import has_actionable_guidance
+        metadata = {"solution": "Use optional chaining (?.) for nested access"}
+        assert has_actionable_guidance(metadata) is True
+
+
+class TestProductWorkQuality:
+    """Test that product work gets downgraded to low quality."""
+
+    def test_product_work_is_low_quality(self):
+        """Product work in fix category is always low quality."""
+        metadata = {
+            "solution": "Expanded _ERROR_INVESTIGATION_TERMS with connection/refused",
+            "root_cause": "Missing terms",
+            "action_now": "Done",  # Even with fields, still low
+        }
+        result = assess_quality("fix", metadata)
+        assert result["quality"] == "low"
+        assert result["is_product_work"] is True
+
+    def test_product_work_not_shown_as_fix(self):
+        """Product work should NOT show as SOLVED BEFORE."""
+        metadata = {
+            "solution": "Added regression coverage for error detection",
+            "root_cause": "Missing coverage",
+        }
+        assert should_show_as_fix("fix", metadata) is False
+
+    def test_actionable_fix_shown_as_fix(self):
+        """Actionable fix should show as SOLVED BEFORE."""
+        metadata = {
+            "solution": "Check response status before parsing. If 404, handle gracefully.",
+            "root_cause": "API returned HTML error page",
+            "action_now": "Add status check",
+        }
+        assert should_show_as_fix("fix", metadata) is True
+
+    def test_product_work_quality_has_flag(self):
+        """Quality result includes is_product_work flag."""
+        metadata = {"solution": "Refactored the search module"}
+        result = assess_quality("fix", metadata)
+        assert "is_product_work" in result
+        assert result["is_product_work"] is True
+
+
+class TestRealWorldCases:
+    """Test cases from the break test that failed."""
+
+    def test_connection_refused_product_work(self):
+        """The actual failing case: 'Expanded _ERROR_INVESTIGATION_TERMS'."""
+        metadata = {
+            "solution": "Expanded _ERROR_INVESTIGATION_TERMS with connection/refused, "
+                       "timeout/timeouterror, import/module-not-found, and permission/denied terms",
+            "text": "Expanded _ERROR_INVESTIGATION_TERMS...",
+        }
+        # Should be detected as product work
+        from core.memory_categories import is_product_work
+        assert is_product_work(metadata) is True
+
+        # Should NOT show as SOLVED BEFORE
+        assert should_show_as_fix("fix", metadata) is False
+
+    def test_real_json_decode_error_fix(self):
+        """A real actionable fix should show as SOLVED BEFORE."""
+        metadata = {
+            "solution": "404 endpoint returned HTML page. Check response status before parsing.",
+            "root_cause": "API returned error page instead of JSON",
+            "action_now": "Check response.status_code before json.loads()",
+        }
+        # Should NOT be product work
+        from core.memory_categories import is_product_work
+        assert is_product_work(metadata) is False
+
+        # SHOULD show as SOLVED BEFORE
+        assert should_show_as_fix("fix", metadata) is True
