@@ -244,6 +244,32 @@ class TestProductWorkQuality:
         assert result["is_product_work"] is True
 
 
+class TestGetDisplayCategory:
+    """Test V1.1 get_display_category for downgrading."""
+
+    def test_product_work_displays_as_work(self):
+        """Product work in fix category displays as 'work'."""
+        from core.memory_categories import get_display_category
+        metadata = {
+            "text": "✅ Solution: Expanded _ERROR_INVESTIGATION_TERMS with connection/refused"
+        }
+        assert get_display_category("fix", metadata) == "work"
+
+    def test_actionable_fix_displays_as_fix(self):
+        """Actionable fix displays as 'fix'."""
+        from core.memory_categories import get_display_category
+        metadata = {
+            "text": "✅ Solution: Check response status before parsing"
+        }
+        assert get_display_category("fix", metadata) == "fix"
+
+    def test_non_fix_category_unchanged(self):
+        """Non-fix categories return unchanged."""
+        from core.memory_categories import get_display_category
+        assert get_display_category("decision", {}) == "decision"
+        assert get_display_category("avoid", {}) == "avoid"
+
+
 class TestRealWorldCases:
     """Test cases from the break test that failed."""
 

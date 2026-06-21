@@ -32,7 +32,7 @@ from typing import Dict, Any, Optional, List
 
 from core.windows_subprocess import no_window_creationflags
 from core.search import search_memory as core_search_memory, SearchMatch
-from core.memory_categories import format_header, should_show_as_fix
+from core.memory_categories import format_header, should_show_as_fix, get_display_category
 
 _MCP_WINDOWS_CTRL_HANDLER = None
 _fo_init_trace_local = threading.local()
@@ -9977,8 +9977,9 @@ def _nav_v2_format_response(
             if should_show_as_fix(category, strong_memory):
                 lines.append("✅ **SOLVED BEFORE**")
             else:
-                # Downgrade: show as related work or context
-                lines.append(format_header(category))
+                # V1.1: Downgrade product work to appropriate display category
+                display_cat = get_display_category(category, strong_memory)
+                lines.append(format_header(display_cat))
             lines.append("")
 
             # Extract structured info from solution

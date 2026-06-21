@@ -130,13 +130,15 @@ def has_actionable_guidance(metadata: Dict[str, Any]) -> bool:
     """
     action_now = str(metadata.get('action_now', ''))
     solution = str(metadata.get('solution', ''))
+    text = str(metadata.get('text', ''))
 
     # action_now field is the primary signal
     if action_now and len(action_now) > 10:
         return True
 
-    # Check solution for actionable patterns
-    return _text_matches_patterns(solution, ACTIONABLE_FIX_PATTERNS)
+    # Check solution and text for actionable patterns
+    combined = f"{solution} {text}"
+    return _text_matches_patterns(combined, ACTIONABLE_FIX_PATTERNS)
 
 
 def assess_quality(category: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
@@ -161,10 +163,12 @@ def assess_quality(category: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
     detected_actionable = has_actionable_guidance(metadata)
 
     # Check actionability - V1.1: must have actual guidance, not just any text
+    # Also check 'text' field for MCP format compatibility
     has_action = bool(
         metadata.get("action_now") or
         metadata.get("solution") or
-        metadata.get("next_step")
+        metadata.get("next_step") or
+        metadata.get("text")  # MCP format has formatted text
     )
 
     # V1.1: Product work is ALWAYS low quality for fix category
@@ -204,6 +208,31 @@ def should_show_as_fix(category: str, metadata: Dict[str, Any]) -> bool:
 
     quality = assess_quality(category, metadata)
     return quality["quality"] in ("high", "medium")
+
+
+def get_display_category(category: str, metadata: Dict[str, Any]) -> str:
+    """
+    Get the effective category for display purposes.
+
+    V1.1: Product work in 'fix' category should display as 'work' or 'insight',
+    not as 'fix' (which shows "SOLVED BEFORE").
+
+    Returns the category to use with format_header().
+    """
+    if category != "fix":
+        return category
+
+    quality = assess_quality(category, metadata)
+
+    # Product work displays as 'work' category
+    if quality.get("is_product_work"):
+        return "work"
+
+    # Low quality non-product work displays as 'insight'
+    if quality["quality"] == "low":
+        return "insight"
+
+    return category
 
 
 # Backward compatibility: map old match_types to categories
