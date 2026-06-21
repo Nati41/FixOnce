@@ -440,6 +440,39 @@ class TestFoSync(unittest.TestCase):
         self.assertIn("🔒 **ACTIVE DECISION**", result)
         self.assertNotIn("✅ **SOLVED BEFORE**", result)
 
+    def test_error_investigation_detects_common_runtime_failures(self):
+        """Common runtime errors should prefer actionable solved bugs."""
+        for query in [
+            "Connection refused",
+            "TimeoutError",
+            "ModuleNotFoundError",
+            "Permission denied",
+        ]:
+            with self.subTest(query=query):
+                result = server._nav_v2_format_response(
+                    query=query,
+                    targets=[],
+                    memory_matches=[
+                        {
+                            "type": "decision",
+                            "similarity": 100,
+                            "text": "🔒 Decision: Runtime responses follow the current adapter contract",
+                        },
+                        {
+                            "type": "solution",
+                            "similarity": 85,
+                            "text": (
+                                f"🐛 **Problem:** {query} during startup\n"
+                                "✅ **Solution:** Check process health and restore the expected runtime path."
+                            ),
+                        },
+                    ],
+                    commits=[],
+                )
+
+                self.assertIn("✅ **SOLVED BEFORE**", result)
+                self.assertIn("Check process health", result)
+
     def test_fo_search_function_name_meaningful(self):
         """Memory-First: Function names with underscores are meaningful queries."""
         # Test that _is_meaningful_query_for_strong_match returns True for function names

@@ -9848,6 +9848,8 @@ _ERROR_INVESTIGATION_TERMS = {
     "parse", "parsing", "decode", "json", "jsondecodeerror",
     "unexpected", "undefined", "null", "typeerror", "referenceerror",
     "syntaxerror", "valueerror", "404", "500",
+    "connection", "refused", "timeout", "timeouterror",
+    "modulenotfounderror", "importerror", "permission", "denied",
 }
 
 _ACTIONABLE_ERROR_MEMORY_TYPES = {"solution", "error", "solved_bug"}
