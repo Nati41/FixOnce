@@ -358,6 +358,86 @@ def api_live_errors():
     return jsonify({"errors": errors, "count": len(errors)})
 
 
+@errors_bp.route("/api/analyze-errors", methods=["GET"])
+def api_analyze_errors():
+    """Analyze errors using the Error Engine.
+
+    Returns comprehensive analysis with matched solutions.
+    This is the REST interface to core.error_engine.
+
+    Query params:
+        limit: Max errors to analyze (default 5)
+    """
+    from core.error_engine import analyze_error, ErrorAnalysis
+
+    limit = request.args.get('limit', 5, type=int)
+
+    # Get current errors
+    with log_lock:
+        errors = list(error_log)[-limit:]
+
+    # Get project memory for matching
+    project_id, _ = get_project_from_request()
+    debug_sessions = []
+
+    if project_id:
+        try:
+            from managers.multi_project_manager import load_project_memory
+            memory = load_project_memory(project_id)
+            if memory:
+                debug_sessions = memory.get('debug_sessions', [])
+        except Exception:
+            pass
+
+    # Analyze each error
+    results = []
+    auto_fix_count = 0
+
+    for error in errors:
+        error_msg = error.get("message", str(error))
+        analysis = analyze_error(error_msg, debug_sessions)
+
+        result = {
+            "original": error,
+            "normalized": {
+                "text": analysis.error.normalized,
+                "type": analysis.error.error_type,
+                "file": analysis.error.file_reference,
+                "line": analysis.error.line_number,
+            },
+            "matches": [
+                {
+                    "solution": m.solution_text,
+                    "similarity": m.similarity,
+                    "confidence": m.confidence,
+                    "source": m.source,
+                    "files": m.files_changed,
+                    "root_cause": m.root_cause,
+                }
+                for m in analysis.matches[:3]
+            ],
+            "auto_fix_ready": analysis.auto_fix_ready,
+            "diagnostic": analysis.diagnostic,
+        }
+
+        if analysis.suggested_fix:
+            result["suggested_fix"] = {
+                "solution": analysis.suggested_fix.solution_text,
+                "confidence": analysis.suggested_fix.confidence,
+            }
+
+        if analysis.auto_fix_ready:
+            auto_fix_count += 1
+
+        results.append(result)
+
+    return jsonify({
+        "analyses": results,
+        "count": len(results),
+        "auto_fix_ready_count": auto_fix_count,
+    })
+
+
 @errors_bp.route("/api/clear-logs", methods=["POST"])
 def api_clear_logs():
     """API endpoint to clear all live error logs."""
