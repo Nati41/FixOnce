@@ -119,7 +119,18 @@ def record_solution(
     error_lower = error_message.lower()[:100]
     for existing in memory['debug_sessions']:
         existing_problem = existing.get('problem', '').lower()[:100]
-        if error_lower in existing_problem or existing_problem in error_lower:
+        # Skip empty problems - they match everything via substring
+        if not existing_problem.strip():
+            continue
+        # Require meaningful overlap: exact match OR substantial (20+ char) substring
+        is_duplicate = (
+            error_lower == existing_problem or
+            (len(error_lower) >= 20 and error_lower in existing_problem) or
+            (len(existing_problem) >= 20 and existing_problem in error_lower)
+        )
+        if not is_duplicate:
+            continue
+        if is_duplicate:
             # Update reuse_count instead of creating duplicate
             existing['reuse_count'] = existing.get('reuse_count', 0) + 1
             existing['solution'] = solution

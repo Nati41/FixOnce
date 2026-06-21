@@ -44,6 +44,20 @@ class TestTokenize(unittest.TestCase):
         self.assertIn("typeerror", tokens)
         self.assertIn("property", tokens)
 
+    def test_splits_camelcase_tokens(self):
+        """Regression: JSONDecodeError should match 'JSON parsing'."""
+        tokens = tokenize("JSONDecodeError: Expecting value")
+        self.assertIn("json", tokens)
+        self.assertIn("decode", tokens)
+        self.assertIn("jsondecodeerror", tokens)  # keeps original too
+
+    def test_camelcase_enables_semantic_match(self):
+        """Regression: JSONDecodeError query should match 'JSON parsing failed' solution."""
+        query_tokens = tokenize("JSONDecodeError: Expecting value: line 1 column 1")
+        saved_tokens = tokenize("JSON parsing failed because API returned HTML")
+        overlap = query_tokens & saved_tokens
+        self.assertIn("json", overlap)
+
 
 class TestCalculateSimilarity(unittest.TestCase):
     """Tests for calculate_similarity function."""
@@ -91,6 +105,46 @@ class TestTextMatches(unittest.TestCase):
     def test_single_token_match(self):
         tokens = tokenize("authentication")
         self.assertTrue(text_matches("authentication", tokens, "authentication required"))
+
+    def test_synonym_match_jsondecode_parsing(self):
+        """Regression: JSONDecodeError should match 'parsing' via synonyms."""
+        query = "JSONDecodeError"
+        tokens = tokenize(query)
+        text = "Check response status before parsing."
+        self.assertTrue(
+            text_matches(query, tokens, text),
+            "JSONDecodeError should match text with 'parsing' via decode↔parse synonyms"
+        )
+
+    def test_synonym_match_non_json_response(self):
+        """Regression: 'non-JSON response' should match 404/HTML solution."""
+        query = "non-JSON response"
+        tokens = tokenize(query)
+        text = "404 endpoint returned HTML page. Check response status before parsing."
+        self.assertTrue(
+            text_matches(query, tokens, text),
+            "'non-JSON response' should match 404/HTML solution via synonyms"
+        )
+
+    def test_synonym_match_requires_strong_signal(self):
+        """Synonym-only matches require >=3 expanded tokens to avoid over-matching."""
+        query = "parse"  # Only 1 token, expands but shouldn't match unrelated text
+        tokens = tokenize(query)
+        text = "The server returned a 200 status code."  # No semantic relation
+        self.assertFalse(
+            text_matches(query, tokens, text),
+            "Weak synonym overlap should not match unrelated text"
+        )
+
+    def test_direct_match_still_works(self):
+        """Direct token overlap should still work without needing synonyms."""
+        query = "TypeError Cannot read property"
+        tokens = tokenize(query)
+        text = "TypeError: Cannot read property 'length' of undefined"
+        self.assertTrue(
+            text_matches(query, tokens, text),
+            "Direct token overlap should still match"
+        )
 
 
 class TestSearchMemory(unittest.TestCase):
@@ -197,6 +251,68 @@ class TestSearchMemory(unittest.TestCase):
         }
         result = search_memory(memory, "testing insight", limit=5)
         self.assertLessEqual(len(result.matches), 5)
+
+    def test_jsondecode_matches_json_parsing_solution(self):
+        """Regression: JSONDecodeError query should find 'JSON parsing failed' solution."""
+        memory = {
+            'debug_sessions': [
+                {
+                    'problem': 'JSON parsing failed because API returned HTML instead of JSON',
+                    'root_cause': '404 endpoint returned HTML page and jq tried to parse it',
+                    'solution': 'Always validate response content type before JSON parsing',
+                    'lesson_learned': 'Check content-type header before parsing response as JSON',
+                }
+            ]
+        }
+        result = search_memory(memory, "JSONDecodeError: Expecting value: line 1 column 1 (char 0)")
+        self.assertGreater(len(result.matches), 0, "Should find the JSON parsing solution")
+        self.assertEqual(result.matches[0].match_type, 'solution')
+
+    def test_jsondecode_matches_solution_with_empty_problem(self):
+        """Regression: JSONDecodeError should match solution even with empty problem field."""
+        memory = {
+            'debug_sessions': [
+                {
+                    'problem': '',  # Empty problem field (like Session 24)
+                    'solution': '404 endpoint returned HTML page. Check response status before parsing.',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                }
+            ]
+        }
+        result = search_memory(memory, "JSONDecodeError")
+        self.assertGreater(len(result.matches), 0, "Should find solution via synonym match on 'parsing'")
+        self.assertEqual(result.matches[0].match_type, 'solution')
+
+    def test_non_json_response_matches_404_solution(self):
+        """Regression: 'non-JSON response' should find 404/HTML solution."""
+        memory = {
+            'debug_sessions': [
+                {
+                    'problem': '',
+                    'solution': '404 endpoint returned HTML page. Check response status before parsing.',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                }
+            ]
+        }
+        result = search_memory(memory, "non-JSON response")
+        self.assertGreater(len(result.matches), 0, "Should find 404/HTML solution")
+
+    def test_no_overmatch_unrelated_queries(self):
+        """Ensure irrelevant queries don't match due to weak synonym overlap."""
+        memory = {
+            'debug_sessions': [
+                {
+                    'problem': '',
+                    'solution': '404 endpoint returned HTML page. Check response status before parsing.',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                }
+            ]
+        }
+        result = search_memory(memory, "database connection timeout")
+        self.assertEqual(len(result.matches), 0, "Unrelated query should not match")
 
 
 class TestSearchMatch(unittest.TestCase):

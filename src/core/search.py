@@ -47,13 +47,58 @@ NOISE_WORDS = frozenset({
     'cannot', 'undefined', 'null', 'not', 'file', 'found', 'more'
 })
 
+# Synonyms for error-related terms (subset from semantic_engine.py)
+# Used to boost similarity when semantically related terms appear
+ERROR_SYNONYMS = {
+    'parse': {'decode', 'deserialize', 'convert', 'read', 'parsing'},
+    'decode': {'parse', 'deserialize', 'convert', 'parsing'},
+    'parsing': {'parse', 'decode', 'deserialize'},
+    'json': {'jsondecodeerror', 'jsonparseerror'},
+    'jsondecodeerror': {'json', 'parse', 'decode', 'parsing'},
+    'jsonparseerror': {'json', 'parse', 'decode', 'parsing'},
+    'html': {'webpage', 'page', 'markup'},
+    'api': {'endpoint', 'request', 'http', 'fetch'},
+    'fetch': {'request', 'get', 'load', 'retrieve', 'api'},
+    'request': {'fetch', 'call', 'api', 'http'},
+    'response': {'result', 'reply', 'return', 'data'},
+    '404': {'notfound', 'missing', 'absent'},
+    'notfound': {'404', 'missing', 'absent'},
+    'expecting': {'expected', 'want', 'require'},
+    'value': {'data', 'content', 'result'},
+}
+
 
 def tokenize(text: str) -> Set[str]:
     """Extract meaningful tokens from text."""
     if not text:
         return set()
-    words = set(re.findall(r'\b\w+\b', text.lower()))
-    return words - NOISE_WORDS
+    # First extract raw words
+    raw_words = re.findall(r'\b\w+\b', text)
+    expanded = set()
+    for word in raw_words:
+        expanded.add(word.lower())
+        # Split camelCase/PascalCase (e.g., JSONDecodeError → json, decode, error)
+        parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', word)
+        for part in parts:
+            if len(part) >= 3:
+                expanded.add(part.lower())
+    return expanded - NOISE_WORDS
+
+
+def expand_with_synonyms(tokens: Set[str]) -> Set[str]:
+    """Expand token set with synonyms for better matching."""
+    expanded = set(tokens)
+    for token in tokens:
+        if token in ERROR_SYNONYMS:
+            expanded.update(ERROR_SYNONYMS[token])
+    return expanded
+
+
+def synonym_overlap(tokens1: Set[str], tokens2: Set[str]) -> int:
+    """Count overlap including synonym matches."""
+    expanded1 = expand_with_synonyms(tokens1)
+    expanded2 = expand_with_synonyms(tokens2)
+    return len(expanded1 & expanded2)
 
 
 def calculate_similarity(query: str, text: str) -> int:
@@ -67,8 +112,30 @@ def calculate_similarity(query: str, text: str) -> int:
     if not query_words:
         return 0
 
+    # Direct token overlap
     common = query_words & text_words
     base_score = int((len(common) / len(query_words)) * 100)
+
+    # Synonym-based overlap (counts expanded matches)
+    synonym_common = synonym_overlap(query_words, text_words)
+    if synonym_common > len(common):
+        extra_synonyms = synonym_common - len(common)
+
+        # Strong synonym relationship (5+ extra matches) - likely same error described differently
+        # Use synonym count as primary signal, not just bonus
+        if extra_synonyms >= 5:
+            # Calculate score based on proportion of meaningful overlap
+            # This handles "JSONDecodeError" vs "JSON parsing failed" scenarios
+            synonym_score = int((synonym_common / max(len(query_words), len(text_words))) * 100)
+            base_score = max(base_score, synonym_score)
+        elif extra_synonyms >= 3:
+            # Moderate synonym match - significant boost
+            synonym_bonus = int((extra_synonyms / len(query_words)) * 60)
+            base_score = min(100, base_score + synonym_bonus)
+        else:
+            # Light synonym match - small boost
+            synonym_bonus = int((extra_synonyms / len(query_words)) * 30)
+            base_score = min(100, base_score + synonym_bonus)
 
     # Bonus for exact substring match
     if query.lower() in text.lower():
@@ -84,7 +151,7 @@ def calculate_similarity(query: str, text: str) -> int:
 
 
 def text_matches(query: str, query_tokens: Set[str], text: str) -> bool:
-    """Check if text matches query via token overlap or substring."""
+    """Check if text matches query via token overlap, synonym overlap, or substring."""
     if not query or not text:
         return False
 
@@ -95,10 +162,23 @@ def text_matches(query: str, query_tokens: Set[str], text: str) -> bool:
     if query_lower in text_lower:
         return True
 
-    # Token overlap
+    # Token overlap (direct + synonym-expanded)
     text_tokens = tokenize(text)
-    common = query_tokens & text_tokens
-    return len(common) >= 2 or (len(common) == 1 and len(query_tokens) == 1)
+
+    # Direct overlap
+    direct_common = query_tokens & text_tokens
+    has_meaningful_direct = any(len(t) >= 4 for t in direct_common)
+    if len(direct_common) >= 2 or (len(direct_common) >= 1 and has_meaningful_direct):
+        return True
+
+    # Synonym-expanded overlap (e.g., JSONDecodeError ↔ parsing)
+    expanded_query = expand_with_synonyms(query_tokens)
+    expanded_text = expand_with_synonyms(text_tokens)
+    synonym_common = expanded_query & expanded_text
+    # Require stronger signal for synonym-only matches (>=3 expanded tokens)
+    # to avoid over-matching on generic terms
+    has_meaningful_synonym = any(len(t) >= 4 for t in synonym_common)
+    return len(synonym_common) >= 3 and has_meaningful_synonym
 
 
 def search_memory(
