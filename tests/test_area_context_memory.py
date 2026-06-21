@@ -2,6 +2,7 @@
 Tests for area-context project memory injection.
 
 Phase 1: Proof-of-direction - automatic context injection.
+Phase 2: Filter weak relevance matches below 60% threshold.
 """
 
 import sys
@@ -89,6 +90,26 @@ class TestGetRelevantProjectMemory(unittest.TestCase):
         with patch("api.activity._get_project_id_from_file", side_effect=Exception("Test error")):
             result = _get_relevant_project_memory("/src/api/test.py", "api")
             self.assertEqual(result, {"decisions": [], "solved": [], "avoid": []})
+
+    @patch("api.activity._get_project_id_from_file")
+    def test_filters_below_60_percent_threshold(self, mock_get_project):
+        """Phase 2: Verify min_score=0.60 is passed to search_project."""
+        mock_get_project.return_value = "test_project"
+
+        with patch("core.project_semantic.search_project") as mock_search:
+            mock_search.return_value = []
+            _get_relevant_project_memory("/src/api/test.py", "api")
+
+            calls = mock_search.call_args_list
+            self.assertGreater(len(calls), 0, "search_project should be called")
+            for call in calls:
+                kwargs = call[1] if len(call) > 1 else {}
+                args = call[0] if call[0] else ()
+                min_score = kwargs.get("min_score", 0.3)
+                self.assertGreaterEqual(
+                    min_score, 0.60,
+                    f"min_score should be >= 0.60, got {min_score}"
+                )
 
 
 class TestFormatProjectMemorySection(unittest.TestCase):
