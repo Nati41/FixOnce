@@ -178,6 +178,14 @@ def calculate_similarity(query: str, text: str) -> int:
             base_score = min(100, base_score + 40)
             break
 
+    # Exact match bonus: all query tokens present in text
+    # Applied AFTER the 100 cap to break ties between partial and complete matches
+    # Example: "ModuleNotFoundError requests" query
+    #   - Partial match (2/3 tokens): capped at 100
+    #   - Complete match (3/3 tokens): 100 + 20 = 120
+    if len(query_words) >= 2 and common == query_words:
+        base_score += 20
+
     return base_score
 
 

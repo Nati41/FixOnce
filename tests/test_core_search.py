@@ -88,6 +88,22 @@ class TestCalculateSimilarity(unittest.TestCase):
         score_without = calculate_similarity("login", "authentication failed")
         self.assertGreater(score_with_substring, score_without)
 
+    def test_exact_match_bonus_beats_partial(self):
+        """Complete query token match should beat partial match even with long-token bonus."""
+        query = "ModuleNotFoundError requests"
+        # Fresh fix: all 3 query tokens present (modulenotfounderror, module, requests)
+        fresh_problem = "ModuleNotFoundError: No module named 'requests'"
+        # Old memory: only 2/3 tokens (modulenotfounderror, module - missing requests)
+        old_problem = "LaunchAgent crash loop: ModuleNotFoundError: No module named 'flask'"
+
+        fresh_score = calculate_similarity(query, fresh_problem)
+        old_score = calculate_similarity(query, old_problem)
+
+        self.assertGreater(
+            fresh_score, old_score,
+            f"Fresh exact match ({fresh_score}) should beat old partial match ({old_score})"
+        )
+
 
 class TestTextMatches(unittest.TestCase):
     """Tests for text_matches function."""
@@ -464,6 +480,76 @@ class TestSearchRanking(unittest.TestCase):
         self.assertGreater(len(solutions), 1, "Should find multiple solutions")
         # The more specific match (pool exhausted timeout) should rank higher
         self.assertIn('timeout', solutions[0].text.lower())
+
+    def test_fresh_exact_fix_beats_old_partial(self):
+        """Fresh exact actionable fix should beat older partial match."""
+        memory = {
+            'debug_sessions': [
+                {
+                    'problem': 'LaunchAgent crash loop: ModuleNotFoundError: No module named flask',
+                    'solution': 'Added health gate: verify_and_enable_service() starts server manually',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                },
+                {
+                    'problem': "ModuleNotFoundError: No module named 'requests'",
+                    'solution': 'Dependency missing. Run pip install requests.',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                },
+            ],
+        }
+        result = search_memory(memory, "ModuleNotFoundError requests")
+
+        self.assertGreater(len(result.matches), 0)
+        self.assertIn(
+            'pip install', result.matches[0].text.lower(),
+            "Fresh exact fix (pip install requests) should rank first"
+        )
+
+    def test_old_exact_fix_beats_fresh_unrelated(self):
+        """Old exact fix should still beat a fresh but unrelated memory."""
+        memory = {
+            'debug_sessions': [
+                {
+                    'problem': 'TypeError: Cannot read property name of undefined',
+                    'solution': 'Use optional chaining (user?.name) or fallback object.',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                },
+                {
+                    'problem': 'Database connection timeout',
+                    'solution': 'Increase pool timeout to 30 seconds.',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                },
+            ],
+        }
+        result = search_memory(memory, "TypeError cannot read property name")
+
+        self.assertGreater(len(result.matches), 0)
+        self.assertIn(
+            'optional chaining', result.matches[0].text.lower(),
+            "Exact TypeError fix should rank above unrelated database fix"
+        )
+
+    def test_jsondecode_fix_still_works(self):
+        """Existing JSONDecodeError search should still find the correct fix."""
+        memory = {
+            'debug_sessions': [
+                {
+                    'problem': 'json.JSONDecodeError: Expecting value: line 1 column 1',
+                    'solution': 'API returned HTML 404 instead of JSON. Check response.status_code before calling response.json().',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                },
+            ],
+        }
+        result = search_memory(memory, "JSONDecodeError expecting value")
+
+        self.assertGreater(len(result.matches), 0)
+        self.assertEqual(result.matches[0].match_type, 'solution')
+        self.assertIn('status_code', result.matches[0].text.lower())
 
 
 if __name__ == '__main__':
