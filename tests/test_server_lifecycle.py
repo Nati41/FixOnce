@@ -112,12 +112,30 @@ class TestServerLifecycle(unittest.TestCase):
         self._write_runtime(5000, 12345, "/test/path")
 
         with patch("core.port_manager.is_pid_running", return_value=True), \
+             patch("core.port_manager._is_fixonce_server_responding", return_value=True), \
              patch("core.port_manager._kill_process", return_value=True), \
              patch("core.port_manager.is_port_available", return_value=True):
             success, message = ensure_clean_startup("/test/path")
 
         self.assertTrue(success)
         self.assertIn("Stale server stopped", message)
+
+    def test_ensure_clean_startup_same_install_not_responding_clears_runtime(self):
+        """Same-install runtime with live PID but no HTTP server should be cleared."""
+        from core.port_manager import ensure_clean_startup
+
+        self._write_runtime(5000, 12345, "/test/path")
+
+        with patch("core.port_manager.is_pid_running", return_value=True), \
+             patch("core.port_manager._is_fixonce_server_responding", return_value=False), \
+             patch("core.port_manager._kill_process") as kill_process, \
+             patch("core.port_manager.is_port_available", return_value=True):
+            success, message = ensure_clean_startup("/test/path")
+
+        self.assertTrue(success)
+        self.assertIn("Stale runtime state cleared", message)
+        self.assertFalse(self.runtime_file.exists())
+        kill_process.assert_not_called()
 
     def test_ensure_clean_startup_different_install(self):
         """Server from different install_path should fail with error."""
@@ -241,6 +259,7 @@ class TestDashboardPortResolution(unittest.TestCase):
         self._write_runtime(5000, 12345, "/test/path")
 
         with patch("core.port_manager.is_pid_running", return_value=True), \
+             patch("core.port_manager._is_fixonce_server_responding", return_value=True), \
              patch("core.port_manager._kill_process", return_value=True), \
              patch("core.port_manager.is_port_available", return_value=True):
             success, message = ensure_clean_startup("/test/path")

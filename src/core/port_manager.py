@@ -563,6 +563,11 @@ def ensure_clean_startup(current_install_path: str) -> Tuple[bool, str]:
         if is_pid_running(old_pid):
             # Server is running - check if it's from the same install
             if old_install_path == current_install_path:
+                if old_port and not _is_fixonce_server_responding(old_port):
+                    clear_runtime_state()
+                    release_server_lock()
+                    return True, "Stale runtime state cleared, proceeding with clean startup"
+
                 # Same install path - this is a stale code scenario
                 # Kill the old server so we can start fresh
                 print(f"[FixOnce] Stopping stale server (PID {old_pid}) to reload code...")
