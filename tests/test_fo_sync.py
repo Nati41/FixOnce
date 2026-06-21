@@ -339,6 +339,107 @@ class TestFoSync(unittest.TestCase):
         result_lower = result.lower()
         self.assertIn("active decision", result_lower)
 
+    def test_error_investigation_prefers_semantic_error_solution(self):
+        """Error investigation should surface actionable semantic errors as solved before."""
+        result = server._nav_v2_format_response(
+            query="Failed to parse response body",
+            targets=[],
+            memory_matches=[
+                {
+                    "type": "decision",
+                    "similarity": 100,
+                    "text": "🔒 Decision: AI Context Mode injects selected elements into response",
+                },
+                {
+                    "type": "error",
+                    "similarity": 74,
+                    "text": (
+                        "Error: JSON parsing failed because API returned HTML instead of JSON. "
+                        "Solution: 404 endpoint returned HTML page. Check response status before parsing."
+                    ),
+                    "files_changed": ["api/client.py"],
+                },
+            ],
+            commits=[],
+        )
+
+        self.assertIn("✅ **SOLVED BEFORE**", result)
+        self.assertIn("404 endpoint returned HTML page", result)
+        self.assertNotIn("🔒 **ACTIVE DECISION**", result)
+
+    def test_generic_response_decisions_do_not_hide_solved_bugs(self):
+        """High-scoring generic response decisions should not hide close solved bugs."""
+        result = server._nav_v2_format_response(
+            query="Failed to parse response body",
+            targets=[],
+            memory_matches=[
+                {
+                    "type": "decision",
+                    "similarity": 100,
+                    "text": "🔒 Decision: init_session response includes dashboard context",
+                },
+                {
+                    "type": "solution",
+                    "similarity": 85,
+                    "text": (
+                        "🐛 **Problem:** Failed to parse response body from API\n"
+                        "✅ **Solution:** Check response status before parsing JSON"
+                    ),
+                    "files_changed": ["api/client.py"],
+                },
+            ],
+            commits=[],
+        )
+
+        self.assertIn("✅ **SOLVED BEFORE**", result)
+        self.assertIn("Check response status before parsing JSON", result)
+
+    def test_non_error_search_keeps_existing_top_match(self):
+        """Normal non-error searches should still use the top-ranked memory."""
+        result = server._nav_v2_format_response(
+            query="init_session response",
+            targets=[],
+            memory_matches=[
+                {
+                    "type": "decision",
+                    "similarity": 90,
+                    "text": "🔒 Decision: Keep init_session response concise\n📝 Reason: Avoid noisy openers",
+                },
+                {
+                    "type": "solution",
+                    "similarity": 89,
+                    "text": "🐛 **Problem:** Response parsing failed\n✅ **Solution:** Check status first",
+                },
+            ],
+            commits=[],
+        )
+
+        self.assertIn("🔒 **ACTIVE DECISION**", result)
+        self.assertNotIn("✅ **SOLVED BEFORE**", result)
+
+    def test_weak_solved_bug_does_not_override_much_stronger_decision(self):
+        """Weak actionable matches should not displace much stronger decisions."""
+        result = server._nav_v2_format_response(
+            query="Failed to parse response body",
+            targets=[],
+            memory_matches=[
+                {
+                    "type": "decision",
+                    "similarity": 100,
+                    "text": "🔒 Decision: Response body handling follows the adapter contract",
+                },
+                {
+                    "type": "solution",
+                    "similarity": 50,
+                    "text": "🐛 **Problem:** Old parse warning\n✅ **Solution:** Retry once",
+                },
+            ],
+            commits=[],
+        )
+
+        self.assertIn("🔒 **ACTIVE DECISION**", result)
+        self.assertNotIn("✅ **SOLVED BEFORE**", result)
+
     def test_fo_search_function_name_meaningful(self):
         """Memory-First: Function names with underscores are meaningful queries."""
         # Test that _is_meaningful_query_for_strong_match returns True for function names

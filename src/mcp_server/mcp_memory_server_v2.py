@@ -9843,6 +9843,52 @@ def _is_meaningful_query_for_strong_match(query: str) -> bool:
     return False
 
 
+_ERROR_INVESTIGATION_TERMS = {
+    "error", "exception", "traceback", "failed", "failure", "fail", "crash",
+    "parse", "parsing", "decode", "json", "jsondecodeerror",
+    "unexpected", "undefined", "null", "typeerror", "referenceerror",
+    "syntaxerror", "valueerror", "404", "500",
+}
+
+_ACTIONABLE_ERROR_MEMORY_TYPES = {"solution", "error", "solved_bug"}
+
+
+def _is_error_investigation_query(query: str) -> bool:
+    """Return True when a query looks like debugging/error investigation."""
+    query_lower = query.lower()
+    tokens = _memory_tokens(query_lower)
+    if tokens & _ERROR_INVESTIGATION_TERMS:
+        return True
+    return any(marker in query_lower for marker in ("error:", "exception:", "traceback", "failed to "))
+
+
+def _select_nav_memory_match(memory_matches: List[Dict[str, Any]], query: str) -> Dict[str, Any]:
+    """Prefer actionable error memories during error investigation."""
+    if not memory_matches:
+        return {}
+
+    best = memory_matches[0]
+    if not _is_error_investigation_query(query):
+        return best
+
+    best_similarity = best.get("similarity", 0)
+    best_actionable = None
+    for match in memory_matches:
+        if match.get("type") not in _ACTIONABLE_ERROR_MEMORY_TYPES:
+            continue
+        if best_actionable is None or match.get("similarity", 0) > best_actionable.get("similarity", 0):
+            best_actionable = match
+
+    if not best_actionable:
+        return best
+
+    actionable_similarity = best_actionable.get("similarity", 0)
+    if actionable_similarity >= 60 and actionable_similarity >= best_similarity - 30:
+        return best_actionable
+
+    return best
+
+
 def _nav_v2_format_response(
     query: str,
     targets: List[Dict[str, Any]],
@@ -9882,8 +9928,10 @@ def _nav_v2_format_response(
     query_meaningful = _is_meaningful_query_for_strong_match(query)
 
     if memory_matches:
-        best = memory_matches[0]
+        best = _select_nav_memory_match(memory_matches, query)
         best_type = best.get('type', 'memory')
+        if best_type in ('error', 'solved_bug'):
+            best_type = 'solution'
         similarity = best.get('similarity', 0)
 
         # Strong match criteria:
@@ -10182,17 +10230,37 @@ def _nav_v2_format_response(
 def _extract_section(text: str, section_name: str) -> str:
     """Extract a section from formatted text like '**Problem:** ...'"""
     import re
+    section_aliases = {
+        "Problem": ["Problem", "Error"],
+        "Root cause": ["Root cause"],
+        "Solution": ["Solution"],
+        "Lesson": ["Lesson"],
+        "Avoid": ["Avoid"],
+        "Reason": ["Reason"],
+        "Decision": ["Decision"],
+    }
+    names = section_aliases.get(section_name, [section_name])
+
     # Try to find **Section:** pattern
-    pattern = rf'\*\*{section_name}:\*\*\s*([^\n*]+)'
-    match = re.search(pattern, text, re.IGNORECASE)
-    if match:
-        return match.group(1).strip()
+    for name in names:
+        pattern = rf'\*\*{name}:\*\*\s*([^\n*]+)'
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
 
     # Try emoji + Section: pattern
-    pattern = rf'[🐛✅🧭🧠⛔🔒📝]\s*\*\*{section_name}:\*\*\s*([^\n*]+)'
-    match = re.search(pattern, text, re.IGNORECASE)
-    if match:
-        return match.group(1).strip()
+    for name in names:
+        pattern = rf'[🐛✅🧭🧠⛔🔒📝]\s*\*\*{name}:\*\*\s*([^\n*]+)'
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+    # Try plain semantic-index text: "Error: ... Solution: ..."
+    for name in names:
+        pattern = rf'\b{name}:\s*(.*?)(?=\s+\b(?:Problem|Error|Root cause|Solution|Lesson|Avoid|Reason|Decision):|$)'
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
 
     return ""
 
