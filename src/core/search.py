@@ -15,6 +15,8 @@ from typing import List, Dict, Any, Optional, Set
 from pathlib import Path
 import re
 
+from core.memory_categories import category_from_match_type, assess_quality
+
 
 @dataclass
 class SearchMatch:
@@ -26,6 +28,9 @@ class SearchMatch:
     metadata: Dict[str, Any] = field(default_factory=dict)
     use_count: int = 0
     files_changed: List[str] = field(default_factory=list)
+    # V1 Memory Quality fields
+    category: str = "unknown"  # fix, decision, avoid, regression, insight, handoff, work, unknown
+    quality: str = "unknown"   # high, medium, low, unknown
 
 
 @dataclass
@@ -99,6 +104,32 @@ def synonym_overlap(tokens1: Set[str], tokens2: Set[str]) -> int:
     expanded1 = expand_with_synonyms(tokens1)
     expanded2 = expand_with_synonyms(tokens2)
     return len(expanded1 & expanded2)
+
+
+def _make_match(
+    text: str,
+    match_type: str,
+    similarity: int,
+    confidence: int,
+    metadata: Dict[str, Any],
+    use_count: int = 0,
+    files_changed: Optional[List[str]] = None,
+) -> SearchMatch:
+    """Create SearchMatch with category and quality populated."""
+    category = category_from_match_type(match_type)
+    quality_info = assess_quality(category, metadata)
+
+    return SearchMatch(
+        text=text,
+        match_type=match_type,
+        similarity=similarity,
+        confidence=confidence,
+        metadata=metadata,
+        use_count=use_count,
+        files_changed=files_changed or [],
+        category=category,
+        quality=quality_info["quality"],
+    )
 
 
 def calculate_similarity(query: str, text: str) -> int:
@@ -211,7 +242,7 @@ def search_memory(
         try:
             semantic_results = semantic_search_fn(project_id, query, k=5, min_score=0.3)
             for result in semantic_results:
-                matches.append(SearchMatch(
+                matches.append(_make_match(
                     text=result.text,
                     match_type=result.metadata.get('doc_type', 'insight'),
                     similarity=int(result.score * 100),
@@ -228,7 +259,7 @@ def search_memory(
     for insight in insights:
         text = _normalize_insight_text(insight)
         if text_matches(query, query_tokens, text):
-            matches.append(SearchMatch(
+            matches.append(_make_match(
                 text=text,
                 match_type='insight',
                 similarity=calculate_similarity(query, text),
@@ -241,7 +272,7 @@ def search_memory(
     for attempt in failed:
         text = _normalize_insight_text(attempt)
         if text_matches(query, query_tokens, text):
-            matches.append(SearchMatch(
+            matches.append(_make_match(
                 text=f"❌ Failed attempt: {text}",
                 match_type='failed_attempt',
                 similarity=calculate_similarity(query, text),
@@ -268,7 +299,7 @@ def search_memory(
             if lesson:
                 text += f"\n🧠 Lesson: {lesson}"
 
-            matches.append(SearchMatch(
+            matches.append(_make_match(
                 text=text,
                 match_type='solution',
                 similarity=max(calculate_similarity(query, problem),
@@ -290,7 +321,7 @@ def search_memory(
         combined = f"{dec_text} {dec_reason}"
 
         if text_matches(query, query_tokens, combined):
-            matches.append(SearchMatch(
+            matches.append(_make_match(
                 text=f"🔒 Decision: {dec_text}\n📝 Reason: {dec_reason}",
                 match_type='decision',
                 similarity=calculate_similarity(query, combined),
@@ -306,7 +337,7 @@ def search_memory(
         combined = f"{av_what} {av_reason}"
 
         if text_matches(query, query_tokens, combined):
-            matches.append(SearchMatch(
+            matches.append(_make_match(
                 text=f"⛔ Avoid: {av_what}\n📝 Reason: {av_reason}",
                 match_type='avoid',
                 similarity=calculate_similarity(query, combined),
@@ -326,7 +357,7 @@ def search_memory(
     intent_text = ' '.join(str(p) for p in intent_parts if p)
 
     if intent_text and text_matches(query, query_tokens, intent_text):
-        matches.append(SearchMatch(
+        matches.append(_make_match(
             text=f"🎯 Context: {intent_text[:300]}",
             match_type='context',
             similarity=calculate_similarity(query, intent_text),
@@ -344,7 +375,7 @@ def search_memory(
         comp_text = ' '.join(str(p) for p in comp_parts if p)
 
         if text_matches(query, query_tokens, comp_text):
-            matches.append(SearchMatch(
+            matches.append(_make_match(
                 text=f"🧩 Component: {comp.get('name', '')}\n{comp.get('desc', '')}",
                 match_type='component',
                 similarity=calculate_similarity(query, comp_text),
