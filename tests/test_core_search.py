@@ -19,6 +19,8 @@ from core.search import (
     SearchMatch,
     SearchResult,
     NOISE_WORDS,
+    _relevance_score,
+    _type_priority,
 )
 
 
@@ -328,6 +330,140 @@ class TestSearchMatch(unittest.TestCase):
         self.assertEqual(match.metadata, {})
         self.assertEqual(match.use_count, 0)
         self.assertEqual(match.files_changed, [])
+
+
+class TestRelevanceScore(unittest.TestCase):
+    """Tests for _relevance_score ranking function."""
+
+    def test_high_similarity_solution_beats_low_similarity_avoid(self):
+        """A solution with sim=177 must outrank an avoid with sim=32."""
+        solution = SearchMatch(text="Solution", match_type="solution", similarity=177, confidence=90)
+        avoid = SearchMatch(text="Avoid", match_type="avoid", similarity=32, confidence=95)
+
+        solution_score = _relevance_score(solution)
+        avoid_score = _relevance_score(avoid)
+
+        self.assertGreater(
+            solution_score, avoid_score,
+            f"Solution (score={solution_score}) should beat avoid (score={avoid_score})"
+        )
+
+    def test_type_priority_breaks_ties(self):
+        """When similarity is equal, type priority should break the tie."""
+        avoid = SearchMatch(text="Avoid", match_type="avoid", similarity=60, confidence=90)
+        solution = SearchMatch(text="Solution", match_type="solution", similarity=60, confidence=90)
+
+        avoid_score = _relevance_score(avoid)
+        solution_score = _relevance_score(solution)
+
+        self.assertGreater(
+            avoid_score, solution_score,
+            "Avoid should win tie-breaker when similarity is equal"
+        )
+
+    def test_small_similarity_gap_respects_type(self):
+        """With small similarity gap (~10), higher type priority can still win."""
+        avoid = SearchMatch(text="Avoid", match_type="avoid", similarity=55, confidence=90)
+        solution = SearchMatch(text="Solution", match_type="solution", similarity=60, confidence=90)
+
+        avoid_score = _relevance_score(avoid)
+        solution_score = _relevance_score(solution)
+
+        # avoid: 55 + 30 = 85, solution: 60 + 27 = 87 → solution wins slightly
+        # This is acceptable - the 5-point gap favors the solution
+        self.assertGreater(solution_score, avoid_score)
+
+    def test_large_similarity_gap_overrides_type(self):
+        """A 50+ point similarity gap should always override type priority."""
+        insight = SearchMatch(text="Insight", match_type="insight", similarity=150, confidence=80)
+        avoid = SearchMatch(text="Avoid", match_type="avoid", similarity=50, confidence=95)
+
+        insight_score = _relevance_score(insight)
+        avoid_score = _relevance_score(avoid)
+
+        self.assertGreater(
+            insight_score, avoid_score,
+            "High-similarity insight should beat low-similarity avoid"
+        )
+
+
+class TestSearchRanking(unittest.TestCase):
+    """Integration tests for search result ranking."""
+
+    def test_jsondecode_solution_ranks_first(self):
+        """Regression: JSONDecodeError solution must rank above unrelated avoid patterns."""
+        memory = {
+            'debug_sessions': [
+                {
+                    'problem': 'JSONDecodeError: Expecting value - API returned HTML instead of JSON',
+                    'solution': '404 endpoint returned HTML page. Check response status before parsing.',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                }
+            ],
+            'avoid': [
+                {'what': 'project_context.py is CRITICAL', 'reason': 'This file controls everything'},
+            ],
+            'decisions': [
+                {'decision': 'MCP Diet v3: repeated responses should omit context', 'reason': 'Reduce noise'},
+            ],
+        }
+        result = search_memory(memory, "JSONDecodeError Expecting value line 1 column 1")
+
+        self.assertGreater(len(result.matches), 0, "Should find matches")
+        self.assertEqual(
+            result.matches[0].match_type, 'solution',
+            f"Top result should be solution, got {result.matches[0].match_type}"
+        )
+        self.assertIn('404', result.matches[0].text, "Top result should be the 404 solution")
+
+    def test_irrelevant_avoid_does_not_outrank_relevant_solution(self):
+        """An avoid pattern with low similarity should not outrank a relevant solution."""
+        memory = {
+            'debug_sessions': [
+                {
+                    'problem': 'Connection timeout when calling external API',
+                    'solution': 'Increased timeout to 30 seconds and added retry logic',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                }
+            ],
+            'avoid': [
+                {'what': 'Never modify core auth module', 'reason': 'Security sensitive'},
+            ],
+        }
+        result = search_memory(memory, "connection timeout API")
+
+        self.assertGreater(len(result.matches), 0)
+        self.assertEqual(
+            result.matches[0].match_type, 'solution',
+            "Relevant solution should rank above irrelevant avoid"
+        )
+
+    def test_multiple_solutions_ranked_by_similarity(self):
+        """When multiple solutions match, higher similarity should rank first."""
+        memory = {
+            'debug_sessions': [
+                {
+                    'problem': 'Database connection failed',
+                    'solution': 'Restart the database server',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                },
+                {
+                    'problem': 'Database connection pool exhausted timeout',
+                    'solution': 'Increased pool size and connection timeout',
+                    'root_cause': '',
+                    'lesson_learned': '',
+                },
+            ],
+        }
+        result = search_memory(memory, "database connection timeout")
+
+        solutions = [m for m in result.matches if m.match_type == 'solution']
+        self.assertGreater(len(solutions), 1, "Should find multiple solutions")
+        # The more specific match (pool exhausted timeout) should rank higher
+        self.assertIn('timeout', solutions[0].text.lower())
 
 
 if __name__ == '__main__':

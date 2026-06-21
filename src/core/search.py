@@ -355,8 +355,7 @@ def search_memory(
     # === Sort by relevance ===
     matches = _deduplicate_matches(matches)
     matches.sort(key=lambda m: (
-        _type_priority(m.match_type),
-        m.similarity,
+        _relevance_score(m),
         m.confidence,
     ), reverse=True)
 
@@ -388,6 +387,22 @@ def _type_priority(match_type: str) -> int:
         'activity': 50,
     }
     return priorities.get(match_type, 0)
+
+
+def _relevance_score(match: 'SearchMatch') -> float:
+    """
+    Compute composite relevance score balancing similarity and type priority.
+
+    Similarity is the primary signal; type priority breaks ties.
+    Formula: similarity + (type_priority * 0.3)
+
+    Examples:
+    - avoid (sim=32):   32 + 30 = 62
+    - solution (sim=177): 177 + 27 = 204  → solution wins
+    - avoid (sim=60):   60 + 30 = 90
+    - solution (sim=60): 60 + 27 = 87    → avoid wins (tie-breaker)
+    """
+    return match.similarity + (_type_priority(match.match_type) * 0.3)
 
 
 def _deduplicate_matches(matches: List[SearchMatch]) -> List[SearchMatch]:
