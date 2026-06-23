@@ -1174,20 +1174,127 @@ def launch_app() -> bool:
     return True
 
 
-def run_menubar_app():
-    """Optional menu bar mode for advanced users."""
+def run_menubar_app(explicit_request: bool = False):
+    """
+    macOS menu bar mode.
+
+    Args:
+        explicit_request: True if user explicitly requested tray mode via --tray flag.
+                         If True and rumps is unavailable, show error instead of fallback.
+    """
     try:
         import rumps
     except ImportError:
-        if not launch_app():
-            show_failure_window(launch_app, lambda: run_repair_action() and launch_app())
-        return
+        if explicit_request:
+            log_event("rumps not available, --tray explicitly requested, showing error")
+            print("Error: Tray mode requires 'rumps' package.")
+            print("Install with: pip install rumps")
+            print("")
+            print("Alternatively, run without --tray to use dashboard mode.")
+            return
+        else:
+            log_event("rumps not available, falling back to dashboard")
+            if not launch_app():
+                show_failure_window(launch_app, lambda: run_repair_action() and launch_app())
+            return
 
     sys.path.insert(0, str(SCRIPT_DIR))
     from menubar_app import FixOnceMenuBar
 
     app = FixOnceMenuBar()
     app.run()
+
+
+def run_tray_app(explicit_request: bool = False):
+    """
+    Windows system tray mode.
+
+    Args:
+        explicit_request: True if user explicitly requested tray mode via --tray flag.
+                         If True and dependencies unavailable, show error instead of fallback.
+    """
+    try:
+        import pystray
+        from PIL import Image
+    except ImportError:
+        if explicit_request:
+            log_event("pystray/Pillow not available, --tray explicitly requested, showing error")
+            print("Error: Tray mode requires 'pystray' and 'Pillow' packages.")
+            print("Install with: pip install pystray pillow")
+            print("")
+            print("Alternatively, run without --tray to use dashboard mode.")
+            return
+        else:
+            log_event("pystray/Pillow not available, falling back to dashboard")
+            if not launch_app():
+                show_failure_window(launch_app, lambda: run_repair_action() and launch_app())
+            return
+
+    sys.path.insert(0, str(SCRIPT_DIR))
+    from tray_app_windows import FixOnceTray
+
+    app = FixOnceTray()
+    app.run()
+
+
+def get_launch_mode() -> str:
+    """Get configured launch mode from user config."""
+    config_file = USER_DATA_DIR / "config.json"
+    try:
+        config = json.loads(config_file.read_text(encoding="utf-8"))
+        mode = config.get("launch_mode", "dashboard")
+        if mode in ("dashboard", "tray", "auto"):
+            return mode
+    except Exception:
+        pass
+    return "dashboard"
+
+
+def can_run_tray() -> bool:
+    """Check if tray mode is available on this platform."""
+    if sys.platform == "darwin":
+        try:
+            import rumps
+            return True
+        except ImportError:
+            return False
+    elif sys.platform == "win32":
+        try:
+            import pystray
+            from PIL import Image
+            return True
+        except ImportError:
+            return False
+    return False
+
+
+def run_tray_mode(explicit_request: bool = False):
+    """
+    Run in tray-first mode.
+
+    - macOS: uses rumps menu bar app
+    - Windows: uses pystray system tray app
+    - Fallback: opens dashboard if tray not available (unless explicit_request)
+
+    Args:
+        explicit_request: True if user explicitly requested tray mode via --tray flag.
+    """
+    log_event(f"Tray mode requested on platform {sys.platform}")
+
+    if sys.platform == "darwin":
+        run_menubar_app(explicit_request=explicit_request)
+    elif sys.platform == "win32":
+        run_tray_app(explicit_request=explicit_request)
+    else:
+        if explicit_request:
+            log_event("Tray mode not supported on this platform")
+            print(f"Error: Tray mode is not supported on {sys.platform}.")
+            print("Run without --tray to use dashboard mode.")
+            return
+        else:
+            log_event("Tray mode not supported on this platform, falling back to dashboard")
+            if not launch_app():
+                show_failure_window(launch_app, lambda: run_repair_action() and launch_app())
 
 
 def run_server_mode(argv: list[str]):
@@ -1235,10 +1342,35 @@ def main():
     if "--bootstrap" in sys.argv:
         raise SystemExit(run_bootstrap())
 
-    if "--menubar" in sys.argv or "-m" in sys.argv:
-        run_menubar_app()
+    # Explicit tray mode flags (backward compatible)
+    if "--menubar" in sys.argv or "-m" in sys.argv or "--tray" in sys.argv:
+        run_tray_mode(explicit_request=True)
         return
 
+    # Explicit dashboard mode flag
+    if "--dashboard" in sys.argv:
+        if launch_app():
+            return
+        show_failure_window(launch_app, lambda: run_repair_action() and launch_app())
+        return
+
+    # Check launch_mode configuration
+    launch_mode = get_launch_mode()
+    log_event(f"Launch mode from config: {launch_mode}")
+
+    if launch_mode == "tray":
+        # Tray-first mode (new behavior, opt-in)
+        run_tray_mode()
+        return
+
+    if launch_mode == "auto":
+        # Auto mode: try tray if available, otherwise dashboard
+        if can_run_tray():
+            run_tray_mode()
+            return
+        # Fall through to dashboard mode
+
+    # Default: dashboard mode (current behavior preserved)
     if launch_app():
         return
 

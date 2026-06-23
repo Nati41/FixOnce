@@ -122,3 +122,44 @@ APP_NAME = "FixOnce"
 MEMORY_REVIEW_ENABLED = os.environ.get(
     "MEMORY_REVIEW_ENABLED", ""
 ).lower() in ("1", "true", "yes")
+
+# ---------------------------------------------------------------------------
+# Launch Mode Configuration
+# ---------------------------------------------------------------------------
+# Controls how FixOnce starts: "dashboard" (current), "tray", or "auto"
+# - dashboard: Opens browser/webview dashboard (current default behavior)
+# - tray: Runs as menu bar/system tray app (new tray-first mode)
+# - auto: Tray mode if available, fallback to dashboard
+VALID_LAUNCH_MODES = ("dashboard", "tray", "auto")
+DEFAULT_LAUNCH_MODE = "dashboard"  # Keep current behavior as default
+
+
+def get_launch_mode() -> str:
+    """Get the configured launch mode from user config."""
+    config_file = USER_DATA_DIR / "config.json"
+    try:
+        import json
+        config = json.loads(config_file.read_text(encoding="utf-8"))
+        mode = config.get("launch_mode", DEFAULT_LAUNCH_MODE)
+        if mode in VALID_LAUNCH_MODES:
+            return mode
+    except Exception:
+        pass
+    return DEFAULT_LAUNCH_MODE
+
+
+def set_launch_mode(mode: str) -> bool:
+    """Set the launch mode in user config. Returns True on success."""
+    if mode not in VALID_LAUNCH_MODES:
+        return False
+    config_file = USER_DATA_DIR / "config.json"
+    try:
+        import json
+        config = {}
+        if config_file.exists():
+            config = json.loads(config_file.read_text(encoding="utf-8"))
+        config["launch_mode"] = mode
+        config_file.write_text(json.dumps(config, indent=2), encoding="utf-8")
+        return True
+    except Exception:
+        return False

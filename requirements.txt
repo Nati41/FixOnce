@@ -8,3 +8,10 @@ watchdog>=4.0.0
 fastembed>=0.2.0
 onnxruntime>=1.16.0
 waitress>=2.1.0
+
+# Optional: Tray-first mode dependencies
+# macOS menu bar (install with: pip install rumps)
+# rumps>=0.4.0
+# Windows system tray (install with: pip install pystray pillow)
+# pystray>=0.19.0
+# pillow>=10.0.0

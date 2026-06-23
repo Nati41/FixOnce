@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 """
-FixOnce Menu Bar App
+FixOnce Menu Bar App (macOS)
 A native macOS menu bar app for FixOnce with quick access to project status.
+
+This is the tray-first interface for FixOnce. The browser dashboard
+becomes "Full View" accessible from the menu.
+
+Status is shown via title text next to the icon:
+  (icon)         Connected, synced
+  (icon) 3       3 items pending commit
+  (icon) !       Needs attention
+  (icon) -       Disconnected
 """
 
 import subprocess
@@ -12,16 +21,26 @@ import os
 import json
 import urllib.request
 import urllib.error
+import webbrowser
+from datetime import datetime
+from pathlib import Path
 
 # Get the directory where this script is located
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
-SERVER_DIR = os.path.join(PROJECT_DIR, 'src')
-DATA_DIR = os.path.join(PROJECT_DIR, 'data')
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = SCRIPT_DIR.parent
+SERVER_DIR = PROJECT_DIR / "src"
+DATA_DIR = PROJECT_DIR / "data"
+USER_DATA_DIR = Path.home() / ".fixonce"
+ASSETS_DIR = PROJECT_DIR / "assets"
+
+# Menu bar icon path (color version for branding visibility)
+MENUBAR_ICON = ASSETS_DIR / "menubar" / "icon_18x18@2x.png"
+MENUBAR_ICON_TEMPLATE = ASSETS_DIR / "menubar" / "icon_18x18@2x_template.png"
 
 # Try to import rumps for menu bar
 try:
     import rumps
+    from PyObjCTools import AppHelper
     HAS_RUMPS = True
 except ImportError:
     HAS_RUMPS = False
@@ -29,210 +48,379 @@ except ImportError:
 
 
 class FixOnceMenuBar(rumps.App):
+    """
+    FixOnce menu bar application.
+
+    Provides quick status visibility and actions without opening the full dashboard.
+    The AI conversation remains the primary interface; this is the trust indicator.
+    """
+
     DEFAULT_PORT = 5000
     PORT_RANGE = range(5000, 5010)
+    UPDATE_INTERVAL = 5  # seconds
 
     def __init__(self):
+        # Determine icon path - prefer color icon for branding
+        icon_path = None
+        if MENUBAR_ICON.exists():
+            icon_path = str(MENUBAR_ICON)
+        elif MENUBAR_ICON_TEMPLATE.exists():
+            icon_path = str(MENUBAR_ICON_TEMPLATE)
+
         super().__init__(
             name="FixOnce",
-            title="🧠",
+            title="-",  # Start disconnected (shown next to icon)
+            icon=icon_path,
             quit_button=None
         )
 
+        # State
         self.server_running = False
         self.server_port = self.DEFAULT_PORT
-        self.current_project = None
-        self.current_goal = None
-        self.stats = {"decisions": 0, "insights": 0, "avoids": 0}
+        self.is_paused = False
 
-        # Build menu
-        self.menu = [
-            rumps.MenuItem("Loading...", callback=None),
-            None,  # Separator
-            rumps.MenuItem("Open Dashboard", callback=self.open_dashboard),
-            rumps.MenuItem("Open Dashboard (vNext)", callback=self.open_dashboard_vnext),
-            None,  # Separator
-            rumps.MenuItem("Switch Project", callback=self.show_projects),
-            None,  # Separator
-            rumps.MenuItem("Start Server", callback=self.toggle_server),
-            None,  # Separator
-            rumps.MenuItem("Quit", callback=self.quit_app)
-        ]
+        # Data from tray API
+        self.status = "disconnected"
+        self.pending_count = 0
+        self.project_name = "No project"
+        self.ai_client = None
+        self.memory_stats = {"decisions": 0, "solved": 0, "avoid": 0}
+        self.last_sync = None
+        self.needs_attention = False
+        self.attention_reason = None
+
+        # Build initial menu
+        self._build_menu()
 
         # Start background update thread
-        self.update_thread = threading.Thread(target=self.update_loop, daemon=True)
+        self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
         self.update_thread.start()
 
-    def update_loop(self):
+    def _noop(self, _):
+        """No-op callback for info items (makes them appear non-grayed)."""
+        pass
+
+    def _build_menu(self):
+        """Build the menu structure."""
+        self.menu.clear()
+
+        # Status section - use _noop callback so items appear normal (not grayed)
+        self.status_item = rumps.MenuItem("○ Connecting...", callback=self._noop)
+        self.menu.add(self.status_item)
+
+        self.project_item = rumps.MenuItem("", callback=self._noop)
+        self.menu.add(self.project_item)
+
+        self.ai_item = rumps.MenuItem("", callback=self._noop)
+        self.menu.add(self.ai_item)
+
+        self.sync_item = rumps.MenuItem("", callback=self._noop)
+        self.menu.add(self.sync_item)
+
+        self.memory_item = rumps.MenuItem("", callback=self._noop)
+        self.menu.add(self.memory_item)
+
+        self.menu.add(None)  # Separator
+
+        # Quick actions
+        self.open_full_view_item = rumps.MenuItem("Open Full View", callback=self._open_full_view)
+        self.menu.add(self.open_full_view_item)
+
+        self.commit_item = rumps.MenuItem("Commit Knowledge", callback=self._commit_knowledge)
+        self.commit_item.set_callback(None)  # Hidden until pending > 0
+        self.menu.add(self.commit_item)
+
+        self.repair_item = rumps.MenuItem("Repair", callback=self._repair)
+        self.repair_item.set_callback(None)  # Hidden until needed
+        self.menu.add(self.repair_item)
+
+        self.menu.add(None)  # Separator
+
+        # Pause/Resume
+        self.pause_item = rumps.MenuItem("Pause", callback=self._toggle_pause)
+        self.menu.add(self.pause_item)
+
+        # Switch Project submenu
+        self.switch_project_item = rumps.MenuItem("Switch Project")
+        self.menu.add(self.switch_project_item)
+
+        self.menu.add(None)  # Separator
+
+        # Settings
+        self.settings_item = rumps.MenuItem("Settings", callback=self._open_settings)
+        self.menu.add(self.settings_item)
+
+        # Quit
+        self.quit_item = rumps.MenuItem("Quit FixOnce", callback=self._quit_app)
+        self.menu.add(self.quit_item)
+
+    def _update_loop(self):
         """Background loop to update status."""
         while True:
-            try:
-                self.update_status()
-            except Exception as e:
-                pass
-            time.sleep(5)
+            if not self.is_paused:
+                try:
+                    self._update_status()
+                except Exception as e:
+                    pass
+            time.sleep(self.UPDATE_INTERVAL)
 
     def _discover_port(self):
         """Find which port FixOnce server is running on."""
-        # First try current_port.txt for a fast hint
-        port_file = os.path.join(DATA_DIR, 'current_port.txt')
-        if os.path.exists(port_file):
+        # First try runtime.json for canonical port
+        runtime_file = USER_DATA_DIR / "runtime.json"
+        if runtime_file.exists():
             try:
-                hint_port = int(open(port_file).read().strip())
-                url = f'http://localhost:{hint_port}/api/ping'
-                with urllib.request.urlopen(url, timeout=1) as resp:
-                    data = json.loads(resp.read().decode())
-                    if data.get('service') == 'fixonce':
-                        return hint_port
+                runtime = json.loads(runtime_file.read_text(encoding="utf-8"))
+                hint_port = int(runtime.get("port", 0))
+                if hint_port and self._check_port(hint_port):
+                    return hint_port
             except Exception:
                 pass
 
-        # Fallback: scan port range
-        for port in self.PORT_RANGE:
+        # Try current_port.txt
+        port_file = DATA_DIR / "current_port.txt"
+        if port_file.exists():
             try:
-                url = f'http://localhost:{port}/api/ping'
-                with urllib.request.urlopen(url, timeout=1) as resp:
-                    data = json.loads(resp.read().decode())
-                    if data.get('service') == 'fixonce':
-                        return port
+                hint_port = int(port_file.read_text().strip())
+                if self._check_port(hint_port):
+                    return hint_port
             except Exception:
-                continue
+                pass
+
+        # Scan port range
+        for port in self.PORT_RANGE:
+            if self._check_port(port):
+                return port
+
         return None
 
-    def update_status(self):
-        """Fetch and update status from server."""
+    def _check_port(self, port):
+        """Check if FixOnce is running on this port."""
         try:
-            discovered = self._discover_port()
-            if not discovered:
-                self.server_running = False
-                self._update_menu()
-                return
+            url = f"http://localhost:{port}/api/ping"
+            with urllib.request.urlopen(url, timeout=1) as resp:
+                data = json.loads(resp.read().decode())
+                return data.get("service") == "fixonce"
+        except Exception:
+            return False
 
-            self.server_port = discovered
-            url = f'http://localhost:{self.server_port}/api/dashboard_snapshot'
+    def _update_status(self):
+        """Fetch status from tray API and update display."""
+        discovered = self._discover_port()
+
+        if not discovered:
+            self.server_running = False
+            self.status = "disconnected"
+            # Dispatch UI update to main thread
+            AppHelper.callAfter(self._update_display)
+            return
+
+        self.server_port = discovered
+        self.server_running = True
+
+        try:
+            url = f"http://localhost:{self.server_port}/api/tray/status"
             with urllib.request.urlopen(url, timeout=2) as response:
                 data = json.loads(response.read().decode())
-                self.server_running = True
 
-                # Update data
-                identity = data.get('identity', {})
-                self.current_project = identity.get('project_name', 'Unknown')
-                self.current_goal = identity.get('current_goal', '')
+                self.status = data.get("status", "disconnected")
+                self.pending_count = data.get("pending_count", 0)
+                self.project_name = data.get("project_name", "No project")
+                self.ai_client = data.get("ai_client")
+                self.memory_stats = data.get("memory", {})
+                self.last_sync = data.get("last_sync")
+                self.needs_attention = data.get("needs_attention", False)
+                self.attention_reason = data.get("attention_reason")
 
-                memory = data.get('memory', {})
-                self.stats = {
-                    "decisions": memory.get('decisions', 0),
-                    "insights": memory.get('insights', 0),
-                    "avoids": memory.get('avoids', 0)
-                }
+        except Exception as e:
+            self.status = "problem"
+            self.needs_attention = True
+            self.attention_reason = str(e)
 
-                # Update menu
-                self._update_menu()
+        # Dispatch UI update to main thread
+        AppHelper.callAfter(self._update_display)
 
-        except (urllib.error.URLError, Exception):
-            self.server_running = False
-            self._update_menu()
-
-    def _update_menu(self):
-        """Update the menu with current status."""
-        # Clear and rebuild status section
-        while len(self.menu) > 0 and self.menu.keys()[0] != "Open Dashboard":
-            del self.menu[self.menu.keys()[0]]
-
-        if self.server_running:
-            # Project name
-            project_item = rumps.MenuItem(
-                f"🟢 {self.current_project}",
-                callback=None
-            )
-            self.menu.insert_before("Open Dashboard", project_item)
-
-            # Goal (truncated)
-            if self.current_goal:
-                goal_short = self.current_goal[:40] + ('...' if len(self.current_goal) > 40 else '')
-                goal_item = rumps.MenuItem(f"🎯 {goal_short}", callback=None)
-                self.menu.insert_before("Open Dashboard", goal_item)
-
-            # Stats
-            stats_text = f"📊 {self.stats['decisions']}D · {self.stats['insights']}I · {self.stats['avoids']}A"
-            stats_item = rumps.MenuItem(stats_text, callback=None)
-            self.menu.insert_before("Open Dashboard", stats_item)
-
-            # Separator
-            self.menu.insert_before("Open Dashboard", None)
-
-            # Update server toggle text
-            self.menu["Start Server"].title = "Stop Server"
-
-            # Update title (icon with indicator)
-            self.title = "🧠"
+    def _update_display(self):
+        """Update menu bar title and menu items."""
+        # Update title with status indicator (shown next to icon)
+        # Keep it minimal: empty when OK, number for pending, symbols for states
+        if self.is_paused:
+            self.title = "⏸"
+        elif self.status == "disconnected":
+            self.title = "-"
+        elif self.status == "problem" or self.needs_attention:
+            self.title = "!"
+        elif self.pending_count > 0:
+            self.title = str(self.pending_count)
         else:
-            offline_item = rumps.MenuItem("⚪ Offline", callback=None)
-            self.menu.insert_before("Open Dashboard", offline_item)
-            self.menu.insert_before("Open Dashboard", None)
+            self.title = ""  # Clean look when everything is OK
 
-            self.menu["Start Server"].title = "Start Server"
-            self.title = "🧠"
+        # Update status item
+        if self.is_paused:
+            self.status_item.title = "⏸ Paused"
+        elif self.status == "connected":
+            self.status_item.title = "● Connected"
+        elif self.status == "pending":
+            self.status_item.title = f"● {self.pending_count} pending"
+        elif self.status == "problem":
+            reason = self.attention_reason or "Unknown issue"
+            self.status_item.title = f"⚠ {reason[:30]}"
+        else:
+            self.status_item.title = "○ Disconnected"
 
-    @rumps.clicked("Open Dashboard")
-    def open_dashboard(self, _):
-        """Open the dashboard in browser."""
-        import webbrowser
-        webbrowser.open(f"http://localhost:{self.server_port}/")
+        # Update project
+        if self.project_name and self.project_name != "No project":
+            self.project_item.title = f"📁 {self.project_name}"
+        else:
+            self.project_item.title = "📁 No project"
 
-    @rumps.clicked("Open Dashboard (vNext)")
-    def open_dashboard_vnext(self, _):
-        """Open the vNext dashboard."""
-        import webbrowser
-        webbrowser.open(f"http://localhost:{self.server_port}/next")
+        # Update AI client
+        if self.ai_client:
+            self.ai_item.title = f"🤖 {self.ai_client}"
+        else:
+            self.ai_item.title = "🤖 No AI connected"
 
-    @rumps.clicked("Switch Project")
-    def show_projects(self, _):
-        """Show project switcher (opens dashboard)."""
-        import webbrowser
-        webbrowser.open(f"http://localhost:{self.server_port}/next#projects")
-
-    @rumps.clicked("Start Server")
-    def toggle_server(self, sender):
-        """Start or stop the server."""
-        if self.server_running:
-            # Stop server
+        # Update last sync
+        if self.last_sync:
             try:
-                subprocess.run(['pkill', '-f', 'server.py'], capture_output=True)
-                rumps.notification(
-                    title="FixOnce",
-                    subtitle="Server Stopped",
-                    message="The FixOnce server has been stopped."
-                )
-            except:
-                pass
+                sync_dt = datetime.fromisoformat(self.last_sync.replace("Z", "+00:00"))
+                now = datetime.now(sync_dt.tzinfo) if sync_dt.tzinfo else datetime.now()
+                diff = now - sync_dt
+                if diff.total_seconds() < 60:
+                    sync_text = "just now"
+                elif diff.total_seconds() < 3600:
+                    mins = int(diff.total_seconds() / 60)
+                    sync_text = f"{mins}m ago"
+                else:
+                    hours = int(diff.total_seconds() / 3600)
+                    sync_text = f"{hours}h ago"
+                self.sync_item.title = f"🔄 Synced {sync_text}"
+            except Exception:
+                self.sync_item.title = "🔄 Last sync unknown"
         else:
-            # Start server
-            self.start_server()
+            self.sync_item.title = "🔄 Never synced"
+
+        # Update memory stats
+        d = self.memory_stats.get("decisions", 0)
+        s = self.memory_stats.get("solved", 0)
+        a = self.memory_stats.get("avoid", 0)
+        self.memory_item.title = f"📊 {d}D · {s}B · {a}A"
+
+        # Show/hide conditional items
+        if self.pending_count > 0:
+            self.commit_item.title = f"Commit Knowledge ({self.pending_count})"
+            self.commit_item.set_callback(self._commit_knowledge)
+        else:
+            self.commit_item.title = "Commit Knowledge"
+            self.commit_item.set_callback(None)
+
+        if self.needs_attention and self.status == "problem":
+            self.repair_item.set_callback(self._repair)
+        else:
+            self.repair_item.set_callback(None)
+
+        # Update pause item text
+        self.pause_item.title = "Resume" if self.is_paused else "Pause"
+
+    def _open_full_view(self, _):
+        """Open the full dashboard in browser."""
+        if self.server_running:
+            webbrowser.open(f"http://localhost:{self.server_port}/")
+        else:
             rumps.notification(
                 title="FixOnce",
-                subtitle="Server Starting",
-                message="The FixOnce server is starting..."
+                subtitle="Server not running",
+                message="Starting server..."
+            )
+            self._start_server()
+            time.sleep(2)
+            port = self._discover_port()
+            if port:
+                webbrowser.open(f"http://localhost:{port}/")
+
+    def _commit_knowledge(self, _):
+        """Open commit knowledge dialog (redirects to dashboard for now)."""
+        if self.server_running and self.pending_count > 0:
+            webbrowser.open(f"http://localhost:{self.server_port}/#commit")
+            rumps.notification(
+                title="FixOnce",
+                subtitle="Commit Knowledge",
+                message=f"{self.pending_count} items ready for review"
             )
 
-    def start_server(self):
+    def _repair(self, _):
+        """Attempt to repair connection."""
+        rumps.notification(
+            title="FixOnce",
+            subtitle="Repairing...",
+            message="Attempting to fix connection"
+        )
+
+        try:
+            url = f"http://localhost:{self.server_port}/api/setup/repair-mcp"
+            req = urllib.request.Request(url, method="POST")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read().decode())
+                if result.get("status") == "ok":
+                    rumps.notification(
+                        title="FixOnce",
+                        subtitle="Repair complete",
+                        message="Connection restored"
+                    )
+                else:
+                    rumps.notification(
+                        title="FixOnce",
+                        subtitle="Repair incomplete",
+                        message="Please check Full View for details"
+                    )
+        except Exception as e:
+            rumps.notification(
+                title="FixOnce",
+                subtitle="Repair failed",
+                message=str(e)[:50]
+            )
+
+    def _toggle_pause(self, _):
+        """Toggle pause state."""
+        self.is_paused = not self.is_paused
+        self._update_display()
+
+        state = "paused" if self.is_paused else "resumed"
+        rumps.notification(
+            title="FixOnce",
+            subtitle=f"Updates {state}",
+            message=""
+        )
+
+    def _open_settings(self, _):
+        """Open settings (redirects to dashboard settings for now)."""
+        if self.server_running:
+            webbrowser.open(f"http://localhost:{self.server_port}/#settings")
+        else:
+            rumps.notification(
+                title="FixOnce",
+                subtitle="Server not running",
+                message="Cannot open settings"
+            )
+
+    def _start_server(self):
         """Start the Flask server."""
-        server_script = os.path.join(SERVER_DIR, 'server.py')
+        server_script = SERVER_DIR / "server.py"
         subprocess.Popen(
-            [sys.executable, server_script, '--flask-only'],
-            cwd=SERVER_DIR,
+            [sys.executable, str(server_script), "--flask-only"],
+            cwd=str(SERVER_DIR),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True
         )
 
-    @rumps.clicked("Quit")
-    def quit_app(self, _):
-        """Quit the app."""
+    def _quit_app(self, _):
+        """Quit the menu bar app."""
         rumps.quit_application()
 
 
 def main():
+    """Entry point for menu bar app."""
     if not HAS_RUMPS:
         print("Error: rumps is required for the menu bar app.")
         print("Install it with: pip install rumps")
@@ -242,5 +430,5 @@ def main():
     app.run()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

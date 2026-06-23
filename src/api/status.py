@@ -936,10 +936,25 @@ def api_dashboard_snapshot():
                 decisions = memory.get("decisions", [])
                 avoids = memory.get("avoid", [])
                 project_rules = memory.get("project_rules", [])
+                committed_solutions_count = 0
+                try:
+                    working_dir = (
+                        memory.get("live_record", {}).get("gps", {}).get("working_dir")
+                        or memory.get("project_info", {}).get("working_dir")
+                    )
+                    if working_dir:
+                        from core.committed_knowledge import read_committed_knowledge
+                        committed = read_committed_knowledge(working_dir)
+                        committed_solutions_count = len(committed.get("solutions", []))
+                except Exception:
+                    committed_solutions_count = len(memory.get("debug_sessions", []))
 
                 snapshot["knowledge"]["total_insights"] = len(insights)
                 snapshot["knowledge"]["total_decisions"] = len(decisions)
                 snapshot["knowledge"]["total_avoids"] = len(avoids)
+                snapshot["knowledge"]["total_solutions"] = committed_solutions_count
+                snapshot["knowledge"]["solutions_count"] = committed_solutions_count
+                snapshot["knowledge"]["solved_bugs"] = committed_solutions_count
                 snapshot["knowledge"]["total_rules"] = len([r for r in project_rules if r.get("enabled", True)])
                 snapshot["knowledge"]["project_rules"] = project_rules
                 snapshot["knowledge"]["decisions"] = decisions[-10:]  # Last 10
@@ -1021,6 +1036,18 @@ def api_dashboard_snapshot():
                 lessons = live_record.get("lessons", {})
                 decisions = memory.get("decisions", [])
                 avoids = memory.get("avoid", [])
+                committed_solutions_count = 0
+                try:
+                    working_dir = (
+                        live_record.get("gps", {}).get("working_dir")
+                        or project_info.get("working_dir")
+                    )
+                    if working_dir:
+                        from core.committed_knowledge import read_committed_knowledge
+                        committed = read_committed_knowledge(working_dir)
+                        committed_solutions_count = len(committed.get("solutions", []))
+                except Exception:
+                    committed_solutions_count = len(memory.get("debug_sessions", []))
 
                 last_decision = decisions[-1] if decisions else None
                 last_insight_raw = (lessons.get("insights") or [])
@@ -1046,6 +1073,9 @@ def api_dashboard_snapshot():
                     ) if last_avoid else None,
                     "counts": {
                         "decisions": len(decisions),
+                        "solved_bugs": committed_solutions_count,
+                        "solutions_count": committed_solutions_count,
+                        "total_solutions": committed_solutions_count,
                         "insights": len(last_insight_raw),
                         "avoids": len(avoids),
                     }
@@ -1575,3 +1605,163 @@ def api_mark_stable(name):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Tray-Optimized Status API
+# ---------------------------------------------------------------------------
+@status_bp.route("/tray/status", methods=["GET"])
+def api_tray_status():
+    """
+    Tray-optimized status endpoint.
+
+    Returns minimal payload for menu bar / system tray display:
+    - status: connected | disconnected | pending | problem
+    - pending_count: number of items awaiting commit
+    - project_name: active project name
+    - ai_client: detected AI client name
+    - memory: {decisions, solved, avoid}
+    - last_sync: ISO timestamp
+    - needs_attention: boolean
+    - attention_reason: string or null
+    """
+    try:
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
+        from core.mcp_session_health import get_session_health
+
+        project_id = get_active_project_id()
+        memory = load_project_memory(project_id) if project_id else {}
+        session_health = get_session_health()
+
+        # Determine status
+        is_connected = session_health.get("state") == "connected"
+
+        # Get pending count
+        pending_count = 0
+        try:
+            pending_file = USER_DATA_DIR / "pending_knowledge.json"
+            if pending_file.exists():
+                import json
+                pending_data = json.loads(pending_file.read_text(encoding="utf-8"))
+                pending_count = len(pending_data.get("items", []))
+        except Exception:
+            pass
+
+        # Determine overall status
+        if not is_connected:
+            status = "disconnected"
+        elif pending_count > 0:
+            status = "pending"
+        else:
+            status = "connected"
+
+        # Check for problems
+        needs_attention = False
+        attention_reason = None
+
+        # Check MCP health
+        try:
+            from core.mcp_health import get_health_status
+            health = get_health_status()
+            if health.get("status") == "error":
+                needs_attention = True
+                attention_reason = health.get("message", "MCP connection issue")
+                status = "problem"
+        except Exception:
+            pass
+
+        # Get project name
+        project_name = "No project"
+        if memory:
+            project_info = memory.get("project_info", {})
+            project_name = project_info.get("name") or project_id.split("_")[0] if project_id else "Unknown"
+
+        # Get AI client - only show when actually connected
+        ai_client = None
+        if is_connected:
+            actor = session_health.get("last_actor")
+            if _known_agent_name(actor):
+                ai_client = _agent_display_name(actor)
+
+        # Get memory stats
+        decisions_count = len(memory.get("decisions", []))
+        avoid_count = len(memory.get("avoid", []))
+
+        # Get solved bugs from committed_knowledge (same source as dashboard)
+        solved_count = 0
+        try:
+            working_dir = (
+                memory.get("live_record", {}).get("gps", {}).get("working_dir")
+                or memory.get("project_info", {}).get("working_dir")
+            )
+            if working_dir:
+                from core.committed_knowledge import read_committed_knowledge
+                committed = read_committed_knowledge(working_dir)
+                solved_count = len(committed.get("solutions", []))
+        except Exception:
+            pass
+
+        # Get last sync time
+        last_sync = session_health.get("last_success_at")
+
+        return jsonify({
+            "status": status,
+            "pending_count": pending_count,
+            "project_name": project_name,
+            "ai_client": ai_client,
+            "memory": {
+                "decisions": decisions_count,
+                "solved": solved_count,
+                "avoid": avoid_count
+            },
+            "last_sync": last_sync,
+            "needs_attention": needs_attention,
+            "attention_reason": attention_reason,
+            "is_connected": is_connected
+        })
+
+    except Exception as e:
+        return jsonify({
+            "status": "problem",
+            "pending_count": 0,
+            "project_name": "Error",
+            "ai_client": None,
+            "memory": {"decisions": 0, "solved": 0, "avoid": 0},
+            "last_sync": None,
+            "needs_attention": True,
+            "attention_reason": str(e),
+            "is_connected": False
+        })
+
+
+@status_bp.route("/tray/launch-mode", methods=["GET"])
+def api_get_launch_mode():
+    """Get current launch mode configuration."""
+    from config import get_launch_mode, VALID_LAUNCH_MODES, DEFAULT_LAUNCH_MODE
+    return jsonify({
+        "mode": get_launch_mode(),
+        "valid_modes": list(VALID_LAUNCH_MODES),
+        "default": DEFAULT_LAUNCH_MODE
+    })
+
+
+@status_bp.route("/tray/launch-mode", methods=["POST"])
+def api_set_launch_mode():
+    """Set launch mode configuration."""
+    from config import set_launch_mode, VALID_LAUNCH_MODES
+
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode")
+
+    if not mode:
+        return jsonify({"error": "mode is required"}), 400
+
+    if mode not in VALID_LAUNCH_MODES:
+        return jsonify({
+            "error": f"Invalid mode. Must be one of: {', '.join(VALID_LAUNCH_MODES)}"
+        }), 400
+
+    if set_launch_mode(mode):
+        return jsonify({"status": "ok", "mode": mode})
+    else:
+        return jsonify({"error": "Failed to save configuration"}), 500
