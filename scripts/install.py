@@ -1504,10 +1504,97 @@ $Shortcut.Save()
 
 # ============ Step 6: Configure Auto-Start ============
 
-def _cleanup_stale_launchagents():
-    """Clean up any stale LaunchAgent registrations before installing new ones."""
+def _kill_stale_fixonce_processes(current_install_dir: Path) -> list[int]:
+    """
+    Terminate stale FixOnce processes from old install paths.
+
+    Only kills processes that:
+    - Are owned by the current user
+    - Have command lines containing FixOnce/fixonce scripts
+    - Are NOT from the current install directory
+
+    Returns list of PIDs that were killed.
+    """
+    import os
+    import re
+
+    killed_pids = []
+    current_user = os.getenv("USER", "")
+    current_path_lower = str(current_install_dir.resolve()).lower()
+
+    # Scripts we want to clean up
+    target_scripts = ["menubar_app.py", "app_launcher.py", "server.py"]
+
+    try:
+        # Get all Python processes for current user with full command line
+        # ps -u <user> -o pid,command shows PID and full command
+        result = subprocess.run(
+            ["ps", "-u", current_user, "-o", "pid,command"],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            return killed_pids
+
+        for line in result.stdout.strip().split("\n")[1:]:  # Skip header
+            line = line.strip()
+            if not line:
+                continue
+
+            # Parse PID and command
+            parts = line.split(None, 1)
+            if len(parts) < 2:
+                continue
+
+            try:
+                pid = int(parts[0])
+            except ValueError:
+                continue
+
+            command = parts[1]
+            command_lower = command.lower()
+
+            # Check if this is a FixOnce script
+            is_fixonce_script = any(script in command for script in target_scripts)
+            if not is_fixonce_script:
+                continue
+
+            # Check if path contains fixonce (case-insensitive)
+            if "fixonce" not in command_lower:
+                continue
+
+            # Skip if this is from the CURRENT install directory
+            if current_path_lower in command_lower:
+                continue
+
+            # This is a stale FixOnce process from an old path - kill it
+            try:
+                os.kill(pid, 15)  # SIGTERM
+                killed_pids.append(pid)
+            except (ProcessLookupError, PermissionError):
+                pass
+
+    except Exception:
+        pass
+
+    return killed_pids
+
+
+def _cleanup_stale_launchagents(current_install_dir: Path = None):
+    """Clean up any stale LaunchAgent registrations and processes before installing new ones."""
     launch_agents_dir = Path.home() / "Library" / "LaunchAgents"
     labels = ["com.fixonce.server", "com.fixonce.tray"]
+
+    # First, kill any stale running processes from old install paths
+    if current_install_dir is None:
+        current_install_dir = get_fixonce_dir()
+
+    killed = _kill_stale_fixonce_processes(current_install_dir)
+    if killed:
+        # Give processes time to terminate gracefully
+        import time
+        time.sleep(0.5)
 
     for label in labels:
         plist_path = launch_agents_dir / f"{label}.plist"
@@ -1540,8 +1627,8 @@ def configure_auto_start() -> bool:
     current_platform = get_platform()
 
     if current_platform == 'mac':
-        # ALWAYS clean up stale LaunchAgents first (handles reinstall from different path)
-        _cleanup_stale_launchagents()
+        # ALWAYS clean up stale LaunchAgents and processes first (handles reinstall from different path)
+        _cleanup_stale_launchagents(fixonce_dir)
 
         # Create LaunchAgent directory
         launch_agents_dir = Path.home() / "Library" / "LaunchAgents"
