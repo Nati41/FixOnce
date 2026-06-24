@@ -1504,6 +1504,34 @@ $Shortcut.Save()
 
 # ============ Step 6: Configure Auto-Start ============
 
+def _cleanup_stale_launchagents():
+    """Clean up any stale LaunchAgent registrations before installing new ones."""
+    launch_agents_dir = Path.home() / "Library" / "LaunchAgents"
+    labels = ["com.fixonce.server", "com.fixonce.tray"]
+
+    for label in labels:
+        plist_path = launch_agents_dir / f"{label}.plist"
+
+        # Always unload first (handles stale registrations pointing to old paths)
+        subprocess.run(
+            ['launchctl', 'unload', str(plist_path)],
+            capture_output=True
+        )
+
+        # Also try to remove by label (cleans up orphaned registrations)
+        subprocess.run(
+            ['launchctl', 'remove', label],
+            capture_output=True
+        )
+
+        # Remove old plist file if it exists
+        if plist_path.exists():
+            try:
+                plist_path.unlink()
+            except Exception:
+                pass
+
+
 def configure_auto_start() -> bool:
     """Configure FixOnce to start automatically on login"""
     print(f"\n{Colors.BLUE}[6/8]{Colors.END} Configuring auto-start...")
@@ -1512,10 +1540,18 @@ def configure_auto_start() -> bool:
     current_platform = get_platform()
 
     if current_platform == 'mac':
-        # Create LaunchAgent for auto-start
+        # ALWAYS clean up stale LaunchAgents first (handles reinstall from different path)
+        _cleanup_stale_launchagents()
+
+        # Create LaunchAgent directory
         launch_agents_dir = Path.home() / "Library" / "LaunchAgents"
         launch_agents_dir.mkdir(parents=True, exist_ok=True)
 
+        # Create logs directory in ~/.fixonce/logs/
+        logs_dir = Path.home() / ".fixonce" / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+
+        # --- Server LaunchAgent ---
         plist_path = launch_agents_dir / "com.fixonce.server.plist"
         server_script = fixonce_dir / "src" / "server.py"
 
@@ -1545,13 +1581,14 @@ def configure_auto_start() -> bool:
     <key>ThrottleInterval</key>
     <integer>10</integer>
     <key>StandardOutPath</key>
-    <string>{fixonce_dir / "data" / "server.log"}</string>
+    <string>{logs_dir / "server.log"}</string>
     <key>StandardErrorPath</key>
-    <string>{fixonce_dir / "data" / "server.log"}</string>
+    <string>{logs_dir / "server.log"}</string>
 </dict>
 </plist>
 '''
-        # Tray LaunchAgent (uses pythonw for proper app identity)
+
+        # --- Tray LaunchAgent ---
         tray_plist_path = launch_agents_dir / "com.fixonce.tray.plist"
         tray_script = fixonce_dir / "scripts" / "menubar_app.py"
         pythonw = get_pythonw()
@@ -1579,40 +1616,23 @@ def configure_auto_start() -> bool:
     <key>ThrottleInterval</key>
     <integer>30</integer>
     <key>StandardOutPath</key>
-    <string>{fixonce_dir / "data" / "tray.log"}</string>
+    <string>{logs_dir / "tray.log"}</string>
     <key>StandardErrorPath</key>
-    <string>{fixonce_dir / "data" / "tray.log"}</string>
+    <string>{logs_dir / "tray.log"}</string>
 </dict>
 </plist>
 '''
 
         try:
-            # --- Server LaunchAgent ---
-            # Check if already exists and running
-            check_result = subprocess.run(
-                ['launchctl', 'list', 'com.fixonce.server'],
-                capture_output=True, text=True
-            )
-            server_already_running = check_result.returncode == 0
-
-            if not server_already_running:
-                # Unload if exists but not running
-                subprocess.run(['launchctl', 'unload', str(plist_path)], capture_output=True)
-
-                # Write new plist
-                with open(plist_path, 'w') as f:
-                    f.write(plist_content)
-
-                # Load the LaunchAgent
-                subprocess.run(['launchctl', 'load', str(plist_path)], capture_output=True)
-
-            # --- Tray LaunchAgent ---
-            # Always update tray plist (may need pythonw path update)
-            subprocess.run(['launchctl', 'unload', str(tray_plist_path)], capture_output=True)
+            # Write BOTH plist files (always recreate with current paths)
+            with open(plist_path, 'w') as f:
+                f.write(plist_content)
 
             with open(tray_plist_path, 'w') as f:
                 f.write(tray_plist_content)
 
+            # Load BOTH LaunchAgents
+            subprocess.run(['launchctl', 'load', str(plist_path)], capture_output=True)
             subprocess.run(['launchctl', 'load', str(tray_plist_path)], capture_output=True)
 
             print(f"  {Colors.GREEN}[OK]{Colors.END} Auto-start configured (server + tray)")
@@ -1889,31 +1909,13 @@ def open_web_installer():
         print(f"  {Colors.GREEN}[OK]{Colors.END} Server running on port {port}")
 
     # Installation complete - inform user about tray
+    # Do NOT prompt or auto-open app - let tray handle it
     print()
-    print(f"  {Colors.GREEN}✅ FixOnce installed successfully!{Colors.END}")
+    print(f"  {Colors.GREEN}✅ FixOnce installed successfully.{Colors.END}")
     print()
     print(f"  {Colors.BLUE}Look for the FixOnce icon in your menu bar.{Colors.END}")
-    print(f"  Click it to see status, save memories, or expand to full view.")
+    print(f"  {Colors.BLUE}Click Expand to open the app.{Colors.END}")
     print()
-
-    # Optionally open the native app (not browser)
-    try:
-        response = input(f"  Open FixOnce app now? [Y/n] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        response = 'n'
-
-    if response in ('', 'y', 'yes'):
-        try:
-            app_launcher = fixonce_dir / "scripts" / "app_launcher.py"
-            subprocess.Popen(
-                [sys.executable, str(app_launcher), "--dashboard"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True
-            )
-            print(f"  {Colors.GREEN}[OK]{Colors.END} FixOnce app opened")
-        except Exception as e:
-            print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not open app: {e}")
 
     return True
 
