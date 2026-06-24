@@ -80,6 +80,27 @@ def get_platform() -> str:
         return 'linux'
 
 
+def get_pythonw() -> str:
+    """
+    Get path to pythonw (macOS) for proper app identity in Dock/menu bar.
+    Falls back to python3 if pythonw not found.
+    """
+    python_dir = Path(sys.executable).parent
+
+    # Try pythonw in same directory as python
+    pythonw = python_dir / "pythonw"
+    if pythonw.exists():
+        return str(pythonw)
+
+    # Try system pythonw
+    for path in ["/usr/bin/pythonw", "/usr/local/bin/pythonw"]:
+        if Path(path).exists():
+            return path
+
+    # Fallback to regular python
+    return sys.executable
+
+
 def get_runtime_file() -> Path:
     """Return the canonical runtime state file used by the server."""
     return Path.home() / ".fixonce" / "runtime.json"
@@ -1530,27 +1551,71 @@ def configure_auto_start() -> bool:
 </dict>
 </plist>
 '''
+        # Tray LaunchAgent (uses pythonw for proper app identity)
+        tray_plist_path = launch_agents_dir / "com.fixonce.tray.plist"
+        tray_script = fixonce_dir / "scripts" / "menubar_app.py"
+        pythonw = get_pythonw()
+
+        tray_plist_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.fixonce.tray</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{pythonw}</string>
+        <string>{tray_script}</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>{fixonce_dir / "scripts"}</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>StandardOutPath</key>
+    <string>{fixonce_dir / "data" / "tray.log"}</string>
+    <key>StandardErrorPath</key>
+    <string>{fixonce_dir / "data" / "tray.log"}</string>
+</dict>
+</plist>
+'''
+
         try:
+            # --- Server LaunchAgent ---
             # Check if already exists and running
             check_result = subprocess.run(
                 ['launchctl', 'list', 'com.fixonce.server'],
                 capture_output=True, text=True
             )
-            if check_result.returncode == 0:
-                print(f"  {Colors.GREEN}[OK]{Colors.END} Auto-start already configured")
-                return True
+            server_already_running = check_result.returncode == 0
 
-            # Unload if exists but not running
-            subprocess.run(['launchctl', 'unload', str(plist_path)], capture_output=True)
+            if not server_already_running:
+                # Unload if exists but not running
+                subprocess.run(['launchctl', 'unload', str(plist_path)], capture_output=True)
 
-            # Write new plist
-            with open(plist_path, 'w') as f:
-                f.write(plist_content)
+                # Write new plist
+                with open(plist_path, 'w') as f:
+                    f.write(plist_content)
 
-            # Load the LaunchAgent
-            subprocess.run(['launchctl', 'load', str(plist_path)], capture_output=True)
+                # Load the LaunchAgent
+                subprocess.run(['launchctl', 'load', str(plist_path)], capture_output=True)
 
-            print(f"  {Colors.GREEN}[OK]{Colors.END} Auto-start configured (LaunchAgent with restart on failure)")
+            # --- Tray LaunchAgent ---
+            # Always update tray plist (may need pythonw path update)
+            subprocess.run(['launchctl', 'unload', str(tray_plist_path)], capture_output=True)
+
+            with open(tray_plist_path, 'w') as f:
+                f.write(tray_plist_content)
+
+            subprocess.run(['launchctl', 'load', str(tray_plist_path)], capture_output=True)
+
+            print(f"  {Colors.GREEN}[OK]{Colors.END} Auto-start configured (server + tray)")
             return True
         except Exception as e:
             print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not configure auto-start: {e}")
