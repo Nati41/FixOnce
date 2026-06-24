@@ -11,9 +11,9 @@ Brutal tests to verify FixOnce can handle:
 5. Edge cases (port conflicts, missing dirs)
 
 Usage:
-    python tests/stress_test.py              # Run all tests
-    python tests/stress_test.py --test load  # Run specific test
-    python tests/stress_test.py --quick      # Quick smoke test
+    FIXONCE_RUN_STRESS=1 python tests/stress_test.py              # Run all tests
+    FIXONCE_RUN_STRESS=1 python tests/stress_test.py --test load  # Run specific test
+    FIXONCE_RUN_STRESS=1 python tests/stress_test.py --quick      # Quick smoke test
 
 Requirements:
     - FixOnce server running on localhost:5000
@@ -37,6 +37,9 @@ from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Prevent pytest from collecting and running these stateful write tests directly.
+__test__ = False
+
 try:
     import requests
 except ImportError:
@@ -58,6 +61,7 @@ LOAD_TEST_THREADS = 10
 LOAD_TEST_OPS_PER_THREAD = 100
 CONCURRENT_TEST_THREADS = 5
 TIMEOUT_SECONDS = 5
+STRESS_RUN_ENV = "FIXONCE_RUN_STRESS"
 
 # IMPORTANT: the server and this test must share an isolated user-data root.
 TEST_USER_DATA_DIR = Path(
@@ -71,6 +75,13 @@ ORIGINAL_ACTIVE_PROJECT = None
 
 # Module-level storage for test results (used by run_all_tests)
 _stress_test_results: Dict[str, 'Result'] = {}
+
+
+def require_stress_opt_in() -> None:
+    """Require explicit opt-in before any stress write can run."""
+    if os.environ.get(STRESS_RUN_ENV) != "1":
+        print(f"ERROR: Stress tests are disabled. Set {STRESS_RUN_ENV}=1 to run.")
+        sys.exit(1)
 
 
 @dataclass
@@ -134,6 +145,8 @@ def check_server_running() -> bool:
 
 def verify_server_uses_isolated_storage() -> bool:
     """Refuse to run if the target server is using real user data."""
+    if os.environ.get(STRESS_RUN_ENV) != "1":
+        return False
     try:
         resp = requests.get(f"{API_URL}/health", timeout=2)
         payload = resp.json()
@@ -839,6 +852,16 @@ def test_ux_edge_cases() -> None:
 # Main Runner
 # ============================================================================
 
+for _stress_test_func in (
+    test_load_high_volume,
+    test_crash_recovery,
+    test_concurrent_access,
+    test_boundary_detection,
+    test_ux_edge_cases,
+):
+    _stress_test_func.__test__ = False
+
+
 def run_all_tests() -> StressTestReport:
     """Run all stress tests and generate report."""
     print("\n" + "="*70)
@@ -952,6 +975,8 @@ def run_all_tests() -> StressTestReport:
 
 
 def main():
+    require_stress_opt_in()
+
     parser = argparse.ArgumentParser(description="FixOnce Stress Test Suite")
     parser.add_argument("--test", choices=["load", "crash", "concurrent", "boundary", "ux"],
                         help="Run specific test")

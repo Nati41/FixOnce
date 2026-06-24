@@ -12,9 +12,13 @@ Usage:
 
 from flask import Blueprint, jsonify, request
 from datetime import datetime
+from pathlib import Path
 import json
+import os
+import re
 
 openai_bp = Blueprint('openai', __name__, url_prefix='/openai')
+SYNTHETIC_STRESS_RE = re.compile(r"^Test (decision|avoid|insight) #\d+ from thread \d+$")
 
 # ============================================================================
 # OpenAI Function Definitions
@@ -336,6 +340,50 @@ def get_openai_schema():
 # Function Handlers
 # ============================================================================
 
+def _is_isolated_user_data_dir() -> bool:
+    override = os.environ.get("FIXONCE_USER_DATA_DIR", "").strip()
+    if not override:
+        return False
+
+    try:
+        return Path(override).expanduser().resolve() != (Path.home() / ".fixonce").resolve()
+    except OSError:
+        return True
+
+
+def _is_synthetic_stress_payload(args: dict) -> bool:
+    for key in ("decision", "what", "insight"):
+        value = args.get(key)
+        if isinstance(value, str) and SYNTHETIC_STRESS_RE.match(value):
+            return True
+    return False
+
+
+def _allows_synthetic_stress_writes(memory: dict) -> bool:
+    project_info = memory.get("project_info", {}) if isinstance(memory, dict) else {}
+    provenance = str(project_info.get("provenance", "")).lower()
+    working_dir = str(project_info.get("working_dir", "")).lower()
+
+    if provenance == "test":
+        return True
+    if "fixonce-stress" in working_dir or "fixonce_stress_test_project" in working_dir:
+        return True
+    return os.environ.get("FIXONCE_RUN_STRESS") == "1" and _is_isolated_user_data_dir()
+
+
+def _reject_synthetic_stress_write(args: dict, memory: dict):
+    if not _is_synthetic_stress_payload(args):
+        return None
+    if _allows_synthetic_stress_writes(memory):
+        return None
+    return {
+        "error": (
+            "Synthetic stress-test memory payload rejected. "
+            "Run stress tests with FIXONCE_RUN_STRESS=1 against isolated test storage."
+        )
+    }
+
+
 def _handle_init_session(args: dict) -> dict:
     """Handle init_session function call."""
     from managers.multi_project_manager import (
@@ -465,6 +513,10 @@ def _handle_log_decision(args: dict) -> dict:
             return {"error": "No active project. Call init_session first."}
 
         memory = load_project_memory(project_id) or {}
+        rejected = _reject_synthetic_stress_write(args, memory)
+        if rejected:
+            return rejected
+
         decisions = memory.setdefault('decisions', [])
 
         decisions.append({
@@ -500,6 +552,10 @@ def _handle_log_avoid(args: dict) -> dict:
             return {"error": "No active project. Call init_session first."}
 
         memory = load_project_memory(project_id) or {}
+        rejected = _reject_synthetic_stress_write(args, memory)
+        if rejected:
+            return rejected
+
         avoid_list = memory.setdefault('avoid', [])
 
         avoid_list.append({
@@ -577,6 +633,10 @@ def _handle_log_insight(args: dict) -> dict:
             return {"error": "No active project. Call init_session first."}
 
         memory = load_project_memory(project_id) or {}
+        rejected = _reject_synthetic_stress_write(args, memory)
+        if rejected:
+            return rejected
+
         live = memory.setdefault('live_record', {})
         lessons = live.setdefault('lessons', {})
         insights = lessons.setdefault('insights', [])

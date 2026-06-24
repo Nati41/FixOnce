@@ -28,6 +28,21 @@ RELIABLE_AGENT_CONFIDENCE = 0.5
 RECENT_AGENT_THRESHOLD_SECONDS = 1800
 
 
+def _stress_or_test_mode() -> bool:
+    if os.environ.get("FIXONCE_RUN_STRESS") == "1":
+        return True
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return True
+
+    override = os.environ.get("FIXONCE_USER_DATA_DIR", "").strip()
+    if not override:
+        return False
+    try:
+        return Path(override).expanduser().resolve() != (Path.home() / ".fixonce").resolve()
+    except OSError:
+        return True
+
+
 def _dashboard_project_status(project: dict, active_id: str, now: datetime) -> str:
     """Classify display status without deciding whether a project is visible."""
     if project.get("id") == active_id:
@@ -863,7 +878,7 @@ def api_dashboard_snapshot():
                 data_dir=USER_DATA_DIR,
             )
             visible_ids = {project.get("id") for project in projects}
-            if projects and active_id not in visible_ids:
+            if projects and active_id not in visible_ids and not _stress_or_test_mode():
                 from managers import multi_project_manager as project_manager
 
                 if Path(project_manager.DATA_DIR) == Path(USER_DATA_DIR):
