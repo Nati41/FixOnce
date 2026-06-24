@@ -1888,32 +1888,32 @@ def open_web_installer():
 
         print(f"  {Colors.GREEN}[OK]{Colors.END} Server running on port {port}")
 
-    # Ask user if they want to open dashboard
-    dashboard_url = f"http://localhost:{port}"
+    # Installation complete - inform user about tray
     print()
     print(f"  {Colors.GREEN}✅ FixOnce installed successfully!{Colors.END}")
-    print(f"  Server is running on {dashboard_url}")
+    print()
+    print(f"  {Colors.BLUE}Look for the FixOnce icon in your menu bar.{Colors.END}")
+    print(f"  Click it to see status, save memories, or expand to full view.")
     print()
 
+    # Optionally open the native app (not browser)
     try:
-        response = input(f"  Do you want to open the dashboard now? [Y/n] ").strip().lower()
+        response = input(f"  Open FixOnce app now? [Y/n] ").strip().lower()
     except (EOFError, KeyboardInterrupt):
         response = 'n'
 
     if response in ('', 'y', 'yes'):
         try:
-            if current_platform == 'mac':
-                subprocess.run(['open', dashboard_url], capture_output=True)
-            elif current_platform == 'windows':
-                subprocess.run(f'start "" "{dashboard_url}"', shell=True, capture_output=True)
-            else:
-                subprocess.run(['xdg-open', dashboard_url], capture_output=True)
-            print(f"  {Colors.GREEN}[OK]{Colors.END} Dashboard opened")
+            app_launcher = fixonce_dir / "scripts" / "app_launcher.py"
+            subprocess.Popen(
+                [sys.executable, str(app_launcher), "--dashboard"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            print(f"  {Colors.GREEN}[OK]{Colors.END} FixOnce app opened")
         except Exception as e:
-            print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not open browser: {e}")
-            print(f"  Open manually: {dashboard_url}")
-    else:
-        print(f"  OK, you can open it later at: {dashboard_url}")
+            print(f"  {Colors.YELLOW}[WARN]{Colors.END} Could not open app: {e}")
 
     return True
 

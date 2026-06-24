@@ -499,6 +499,14 @@ def main():
         print("Install it with: pip install rumps")
         sys.exit(1)
 
+    # Set activation policy to Accessory (no Dock icon, menu bar only)
+    # This prevents "Python" from appearing in the Dock
+    try:
+        from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
+        NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+    except ImportError:
+        pass  # AppKit not available, continue anyway
+
     app = FixOnceMenuBar()
     app.run()
 
