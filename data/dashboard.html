@@ -135,6 +135,169 @@ body {
   border-radius: 50%;
 }
 
+/* Compact Header */
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.status-indicator.disconnected {
+  background: var(--text-dim);
+}
+
+.status-indicator.problem {
+  background: var(--red);
+}
+
+.status-text {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.status-separator {
+  color: var(--text-dim);
+}
+
+.memory-counts {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+/* Saved Items (memories + code changes) */
+.saved-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.saved-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.saved-item:last-child {
+  border-bottom: none;
+}
+
+.saved-item-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.saved-item-type {
+  font-size: 11px;
+  color: var(--green);
+  font-weight: 500;
+  flex-shrink: 0;
+  min-width: 55px;
+}
+
+.saved-item-type.solved {
+  color: var(--amber);
+}
+
+.saved-item-type.avoid {
+  color: var(--red);
+}
+
+.saved-item-type.code {
+  color: var(--text-dim);
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.saved-item-text {
+  font-size: 12px;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-item-text.expanded {
+  white-space: normal;
+  overflow: visible;
+}
+
+.saved-item-more {
+  font-size: 11px;
+  color: var(--green);
+  cursor: pointer;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.saved-item-more:hover {
+  text-decoration: underline;
+}
+
+.saved-item-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+  padding-left: 63px;
+}
+
+.saved-empty {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 8px 0;
+  font-style: italic;
+}
+
+/* Legacy commits styles (keeping for backwards compat) */
+.commits-card {
+  margin-bottom: 12px;
+}
+
+.commits-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.commit-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.commit-hash {
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 11px;
+  color: var(--amber);
+  flex-shrink: 0;
+}
+
+.commit-msg {
+  font-size: 12px;
+  color: var(--text-dim);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-empty {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 8px 0;
+}
+
 /* Toggle */
 .switch {
   position: relative;
@@ -2603,232 +2766,784 @@ body.native-app .header-btn {
     font-size: 15px;
   }
 }
+
+/* Project Brain layer - keeps the existing colorful dashboard, shifts meaning away from controls */
+.brain-hero {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding: 18px 24px;
+  border: 1px solid rgba(67, 54, 118, 0.1);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 86% 15%, rgba(21, 141, 165, 0.12), transparent 17rem),
+    linear-gradient(135deg, rgba(255,255,255,0.96), rgba(240,236,255,0.7) 54%, rgba(230,247,250,0.62));
+  box-shadow:
+    0 12px 34px rgba(66, 52, 116, 0.07),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+.brain-pill {
+  width: fit-content;
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: var(--green);
+  background: var(--green-soft);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.brain-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px var(--green-soft);
+}
+
+.brain-title {
+  margin: 0;
+  color: #2d2943;
+  font-size: clamp(27px, 4vw, 42px);
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.brain-subtitle {
+  max-width: 620px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.memory-stats-card,
+.timeline-card {
+  grid-column: 1 / -1;
+}
+
+.memory-meta {
+  display: grid;
+  gap: 6px;
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(67, 54, 118, 0.08);
+}
+
+.memory-meta-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.memory-meta-label {
+  color: var(--text-faint);
+  font-weight: 700;
+}
+
+.memory-meta-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.memory-stat {
+  min-height: 74px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(67, 54, 118, 0.08);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.64);
+}
+
+.memory-stat-value {
+  color: #2d2943;
+  font-size: 22px;
+  font-weight: 760;
+  line-height: 1;
+}
+
+.memory-stat-label {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.timeline-list {
+  display: grid;
+  gap: 8px;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-height: 32px;
+}
+
+.timeline-dot {
+  width: 9px;
+  height: 9px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--violet);
+  box-shadow: 0 0 0 3px var(--violet-soft);
+}
+
+.timeline-text {
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-meta {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.knowledge-success {
+  display: none;
+  margin-left: auto;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 750;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.knowledge-success.show {
+  display: inline-flex;
+  opacity: 1;
+}
+
+#contextCard {
+  grid-column: 1 / -1;
+  min-height: 300px;
+}
+
+#contextCard .card-label {
+  font-size: 10px;
+}
+
+#contextCard #contextContent .context-item:nth-child(2) {
+  min-height: 112px;
+}
+
+#contextCard #contextContent .context-item:nth-child(2) .context-value {
+  font-size: 20px;
+}
+
+#statusCard .card-label {
+  color: var(--amber);
+}
+
+#aiToolsCard {
+  grid-column: span 12;
+}
+
+#aiToolsCard .ai-tools-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#aiToolsCard .ai-tool-header {
+  min-height: 46px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(67, 54, 118, 0.08);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.64);
+}
+
+#aiToolsCard .ai-tool-activity,
+#aiToolsCard .ai-tool-sync-status {
+  display: none;
+}
+
+#statusCard {
+  display: none;
+}
+
+#statusCard[style*="display:"] {
+  display: block;
+}
+
+.advanced-system {
+  margin-top: 14px;
+  border: 1px solid rgba(67, 54, 118, 0.1);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.58);
+}
+
+.advanced-system summary {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.advanced-system .system-status {
+  margin: 0 14px 14px;
+}
+
+.footer span:first-child {
+  color: transparent;
+  font-size: 0;
+}
+
+.footer span:first-child::after {
+  content: "FixOnce — project memory and continuity";
+  color: var(--text-faint);
+  font-size: 9px;
+}
+
+@media (min-width: 900px) {
+  .memory-stats-card {
+    grid-column: span 4;
+  }
+
+  .timeline-card {
+    grid-column: span 8;
+  }
+
+  #contextCard {
+    grid-column: span 8;
+  }
+
+  #projectCard {
+    grid-column: span 4;
+    display: block;
+  }
+
+  #projectCard .card-label,
+  #projectCard .project-select,
+  #projectCard .project-name,
+  #projectCard .project-goal,
+  #projectCard .project-subtitle,
+  #projectCard .project-presence {
+    grid-column: auto;
+    grid-row: auto;
+    margin: initial;
+  }
+
+  #projectCard .project-name {
+    margin-top: 10px;
+  }
+
+  #projectCard .project-goal {
+    margin-top: 8px;
+  }
+
+  #projectCard .project-subtitle {
+    margin-top: 13px;
+  }
+
+  #projectCard .project-presence {
+    margin-top: 15px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 760px) {
+  .brain-hero {
+    padding: 22px 18px;
+  }
+
+  .memory-stats,
+  #aiToolsCard .ai-tools-list {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-text {
+    white-space: normal;
+  }
+}
+
+/* Conversational Layout */
+.conversational-flow {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+.status-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-main {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.status-right {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-connection {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section {
+  margin-bottom: 28px;
+}
+
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.project-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.project-path {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: 'SF Mono', Monaco, monospace;
+  margin-bottom: 12px;
+}
+
+.project-description {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.memory-counts-line {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.memory-counts-line span {
+  font-weight: 600;
+  color: var(--green);
+}
+
+.context-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.context-row {
+  display: flex;
+  gap: 12px;
+}
+
+.context-key {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 600;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.context-value {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.context-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-text.expanded {
+  white-space: normal;
+  overflow: visible;
+}
+
+.context-more {
+  color: var(--green);
+  font-size: 11px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.context-more:hover {
+  text-decoration: underline;
+}
+
+.context-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 12px;
+}
+
+.saved-group {
+  margin-bottom: 16px;
+}
+
+.saved-group-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.pending-section {
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+
+.pending-intro {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+.pending-intro span {
+  font-weight: 600;
+}
+
+.pending-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.save-btn {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.save-btn:hover {
+  opacity: 0.9;
+}
+
+.pending-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.pending-item:last-child {
+  border-bottom: none;
+}
+
+.pending-item input[type="checkbox"] {
+  margin-top: 2px;
+  accent-color: var(--green);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pending-item-type {
+  font-size: 11px;
+  color: var(--green);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.pending-item-text {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+}
+
+.settings-panel {
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  font-size: 13px;
+}
+
+.settings-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.settings-links a:hover {
+  color: var(--text);
+}
+
+.footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 12px;
+}
+
+.footer-links a {
+  color: var(--text-dim);
+  text-decoration: none;
+}
+
+.footer-links a:hover {
+  color: var(--text);
+}
 </style>
 </head>
 <body>
 
-<!-- Header -->
-<div class="header">
-  <div class="logo">
-    <svg width="24" height="24" viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="eyeTop" x1="16" y1="110" x2="204" y2="98" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#1F67C4"/><stop offset="0.55" stop-color="#2FA6E8"/><stop offset="1" stop-color="#39D86F"/>
-        </linearGradient>
-        <linearGradient id="eyeBottom" x1="16" y1="114" x2="204" y2="126" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#1A5CB5"/><stop offset="0.55" stop-color="#2498DE"/><stop offset="1" stop-color="#32CD69"/>
-        </linearGradient>
-      </defs>
-      <path d="M16 110C16 110 51 54 110 54C158 54 187 88 204 103" stroke="url(#eyeTop)" stroke-width="12" stroke-linecap="round"/>
-      <path d="M16 110C16 110 51 166 110 166C158 166 187 132 204 117" stroke="url(#eyeBottom)" stroke-width="12" stroke-linecap="round"/>
-      <circle cx="110" cy="110" r="41" stroke="#2BA4E2" stroke-width="11"/>
-      <path d="M83 88C90 79 100 73 112 70C124 67 136 69 146 76" stroke="#31CF6E" stroke-width="10" stroke-linecap="round"/>
-      <path d="M92 109L106 123L137 92" stroke="#2CCF6C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    <span class="logo-text">FixOnce</span>
-    <span class="version" id="version">v1.0.13</span>
+<!-- Conversational Layout -->
+<div class="conversational-flow">
+
+<!-- Status Section -->
+<div class="status-section">
+  <div class="status-left">
+    <span class="status-indicator" id="headerStatusDot"></span>
+    <span class="status-main">FixOnce active</span>
   </div>
-  <div class="header-right">
-    <button class="header-btn" type="button" onclick="openInBrowser()">Open in Browser</button>
-    <div class="ai-badge">
-      <span class="ai-dot"></span>
-      <span id="activeAI">Claude</span>
+  <div class="status-right">
+    <button class="header-btn" id="pauseBtn" onclick="togglePower()">Pause</button>
+    <button class="header-btn" id="settingsBtn" onclick="toggleSettings()">Settings</button>
+  </div>
+</div>
+
+<div class="ai-connection" id="aiConnection">
+  <span id="aiConnectionText">Connected now: Claude</span>
+</div>
+
+<!-- Project Section -->
+<div class="section" id="projectSection">
+  <div class="section-label">Project connected to FixOnce</div>
+  <div class="project-title" id="projectName">FixOnce</div>
+  <div class="project-path" id="projectPath">/Users/haimdayan/Desktop/FixOnce</div>
+  <div class="project-description">
+    To work with FixOnce on this project, open your AI tool and say "hi".
+    FixOnce will remember your decisions, fixes, and where you left off.
+  </div>
+  <div class="memory-counts-line" id="memoryCountsLine">
+    Saved in this project: <span id="decisionCount">0</span> decisions · <span id="bugCount">0</span> fixes · <span id="avoidCount">0</span> things to avoid
+  </div>
+</div>
+
+<!-- Where We Stopped Section -->
+<div class="section" id="contextSection">
+  <div class="section-label">Where we stopped</div>
+  <div class="context-flow">
+    <div class="context-row">
+      <span class="context-key">Last</span>
+      <span class="context-value">
+        <span class="context-text" id="lastChange">—</span>
+        <span class="context-more" id="lastMore" style="display: none;" onclick="toggleContextText('last')">more</span>
+      </span>
     </div>
+    <div class="context-row">
+      <span class="context-key">Next Action</span>
+      <span class="context-value">
+        <span class="context-text" id="nextStep">—</span>
+        <span class="context-more" id="nextMore" style="display: none;" onclick="toggleContextText('next')">more</span>
+      </span>
+    </div>
+    <div class="context-row" id="recentRow" style="display: none;">
+      <span class="context-key">Recent</span>
+      <span class="context-value">
+        <span class="context-text" id="recentAction">—</span>
+      </span>
+    </div>
+  </div>
+  <div class="context-meta" id="syncTime"></div>
+</div>
+
+<!-- Saved Memories -->
+<div class="section" id="memoriesGroup" style="display: none;">
+  <div class="section-label">Saved memories</div>
+  <div class="saved-list" id="memoriesList"></div>
+</div>
+
+<!-- Code Changes -->
+<div class="section" id="codeChangesGroup" style="display: none;">
+  <div class="section-label">Code changes</div>
+  <div class="saved-list" id="codeChangesList"></div>
+</div>
+
+<!-- Pending Memories Section -->
+<div class="section pending-section" id="pendingSection" style="display: none;">
+  <div class="pending-intro" id="pendingIntro">
+    <span id="pendingCount">0</span> new memories waiting for approval.
+    No rush — save them now or later.
+  </div>
+
+  <div id="pendingList" class="pending-list"></div>
+
+  <div class="pending-actions">
+    <button class="save-btn" id="saveMemoriesBtn" type="button">Save memories</button>
+  </div>
+</div>
+
+<!-- Settings Panel (hidden by default) -->
+<div class="section settings-panel" id="settingsPanel" style="display: none;">
+  <div class="section-label">Settings</div>
+
+  <!-- Power Toggle -->
+  <div class="setting-row">
+    <span>FixOnce active</span>
     <label class="switch">
       <input type="checkbox" id="powerToggle" checked onchange="togglePower()">
       <span class="slider"></span>
     </label>
   </div>
-</div>
 
-<!-- Dashboard Grid -->
-<div class="dashboard-grid">
-
-<!-- First-Run Wizard -->
-<div class="card wizard-card grid-full" id="onboardingCard" style="display: none;">
-  <div class="wizard-header">
-    <div>
-      <div class="wizard-title" id="wizardTitle">Connect your AI tools</div>
-      <div class="wizard-copy" id="wizardCopy">FixOnce is ready. Finish connecting the apps you use.</div>
-    </div>
+  <!-- Links -->
+  <div class="settings-links">
+    <a href="/privacy.html" target="_blank">Privacy Policy</a>
+    <a href="/terms.html" target="_blank">Terms of Service</a>
+    <a href="/security.html" target="_blank">Security</a>
   </div>
-  <div class="wizard-grid" id="wizardGrid"></div>
-  <div class="wizard-footer">
-    <button class="wizard-btn ghost" id="wizardDismiss" type="button"></button>
-  </div>
-</div>
-
-<!-- Empty State (shown when no project) -->
-<div class="card grid-full empty-state" id="emptyStateCard" style="display: none;">
-  <div class="empty-state-title">Welcome to FixOnce</div>
-  <div class="empty-state-subtitle">Open a Git project to start building project memory.</div>
-  <ul class="empty-state-list">
-    <li>Decisions you made</li>
-    <li>Bug fixes you solved</li>
-    <li>Context from each session</li>
-    <li>Where you left off</li>
-  </ul>
-</div>
-
-<!-- Resume Project (hero card - primary focus) -->
-<div class="card hero grid-full" id="contextCard" style="display: none;">
-  <div class="card-label">Where You Left Off</div>
-  <div id="contextContent">
-    <div class="context-item">
-      <span class="context-label">Last</span>
-      <span class="context-value" id="lastChange">—</span>
-    </div>
-    <div class="context-item">
-      <span class="context-label">Next Action</span>
-      <span class="context-value" id="nextStep">—</span>
-    </div>
-    <div class="context-item" id="recentRow" style="display: none;">
-      <span class="context-label">Recent</span>
-      <span class="context-value" id="recentAction">—</span>
-    </div>
-  </div>
-  <div class="context-time" id="syncTime"></div>
-</div>
-
-<!-- Memory Review Card -->
-<div class="card grid-full memory-review-card" id="memoryReviewCard" style="display: none;">
-  <div class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>Proposed Memories</div>
-  <div id="pendingList" class="pending-list">
-    <div class="pending-empty">No pending memories</div>
-  </div>
-
-  <div class="next-task-section">
-    <div class="next-task-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>Next Task</div>
-    <textarea id="nextTaskInput" class="next-task-input"
-              placeholder="AI suggestion will appear here..."></textarea>
-    <div class="next-task-hint">✎ Edit if needed</div>
-  </div>
-
-  <div class="custom-memory-section">
-    <input type="text" id="customMemoryInput" class="custom-memory-input"
-           placeholder="+ Add custom memory (optional)">
-  </div>
-
-  <div class="memory-actions">
-    <button class="memory-btn secondary" id="clearMemoriesBtn" type="button">Clear</button>
-    <button class="memory-btn primary" id="saveMemoriesBtn" type="button">Save Selected</button>
-  </div>
-</div>
-
-<!-- Pending Knowledge (V2) -->
-<div class="card grid-full pending-knowledge-card" id="pendingKnowledgeCard" style="display: none;">
-  <div class="card-label">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;">
-      <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-      <path d="M2 17l10 5 10-5"/>
-      <path d="M2 12l10 5 10-5"/>
-    </svg>
-    Pending Knowledge
-  </div>
-  <div id="pendingKnowledgeList" class="pending-knowledge-list">
-    <div class="pending-knowledge-empty">No pending changes</div>
-  </div>
-  <div class="pending-knowledge-commit-section" id="pendingKnowledgeCommitSection">
-    <input type="text" id="commitMessageInput" class="commit-message-input"
-           placeholder="Commit message (auto-generated if empty)">
-    <button class="memory-btn primary" id="commitKnowledgeBtn" type="button">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-        <polyline points="22 4 12 14.01 9 11.01"/>
-      </svg>
-      Commit Knowledge
-    </button>
-  </div>
-</div>
-
-<!-- AI Summary -->
-<div class="card" id="aiSummaryCard" style="display: none;">
-  <div class="card-label">AI</div>
-  <div class="summary-title" id="aiSummaryTitle">Setup needed</div>
-  <div class="summary-subtitle" id="aiSummarySubtitle">Manage AI integrations</div>
-</div>
-
-<!-- Settings -> AI Integrations -->
-<div class="card grid-full" id="aiIntegrationsCard" style="display: none;">
-  <div class="card-label">Settings</div>
-  <div class="settings-header">
-    <div class="summary-title" id="integrationsTitle">AI Integrations</div>
-    <div class="summary-subtitle" id="integrationsCopy">Manage connected apps and reconnect when needed.</div>
-  </div>
-  <div class="wizard-grid" id="integrationsGrid"></div>
-</div>
-
-<!-- Project -->
-<div class="card" id="projectCard">
-  <div class="card-label">Project</div>
-  <select class="project-select" id="projectSelect" aria-label="Displayed project" onchange="switchDisplayedProject(this.value)"></select>
-  <div class="project-name" id="projectName">—</div>
-  <div class="project-goal" id="projectGoal">No active project</div>
-  <div class="project-subtitle muted" id="projectSubtitle">Audit only</div>
-  <div class="project-presence" id="projectPresence"></div>
-</div>
-
-<!-- Status (collapsed when healthy) -->
-<div class="card grid-full" id="statusCard">
-  <div id="statusCollapsed" class="status-collapsed" style="display: none;">
-    <div class="status-collapsed-left">
-      <span class="status-collapsed-dot" id="statusDot"></span>
-      <span id="statusSummary">FixOnce Active</span>
-    </div>
-    <button type="button" id="statusToggle">Details</button>
-  </div>
-  <div id="statusExpanded">
-    <div class="card-label">Status</div>
-    <div id="statusContent">
-      <div class="status-row">
-        <span class="status-icon status-ok">✓</span>
-        <span class="status-text">System healthy</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- AI Tools Detection -->
-<div class="card" id="aiToolsCard">
-  <div class="ai-tools-heading">
-    <div class="card-label">AI Tools</div>
-    <button class="wizard-btn" id="manageIntegrationsBtn" type="button">Manage AI integrations</button>
-  </div>
-  <div class="ai-tools-list" id="aiToolsList">
-    <div class="agents-empty">Checking...</div>
-  </div>
-  <div class="ai-tools-warning" id="aiToolsWarning" style="display: none;"></div>
-</div>
-
-</div><!-- /dashboard-grid -->
-
-<!-- System Status (compact) -->
-<div class="system-status" id="systemStatus">
-  <span class="sys-item" id="sysFixonce" title="FixOnce Server">
-    <span class="sys-dot"></span>Server
-  </span>
-  <span class="sys-item" id="sysExtension" title="Browser Extension">
-    <span class="sys-dot"></span>Extension
-  </span>
-  <span class="sys-item" id="sysMemory" title="Project Memory">
-    <span class="sys-dot"></span>Memory
-  </span>
-  <span class="sys-item" id="sysPolicy" title="Policy Layer">
-    <span class="sys-dot"></span>Policy
-  </span>
-  <span class="sys-item" id="sysAgent" title="Agent Audit">
-    <span class="sys-dot"></span>Agent
-  </span>
 </div>
 
 <!-- Footer -->
 <div class="footer">
-  <span>FixOnce — Memory • Policy • Agent</span>
   <span class="footer-links">
-    <a href="/privacy.html">Privacy</a>
-    <a href="/terms.html">Terms</a>
-    <a href="/security.html">Security</a>
+    <a href="#" onclick="toggleSettings(); return false;">Settings</a>
   </span>
+</div>
+
+</div><!-- /conversational-flow -->
+
+<!-- Hidden elements for compatibility -->
+<div style="display: none;">
+  <div id="emptyStateCard"></div>
+  <div id="memoryStatsCard">
+    <span id="memoryLastActor"></span>
+    <span id="memoryUpdated"></span>
+    <span id="memoryLastCommit"></span>
+  </div>
+  <div id="contextCard"></div>
+  <div id="headerProjectName"></div>
+  <div id="headerMemoryCounts"></div>
+  <div id="headerStatusText"></div>
+  <div id="activeAI"></div>
+  <div id="aiSummaryCard">
+    <div id="aiSummaryTitle"></div>
+    <div id="aiSummarySubtitle"></div>
+    <button id="manageIntegrationsBtn"></button>
+  </div>
+  <div id="projectCard">
+    <select id="projectSelect"></select>
+    <div id="projectGoal"></div>
+    <div id="projectSubtitle"></div>
+    <div id="projectPresence"></div>
+  </div>
+  <div id="statusCard">
+    <div id="statusCollapsed">
+      <span id="statusDot"></span>
+      <span id="statusSummary"></span>
+      <button id="statusToggle"></button>
+    </div>
+    <div id="statusExpanded">
+      <div id="statusContent"></div>
+    </div>
+  </div>
+  <div id="aiToolsCard">
+    <div id="aiToolsList"></div>
+    <div id="aiToolsWarning"></div>
+  </div>
+  <div id="timelineCard">
+    <div id="workTimeline"></div>
+  </div>
+  <div id="pendingKnowledgeCard">
+    <div id="pendingKnowledgeList"></div>
+    <div id="pendingKnowledgeCommitSection">
+      <input id="commitMessageInput">
+      <button id="commitKnowledgeBtn"></button>
+      <div id="knowledgeSuccess"></div>
+    </div>
+  </div>
+  <div id="systemStatus">
+    <span id="sysFixonce"></span>
+    <span id="sysExtension"></span>
+    <span id="sysMemory"></span>
+    <span id="sysPolicy"></span>
+    <span id="sysAgent"></span>
+  </div>
+  <textarea id="nextTaskInput"></textarea>
+  <input id="customMemoryInput">
+  <button id="clearMemoriesBtn"></button>
 </div>
 
 <script>
@@ -2866,10 +3581,10 @@ const WIZARD_COPY = {
   retry_success: 'Connection updated.',
   retry_error: 'Could not update this app right now.',
   open_error: 'Could not open this app right now.',
-  repair_mcp: 'Check AI connection',
+  repair_mcp: 'Run health check',
   repairing_mcp: 'Checking...',
-  repair_done: 'Connection check completed. If tools still fail, open a new AI chat or restart your AI app.',
-  repair_error: 'Could not check the AI connection right now.',
+  repair_done: 'Health check complete. If your AI still does not see FixOnce, restart that AI app.',
+  repair_error: 'Could not run the health check right now.',
   finalizing_setup: 'Finalizing setup...',
   checking_integrations: 'Checking integrations...'
 };
@@ -2942,211 +3657,367 @@ function render(s) {
   const agents = safeObject(s.agents);
 
   // Determine if we have an active project
-  const projectName = s.project_name || s.project_id || '';
+  const selectedProject = getSelectedProject(s);
+  const projectName = s.identity?.name || s.project_name || selectedProject.name || s.project_id || selectedProject.project_id || '';
   const hasProject = projectName && projectName !== '—';
-  const goal = s.current_goal || s.knowledge?.current_goal || '';
+  const goal = s.identity?.current_goal || s.current_goal || s.knowledge?.current_goal || '';
+  const workingDir = s.identity?.working_dir || s.working_dir || selectedProject.path || '';
 
-  // Empty State - show when no project
-  const emptyStateCard = document.getElementById('emptyStateCard');
-  const projectCard = document.getElementById('projectCard');
-  if (!hasProject) {
-    emptyStateCard.style.display = '';
-    projectCard.style.display = 'none';
-  } else {
-    emptyStateCard.style.display = 'none';
-    projectCard.style.display = '';
-  }
-
-  // Project
-  document.getElementById('projectName').textContent = projectName || '—';
-  document.getElementById('projectGoal').textContent = goal || 'No active goal';
-  document.getElementById('projectSubtitle').textContent = getProjectSubtitle(s, policy);
-  document.getElementById('projectSubtitle').className = 'project-subtitle';
-  renderProjects(s.projects || [], s.selected_project_id);
-
-  // Active AI
+  // Setup status
   const setupFinalizing = isSetupFinalizing(s);
   const agentPresence = formatAgentPresence(activeAgent, setupFinalizing);
-  document.getElementById('activeAI').textContent = formatAgentsHeader(agents, agentPresence);
+  const isConnected = activeAgent.is_connected;
 
-  // Status - Build status rows
-  const statusEl = document.getElementById('statusContent');
-  const rows = [];
+  // Status section
+  const headerStatusDot = document.getElementById('headerStatusDot');
+  if (headerStatusDot) {
+    headerStatusDot.className = isConnected ? 'status-indicator' : 'status-indicator disconnected';
+  }
 
-  const errorCount = s.browser_errors?.length || s.error_count || 0;
-  const intervention = getInterventionLevel(lastIntervention);
-  const agentAuditActive = Boolean(s.agent_audit_active || agentContext.tool_name || compliance.tool_calls_count);
-
-  rows.push({
-    icon: errorCount > 0 ? '⚠️' : '✓',
-    iconClass: errorCount > 0 ? 'status-warn' : 'status-ok',
-    text: `Active issues: ${errorCount}`,
-    action: errorCount > 0 ? 'Needs review' : ''
-  });
-  rows.push({
-    icon: '◉',
-    iconClass: 'status-ok',
-    text: 'Policy: Active',
-    action: policy.mode ? `Mode: ${capitalize(policy.mode)}` : 'Audit profile'
-  });
-  rows.push({
-    icon: intervention === 'block' ? '⛔' : intervention === 'warn' ? '⚠️' : '·',
-    iconClass: intervention === 'block' ? 'status-error' : intervention === 'warn' ? 'status-warn' : 'status-ok',
-    text: `Intervention: ${intervention}`,
-    action: intervention === 'silent' ? 'No active intervention' : 'Audit only'
-  });
-  rows.push({
-    icon: agentAuditActive ? '✓' : '·',
-    iconClass: agentAuditActive ? 'status-ok' : 'status-warn',
-    text: `Agent audit: ${agentAuditActive ? 'active' : 'audit only'}`,
-    action: agentContext.tool_name || lastIntervention.tool_name || ''
-  });
-
-  const mcpSession = safeObject(s.mcp_health?.session);
-  const mcpState = mcpSession.state || s.mcp_health?.state || 'unknown';
-  const mcpChecking = setupFinalizing && mcpState === 'unknown';
-  const mcpLabel = mcpChecking ? WIZARD_COPY.checking_integrations : getMcpSessionLabel(mcpState);
-  const mcpMessage = mcpChecking ? 'FixOnce is finishing integration checks.' : (mcpSession.message || s.mcp_health?.message || 'MCP session status is unknown.');
-  const mcpIconClass = mcpState === 'session_lost' ? 'status-error' : mcpState === 'degraded' || mcpChecking ? 'status-warn' : mcpState === 'connected' ? 'status-ok' : 'status-warn';
-  rows.push({
-    icon: mcpState === 'session_lost' ? '!' : mcpState === 'connected' ? '✓' : mcpChecking ? '…' : '·',
-    iconClass: mcpIconClass,
-    text: `AI connection: ${mcpLabel}`,
-    action: `<button class="wizard-btn" type="button" id="repairMcpBtn">${WIZARD_COPY.repair_mcp}</button>`,
-    title: mcpMessage
-  });
-
-  const sys = s.system_status || {};
-  const extensionConnected = Boolean(sys.extension?.connected);
-  rows.push({
-    icon: extensionConnected ? '✓' : '·',
-    iconClass: extensionConnected ? 'status-ok' : 'status-warn',
-    text: `FixOnce extension: ${extensionConnected ? 'Connected' : 'Ready to connect'}`,
-    action: 'Current site monitoring is shown in the extension popup',
-    title: extensionConnected
-      ? 'FixOnce extension is connected to the local server. This is separate from whether the current website is monitored.'
-      : 'FixOnce extension is optional. Your AI connection can still work without it.'
-  });
-
-  statusEl.innerHTML = rows.map(r => `
-    <div class="status-row" ${r.title ? `title="${escapeHtml(r.title)}"` : ''}>
-      <span class="status-icon ${r.iconClass}">${r.icon}</span>
-      <span class="status-text">${escapeHtml(r.text)}</span>
-      ${r.action ? `<span class="status-action">${r.action}</span>` : ''}
-    </div>
-  `).join('');
-  wireRepairMcpButton();
-
-  // Collapsed status logic
-  const allHealthy = errorCount === 0 && intervention === 'silent';
-  const statusCollapsed = document.getElementById('statusCollapsed');
-  const statusExpandedEl = document.getElementById('statusExpanded');
-  const statusCard = document.getElementById('statusCard');
-  const statusDot = document.getElementById('statusDot');
-  const statusSummary = document.getElementById('statusSummary');
-
-  if (allHealthy) {
-    statusCard.style.display = 'none';
-    statusCollapsed.style.display = 'none';
-    statusExpandedEl.style.display = 'none';
-    statusDot.className = 'status-collapsed-dot';
-    statusSummary.textContent = 'FixOnce Active';
-  } else {
-    statusCard.style.display = '';
-    statusCollapsed.style.display = statusExpanded ? '' : 'none';
-    statusExpandedEl.style.display = '';
-    if (!allHealthy) {
-      statusDot.className = errorCount > 0 ? 'status-collapsed-dot error' : 'status-collapsed-dot warn';
-      statusSummary.textContent = errorCount > 0 ? `${errorCount} issue${errorCount > 1 ? 's' : ''} need attention` : 'Status';
+  // AI Connection line
+  const aiConnectionText = document.getElementById('aiConnectionText');
+  if (aiConnectionText) {
+    const activeAgents = Array.isArray(agents.active) ? agents.active : [];
+    if (activeAgents.length > 0) {
+      const agentName = activeAgents[0].display_name || formatActorName(activeAgents[0].name);
+      aiConnectionText.textContent = `Connected now: ${agentName}`;
+    } else if (activeAgent.is_connected && activeAgent.last_agent_name) {
+      aiConnectionText.textContent = `Connected now: ${capitalize(activeAgent.last_agent_name)}`;
+    } else if (activeAgent.last_agent_name && activeAgent.last_seen) {
+      const time = formatLocalTime(activeAgent.last_seen);
+      aiConnectionText.textContent = `Last connected: ${capitalize(activeAgent.last_agent_name)} · Today ${time}`;
+    } else {
+      aiConnectionText.textContent = 'No AI connected';
     }
   }
 
-  // Wire status toggle
-  const statusToggle = document.getElementById('statusToggle');
-  statusToggle.textContent = statusExpanded ? 'Hide' : 'Details';
-  statusToggle.onclick = () => {
-    statusExpanded = !statusExpanded;
-    render(s);
-  };
+  // Project section
+  const projectNameEl = document.getElementById('projectName');
+  const projectPathEl = document.getElementById('projectPath');
+  if (projectNameEl) projectNameEl.textContent = projectName || 'No project';
+  if (projectPathEl) projectPathEl.textContent = workingDir || '';
 
-  // Context - from intent/live_record
+  // Memory counts
+  renderMemoryStats(s);
+
+  // Context section (Where we stopped)
   const intent = s.intent || s.live_record?.intent || {};
   const lastChange = intent.last_change || '';
   const nextStep = intent.next_step || '';
 
-  const contextCard = document.getElementById('contextCard');
-  if (lastChange || nextStep) {
-    contextCard.style.display = '';
-    setTextWithTitle(document.getElementById('lastChange'), lastChange || '—');
-    setTextWithTitle(document.getElementById('nextStep'), nextStep || '—');
-    document.getElementById('nextStep').classList.add('truncate');
+  const lastChangeEl = document.getElementById('lastChange');
+  const nextStepEl = document.getElementById('nextStep');
+  if (lastChangeEl) {
+    lastChangeEl.textContent = lastChange || getLatestText(s) || 'FixOnce is connected to this project.';
+    lastChangeEl.title = lastChange || '';
+  }
+  if (nextStepEl) {
+    nextStepEl.textContent = nextStep || 'Say "hi" in your AI tool.';
+    nextStepEl.title = nextStep || '';
+  }
 
-    const updatedAt = intent.updated_at;
-    const syncTimeEl = document.getElementById('syncTime');
+  // Show/hide "more" buttons based on text length
+  updateContextMoreButtons();
+
+  // Sync time
+  const updatedAt = intent.updated_at;
+  const syncTimeEl = document.getElementById('syncTime');
+  if (syncTimeEl) {
     if (updatedAt) {
       const contextActor = formatActorName(intent.actor);
       const contextTime = relativeTime(updatedAt);
       syncTimeEl.textContent = contextActor
         ? `Context by ${contextActor} · synced ${contextTime}`
         : `Context synced ${contextTime}`;
-      syncTimeEl.style.display = '';
     } else {
-      syncTimeEl.style.display = 'none';
+      syncTimeEl.textContent = '';
     }
-  } else {
-    contextCard.style.display = 'none';
   }
 
+  // Legacy compatibility - keep these for existing functions
+  renderProjects(s.projects || [], s.selected_project_id);
+  renderWorkTimeline(s);
+
+  const headerStatusText = document.getElementById('headerStatusText');
+  const headerProjectName = document.getElementById('headerProjectName');
+  const headerMemoryCounts = document.getElementById('headerMemoryCounts');
+  const activeAI = document.getElementById('activeAI');
+
+  if (headerStatusText) headerStatusText.textContent = isConnected ? 'Connected' : 'Disconnected';
+  if (headerProjectName) headerProjectName.textContent = projectName || 'FixOnce';
+  if (activeAI) activeAI.textContent = formatAgentsHeader(agents, agentPresence);
+  if (headerMemoryCounts) {
+    const dCount = s.knowledge?.total_decisions || 0;
+    const bCount = s.knowledge?.solved_bugs || 0;
+    const aCount = s.knowledge?.total_avoids || 0;
+    headerMemoryCounts.textContent = `${dCount}D · ${bCount}B · ${aCount}A`;
+  }
+
+  // Status - Build status rows (legacy, hidden in new layout)
+  const statusEl = document.getElementById('statusContent');
+  const errorCount = s.browser_errors?.length || s.error_count || 0;
+  const intervention = getInterventionLevel(lastIntervention);
+  const agentAuditActive = Boolean(s.agent_audit_active || agentContext.tool_name || compliance.tool_calls_count);
+
+  if (statusEl) {
+    const rows = [];
+
+    rows.push({
+      icon: errorCount > 0 ? '⚠️' : '✓',
+      iconClass: errorCount > 0 ? 'status-warn' : 'status-ok',
+      text: errorCount > 0 ? `${errorCount} browser issue${errorCount > 1 ? 's' : ''}` : 'No active issues',
+      action: errorCount > 0 ? 'Needs review' : ''
+    });
+    rows.push({
+      icon: '◉',
+      iconClass: 'status-ok',
+      text: 'Project guidance active',
+      action: policy.mode ? capitalize(policy.mode) : ''
+    });
+    rows.push({
+      icon: intervention === 'block' ? '⛔' : intervention === 'warn' ? '⚠️' : '·',
+      iconClass: intervention === 'block' ? 'status-error' : intervention === 'warn' ? 'status-warn' : 'status-ok',
+      text: intervention === 'silent' ? 'No guardrail warnings' : 'Guardrail warning',
+      action: intervention === 'silent' ? '' : 'Review'
+    });
+    rows.push({
+      icon: agentAuditActive ? '✓' : '·',
+      iconClass: agentAuditActive ? 'status-ok' : 'status-warn',
+      text: `AI activity: ${agentAuditActive ? 'tracked' : 'waiting'}`,
+      action: agentContext.tool_name || lastIntervention.tool_name || ''
+    });
+
+    const mcpSession = safeObject(s.mcp_health?.session);
+    const mcpState = mcpSession.state || s.mcp_health?.state || 'unknown';
+    const mcpChecking = setupFinalizing && mcpState === 'unknown';
+    const mcpLabel = mcpChecking ? WIZARD_COPY.checking_integrations : getMcpSessionLabel(mcpState);
+    const mcpMessage = mcpChecking ? 'FixOnce is finishing integration checks.' : (mcpSession.message || s.mcp_health?.message || 'AI tool connection status is unknown.');
+    const mcpIconClass = mcpState === 'session_lost' ? 'status-error' : mcpState === 'degraded' || mcpChecking ? 'status-warn' : mcpState === 'connected' ? 'status-ok' : 'status-warn';
+    rows.push({
+      icon: mcpState === 'session_lost' ? '!' : mcpState === 'connected' ? '✓' : mcpChecking ? '…' : '·',
+      iconClass: mcpIconClass,
+      text: `AI tools: ${mcpLabel}`,
+      action: `<button class="wizard-btn" type="button" id="repairMcpBtn">${WIZARD_COPY.repair_mcp}</button>`,
+      title: mcpMessage
+    });
+
+    statusEl.innerHTML = rows.map(r => `
+      <div class="status-row" ${r.title ? `title="${escapeHtml(r.title)}"` : ''}>
+        <span class="status-icon ${r.iconClass}">${r.icon}</span>
+        <span class="status-text">${escapeHtml(r.text)}</span>
+        ${r.action ? `<span class="status-action">${r.action}</span>` : ''}
+      </div>
+    `).join('');
+    wireRepairMcpButton();
+  }
+
+  // Collapsed status logic (legacy, all elements may be null)
+  const allHealthy = errorCount === 0 && intervention === 'silent';
+  const statusCollapsed = document.getElementById('statusCollapsed');
+  const statusExpandedEl = document.getElementById('statusExpanded');
+  const statusCard = document.getElementById('statusCard');
+  const statusDot = document.getElementById('statusDot');
+  const statusSummary = document.getElementById('statusSummary');
+  const statusToggle = document.getElementById('statusToggle');
+
+  if (statusCard) {
+    if (allHealthy) {
+      statusCard.style.display = 'none';
+      if (statusCollapsed) statusCollapsed.style.display = 'none';
+      if (statusExpandedEl) statusExpandedEl.style.display = 'none';
+      if (statusDot) statusDot.className = 'status-collapsed-dot';
+      if (statusSummary) statusSummary.textContent = 'FixOnce Active';
+    } else {
+      statusCard.style.display = '';
+      if (statusCollapsed) statusCollapsed.style.display = statusExpanded ? '' : 'none';
+      if (statusExpandedEl) statusExpandedEl.style.display = '';
+      if (statusDot) statusDot.className = errorCount > 0 ? 'status-collapsed-dot error' : 'status-collapsed-dot warn';
+      if (statusSummary) statusSummary.textContent = errorCount > 0 ? `${errorCount} issue${errorCount > 1 ? 's' : ''} need attention` : 'Status';
+    }
+  }
+
+  if (statusToggle) {
+    statusToggle.textContent = statusExpanded ? 'Hide' : 'Details';
+    statusToggle.onclick = () => {
+      statusExpanded = !statusExpanded;
+      render(s);
+    };
+  }
+
+  // Legacy compatibility - system status elements
   renderAgents(agents);
 
-  // System Status (from real sources)
-  // sys already defined above for extension row
+  const sys = s.system_status || {};
+  const extensionConnected = Boolean(sys.extension?.connected);
   const memoryLoaded = Boolean(sys.memory?.loaded);
   const policyActive = Boolean(policy.mode || policy.reason);
 
-  // Hide system status dots when everything is healthy
   const systemStatusEl = document.getElementById('systemStatus');
-  const allSystemsHealthy = extensionConnected && memoryLoaded && policyActive;
-  systemStatusEl.style.display = allSystemsHealthy ? 'none' : '';
-
-  // Server status - if we got data, server is up
-  const sysFixonce = document.getElementById('sysFixonce');
-  sysFixonce.className = 'sys-item ok';
-  sysFixonce.title = 'FixOnce: Connected';
-
-  // Extension status - from real heartbeat
-  const sysExtension = document.getElementById('sysExtension');
-  if (extensionConnected) {
-    sysExtension.className = 'sys-item ok';
-    sysExtension.title = 'FixOnce extension: Connected. Current-site monitoring is controlled per website in the extension popup.' +
-      (sys.extension.last_seen ? ' (' + relativeTime(sys.extension.last_seen) + ')' : '');
-  } else {
-    sysExtension.className = 'sys-item warn';
-    sysExtension.title = 'FixOnce extension: Optional. Your AI connection can still work without it.';
+  if (systemStatusEl) {
+    const allSystemsHealthy = extensionConnected && memoryLoaded && policyActive;
+    systemStatusEl.style.display = allSystemsHealthy ? 'none' : '';
   }
 
-  // Memory status - from active project
+  const sysFixonce = document.getElementById('sysFixonce');
+  if (sysFixonce) {
+    sysFixonce.className = 'sys-item ok';
+    sysFixonce.title = 'FixOnce: Connected';
+  }
+
+  const sysExtension = document.getElementById('sysExtension');
+  if (sysExtension) {
+    if (extensionConnected) {
+      sysExtension.className = 'sys-item ok';
+      sysExtension.title = 'FixOnce extension: Connected.';
+    } else {
+      sysExtension.className = 'sys-item warn';
+      sysExtension.title = 'FixOnce extension: Optional.';
+    }
+  }
+
   const sysMemory = document.getElementById('sysMemory');
-  if (memoryLoaded) {
-    sysMemory.className = 'sys-item ok';
-    sysMemory.title = 'Project Memory: Loaded (' + (sys.memory.project_id || 'unknown') + ')';
-  } else {
-    sysMemory.className = 'sys-item warn';
-    sysMemory.title = 'Project Memory: Not loaded';
+  if (sysMemory) {
+    if (memoryLoaded) {
+      sysMemory.className = 'sys-item ok';
+      sysMemory.title = 'Project Memory: Loaded';
+    } else {
+      sysMemory.className = 'sys-item warn';
+      sysMemory.title = 'Project Memory: Not loaded';
+    }
   }
 
   const sysPolicy = document.getElementById('sysPolicy');
-  sysPolicy.className = policyActive ? 'sys-item ok' : 'sys-item warn';
-  sysPolicy.title = policy.reason || 'Policy layer active';
+  if (sysPolicy) {
+    sysPolicy.className = policyActive ? 'sys-item ok' : 'sys-item warn';
+    sysPolicy.title = policy.reason || 'Policy layer active';
+  }
 
   const sysAgent = document.getElementById('sysAgent');
-  if (agentAuditActive) {
-    sysAgent.className = 'sys-item ok';
-    sysAgent.title = 'Agent audit active';
-  } else {
-    sysAgent.className = 'sys-item warn';
-    sysAgent.title = setupFinalizing ? 'Agent audit: Checking integrations' : 'Agent audit unavailable - Audit only';
+  if (sysAgent) {
+    if (agentAuditActive) {
+      sysAgent.className = 'sys-item ok';
+      sysAgent.title = 'Agent audit active';
+    } else {
+      sysAgent.className = 'sys-item warn';
+      sysAgent.title = setupFinalizing ? 'Agent audit: Checking integrations' : 'Agent audit unavailable';
+    }
   }
+}
+
+function getSelectedProject(s) {
+  const selectedId = s.selected_project_id;
+  const projects = Array.isArray(s.projects) ? s.projects : [];
+  return projects.find(project => project.project_id === selectedId || project.selected) || projects[0] || {};
+}
+
+function renderMemoryStats(s) {
+  const identityCounts = s.identity?.counts || {};
+  const projectCounts = getSelectedProject(s).counts || {};
+  const knowledge = s.knowledge || {};
+  const latest = getMeaningfulActivities(s)[0];
+
+  const decisions = identityCounts.decisions ?? projectCounts.decisions ?? knowledge.total_decisions ?? 0;
+  const solvedBugs = identityCounts.solved_bugs ?? projectCounts.solved_bugs ?? knowledge.total_solutions ?? 0;
+  const avoids = identityCounts.avoids ?? projectCounts.avoids ?? knowledge.total_avoids ?? 0;
+
+  // Update individual count elements
+  const decisionEl = document.getElementById('decisionCount');
+  const bugEl = document.getElementById('bugCount');
+  const avoidEl = document.getElementById('avoidCount');
+
+  if (decisionEl) decisionEl.textContent = decisions;
+  if (bugEl) bugEl.textContent = solvedBugs;
+  if (avoidEl) avoidEl.textContent = avoids;
+
+  // Legacy elements
+  const lastActorEl = document.getElementById('memoryLastActor');
+  const updatedEl = document.getElementById('memoryUpdated');
+  const lastCommitEl = document.getElementById('memoryLastCommit');
+
+  if (lastActorEl) lastActorEl.textContent = formatActorName(latest?.actor || latest?.editor) || '—';
+  if (updatedEl) updatedEl.textContent = relativeTime(latest?.timestamp) || '—';
+  if (lastCommitEl) lastCommitEl.textContent = getLastCommitTitle(s) || '—';
+}
+
+function getLatestText(s) {
+  const identity = s.identity || {};
+  if (identity.last_decision?.text) return identity.last_decision.text;
+  if (identity.last_insight) return identity.last_insight;
+  if (identity.last_avoid) return identity.last_avoid;
+  const activity = Array.isArray(s.activity) ? s.activity[0] : null;
+  return formatActivity(activity);
+}
+
+function renderWorkTimeline(s) {
+  const timeline = document.getElementById('workTimeline');
+  const activities = getMeaningfulActivities(s).slice(0, 4);
+  if (!activities.length) {
+    timeline.innerHTML = `
+      <div class="timeline-item">
+        <span class="timeline-dot"></span>
+        <div>
+          <div class="timeline-text">FixOnce is ready to remember this project</div>
+          <div class="timeline-meta">Open your AI tool and say "hi"</div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  timeline.innerHTML = activities.map(activity => {
+    const text = formatOutcome(activity) || 'Activity recorded';
+    const actor = formatActorName(activity.actor || activity.editor);
+    const time = relativeTime(activity.timestamp);
+    return `
+      <div class="timeline-item">
+        <span class="timeline-dot"></span>
+        <div>
+          <div class="timeline-text" title="${escapeHtml(text)}">${escapeHtml(text)}</div>
+          <div class="timeline-meta">${escapeHtml([actor, time].filter(Boolean).join(' · '))}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function getLastCommitTitle(s) {
+  const activities = Array.isArray(s.activity) ? s.activity : [];
+  const commit = activities.find(activity => {
+    const text = `${activity.human_name || ''} ${activity.tool || ''}`.toLowerCase();
+    return text.includes('commit') || text.includes('committed');
+  });
+  return commit ? formatOutcome(commit).replace(/^✓\s*/, '') : '';
+}
+
+function getMeaningfulActivities(s) {
+  const activities = Array.isArray(s.activity) ? s.activity : [];
+  return activities.filter(activity => {
+    const outcome = formatOutcome(activity);
+    if (!outcome) return false;
+    const raw = `${activity.tool || ''} ${activity.human_name || ''} ${activity.file || ''}`.toLowerCase();
+    if (raw.includes('area-context') || raw.includes('live-errors')) return false;
+    if (isLowLevelActivity(activity) && !isHumanizableTechnicalActivity(activity)) return false;
+    return true;
+  });
+}
+
+function isLowLevelActivity(activity) {
+  const tool = String(activity.tool || '').trim();
+  const name = String(activity.human_name || '').trim();
+  const file = String(activity.file || '').trim();
+  const lowLevel = /^(bash|shell|exec|apply_patch|node|curl|sed|rg|cat|ls|pwd|python|python3|git(?:\s+.*)?|npm(?:\s+.*)?|pytest)$/i;
+  return lowLevel.test(tool) || lowLevel.test(name) || lowLevel.test(file.split('/').pop() || '');
+}
+
+function isHumanizableTechnicalActivity(activity) {
+  const raw = `${activity.tool || ''} ${activity.human_name || ''} ${activity.file || ''}`.toLowerCase();
+  return (
+    raw.includes('apply_patch') ||
+    raw.includes('commit') ||
+    raw.includes('test') ||
+    raw.includes('pytest') ||
+    raw.includes('dashboard.html')
+  );
 }
 
 function renderProjects(projects, selectedProjectId) {
@@ -3589,46 +4460,51 @@ function setTextWithTitle(el, text) {
 }
 
 // Smart activity formatting - result, not technical action
+function formatOutcome(act) {
+  if (!act) return '';
+
+  const rawTool = String(act.tool || '').trim();
+  const rawName = String(act.human_name || '').trim();
+  const rawFile = String(act.file || '').trim();
+  const combined = `${rawName} ${rawTool} ${rawFile}`.toLowerCase();
+
+  if (rawTool === 'apply_patch' || rawName.toLowerCase() === 'apply_patch' || combined.includes('apply_patch')) {
+    return '✓ Updated dashboard experience';
+  }
+  if (combined.includes('git commit') || combined.includes('committed')) return '✓ Committed changes';
+  if (combined.includes('pytest') || combined.includes('test')) return '✓ Ran tests';
+
+  if (rawName && !/^(bash|shell|exec|node|python|rg|sed|curl|cat|ls|pwd|git(?:\s+.*)?)$/i.test(rawName)) {
+    if (rawName.startsWith('Fixed:')) return `✓ ${rawName.replace(/^Fixed:\s*/, 'Fixed ')}`;
+    if (rawName.toLowerCase().includes('commit')) return `✓ ${rawName}`;
+    return `✓ ${rawName}`;
+  }
+
+  if (combined.includes('commit')) return '✓ Committed changes';
+  if (rawTool === 'fo_sync' || rawTool === 'update_work_context') return '✓ Synced project context';
+  if (rawTool === 'fo_solved') return '✓ Recorded solution';
+  if (rawTool === 'fo_decide') return '✓ Recorded decision';
+  if (rawTool === 'fo_apply') return '✓ Applied known fix';
+  if (rawTool === 'fo_search') return '✓ Reused project memory';
+  if (rawTool === 'fo_errors') return '✓ Checked live errors';
+
+  if (act.type === 'file_change') {
+    if (act.file_context === 'ui') return '✓ Updated dashboard experience';
+    if (act.file_context === 'config') return '✓ Updated project setup';
+    const filename = rawFile.split('/').pop();
+    return filename ? `✓ Updated ${filename}` : '✓ Updated project files';
+  }
+
+  if (act.type === 'mcp_tool') return '✓ Updated project memory';
+  return '';
+}
+
 function formatActivity(act) {
   if (!act) return null;
 
   const time = relativeTime(act.timestamp);
-  let text = '';
-
-  // MCP tools - semantic descriptions
-  if (act.type === 'mcp_tool') {
-    // Special case: fo_solved with fix description
-    if (act.tool === 'fo_solved' && act.human_name?.startsWith('Fixed:')) {
-      text = act.human_name;
-    } else {
-      const toolMap = {
-        'fo_errors': 'Checked errors',
-        'fo_apply': 'Applied fix',
-        'fo_search': 'Searched memory',
-        'fo_sync': 'Synced context',
-        'fo_solved': 'Recorded solution',
-        'fo_decide': 'Made decision',
-        'update_work_context': 'Synced context',
-        'get_browser_context': 'Checked browser'
-      };
-      text = toolMap[act.tool] || `Used ${act.tool}`;
-    }
-  }
-  // File changes - use human_name, not filename
-  else if (act.type === 'file_change') {
-    const name = act.human_name || 'file';
-    if (act.file_context === 'ui') {
-      text = `Updated ${name}`;
-    } else if (act.file_context === 'config') {
-      text = `Changed ${name}`;
-    } else {
-      text = `Edited ${name}`;
-    }
-  }
-  // Fallback
-  else {
-    text = act.human_name || act.tool || 'Activity';
-  }
+  const text = formatOutcome(act);
+  if (!text) return null;
 
   const actor = formatActorName(act.actor || act.editor);
   return [actor, text, time].filter(Boolean).join(' · ');
@@ -3658,6 +4534,123 @@ async function fetchActivity() {
   } catch (e) {
     logPollingError('Activity fetch error:', e);
   }
+}
+
+function formatTimestamp(isoString) {
+  if (!isoString) return '';
+  try {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+    if (diffDays === 0) {
+      return `Today ${timeStr}`;
+    } else if (diffDays === 1) {
+      return `Yesterday ${timeStr}`;
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  } catch (e) {
+    return '';
+  }
+}
+
+async function loadRecentMemories() {
+  try {
+    const res = await fetch(`${API}/api/recent-memories?limit=3`, {
+      headers: { 'X-Dashboard': 'true' },
+      signal: AbortSignal.timeout(3000)
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const memories = data.memories || [];
+    const groupEl = document.getElementById('memoriesGroup');
+    const listEl = document.getElementById('memoriesList');
+
+    if (!groupEl || !listEl) return;
+
+    if (memories.length === 0) {
+      groupEl.style.display = 'none';
+      return;
+    }
+
+    groupEl.style.display = 'block';
+    listEl.innerHTML = memories.map((m, idx) => {
+      const typeLabel = m.type === 'decision' ? 'Decision' : m.type === 'solved' ? 'Solved' : 'Avoid';
+      const typeClass = m.type === 'solved' ? 'solved' : m.type === 'avoid' ? 'avoid' : '';
+      const timeStr = formatTimestamp(m.timestamp);
+      const actor = m.actor || 'Unknown';
+      const text = m.text || '—';
+      const needsMore = text.length > 60;
+
+      return `
+        <div class="saved-item">
+          <div class="saved-item-main">
+            <span class="saved-item-type ${typeClass}">${typeLabel}:</span>
+            <span class="saved-item-text" id="memoryText${idx}">${escapeHtml(text)}</span>
+            ${needsMore ? `<span class="saved-item-more" onclick="toggleMemoryText(${idx})">more</span>` : ''}
+          </div>
+          <div class="saved-item-meta">${escapeHtml(actor)} · ${timeStr}</div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    logPollingError('Memories fetch error:', e);
+  }
+}
+
+async function loadCodeChanges() {
+  try {
+    const res = await fetch(`${API}/api/commits?limit=3`, {
+      headers: { 'X-Dashboard': 'true' },
+      signal: AbortSignal.timeout(3000)
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const commits = data.commits || [];
+    const groupEl = document.getElementById('codeChangesGroup');
+    const listEl = document.getElementById('codeChangesList');
+
+    if (!groupEl || !listEl) return;
+
+    if (commits.length === 0) {
+      groupEl.style.display = 'none';
+      return;
+    }
+
+    groupEl.style.display = 'block';
+    listEl.innerHTML = commits.slice(0, 3).map(c => {
+      const timeStr = formatTimestamp(c.timestamp);
+      const author = c.author || 'Unknown';
+      const hash = c.hash?.slice(0, 7) || '—';
+
+      return `
+        <div class="saved-item">
+          <div class="saved-item-main">
+            <span class="saved-item-type code">${hash}</span>
+            <span class="saved-item-text">${escapeHtml(c.message || '—')}</span>
+          </div>
+          <div class="saved-item-meta">${escapeHtml(author)} · ${timeStr}</div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    logPollingError('Code changes fetch error:', e);
+  }
+}
+
+// Legacy function name for backwards compatibility
+async function loadCommits() {
+  await loadCodeChanges();
 }
 
 async function togglePower() {
@@ -3746,7 +4739,109 @@ async function loadPendingMemories() {
   }
 }
 
+function toggleSettings() {
+  const panel = document.getElementById('settingsPanel');
+  if (panel) {
+    const isHidden = panel.style.display === 'none';
+    panel.style.display = isHidden ? '' : 'none';
+    if (isHidden) {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  } else {
+    alert('Settings panel not found');
+  }
+}
+
+function toggleContextText(type) {
+  const textEl = document.getElementById(type === 'last' ? 'lastChange' : 'nextStep');
+  const moreEl = document.getElementById(type === 'last' ? 'lastMore' : 'nextMore');
+  if (textEl && moreEl) {
+    const isExpanded = textEl.classList.contains('expanded');
+    textEl.classList.toggle('expanded');
+    moreEl.textContent = isExpanded ? 'more' : 'less';
+  }
+}
+
+function toggleMemoryText(idx) {
+  const textEl = document.getElementById(`memoryText${idx}`);
+  const moreEl = textEl?.nextElementSibling;
+  if (textEl && moreEl) {
+    const isExpanded = textEl.classList.contains('expanded');
+    textEl.classList.toggle('expanded');
+    moreEl.textContent = isExpanded ? 'more' : 'less';
+  }
+}
+
+function updateContextMoreButtons() {
+  const CHAR_LIMIT = 60;
+
+  const lastEl = document.getElementById('lastChange');
+  const lastMore = document.getElementById('lastMore');
+  if (lastEl && lastMore) {
+    lastMore.style.display = lastEl.textContent.length > CHAR_LIMIT ? '' : 'none';
+  }
+
+  const nextEl = document.getElementById('nextStep');
+  const nextMore = document.getElementById('nextMore');
+  if (nextEl && nextMore) {
+    nextMore.style.display = nextEl.textContent.length > CHAR_LIMIT ? '' : 'none';
+  }
+}
+
 function renderPendingMemories() {
+  const section = document.getElementById('pendingSection');
+  const list = document.getElementById('pendingList');
+  const pendingCountEl = document.getElementById('pendingCount');
+  const nextTaskInput = document.getElementById('nextTaskInput');
+
+  const pending = pendingMemoriesData.pending || [];
+  const nextTask = pendingMemoriesData.next_task || '';
+
+  if (!pending.length) {
+    if (section) section.style.display = 'none';
+    return;
+  }
+
+  if (section) section.style.display = '';
+  if (pendingCountEl) pendingCountEl.textContent = pending.length;
+
+  const groups = { decision: [], avoid: [], solution: [], note: [] };
+  const groupLabels = { decision: 'Decision', avoid: 'Avoid', solution: 'Fix', note: 'Note' };
+  const groupOrder = ['decision', 'avoid', 'solution', 'note'];
+
+  pending.forEach((item, i) => {
+    const type = (item.type || 'note').toLowerCase();
+    const groupKey = groups[type] ? type : 'note';
+    groups[groupKey].push({ ...item, originalIndex: i });
+  });
+
+  let html = '';
+  groupOrder.forEach(groupKey => {
+    const items = groups[groupKey];
+    if (!items.length) return;
+
+    items.forEach(item => {
+      const text = item.text || item.problem || item.decision || '';
+      const checked = item.checked !== false ? 'checked' : '';
+      html += `
+        <div class="pending-item">
+          <input type="checkbox" data-index="${item.originalIndex}" ${checked}>
+          <span class="pending-item-type">${groupLabels[groupKey]}:</span>
+          <span class="pending-item-text">${escapeHtml(text)}</span>
+        </div>
+      `;
+    });
+  });
+
+  if (list) list.innerHTML = html;
+
+  // Update next task input if not focused
+  if (nextTaskInput && document.activeElement !== nextTaskInput) {
+    nextTaskInput.value = nextTask;
+  }
+}
+
+function renderPendingMemoriesLegacy() {
   const card = document.getElementById('memoryReviewCard');
   const list = document.getElementById('pendingList');
   const nextTaskInput = document.getElementById('nextTaskInput');
@@ -3755,14 +4850,14 @@ function renderPendingMemories() {
   const nextTask = pendingMemoriesData.next_task || '';
 
   if (!pending.length && !nextTask) {
-    card.style.display = 'none';
+    if (card) card.style.display = 'none';
     return;
   }
 
-  card.style.display = '';
+  if (card) card.style.display = '';
 
   if (!pending.length) {
-    list.innerHTML = '<div class="pending-empty">No pending memories</div>';
+    if (list) list.innerHTML = '<div class="pending-empty">No pending memories</div>';
   } else {
     const groups = { decision: [], avoid: [], solution: [], note: [] };
     const groupLabels = { decision: 'Decisions', avoid: 'Avoid', solution: 'Solutions', note: 'Notes' };
@@ -3966,6 +5061,7 @@ async function loadPendingKnowledge() {
 async function commitKnowledge() {
   const btn = document.getElementById('commitKnowledgeBtn');
   const input = document.getElementById('commitMessageInput');
+  const success = document.getElementById('knowledgeSuccess');
 
   if (!btn) return;
 
@@ -3990,6 +5086,10 @@ async function commitKnowledge() {
     if (data.status === 'ok') {
       const commit = data.commit;
       showToast(`Committed: ${commit.id} (${commit.stats.total} items)`);
+      if (success) {
+        success.classList.add('show');
+        setTimeout(() => success.classList.remove('show'), 2600);
+      }
       if (input) input.value = '';
       loadPendingKnowledge();
     } else if (data.status === 'empty') {
@@ -4136,7 +5236,9 @@ fetchActivity();
 loadPendingMemories();
 loadPendingKnowledge();
 loadAITools();
-setInterval(() => { fetchData(); fetchOnboarding(); fetchActivity(); loadAITools(); loadPendingMemories(); loadPendingKnowledge(); }, 5000);
+loadRecentMemories();
+loadCodeChanges();
+setInterval(() => { fetchData(); fetchOnboarding(); fetchActivity(); loadAITools(); loadPendingMemories(); loadPendingKnowledge(); loadRecentMemories(); loadCodeChanges(); }, 5000);
 </script>
 </body>
 </html>

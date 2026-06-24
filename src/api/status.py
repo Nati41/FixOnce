@@ -1636,14 +1636,13 @@ def api_tray_status():
         # Determine status
         is_connected = session_health.get("state") == "connected"
 
-        # Get pending count
+        # Get pending count from V2 pending memories
         pending_count = 0
         try:
-            pending_file = USER_DATA_DIR / "pending_knowledge.json"
+            pending_file = USER_DATA_DIR / "pending_memories.json"
             if pending_file.exists():
-                import json
                 pending_data = json.loads(pending_file.read_text(encoding="utf-8"))
-                pending_count = len(pending_data.get("items", []))
+                pending_count = len(pending_data.get("pending", []))
         except Exception:
             pass
 
@@ -1765,3 +1764,140 @@ def api_set_launch_mode():
         return jsonify({"status": "ok", "mode": mode})
     else:
         return jsonify({"error": "Failed to save configuration"}), 500
+
+
+@status_bp.route("/commits", methods=["GET"])
+def api_commits():
+    """
+    Get recent git commits for the active project.
+    Returns human-readable commit list for dashboard display.
+    """
+    try:
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
+
+        limit = request.args.get("limit", 5, type=int)
+        limit = min(limit, 20)  # Cap at 20
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"commits": [], "error": "No active project"})
+
+        memory = load_project_memory(project_id) or {}
+        working_dir = (
+            memory.get("live_record", {}).get("gps", {}).get("working_dir")
+            or memory.get("project_info", {}).get("working_dir")
+        )
+
+        if not working_dir:
+            return jsonify({"commits": [], "error": "No working directory"})
+
+        # Get recent commits with author and ISO timestamp
+        result = subprocess.run(
+            ["git", "log", f"--max-count={limit}", "--pretty=format:%H|%s|%aI|%an"],
+            cwd=working_dir,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if result.returncode != 0:
+            return jsonify({"commits": [], "error": "Not a git repository"})
+
+        commits = []
+        for line in result.stdout.strip().split("\n"):
+            if "|" in line:
+                parts = line.split("|", 3)
+                if len(parts) >= 2:
+                    author = parts[3] if len(parts) > 3 else "Unknown"
+                    # Normalize author name
+                    if "claude" in author.lower():
+                        author = "Claude"
+                    elif "codex" in author.lower():
+                        author = "Codex"
+                    commits.append({
+                        "hash": parts[0],
+                        "message": parts[1],
+                        "timestamp": parts[2] if len(parts) > 2 else "",
+                        "author": author
+                    })
+
+        return jsonify({"commits": commits})
+
+    except Exception as e:
+        return jsonify({"commits": [], "error": str(e)})
+
+
+@status_bp.route("/recent-memories", methods=["GET"])
+def api_recent_memories():
+    """
+    Get recently saved memories (decisions + solutions) for the active project.
+    Returns human-readable list for dashboard display.
+    """
+    try:
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
+
+        limit = request.args.get("limit", 3, type=int)
+        limit = min(limit, 10)  # Cap at 10
+
+        project_id = get_active_project_id()
+        if not project_id:
+            return jsonify({"memories": [], "error": "No active project"})
+
+        memory = load_project_memory(project_id) or {}
+
+        # Collect decisions
+        decisions = memory.get("decisions", [])
+        for d in decisions:
+            d["_type"] = "decision"
+            d["_text"] = d.get("decision", "")
+            d["_timestamp"] = d.get("timestamp", "")
+            d["_actor"] = d.get("actor", "unknown")
+
+        # Collect solutions
+        solutions = memory.get("solutions_history", [])
+        for s in solutions:
+            s["_type"] = "solved"
+            s["_text"] = s.get("problem", "")
+            s["_timestamp"] = s.get("resolved_at", "")
+            s["_actor"] = s.get("actor", "unknown")
+
+        # Collect avoid patterns
+        avoid = memory.get("avoid", [])
+        for a in avoid:
+            a["_type"] = "avoid"
+            a["_text"] = a.get("what", a.get("text", ""))
+            a["_timestamp"] = a.get("timestamp", "")
+            a["_actor"] = a.get("actor", "unknown")
+
+        # Merge and sort by timestamp (most recent first)
+        all_items = decisions + solutions + avoid
+        all_items.sort(key=lambda x: x.get("_timestamp", ""), reverse=True)
+
+        # Format for display
+        memories = []
+        for item in all_items[:limit]:
+            memories.append({
+                "type": item["_type"],
+                "text": item["_text"],  # Full text - UI handles truncation
+                "timestamp": item["_timestamp"],
+                "actor": _normalize_actor(item["_actor"])
+            })
+
+        return jsonify({"memories": memories})
+
+    except Exception as e:
+        return jsonify({"memories": [], "error": str(e)})
+
+
+def _normalize_actor(actor: str) -> str:
+    """Normalize actor name for display."""
+    if not actor or actor == "unknown":
+        return "Unknown"
+    actor_lower = actor.lower()
+    if "claude" in actor_lower:
+        return "Claude"
+    if "codex" in actor_lower:
+        return "Codex"
+    if "user" in actor_lower or "dashboard" in actor_lower:
+        return "You"
+    return actor.title()
