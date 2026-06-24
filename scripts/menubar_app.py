@@ -8,7 +8,7 @@ becomes "Full View" accessible from the menu.
 
 Status is shown via title text next to the icon:
   (icon)         Connected, synced
-  (icon) 3       3 items pending commit
+  (icon) 3       3 memories waiting to save
   (icon) !       Needs attention
   (icon) -       Disconnected
 """
@@ -123,16 +123,12 @@ class FixOnceMenuBar(rumps.App):
         self.menu.add(None)  # Separator
 
         # Quick actions
-        self.open_full_view_item = rumps.MenuItem("Open Full View", callback=self._open_full_view)
-        self.menu.add(self.open_full_view_item)
+        self.expand_item = rumps.MenuItem("Expand", callback=self._expand_app)
+        self.menu.add(self.expand_item)
 
-        self.commit_item = rumps.MenuItem("Commit Knowledge", callback=self._commit_knowledge)
-        self.commit_item.set_callback(None)  # Hidden until pending > 0
+        self.commit_item = rumps.MenuItem("Save", callback=self._commit_knowledge)
+        self.commit_item.set_callback(None)  # Disabled until pending > 0
         self.menu.add(self.commit_item)
-
-        self.repair_item = rumps.MenuItem("Repair", callback=self._repair)
-        self.repair_item.set_callback(None)  # Hidden until needed
-        self.menu.add(self.repair_item)
 
         self.menu.add(None)  # Separator
 
@@ -140,15 +136,7 @@ class FixOnceMenuBar(rumps.App):
         self.pause_item = rumps.MenuItem("Pause", callback=self._toggle_pause)
         self.menu.add(self.pause_item)
 
-        # Switch Project submenu
-        self.switch_project_item = rumps.MenuItem("Switch Project")
-        self.menu.add(self.switch_project_item)
-
         self.menu.add(None)  # Separator
-
-        # Settings
-        self.settings_item = rumps.MenuItem("Settings", callback=self._open_settings)
-        self.menu.add(self.settings_item)
 
         # Quit
         self.quit_item = rumps.MenuItem("Quit FixOnce", callback=self._quit_app)
@@ -308,24 +296,65 @@ class FixOnceMenuBar(rumps.App):
 
         # Show/hide conditional items
         if self.pending_count > 0:
-            self.commit_item.title = f"Commit Knowledge ({self.pending_count})"
+            self.commit_item.title = f"Save ({self.pending_count})"
             self.commit_item.set_callback(self._commit_knowledge)
         else:
-            self.commit_item.title = "Commit Knowledge"
+            self.commit_item.title = "Save"
             self.commit_item.set_callback(None)
-
-        if self.needs_attention and self.status == "problem":
-            self.repair_item.set_callback(self._repair)
-        else:
-            self.repair_item.set_callback(None)
 
         # Update pause item text
         self.pause_item.title = "Resume" if self.is_paused else "Pause"
 
+    def _open_dashboard_url(self, path=""):
+        """Open dashboard URL, reusing existing tab if possible (macOS)."""
+        base_url = f"http://localhost:{self.server_port}"
+        full_url = f"{base_url}/{path}" if path else base_url
+
+        # Try AppleScript to reuse existing Chrome tab
+        applescript = f'''
+        tell application "Google Chrome"
+            set found to false
+            repeat with w in windows
+                repeat with t in tabs of w
+                    if URL of t starts with "{base_url}" then
+                        set URL of t to "{full_url}"
+                        set active tab index of w to index of t
+                        set index of w to 1
+                        activate
+                        set found to true
+                        exit repeat
+                    end if
+                end repeat
+                if found then exit repeat
+            end repeat
+            if not found then
+                open location "{full_url}"
+                activate
+            end if
+        end tell
+        '''
+        try:
+            subprocess.run(["osascript", "-e", applescript],
+                          capture_output=True, timeout=3)
+        except Exception:
+            # Fallback to standard webbrowser
+            webbrowser.open(full_url)
+
+    def _expand_app(self, _):
+        """Open the native FixOnce app in dashboard mode."""
+        # Run app_launcher.py directly with --dashboard flag
+        launcher_path = PROJECT_DIR / "scripts" / "app_launcher.py"
+        subprocess.Popen(
+            [sys.executable, str(launcher_path), "--dashboard"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True
+        )
+
     def _open_full_view(self, _):
         """Open the full dashboard in browser."""
         if self.server_running:
-            webbrowser.open(f"http://localhost:{self.server_port}/")
+            self._open_dashboard_url()
         else:
             rumps.notification(
                 title="FixOnce",
@@ -336,16 +365,60 @@ class FixOnceMenuBar(rumps.App):
             time.sleep(2)
             port = self._discover_port()
             if port:
-                webbrowser.open(f"http://localhost:{port}/")
+                self.server_port = port
+                self._open_dashboard_url()
 
     def _commit_knowledge(self, _):
-        """Open commit knowledge dialog (redirects to dashboard for now)."""
-        if self.server_running and self.pending_count > 0:
-            webbrowser.open(f"http://localhost:{self.server_port}/#commit")
+        """Save all pending memories directly via API."""
+        if not self.server_running or self.pending_count == 0:
+            return
+
+        try:
+            # Get all pending item IDs
+            pending_url = f"http://localhost:{self.server_port}/api/pending"
+            with urllib.request.urlopen(pending_url, timeout=5) as resp:
+                pending_data = json.loads(resp.read().decode())
+                pending_ids = [item["id"] for item in pending_data.get("pending", [])]
+
+            if not pending_ids:
+                return
+
+            # Approve all pending items
+            approve_url = f"http://localhost:{self.server_port}/api/pending/approve"
+            payload = json.dumps({"approved_ids": pending_ids}).encode()
+            req = urllib.request.Request(
+                approve_url,
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read().decode())
+
+            # Show result notification
+            saved = result.get("saved", {})
+            total = sum(saved.values())
+            if result.get("status") == "ok":
+                rumps.notification(
+                    title="FixOnce",
+                    subtitle="Memories saved",
+                    message=f"Saved {total} memories"
+                )
+            else:
+                rumps.notification(
+                    title="FixOnce",
+                    subtitle="Partial save",
+                    message=f"Saved {total}, some failed"
+                )
+
+            # Trigger immediate status update
+            self._update_status()
+
+        except Exception as e:
             rumps.notification(
                 title="FixOnce",
-                subtitle="Commit Knowledge",
-                message=f"{self.pending_count} items ready for review"
+                subtitle="Save failed",
+                message=str(e)[:50]
             )
 
     def _repair(self, _):
@@ -395,7 +468,7 @@ class FixOnceMenuBar(rumps.App):
     def _open_settings(self, _):
         """Open settings (redirects to dashboard settings for now)."""
         if self.server_running:
-            webbrowser.open(f"http://localhost:{self.server_port}/#settings")
+            self._open_dashboard_url("#settings")
         else:
             rumps.notification(
                 title="FixOnce",
