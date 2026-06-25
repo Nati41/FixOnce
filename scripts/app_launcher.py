@@ -898,30 +898,13 @@ def get_dashboard_url(port: int) -> str:
     return f"http://127.0.0.1:{port}/"
 
 
-WEBVIEW_RETRY_ATTEMPTS = 5
-WEBVIEW_RETRY_BACKOFF_MS = [200, 400, 800, 1500, 2500]
-
-
-def _verify_server_reachable(port: int, attempts: int = WEBVIEW_RETRY_ATTEMPTS) -> bool:
-    """Verify server is reachable with retry/backoff before opening webview."""
-    for i in range(attempts):
-        if endpoint_responds(port, "/api/health", timeout=2.0):
-            return True
-        if i < len(WEBVIEW_RETRY_BACKOFF_MS):
-            time.sleep(WEBVIEW_RETRY_BACKOFF_MS[i] / 1000.0)
-    return False
-
-
-def _get_loading_html(port: int) -> str:
-    """Return HTML with JS retry logic for webview initial load."""
-    dashboard_url = get_dashboard_url(port)
-    return f"""<!DOCTYPE html>
+LOADING_HTML = """<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <title>FixOnce</title>
     <style>
-        body {{
+        body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             display: flex;
             flex-direction: column;
@@ -931,8 +914,8 @@ def _get_loading_html(port: int) -> str:
             margin: 0;
             background: #f5f5f5;
             color: #333;
-        }}
-        .spinner {{
+        }
+        .spinner {
             width: 40px;
             height: 40px;
             border: 3px solid #e0e0e0;
@@ -940,57 +923,34 @@ def _get_loading_html(port: int) -> str:
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin-bottom: 16px;
-        }}
-        @keyframes spin {{
-            to {{ transform: rotate(360deg); }}
-        }}
-        .message {{
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .message {
             font-size: 14px;
             color: #666;
-        }}
+        }
     </style>
 </head>
 <body>
     <div class="spinner"></div>
     <div class="message">Connecting to FixOnce...</div>
-    <script>
-        var attempts = 0;
-        var maxAttempts = 20;
-        var delays = [200, 300, 400, 500, 600, 700, 800, 900, 1000];
-
-        function getDelay(attempt) {{
-            return delays[Math.min(attempt, delays.length - 1)];
-        }}
-
-        function checkServer() {{
-            attempts++;
-            fetch('{dashboard_url}api/ping', {{ method: 'GET', cache: 'no-store' }})
-                .then(function(response) {{
-                    if (response.ok) {{
-                        window.location.href = '{dashboard_url}';
-                    }} else {{
-                        retry();
-                    }}
-                }})
-                .catch(function() {{
-                    retry();
-                }});
-        }}
-
-        function retry() {{
-            if (attempts < maxAttempts) {{
-                setTimeout(checkServer, getDelay(attempts));
-            }} else {{
-                document.querySelector('.message').textContent =
-                    'Could not connect. Please restart FixOnce.';
-                document.querySelector('.spinner').style.display = 'none';
-            }}
-        }}
-
-        setTimeout(checkServer, 100);
-    </script>
 </body>
 </html>"""
+
+
+def _navigate_when_ready(window, port: int, dashboard_url: str):
+    """Wait for server health then navigate webview. Runs in background thread."""
+    log_event(f"_navigate_when_ready called: port={port} url={dashboard_url}")
+    for attempt in range(30):
+        if endpoint_responds(port, "/api/health", timeout=2.0):
+            log_event(f"_navigate_when_ready: health OK at attempt {attempt}, calling load_url")
+            window.load_url(dashboard_url)
+            log_event(f"_navigate_when_ready: load_url called successfully")
+            return
+        time.sleep(0.5)
+    log_event(f"_navigate_when_ready: server not reachable after 30 attempts, port {port}")
 
 
 def get_windows_pythonw(executable: str) -> str:
@@ -1062,6 +1022,7 @@ def open_external_url(url: str):
 
 def open_dashboard(port: int):
     """Open the dashboard in a native window only."""
+    log_event(f"open_dashboard: port={port} platform={sys.platform} deferred={sys.platform == 'win32'}")
     set_dock_icon()
     dashboard_url = get_dashboard_url(port)
 
@@ -1069,28 +1030,27 @@ def open_dashboard(port: int):
         def open_url(self, url):
             open_external_url(url)
 
-    # On Windows, verify server is reachable before opening webview to avoid
-    # ERR_CONNECTION_REFUSED being cached in EdgeChromium. macOS pywebview
-    # uses a different backend that handles this better.
-    use_loading_html = sys.platform == "win32"
-    if use_loading_html:
-        if not _verify_server_reachable(port):
-            log_event(f"Server not reachable after retries on port {port}")
-        loading_html = _get_loading_html(port)
+    # On Windows, create webview with loading HTML first, then navigate via
+    # Python after confirming server health. This avoids ERR_CONNECTION_REFUSED
+    # being cached by EdgeChromium if the initial URL load fails.
+    use_deferred_navigation = sys.platform == "win32"
 
     try:
         import webview
 
-        if use_loading_html:
+        if use_deferred_navigation:
+            log_event("open_dashboard: DEFERRED path - creating with LOADING_HTML")
             window = webview.create_window(
                 "FixOnce",
-                html=loading_html,
+                html=LOADING_HTML,
                 width=480,
                 height=800,
                 resizable=True,
                 min_size=(400, 650),
                 js_api=Api(),
             )
+            log_event("open_dashboard: calling webview.start with _navigate_when_ready callback")
+            webview.start(func=_navigate_when_ready, args=(window, port, dashboard_url))
         else:
             window = webview.create_window(
                 "FixOnce",
@@ -1101,7 +1061,7 @@ def open_dashboard(port: int):
                 min_size=(400, 650),
                 js_api=Api(),
             )
-        webview.start()
+            webview.start()
         return
     except Exception as exc:
         log_event(f"Native window unavailable: {exc}")
