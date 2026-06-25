@@ -314,11 +314,16 @@ def format_port_report() -> str:
 # ---------------------------------------------------------------------------
 
 def is_pid_running(pid: int) -> bool:
-    """Check if a process with given PID is running."""
+    """Check if a process with given PID is running.
+
+    Windows note: os.kill(pid, 0) can raise SystemError with WinError 6
+    (invalid handle) for stale PIDs from previous boots. We treat all
+    such errors as "not running".
+    """
     try:
         os.kill(pid, 0)
         return True
-    except (OSError, ProcessLookupError):
+    except (OSError, ProcessLookupError, SystemError):
         return False
 
 

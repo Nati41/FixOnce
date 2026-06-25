@@ -27,6 +27,41 @@ class TestPortManager(unittest.TestCase):
                 self.assertIsNone(port_manager.get_preferred_port())
 
 
+class TestIsPidRunning(unittest.TestCase):
+    """Tests for is_pid_running including Windows edge cases."""
+
+    def test_is_pid_running_returns_false_on_system_error(self):
+        """
+        Regression: On Windows, os.kill(pid, 0) can raise SystemError with
+        WinError 6 (invalid handle) for stale PIDs from previous boots.
+        is_pid_running must catch this and return False.
+        """
+        def raise_system_error(*args):
+            raise SystemError("<built-in function kill> returned a result with an exception set")
+
+        with patch.object(port_manager.os, "kill", side_effect=raise_system_error):
+            result = port_manager.is_pid_running(9999)
+            self.assertFalse(result, "Should return False on SystemError (WinError 6)")
+
+    def test_is_pid_running_returns_false_on_os_error(self):
+        """is_pid_running returns False when process doesn't exist."""
+        with patch.object(port_manager.os, "kill", side_effect=OSError("No such process")):
+            result = port_manager.is_pid_running(9999)
+            self.assertFalse(result)
+
+    def test_is_pid_running_returns_false_on_process_lookup_error(self):
+        """is_pid_running returns False on ProcessLookupError."""
+        with patch.object(port_manager.os, "kill", side_effect=ProcessLookupError("No such process")):
+            result = port_manager.is_pid_running(9999)
+            self.assertFalse(result)
+
+    def test_is_pid_running_returns_true_when_process_exists(self):
+        """is_pid_running returns True when os.kill succeeds."""
+        with patch.object(port_manager.os, "kill", return_value=None):
+            result = port_manager.is_pid_running(9999)
+            self.assertTrue(result)
+
+
 class TestPortSelectionRegression(unittest.TestCase):
     """Regression tests for port selection behavior."""
 
