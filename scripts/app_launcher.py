@@ -898,6 +898,101 @@ def get_dashboard_url(port: int) -> str:
     return f"http://127.0.0.1:{port}/"
 
 
+WEBVIEW_RETRY_ATTEMPTS = 5
+WEBVIEW_RETRY_BACKOFF_MS = [200, 400, 800, 1500, 2500]
+
+
+def _verify_server_reachable(port: int, attempts: int = WEBVIEW_RETRY_ATTEMPTS) -> bool:
+    """Verify server is reachable with retry/backoff before opening webview."""
+    for i in range(attempts):
+        if endpoint_responds(port, "/api/health", timeout=2.0):
+            return True
+        if i < len(WEBVIEW_RETRY_BACKOFF_MS):
+            time.sleep(WEBVIEW_RETRY_BACKOFF_MS[i] / 1000.0)
+    return False
+
+
+def _get_loading_html(port: int) -> str:
+    """Return HTML with JS retry logic for webview initial load."""
+    dashboard_url = get_dashboard_url(port)
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>FixOnce</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: #f5f5f5;
+            color: #333;
+        }}
+        .spinner {{
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }}
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+        .message {{
+            font-size: 14px;
+            color: #666;
+        }}
+    </style>
+</head>
+<body>
+    <div class="spinner"></div>
+    <div class="message">Connecting to FixOnce...</div>
+    <script>
+        var attempts = 0;
+        var maxAttempts = 20;
+        var delays = [200, 300, 400, 500, 600, 700, 800, 900, 1000];
+
+        function getDelay(attempt) {{
+            return delays[Math.min(attempt, delays.length - 1)];
+        }}
+
+        function checkServer() {{
+            attempts++;
+            fetch('{dashboard_url}api/ping', {{ method: 'GET', cache: 'no-store' }})
+                .then(function(response) {{
+                    if (response.ok) {{
+                        window.location.href = '{dashboard_url}';
+                    }} else {{
+                        retry();
+                    }}
+                }})
+                .catch(function() {{
+                    retry();
+                }});
+        }}
+
+        function retry() {{
+            if (attempts < maxAttempts) {{
+                setTimeout(checkServer, getDelay(attempts));
+            }} else {{
+                document.querySelector('.message').textContent =
+                    'Could not connect. Please restart FixOnce.';
+                document.querySelector('.spinner').style.display = 'none';
+            }}
+        }}
+
+        setTimeout(checkServer, 100);
+    </script>
+</body>
+</html>"""
+
+
 def get_windows_pythonw(executable: str) -> str:
     """Best-effort resolve pythonw.exe path from current Python executable."""
     exe = Path(executable)
@@ -974,18 +1069,38 @@ def open_dashboard(port: int):
         def open_url(self, url):
             open_external_url(url)
 
+    # On Windows, verify server is reachable before opening webview to avoid
+    # ERR_CONNECTION_REFUSED being cached in EdgeChromium. macOS pywebview
+    # uses a different backend that handles this better.
+    use_loading_html = sys.platform == "win32"
+    if use_loading_html:
+        if not _verify_server_reachable(port):
+            log_event(f"Server not reachable after retries on port {port}")
+        loading_html = _get_loading_html(port)
+
     try:
         import webview
 
-        window = webview.create_window(
-            "FixOnce",
-            dashboard_url,
-            width=480,
-            height=800,
-            resizable=True,
-            min_size=(400, 650),
-            js_api=Api(),
-        )
+        if use_loading_html:
+            window = webview.create_window(
+                "FixOnce",
+                html=loading_html,
+                width=480,
+                height=800,
+                resizable=True,
+                min_size=(400, 650),
+                js_api=Api(),
+            )
+        else:
+            window = webview.create_window(
+                "FixOnce",
+                dashboard_url,
+                width=480,
+                height=800,
+                resizable=True,
+                min_size=(400, 650),
+                js_api=Api(),
+            )
         webview.start()
         return
     except Exception as exc:

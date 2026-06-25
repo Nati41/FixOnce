@@ -241,5 +241,91 @@ class TestAppLauncher(unittest.TestCase):
         self.assertIn("from core.project_semantic import", source)
 
 
+class TestWebviewRetryFlow(unittest.TestCase):
+    """Regression tests for Windows webview ERR_CONNECTION_REFUSED fix."""
+
+    def test_verify_server_reachable_succeeds_on_first_try(self):
+        with patch.object(app_launcher, "endpoint_responds", return_value=True) as mock_responds:
+            result = app_launcher._verify_server_reachable(5000)
+
+        self.assertTrue(result)
+        mock_responds.assert_called_once_with(5000, "/api/health", timeout=2.0)
+
+    def test_verify_server_reachable_retries_on_failure(self):
+        call_count = [0]
+
+        def respond_on_third(*args, **kwargs):
+            call_count[0] += 1
+            return call_count[0] >= 3
+
+        with patch.object(app_launcher, "endpoint_responds", side_effect=respond_on_third), \
+             patch.object(app_launcher.time, "sleep") as mock_sleep:
+            result = app_launcher._verify_server_reachable(5000, attempts=5)
+
+        self.assertTrue(result)
+        self.assertEqual(call_count[0], 3)
+        self.assertEqual(mock_sleep.call_count, 2)
+
+    def test_verify_server_reachable_returns_false_after_exhausted_retries(self):
+        with patch.object(app_launcher, "endpoint_responds", return_value=False), \
+             patch.object(app_launcher.time, "sleep"):
+            result = app_launcher._verify_server_reachable(5000, attempts=3)
+
+        self.assertFalse(result)
+
+    def test_loading_html_contains_retry_javascript(self):
+        html = app_launcher._get_loading_html(5000)
+
+        self.assertIn("http://127.0.0.1:5000/", html)
+        self.assertIn("api/ping", html)
+        self.assertIn("checkServer", html)
+        self.assertIn("maxAttempts", html)
+        self.assertIn("setTimeout", html)
+        self.assertIn("window.location.href", html)
+
+    def test_loading_html_has_graceful_failure_message(self):
+        html = app_launcher._get_loading_html(5000)
+
+        self.assertIn("Could not connect", html)
+        self.assertIn("Please restart FixOnce", html)
+
+    def test_open_dashboard_windows_uses_loading_html(self):
+        mock_webview = type("webview", (), {
+            "create_window": lambda *a, **kw: type("Window", (), {})(),
+            "start": lambda *a, **kw: None,
+        })()
+
+        with patch.object(app_launcher.sys, "platform", "win32"), \
+             patch.object(app_launcher, "_verify_server_reachable", return_value=True) as verify, \
+             patch.object(app_launcher, "_get_loading_html", return_value="<html>loading</html>") as get_html, \
+             patch.dict("sys.modules", {"webview": mock_webview}), \
+             patch.object(mock_webview, "create_window", return_value=type("W", (), {})()) as create_window:
+            app_launcher.open_dashboard(5000)
+
+        verify.assert_called_once_with(5000)
+        get_html.assert_called_once_with(5000)
+        args, kwargs = create_window.call_args
+        self.assertEqual(kwargs.get("html"), "<html>loading</html>")
+        self.assertNotIn("url", kwargs)
+
+    def test_open_dashboard_macos_uses_direct_url(self):
+        mock_webview = type("webview", (), {
+            "create_window": lambda *a, **kw: type("Window", (), {})(),
+            "start": lambda *a, **kw: None,
+        })()
+
+        with patch.object(app_launcher.sys, "platform", "darwin"), \
+             patch.object(app_launcher, "_verify_server_reachable") as verify, \
+             patch.object(app_launcher, "set_dock_icon"), \
+             patch.dict("sys.modules", {"webview": mock_webview}), \
+             patch.object(mock_webview, "create_window", return_value=type("W", (), {})()) as create_window:
+            app_launcher.open_dashboard(5000)
+
+        verify.assert_not_called()
+        args, kwargs = create_window.call_args
+        self.assertEqual(args[1], "http://127.0.0.1:5000/")
+        self.assertNotIn("html", kwargs)
+
+
 if __name__ == "__main__":
     unittest.main()
