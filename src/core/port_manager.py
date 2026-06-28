@@ -475,8 +475,8 @@ def _kill_process(pid: int) -> bool:
         time.sleep(0.2)
         return not is_pid_running(pid)
 
-    except (OSError, ProcessLookupError):
-        return True  # Process already dead
+    except (OSError, ProcessLookupError, SystemError):
+        return True  # Process already dead or invalid handle
 
 
 def _is_fixonce_server_responding(port: int) -> bool:

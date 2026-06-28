@@ -768,32 +768,51 @@ def _serve_flask_blocking(host: str, port: int):
     _startup_log(f"_serve_flask_blocking enter host={host} port={port} platform={sys.platform!r}")
 
     if sys.platform == "win32":
+        _startup_log("waitress import: start")
         from waitress import serve
+        from waitress.server import create_server
+        _startup_log("waitress import: ok")
 
-        _startup_log(f"waitress serve: start http://{host}:{port}")
-        print(f" * Running on http://{host}:{port}", flush=True)
+        _startup_log(f"waitress create_server: start http://{host}:{port}")
         try:
-            serve(flask_app, host=host, port=port, threads=8)
-            _startup_log("waitress serve: returned normally (unexpected)")
-        except KeyboardInterrupt:
-            _startup_log("waitress serve: KeyboardInterrupt")
-            raise
-        except SystemExit as e:
-            _startup_log(f"waitress serve: SystemExit code={e.code}")
-            raise
+            server = create_server(flask_app, host=host, port=port, threads=8)
+            _startup_log(f"waitress create_server: ok server={server}")
         except BaseException as e:
-            _startup_log(f"waitress serve: CRASH {type(e).__name__}: {e}")
+            _startup_log(f"waitress create_server: CRASH {type(e).__name__}: {e}")
             try:
                 _STARTUP_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
                 with _STARTUP_LOG_FILE.open("a", encoding="utf-8") as f:
-                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [WAITRESS CRASH]\n")
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [CREATE_SERVER CRASH]\n")
+                    traceback.print_exc(file=f)
+                    f.flush()
+            except Exception:
+                pass
+            raise
+
+        _startup_log("waitress server.run: start")
+        print(f" * Running on http://{host}:{port}", flush=True)
+        try:
+            server.run()
+            _startup_log("waitress server.run: returned normally (unexpected)")
+        except KeyboardInterrupt:
+            _startup_log("waitress server.run: KeyboardInterrupt")
+            raise
+        except SystemExit as e:
+            _startup_log(f"waitress server.run: SystemExit code={e.code}")
+            raise
+        except BaseException as e:
+            _startup_log(f"waitress server.run: CRASH {type(e).__name__}: {e}")
+            try:
+                _STARTUP_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+                with _STARTUP_LOG_FILE.open("a", encoding="utf-8") as f:
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [SERVER.RUN CRASH]\n")
                     traceback.print_exc(file=f)
                     f.flush()
             except Exception:
                 pass
             raise
         finally:
-            _startup_log("waitress serve: finally block reached")
+            _startup_log("waitress server.run: finally block reached")
 
         print("[ERROR] Waitress returned unexpectedly", file=sys.stderr, flush=True)
         _startup_log("_serve_flask_blocking returned unexpectedly from waitress")
