@@ -126,7 +126,8 @@ def main() -> int:
     check(import_exists("webview"), "pywebview", "importable in current Python", failures)
 
     check('scripts" / "app_launcher.py' in spec_text, "spec entrypoint", "uses scripts/app_launcher.py", failures)
-    check("console=False" in spec_text, "spec console mode", "windowed EXE configured", failures)
+    check('name="FixOnce"' in spec_text and "console=False" in spec_text, "spec app console mode", "windowed app EXE configured", failures)
+    check('name="FixOnceMCP"' in spec_text and "console=True" in spec_text, "spec MCP console mode", "stdio MCP companion EXE configured", failures)
     check("data/dashboard.html" in spec_text, "dashboard asset", "dashboard packaged", failures)
     check("data/test_error.html" not in spec_text, "test pages excluded", "test_error.html not packaged", failures)
     check('"extension"), "extension"' not in spec_text, "extension allowlist", "no whole extension directory", failures)

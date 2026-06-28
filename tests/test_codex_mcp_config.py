@@ -5,6 +5,7 @@ Ensures Codex config.toml never gets args = ["--mcp"] without a script path.
 """
 
 import sys
+import tempfile
 from pathlib import Path
 
 # Add project paths
@@ -67,3 +68,17 @@ class TestCodexMcpConfig:
         
         config_no_fastmcp = build_install_stdio_config(probe_fastmcp=False)
         assert config_no_fastmcp.get("args") != ["--mcp"], "Config without fastmcp should not have args=['--mcp']"
+
+    def test_packaged_stdio_config_uses_mcp_console_companion(self):
+        """Packaged Windows MCP must use the console-subsystem companion exe."""
+        with tempfile.TemporaryDirectory(prefix="fixonce-install-mcp-") as temp_dir:
+            install_dir = Path(temp_dir)
+            fixonce_exe = install_dir / "FixOnce.exe"
+            mcp_exe = install_dir / "FixOnceMCP.exe"
+            fixonce_exe.write_text("", encoding="utf-8")
+            mcp_exe.write_text("", encoding="utf-8")
+
+            config = build_install_stdio_config(install_dir)
+
+        assert config["command"] == str(mcp_exe)
+        assert config["args"] == ["--mcp"]

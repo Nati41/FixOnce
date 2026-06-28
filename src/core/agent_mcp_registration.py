@@ -20,13 +20,22 @@ def _looks_like_python_interpreter(path: Path) -> bool:
     return name in {"python.exe", "pythonw.exe", "python", "pythonw"}
 
 
+def _mcp_stdio_executable(fixonce_exe: Path) -> Path:
+    if fixonce_exe.name.lower() == "fixonce.exe":
+        companion = fixonce_exe.with_name("FixOnceMCP.exe")
+        if companion.exists():
+            return companion
+    return fixonce_exe
+
+
 def build_packaged_stdio_config(fixonce_exe: Path, actor: str | None = None) -> dict:
     """Return the packaged stdio command shared by agent adapters."""
     if _looks_like_python_interpreter(fixonce_exe):
         raise ValueError(f"Packaged MCP registration requires FixOnce.exe, got Python interpreter: {fixonce_exe}")
 
+    mcp_exe = _mcp_stdio_executable(fixonce_exe)
     config = {
-        "command": str(fixonce_exe),
+        "command": str(mcp_exe),
         "args": ["--mcp"],
         "startup_timeout_sec": 60,
     }

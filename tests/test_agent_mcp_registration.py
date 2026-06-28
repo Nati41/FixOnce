@@ -280,6 +280,31 @@ class TestAgentMcpRegistration(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "requires FixOnce.exe"):
             build_packaged_stdio_config(Path(r"C:\Python314\python.exe"), "codex")
 
+    def test_packaged_config_uses_mcp_companion_when_present(self):
+        install_dir = Path(self.temp_dir.name) / "Program Files" / "FixOnce"
+        install_dir.mkdir(parents=True)
+        fixonce_exe = install_dir / "FixOnce.exe"
+        mcp_exe = install_dir / "FixOnceMCP.exe"
+        fixonce_exe.write_text("", encoding="utf-8")
+        mcp_exe.write_text("", encoding="utf-8")
+
+        config = build_packaged_stdio_config(fixonce_exe, "codex")
+
+        self.assertEqual(config["command"], str(mcp_exe))
+        self.assertEqual(config["args"], ["--mcp"])
+        self.assertEqual(config["env"], {"FIXONCE_ACTOR": "codex"})
+
+    def test_packaged_config_falls_back_to_app_exe_without_mcp_companion(self):
+        install_dir = Path(self.temp_dir.name) / "Program Files" / "FixOnce"
+        install_dir.mkdir(parents=True)
+        fixonce_exe = install_dir / "FixOnce.exe"
+        fixonce_exe.write_text("", encoding="utf-8")
+
+        config = build_packaged_stdio_config(fixonce_exe, "codex")
+
+        self.assertEqual(config["command"], str(fixonce_exe))
+        self.assertEqual(config["args"], ["--mcp"])
+
     def test_json_client_missing_config_creates_section(self):
         cases = [
             (register_claude_mcp, self.home / ".claude.json", "claude"),

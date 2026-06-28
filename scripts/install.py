@@ -901,13 +901,22 @@ def _find_packaged_fixonce_exe(fixonce_dir: Path) -> Path | None:
     return None
 
 
+def _mcp_stdio_executable(packaged_exe: Path) -> Path:
+    """Prefer the console-subsystem MCP companion when installed."""
+    if packaged_exe.name.lower() == "fixonce.exe":
+        companion = packaged_exe.with_name("FixOnceMCP.exe")
+        if companion.exists():
+            return companion
+    return packaged_exe
+
+
 def build_install_stdio_config(fixonce_dir: Path | None = None, probe_fastmcp: bool = True) -> dict:
     """Build the shared stdio config used by installer and dashboard retry actions."""
     fixonce_dir = fixonce_dir or get_fixonce_dir()
     packaged_exe = _find_packaged_fixonce_exe(fixonce_dir)
     if packaged_exe:
         return {
-            "command": str(packaged_exe),
+            "command": str(_mcp_stdio_executable(packaged_exe)),
             "args": ["--mcp"],
         }
 

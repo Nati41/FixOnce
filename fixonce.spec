@@ -213,8 +213,28 @@ exe = EXE(
     icon=str(PROJECT_ROOT / "assets" / "FixOnce.ico"),
 )
 
+mcp_exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="FixOnceMCP",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=str(PROJECT_ROOT / "assets" / "FixOnce.ico"),
+)
+
 coll = COLLECT(
     exe,
+    mcp_exe,
     a.binaries,
     a.datas,
     strip=False,
