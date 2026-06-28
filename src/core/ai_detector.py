@@ -27,10 +27,12 @@ from core.unreported_work import get_latest_actor_state, should_show_unsynced_wa
 
 # Windows subprocess flags to prevent console window flash
 if sys.platform == "win32":
-    from core.windows_subprocess import no_window_creationflags
+    from core.windows_subprocess import no_window_creationflags, is_process_running as win_is_process_running
 else:
     def no_window_creationflags() -> int:
         return 0
+    def win_is_process_running(name: str) -> bool:
+        return False
 
 
 # Connection freshness thresholds (seconds)
@@ -147,16 +149,15 @@ def _run_command(cmd, timeout: float = 2.0) -> Optional[str]:
 def _check_process_running(patterns: List[str]) -> bool:
     """Check if any process matching the patterns is running.
 
-    On Windows, uses tasklist with CREATE_NO_WINDOW to prevent console flash.
+    On Windows, uses native WinAPI (no subprocess, no console flash).
+    On Unix, uses pgrep.
     """
     plat = _get_platform()
 
     for pattern in patterns:
         if plat == "windows":
-            # Use tasklist on Windows - pass as list to avoid shell=True
-            cmd = ["tasklist", "/FI", f"IMAGENAME eq {pattern}", "/NH"]
-            result = _run_command(cmd)
-            if result and pattern.lower() in result.lower():
+            # Use native Windows API - no subprocess, no console flash
+            if win_is_process_running(pattern):
                 return True
         else:
             # For patterns with dots/slashes, use pgrep -f (full command line match)

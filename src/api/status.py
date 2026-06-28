@@ -19,6 +19,7 @@ from . import status_bp, get_project_from_request
 from config import PROJECT_ROOT, USER_DATA_DIR, VERSION
 from core.runtime_log import log_runtime_event
 from core.system_mode import get_system_mode, set_system_mode, VALID_MODES
+from core.windows_subprocess import no_window_creationflags
 
 # Global state (will be set by main app)
 EXTENSION_CONNECTED = False
@@ -1812,7 +1813,8 @@ def api_commits():
             cwd=working_dir,
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            creationflags=no_window_creationflags(),
         )
 
         if result.returncode != 0:

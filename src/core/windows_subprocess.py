@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import threading
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 
 def no_window_creationflags() -> int:
@@ -107,3 +107,103 @@ def run_git_command_safe(
         return (None, False)
 
     return (stdout_result, success)
+
+
+def get_running_process_names() -> List[str]:
+    """Get list of running process names on Windows using native WinAPI.
+
+    Uses EnumProcesses + OpenProcess + GetModuleBaseName to enumerate
+    processes without spawning any subprocess (no console flash).
+
+    Returns lowercase process names (e.g., ['chrome.exe', 'explorer.exe']).
+    Returns empty list on non-Windows or on error.
+    """
+    if sys.platform != "win32":
+        return []
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+        # EnumProcesses
+        psapi.EnumProcesses.argtypes = [
+            ctypes.POINTER(wintypes.DWORD),
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        psapi.EnumProcesses.restype = wintypes.BOOL
+
+        # OpenProcess
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+
+        # GetModuleBaseNameW
+        psapi.GetModuleBaseNameW.argtypes = [
+            wintypes.HANDLE,
+            wintypes.HMODULE,
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+        ]
+        psapi.GetModuleBaseNameW.restype = wintypes.DWORD
+
+        # CloseHandle
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+
+        PROCESS_QUERY_INFORMATION = 0x0400
+        PROCESS_VM_READ = 0x0010
+
+        # Get list of PIDs
+        max_pids = 4096
+        pids = (wintypes.DWORD * max_pids)()
+        bytes_returned = wintypes.DWORD()
+
+        if not psapi.EnumProcesses(pids, ctypes.sizeof(pids), ctypes.byref(bytes_returned)):
+            return []
+
+        num_pids = bytes_returned.value // ctypes.sizeof(wintypes.DWORD)
+
+        process_names = []
+        for i in range(num_pids):
+            pid = pids[i]
+            if pid == 0:
+                continue
+
+            handle = kernel32.OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, False, pid)
+            if not handle:
+                continue
+
+            try:
+                name_buffer = ctypes.create_unicode_buffer(260)
+                length = psapi.GetModuleBaseNameW(handle, None, name_buffer, 260)
+                if length > 0:
+                    process_names.append(name_buffer.value.lower())
+            finally:
+                kernel32.CloseHandle(handle)
+
+        return process_names
+
+    except Exception:
+        return []
+
+
+def is_process_running(process_name: str) -> bool:
+    """Check if a process with given name is running on Windows.
+
+    Uses native WinAPI - no subprocess, no console flash.
+    Case-insensitive comparison.
+
+    Args:
+        process_name: Process name to check (e.g., 'claude.exe', 'Cursor.exe')
+
+    Returns:
+        True if process is running, False otherwise.
+    """
+    if sys.platform != "win32":
+        return False
+
+    running = get_running_process_names()
+    return process_name.lower() in running
