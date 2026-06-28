@@ -19,11 +19,21 @@ from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
 _STARTUP_T0 = time.monotonic()
+_STARTUP_LOG_FILE = Path.home() / ".fixonce" / "logs" / "server_startup.log"
 
 
 def _startup_log(label: str):
+    """Log startup diagnostics to file (stdout may be unavailable on Windows)."""
     elapsed = time.monotonic() - _STARTUP_T0
-    print(f"[STARTUP {elapsed:6.2f}s] {label}", flush=True)
+    message = f"[STARTUP {elapsed:6.2f}s] {label}"
+    print(message, flush=True)
+    try:
+        _STARTUP_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with _STARTUP_LOG_FILE.open("a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
+            f.flush()
+    except Exception:
+        pass
 
 
 def _startup_flag_enabled(flag: str) -> bool:
@@ -873,4 +883,22 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        _startup_log("__main__ entry")
+        main()
+        _startup_log("__main__ main() returned normally")
+    except SystemExit as e:
+        _startup_log(f"__main__ SystemExit: code={e.code}")
+        raise
+    except BaseException as e:
+        _startup_log(f"__main__ unhandled exception: {type(e).__name__}: {e}")
+        import traceback
+        try:
+            _STARTUP_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with _STARTUP_LOG_FILE.open("a", encoding="utf-8") as f:
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [CRASH]\n")
+                traceback.print_exc(file=f)
+                f.flush()
+        except Exception:
+            pass
+        raise
