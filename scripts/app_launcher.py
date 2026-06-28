@@ -764,10 +764,21 @@ def ensure_packaged_server_running(log_fn: Callable[[str], None] | None = None) 
     write_log = log_fn or bootstrap_log
     clear_stale_state()
 
+    runtime_pid, runtime_port = _read_runtime_pid_port()
+    if runtime_pid and runtime_port and is_pid_running(runtime_pid):
+        write_log(
+            f"Runtime PID {runtime_pid} is alive on port {runtime_port}; "
+            "waiting for health instead of starting another server"
+        )
+        return wait_for_health(log_fn=write_log)
+
     port = discover_running_port()
     if port is not None and endpoint_responds(port, "/api/health", timeout=1.5):
         write_log(f"Reusing running server on port {port}")
         return port
+    if port is not None:
+        write_log(f"Server discovered on port {port}; waiting for health")
+        return wait_for_health(log_fn=write_log)
 
     write_log("Starting background server via FixOnce.exe --server")
     try:

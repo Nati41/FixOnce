@@ -540,13 +540,13 @@ def cleanup_stale_runtime() -> bool:
 
 def ensure_clean_startup(current_install_path: str) -> Tuple[bool, str]:
     """
-    Ensure a clean startup by handling stale servers.
+    Ensure startup does not trust stale runtime files.
 
     This function should be called at the very beginning of server startup.
     It handles:
     1. Stale runtime.json with dead PID → cleanup
-    2. Old FixOnce server from same install_path → kill and restart
-    3. FixOnce server from different install_path → error (user has multiple installs)
+    2. Live same-install server → do not kill; caller should reuse or wait
+    3. FixOnce server from different install_path → error
     4. Port occupied by non-FixOnce process → error
 
     Args:
@@ -566,25 +566,19 @@ def ensure_clean_startup(current_install_path: str) -> Tuple[bool, str]:
         old_install_path = state.get("install_path", "")
 
         if is_pid_running(old_pid):
-            # Server is running - check if it's from the same install
             if old_install_path == current_install_path:
-                if old_port and not _is_fixonce_server_responding(old_port):
-                    clear_runtime_state()
-                    release_server_lock()
-                    return True, "Stale runtime state cleared, proceeding with clean startup"
+                if old_port and _is_fixonce_server_responding(old_port):
+                    return False, (
+                        f"FixOnce server is already running on port {old_port} "
+                        f"from this install path (PID {old_pid})."
+                    )
 
-                # Same install path - this is a stale code scenario
-                # Kill the old server so we can start fresh
-                print(f"[FixOnce] Stopping stale server (PID {old_pid}) to reload code...")
-                if _kill_process(old_pid):
-                    # Clean up state files
-                    clear_runtime_state()
-                    release_server_lock()
-                    return True, "Stale server stopped, proceeding with clean startup"
-                else:
-                    return False, f"Failed to stop stale server (PID {old_pid}). Please kill it manually."
+                return False, (
+                    f"FixOnce server process is already starting from this install path "
+                    f"(PID {old_pid}, port {old_port or 'unknown'}), but health is not ready yet. "
+                    "Wait for it to become healthy instead of starting another server."
+                )
             else:
-                # Different install path - user has multiple installs
                 return False, (
                     f"Another FixOnce server is running from a different location:\n"
                     f"  Running: {old_install_path}\n"
@@ -611,9 +605,10 @@ def ensure_clean_startup(current_install_path: str) -> Tuple[bool, str]:
                     f"Please stop it first or use a different port."
                 )
         else:
-            # Port occupied by non-FixOnce process
-            # Don't block - the server will fall back to another port
-            pass
+            return False, (
+                f"Port {DEFAULT_PORT} is occupied by a non-FixOnce process. "
+                "Stop that process or free the port before starting FixOnce."
+            )
 
     return True, "Clean startup"
 

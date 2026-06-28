@@ -132,6 +132,17 @@ class TestAppLauncher(unittest.TestCase):
         start_server.assert_called_once()
         self.assertEqual(progress_steps, ["checking", "connecting"])
 
+    def test_packaged_server_running_waits_for_alive_runtime_without_starting_another(self):
+        with patch.object(app_launcher, "clear_stale_state"), \
+             patch.object(app_launcher, "_read_runtime_pid_port", return_value=(12345, 5000)), \
+             patch.object(app_launcher, "is_pid_running", return_value=True), \
+             patch.object(app_launcher, "wait_for_health", return_value=5000) as wait_for_health, \
+             patch.object(app_launcher, "start_server") as start_server:
+            self.assertEqual(app_launcher.ensure_packaged_server_running(), 5000)
+
+        wait_for_health.assert_called_once()
+        start_server.assert_not_called()
+
     def test_launch_app_shows_startup_splash_until_dashboard_ready(self):
         splash = type(
             "Splash",

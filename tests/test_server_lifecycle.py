@@ -3,9 +3,9 @@ Tests for server lifecycle and stale server handling.
 
 Tests:
 1. Stale runtime.json with dead PID is cleaned up
-2. Stale server from same install_path is killed
+2. Live server from same install_path is never killed during startup cleanup
 3. Server from different install_path fails with clear error
-4. Port occupied by non-FixOnce process allows fallback
+4. Port occupied by non-FixOnce process fails clearly
 5. Clean startup when no server is running
 """
 
@@ -68,12 +68,14 @@ class TestServerLifecycle(unittest.TestCase):
 
         # Write runtime with a PID that doesn't exist
         self._write_runtime(5000, 99999999)
+        self.lock_file.write_text("99999999", encoding="utf-8")
 
         with patch("core.port_manager.is_pid_running", return_value=False):
             result = cleanup_stale_runtime()
 
         self.assertTrue(result)
         self.assertFalse(self.runtime_file.exists())
+        self.assertFalse(self.lock_file.exists())
 
     def test_cleanup_stale_runtime_live_pid(self):
         """Runtime.json with live PID should not be cleaned up."""
@@ -105,26 +107,29 @@ class TestServerLifecycle(unittest.TestCase):
         self.assertTrue(success)
         self.assertEqual(message, "Clean startup")
 
-    def test_ensure_clean_startup_stale_same_install(self):
-        """Stale server from same install_path should be killed."""
+    def test_ensure_clean_startup_same_install_healthy_does_not_kill(self):
+        """Live same-install server should not be killed during startup cleanup."""
         from core.port_manager import ensure_clean_startup
 
         self._write_runtime(5000, 12345, "/test/path")
 
         with patch("core.port_manager.is_pid_running", return_value=True), \
              patch("core.port_manager._is_fixonce_server_responding", return_value=True), \
-             patch("core.port_manager._kill_process", return_value=True), \
+             patch("core.port_manager._kill_process") as kill_process, \
              patch("core.port_manager.is_port_available", return_value=True):
             success, message = ensure_clean_startup("/test/path")
 
-        self.assertTrue(success)
-        self.assertIn("Stale server stopped", message)
+        self.assertFalse(success)
+        self.assertIn("already running", message)
+        self.assertTrue(self.runtime_file.exists())
+        kill_process.assert_not_called()
 
-    def test_ensure_clean_startup_same_install_not_responding_clears_runtime(self):
-        """Same-install runtime with live PID but no HTTP server should be cleared."""
+    def test_ensure_clean_startup_same_install_not_ready_does_not_kill_or_clear(self):
+        """Alive PID with not-yet-ready health should be left for wait/retry."""
         from core.port_manager import ensure_clean_startup
 
         self._write_runtime(5000, 12345, "/test/path")
+        self.lock_file.write_text("12345", encoding="utf-8")
 
         with patch("core.port_manager.is_pid_running", return_value=True), \
              patch("core.port_manager._is_fixonce_server_responding", return_value=False), \
@@ -132,9 +137,10 @@ class TestServerLifecycle(unittest.TestCase):
              patch("core.port_manager.is_port_available", return_value=True):
             success, message = ensure_clean_startup("/test/path")
 
-        self.assertTrue(success)
-        self.assertIn("Stale runtime state cleared", message)
-        self.assertFalse(self.runtime_file.exists())
+        self.assertFalse(success)
+        self.assertIn("health is not ready yet", message)
+        self.assertTrue(self.runtime_file.exists())
+        self.assertTrue(self.lock_file.exists())
         kill_process.assert_not_called()
 
     def test_ensure_clean_startup_different_install(self):
@@ -143,23 +149,27 @@ class TestServerLifecycle(unittest.TestCase):
 
         self._write_runtime(5000, 12345, "/other/path")
 
-        with patch("core.port_manager.is_pid_running", return_value=True):
+        with patch("core.port_manager.is_pid_running", return_value=True), \
+             patch("core.port_manager._kill_process") as kill_process:
             success, message = ensure_clean_startup("/test/path")
 
         self.assertFalse(success)
         self.assertIn("different location", message)
         self.assertIn("/other/path", message)
+        kill_process.assert_not_called()
 
-    def test_ensure_clean_startup_port_occupied_non_fixonce(self):
-        """Port occupied by non-FixOnce process should allow fallback."""
+    def test_ensure_clean_startup_port_occupied_non_fixonce_fails_without_kill(self):
+        """Port occupied by non-FixOnce process should fail without killing."""
         from core.port_manager import ensure_clean_startup
 
         with patch("core.port_manager.is_port_available", return_value=False), \
-             patch("core.port_manager._is_fixonce_server_responding", return_value=False):
+             patch("core.port_manager._is_fixonce_server_responding", return_value=False), \
+             patch("core.port_manager._kill_process") as kill_process:
             success, message = ensure_clean_startup("/test/path")
 
-        # Should succeed - server will fall back to another port
-        self.assertTrue(success)
+        self.assertFalse(success)
+        self.assertIn("non-FixOnce process", message)
+        kill_process.assert_not_called()
 
     def test_get_stale_server_info_dead_pid(self):
         """get_stale_server_info should detect dead PID."""
@@ -251,26 +261,22 @@ class TestDashboardPortResolution(unittest.TestCase):
         with open(self.runtime_file, "w") as f:
             json.dump(state, f)
 
-    def test_stale_fixonce_replaced_uses_default_port(self):
-        """Stale FixOnce from same install gets replaced, server uses port 5000."""
+    def test_live_same_install_server_is_not_replaced(self):
+        """Live same-install server is preserved instead of killed and replaced."""
         from core.port_manager import ensure_clean_startup, get_dashboard_url
 
-        # Stale server on 5000
         self._write_runtime(5000, 12345, "/test/path")
 
         with patch("core.port_manager.is_pid_running", return_value=True), \
              patch("core.port_manager._is_fixonce_server_responding", return_value=True), \
-             patch("core.port_manager._kill_process", return_value=True), \
+             patch("core.port_manager._kill_process") as kill_process, \
              patch("core.port_manager.is_port_available", return_value=True):
             success, message = ensure_clean_startup("/test/path")
 
-        self.assertTrue(success)
-        self.assertIn("Stale server stopped", message)
-
-        # After cleanup, runtime.json should be cleared
-        # New server would start on 5000 and write new runtime.json
-        # Simulate new server writing runtime on port 5000
-        self._write_runtime(5000, 99999, "/test/path")
+        self.assertFalse(success)
+        self.assertIn("already running", message)
+        self.assertTrue(self.runtime_file.exists())
+        kill_process.assert_not_called()
 
         with patch("core.port_manager.is_pid_running", return_value=True), \
              patch("core.port_manager.discover_running_instance", return_value=5000):
