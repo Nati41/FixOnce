@@ -14,7 +14,9 @@ Supported tools: Claude Code, Codex, Cursor, Aider
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 import platform
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +24,13 @@ from typing import Dict, List, Optional, Any
 
 from config import USER_DATA_DIR
 from core.unreported_work import get_latest_actor_state, should_show_unsynced_warning
+
+# Windows subprocess flags to prevent console window flash
+if sys.platform == "win32":
+    from core.windows_subprocess import no_window_creationflags
+else:
+    def no_window_creationflags() -> int:
+        return 0
 
 
 # Connection freshness thresholds (seconds)
@@ -104,23 +113,30 @@ def _get_platform() -> str:
 
 
 def _run_command(cmd, timeout: float = 2.0) -> Optional[str]:
-    """Run a command and return stdout, or None on failure."""
+    """Run a command and return stdout, or None on failure.
+
+    On Windows, uses CREATE_NO_WINDOW to prevent console flash.
+    Avoids shell=True to prevent cmd.exe spawning conhost.exe.
+    """
     try:
+        # Convert string command to list to avoid shell=True
         if isinstance(cmd, str):
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                shell=True,
-            )
+            import shlex
+            if sys.platform == "win32":
+                # shlex.split doesn't handle Windows paths well, use simple split
+                cmd_list = cmd.split()
+            else:
+                cmd_list = shlex.split(cmd)
         else:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+            cmd_list = cmd
+
+        result = subprocess.run(
+            cmd_list,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            creationflags=no_window_creationflags(),
+        )
         if result.returncode == 0:
             return result.stdout.strip()
         return None
@@ -129,13 +145,16 @@ def _run_command(cmd, timeout: float = 2.0) -> Optional[str]:
 
 
 def _check_process_running(patterns: List[str]) -> bool:
-    """Check if any process matching the patterns is running."""
+    """Check if any process matching the patterns is running.
+
+    On Windows, uses tasklist with CREATE_NO_WINDOW to prevent console flash.
+    """
     plat = _get_platform()
 
     for pattern in patterns:
         if plat == "windows":
-            # Use tasklist on Windows
-            cmd = f'tasklist /FI "IMAGENAME eq {pattern}" /NH'
+            # Use tasklist on Windows - pass as list to avoid shell=True
+            cmd = ["tasklist", "/FI", f"IMAGENAME eq {pattern}", "/NH"]
             result = _run_command(cmd)
             if result and pattern.lower() in result.lower():
                 return True
@@ -157,9 +176,27 @@ def _check_process_running(patterns: List[str]) -> bool:
 
 
 def _check_installed(checks: List[str]) -> bool:
-    """Check if tool is installed using platform-specific checks."""
+    """Check if tool is installed using platform-specific checks.
+
+    Uses shutil.which() for 'where'/'which' commands to avoid subprocess.
+    """
     for check in checks:
-        # Pass shell command as string
+        # Handle 'where <exe>' and 'which <exe>' with shutil.which()
+        parts = check.split()
+        if len(parts) == 2 and parts[0] in ("where", "which"):
+            exe_name = parts[1]
+            if shutil.which(exe_name):
+                return True
+            continue
+
+        # Handle 'test -d <path>' for macOS app bundles
+        if check.startswith("test -d "):
+            path = check[8:].strip()
+            if Path(path).is_dir():
+                return True
+            continue
+
+        # Fallback to running the command (with CREATE_NO_WINDOW)
         result = _run_command(check)
         if result is not None:
             return True
