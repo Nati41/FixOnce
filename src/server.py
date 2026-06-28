@@ -663,18 +663,20 @@ def _run_flask(strict_port: bool = False):
     current_pid = os.getpid()
     _startup_log(f"_run_flask enter pid={current_pid} strict_port={strict_port}")
 
-    # Ensure clean startup - handle stale servers automatically
-    current_install_path = str(PROJECT_DIR)
-    success, message = ensure_clean_startup(current_install_path)
-    if not success:
-        print()
-        print(f"\033[1;31mERROR: {message}\033[0m")
-        print()
-        _startup_log(f"_run_flask returning: ensure_clean_startup failed: {message}")
-        return
-    elif "Stale server stopped" in message:
-        print(f"[FixOnce] {message}")
-        _startup_log(f"ensure_clean_startup: {message}")
+    # EXPERIMENT: ensure_clean_startup disabled to test if it causes exit code 7
+    # To re-enable: remove this comment block and uncomment the code below
+    _startup_log("ensure_clean_startup: DISABLED FOR EXPERIMENT")
+    # current_install_path = str(PROJECT_DIR)
+    # success, message = ensure_clean_startup(current_install_path)
+    # if not success:
+    #     print()
+    #     print(f"\033[1;31mERROR: {message}\033[0m")
+    #     print()
+    #     _startup_log(f"_run_flask returning: ensure_clean_startup failed: {message}")
+    #     return
+    # elif "Stale server stopped" in message:
+    #     print(f"[FixOnce] {message}")
+    #     _startup_log(f"ensure_clean_startup: {message}")
 
     if strict_port and not is_port_available(DEFAULT_PORT):
         owner = _describe_port_owner(DEFAULT_PORT)
