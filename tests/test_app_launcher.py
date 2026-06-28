@@ -180,25 +180,29 @@ class TestAppLauncher(unittest.TestCase):
         self.assertEqual(kwargs["creationflags"], 123)
 
     def test_windows_server_launch_uses_detached_process_group(self):
-        with patch.object(app_launcher.sys, "platform", "win32"), \
-             patch.object(app_launcher, "clear_stale_state"), \
-             patch.object(app_launcher, "is_frozen", return_value=False), \
-             patch.object(app_launcher, "SERVER_SCRIPT", PROJECT_ROOT / "src" / "server.py"), \
-             patch.object(app_launcher, "get_windows_pythonw", return_value="pythonw.exe"), \
-             patch.object(app_launcher.subprocess, "DETACHED_PROCESS", 0x8, create=True), \
-             patch.object(app_launcher.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, create=True), \
-             patch.object(app_launcher.subprocess, "CREATE_NO_WINDOW", 0x8000000, create=True), \
-             patch.object(app_launcher.subprocess, "Popen") as popen:
-            app_launcher.start_server()
+        with tempfile.TemporaryDirectory(prefix="fixonce-launcher-") as temp_dir:
+            temp_log_dir = Path(temp_dir) / "logs"
+            with patch.object(app_launcher.sys, "platform", "win32"), \
+                 patch.object(app_launcher, "clear_stale_state"), \
+                 patch.object(app_launcher, "is_frozen", return_value=False), \
+                 patch.object(app_launcher, "SERVER_SCRIPT", PROJECT_ROOT / "src" / "server.py"), \
+                 patch.object(app_launcher, "LOG_DIR", temp_log_dir), \
+                 patch.object(app_launcher, "get_windows_pythonw", return_value="pythonw.exe"), \
+                 patch.object(app_launcher.subprocess, "DETACHED_PROCESS", 0x8, create=True), \
+                 patch.object(app_launcher.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, create=True), \
+                 patch.object(app_launcher.subprocess, "CREATE_NO_WINDOW", 0x8000000, create=True), \
+                 patch.object(app_launcher.subprocess, "Popen") as popen:
+                app_launcher.start_server()
 
-        args, kwargs = popen.call_args
-        self.assertEqual(
-            args[0],
-            ["pythonw.exe", str(PROJECT_ROOT / "src" / "server.py"), "--flask-only", "--quiet", "--strict-port"],
-        )
-        self.assertEqual(kwargs["creationflags"], 0x8000208)
-        self.assertEqual(kwargs["stdout"], app_launcher.subprocess.DEVNULL)
-        self.assertEqual(kwargs["stderr"], app_launcher.subprocess.DEVNULL)
+            args, kwargs = popen.call_args
+            self.assertEqual(
+                args[0],
+                ["pythonw.exe", str(PROJECT_ROOT / "src" / "server.py"), "--flask-only", "--quiet", "--strict-port"],
+            )
+            self.assertEqual(kwargs["creationflags"], 0x8000208)
+            self.assertEqual(kwargs["stdout"], app_launcher.subprocess.DEVNULL)
+            # stderr redirects to log file on Windows for crash diagnostics
+            self.assertIsNotNone(kwargs["stderr"])
 
     def test_windows_external_url_uses_shell_not_webbrowser(self):
         with patch.object(app_launcher.sys, "platform", "win32"), \

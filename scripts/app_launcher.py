@@ -998,6 +998,19 @@ def start_server():
     if not is_frozen() and not SERVER_SCRIPT.exists():
         raise FileNotFoundError("FixOnce is missing required files.")
 
+    # On Windows, redirect stderr to a log file to capture crash diagnostics
+    server_stderr_log = LOG_DIR / "server_stderr.log"
+    stderr_handle = None
+    if sys.platform == "win32":
+        try:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            stderr_handle = open(server_stderr_log, "a", encoding="utf-8")
+            stderr_handle.write(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] Server starting\n")
+            stderr_handle.flush()
+        except Exception as e:
+            log_event(f"Could not open server stderr log: {e}")
+            stderr_handle = None
+
     if sys.platform == "win32":
         if is_frozen():
             command = [sys.executable, "--server", "--flask-only", "--quiet", "--strict-port"]
@@ -1009,7 +1022,7 @@ def start_server():
             command,
             cwd=str(PROJECT_DIR),
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=stderr_handle if stderr_handle else subprocess.DEVNULL,
             creationflags=windows_process_creationflags(detached=True),
         )
         log_event(f"Requested background server start: pid={process.pid} command={subprocess.list2cmdline(command)}")

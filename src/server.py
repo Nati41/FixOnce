@@ -772,7 +772,28 @@ def _serve_flask_blocking(host: str, port: int):
 
         _startup_log(f"waitress serve: start http://{host}:{port}")
         print(f" * Running on http://{host}:{port}", flush=True)
-        serve(flask_app, host=host, port=port, threads=8)
+        try:
+            serve(flask_app, host=host, port=port, threads=8)
+            _startup_log("waitress serve: returned normally (unexpected)")
+        except KeyboardInterrupt:
+            _startup_log("waitress serve: KeyboardInterrupt")
+            raise
+        except SystemExit as e:
+            _startup_log(f"waitress serve: SystemExit code={e.code}")
+            raise
+        except BaseException as e:
+            _startup_log(f"waitress serve: CRASH {type(e).__name__}: {e}")
+            try:
+                _STARTUP_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+                with _STARTUP_LOG_FILE.open("a", encoding="utf-8") as f:
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [WAITRESS CRASH]\n")
+                    traceback.print_exc(file=f)
+                    f.flush()
+            except Exception:
+                pass
+            raise
+        finally:
+            _startup_log("waitress serve: finally block reached")
 
         print("[ERROR] Waitress returned unexpectedly", file=sys.stderr, flush=True)
         _startup_log("_serve_flask_blocking returned unexpectedly from waitress")
