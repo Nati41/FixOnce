@@ -13,6 +13,7 @@ SINGLE SOURCE OF TRUTH:
 import json
 import socket
 import os
+import sys
 import getpass
 import urllib.request
 import urllib.error
@@ -316,10 +317,37 @@ def format_port_report() -> str:
 def is_pid_running(pid: int) -> bool:
     """Check if a process with given PID is running.
 
-    Windows note: os.kill(pid, 0) can raise SystemError with WinError 6
-    (invalid handle) for stale PIDs from previous boots. We treat all
-    such errors as "not running".
+    Windows does not support POSIX signal 0 semantics. Calling os.kill(pid, 0)
+    can terminate the process, so use WinAPI for a non-destructive liveness
+    check there.
     """
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        process_query_limited_information = 0x1000
+        still_active = 259
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+
+        handle = kernel32.OpenProcess(process_query_limited_information, False, int(pid))
+        if not handle:
+            return False
+
+        try:
+            exit_code = wintypes.DWORD()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
+
     try:
         os.kill(pid, 0)
         return True
