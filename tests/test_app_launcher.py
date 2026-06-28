@@ -82,6 +82,34 @@ class TestAppLauncher(unittest.TestCase):
             self.assertFalse(runtime.exists())
             self.assertFalse(lock_file.exists())
 
+    def test_is_pid_running_returns_false_on_system_error(self):
+        """Windows can raise SystemError for stale PIDs from previous boots."""
+        with patch.object(app_launcher.os, "kill", side_effect=SystemError("WinError 6")):
+            self.assertFalse(app_launcher.is_pid_running(12345))
+
+    def test_discover_running_port_clears_stale_runtime_before_checking(self):
+        """If runtime.json has a dead PID, clear it before trusting saved ports."""
+        with tempfile.TemporaryDirectory(prefix="fixonce-launcher-") as temp_dir:
+            temp_home = Path(temp_dir)
+            fixonce_dir = temp_home / ".fixonce"
+            fixonce_dir.mkdir(parents=True, exist_ok=True)
+            runtime = fixonce_dir / "runtime.json"
+            lock_file = fixonce_dir / "server.lock"
+
+            runtime.write_text(json.dumps({"pid": 99999, "port": 5000}), encoding="utf-8")
+            lock_file.write_text("99999", encoding="utf-8")
+
+            with patch.object(app_launcher, "RUNTIME_FILE", runtime), \
+                 patch.object(app_launcher, "LOCK_FILE", lock_file), \
+                 patch.object(app_launcher, "CONFIG_FILE", temp_home / "nonexistent.json"), \
+                 patch.object(app_launcher, "is_pid_running", return_value=False), \
+                 patch.object(app_launcher, "is_current_install_server", return_value=False):
+                result = app_launcher.discover_running_port()
+
+            self.assertIsNone(result)
+            self.assertFalse(runtime.exists())
+            self.assertFalse(lock_file.exists())
+
     def test_ensure_server_ready_reuses_existing_server(self):
         progress_steps = []
         with patch.object(app_launcher, "discover_running_port", return_value=5003), patch.object(

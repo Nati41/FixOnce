@@ -296,10 +296,15 @@ def read_saved_ports() -> list[int]:
 
 
 def is_pid_running(pid: int) -> bool:
+    """Check if a process with given PID is running.
+
+    Windows note: os.kill(pid, 0) can raise SystemError with WinError 6
+    (invalid handle) for stale PIDs from previous boots.
+    """
     try:
         os.kill(pid, 0)
         return True
-    except (OSError, ProcessLookupError):
+    except (OSError, ProcessLookupError, SystemError):
         return False
 
 
@@ -374,7 +379,24 @@ def is_current_install_server(port: int) -> bool:
 
 
 def discover_running_port() -> int | None:
-    """Find a healthy FixOnce server, preferring saved canonical ports."""
+    """Find a healthy FixOnce server, preferring saved canonical ports.
+
+    Before checking saved ports, validates that the runtime PID is actually
+    running. If stale, clears runtime.json and server.lock to avoid trusting
+    dead state.
+    """
+    # Validate runtime PID before trusting saved ports
+    runtime = read_json(RUNTIME_FILE)
+    runtime_pid = runtime.get("pid")
+    if runtime_pid:
+        try:
+            runtime_pid = int(runtime_pid)
+        except (TypeError, ValueError):
+            runtime_pid = None
+        if runtime_pid and not is_pid_running(runtime_pid):
+            log_event(f"Runtime PID {runtime_pid} is dead, clearing stale state")
+            clear_stale_state()
+
     checked: list[int] = []
     for port in read_saved_ports():
         checked.append(port)
