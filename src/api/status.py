@@ -1724,7 +1724,7 @@ def api_tray_status():
             "pending_count": pending_count,
             "project_name": project_name,
             "ai_client": ai_client,
-            "memory": {
+            "knowledge": {
                 "decisions": decisions_count,
                 "solved": solved_count,
                 "avoid": avoid_count
@@ -1741,7 +1741,7 @@ def api_tray_status():
             "pending_count": 0,
             "project_name": "Error",
             "ai_client": None,
-            "memory": {"decisions": 0, "solved": 0, "avoid": 0},
+            "knowledge": {"decisions": 0, "solved": 0, "avoid": 0},
             "last_sync": None,
             "needs_attention": True,
             "attention_reason": str(e),

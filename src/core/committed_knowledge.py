@@ -128,6 +128,9 @@ def sanitize_decision(decision: Dict[str, Any]) -> Dict[str, Any]:
     for field in ("actor", "actor_source", "actor_confidence", "session_id", "tool_name"):
         if field in decision:
             sanitized[field] = decision[field]
+    # Preserve tags for subject-based retrieval
+    if "tags" in decision and isinstance(decision["tags"], list):
+        sanitized["tags"] = decision["tags"]
     return sanitized
 
 
@@ -141,6 +144,9 @@ def sanitize_avoid(avoid: Dict[str, Any]) -> Dict[str, Any]:
     for field in ("actor", "actor_source", "actor_confidence", "session_id", "tool_name"):
         if field in avoid:
             sanitized[field] = avoid[field]
+    # Preserve tags for subject-based retrieval
+    if "tags" in avoid and isinstance(avoid["tags"], list):
+        sanitized["tags"] = avoid["tags"]
     return sanitized
 
 
@@ -355,6 +361,9 @@ def sanitize_insight(insight: Dict[str, Any]) -> Dict[str, Any]:
     for field in ("actor", "actor_source", "actor_confidence", "session_id", "tool_name"):
         if field in insight:
             sanitized[field] = insight[field]
+    # Preserve tags for subject-based retrieval
+    if "tags" in insight and isinstance(insight["tags"], list):
+        sanitized["tags"] = insight["tags"]
     return sanitized
 
 
@@ -402,6 +411,9 @@ def sanitize_solution(solution: Dict[str, Any]) -> Dict[str, Any]:
     for field in ("actor", "actor_source", "actor_confidence", "session_id", "tool_name"):
         if field in solution:
             sanitized[field] = solution[field]
+    # Preserve tags for subject-based retrieval
+    if "tags" in solution and isinstance(solution["tags"], list):
+        sanitized["tags"] = solution["tags"]
     return sanitized
 
 

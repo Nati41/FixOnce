@@ -220,9 +220,18 @@ def text_matches(query: str, query_tokens: Set[str], text: str) -> bool:
     return len(synonym_common) >= 3 and has_meaningful_synonym
 
 
+def _matches_tags(item: Dict[str, Any], required_tags: List[str]) -> bool:
+    """Check if item has any of the required tags."""
+    item_tags = item.get('tags', [])
+    if not item_tags:
+        return False
+    return any(tag in item_tags for tag in required_tags)
+
+
 def search_memory(
     memory: Dict[str, Any],
     query: str,
+    tags: Optional[List[str]] = None,
     semantic_search_fn: Optional[callable] = None,
     project_id: Optional[str] = None,
     include_activity: bool = True,
@@ -234,6 +243,7 @@ def search_memory(
     Args:
         memory: Project memory dict
         query: Search query
+        tags: Optional list of tags to filter by (returns items with ANY matching tag)
         semantic_search_fn: Optional semantic search function(project_id, query, k, min_score)
         project_id: Project ID for semantic search
         include_activity: Whether to include activity log in search
@@ -290,6 +300,9 @@ def search_memory(
 
     # === Search debug_sessions (solutions) ===
     debug_sessions = memory.get('debug_sessions', [])
+    # Pre-filter by tags if specified
+    if tags:
+        debug_sessions = [d for d in debug_sessions if _matches_tags(d, tags)]
     for ds in debug_sessions:
         problem = ds.get('problem', '')
         solution = ds.get('solution', '')
@@ -299,7 +312,8 @@ def search_memory(
 
         combined = f"{problem} {solution} {root_cause} {lesson} {' '.join(symptoms)}"
 
-        if text_matches(query, query_tokens, combined):
+        # If tags specified, include all matching items
+        if tags or text_matches(query, query_tokens, combined):
             text = f"🐛 Problem: {problem}"
             if root_cause:
                 text += f"\n🧭 Root cause: {root_cause}"
@@ -311,7 +325,7 @@ def search_memory(
                 text=text,
                 match_type='solution',
                 similarity=max(calculate_similarity(query, problem),
-                             calculate_similarity(query, solution)),
+                             calculate_similarity(query, solution)) if query else 100,
                 confidence=90,
                 metadata=ds,
                 use_count=ds.get('reuse_count', 1),
@@ -320,6 +334,9 @@ def search_memory(
 
     # === Search decisions ===
     decisions = memory.get('decisions', [])
+    # Pre-filter by tags if specified
+    if tags:
+        decisions = [d for d in decisions if _matches_tags(d, tags)]
     for dec in decisions:
         if dec.get('superseded'):
             continue
@@ -328,27 +345,33 @@ def search_memory(
         dec_reason = dec.get('reason', '')
         combined = f"{dec_text} {dec_reason}"
 
-        if text_matches(query, query_tokens, combined):
+        # If tags specified, include all matching items (skip text match requirement)
+        # If no tags, require text match as before
+        if tags or text_matches(query, query_tokens, combined):
             matches.append(_make_match(
                 text=f"🔒 Decision: {dec_text}\n📝 Reason: {dec_reason}",
                 match_type='decision',
-                similarity=calculate_similarity(query, combined),
+                similarity=calculate_similarity(query, combined) if query else 100,
                 confidence=95,
                 metadata=dec,
             ))
 
     # === Search avoid patterns ===
     avoids = memory.get('avoid', [])
+    # Pre-filter by tags if specified
+    if tags:
+        avoids = [a for a in avoids if _matches_tags(a, tags)]
     for av in avoids:
         av_what = av.get('what', '')
         av_reason = av.get('reason', '')
         combined = f"{av_what} {av_reason}"
 
-        if text_matches(query, query_tokens, combined):
+        # If tags specified, include all matching items
+        if tags or text_matches(query, query_tokens, combined):
             matches.append(_make_match(
                 text=f"⛔ Avoid: {av_what}\n📝 Reason: {av_reason}",
                 match_type='avoid',
-                similarity=calculate_similarity(query, combined),
+                similarity=calculate_similarity(query, combined) if query else 100,
                 confidence=95,
                 metadata=av,
             ))

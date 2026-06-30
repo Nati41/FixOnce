@@ -32,6 +32,12 @@ from typing import Dict, Any, Optional, List
 
 from core.windows_subprocess import no_window_creationflags
 from core.search import search_memory as core_search_memory, SearchMatch
+from core.subject_detection import derive_current_subject_tags, calculate_subject_confidence
+from core.intervention_rules import (
+    should_surface_context, get_intervention_decision,
+    SubjectContext, SessionState, Trigger,
+    SUBJECT_CONFIDENCE_THRESHOLD
+)
 from core.memory_categories import format_header, should_show_as_fix, get_display_category
 
 _MCP_WINDOWS_CTRL_HANDLER = None
@@ -981,6 +987,21 @@ def _get_fixonce_mode() -> str:
 # ============================================================
 
 _session_local = threading.local()
+
+# Intervention session state for subject context surfacing
+_intervention_session_state = SessionState()
+
+
+def _get_intervention_session_state() -> SessionState:
+    """Get the current intervention session state."""
+    global _intervention_session_state
+    return _intervention_session_state
+
+
+def _reset_intervention_session_state():
+    """Reset intervention state (call on new session)."""
+    global _intervention_session_state
+    _intervention_session_state = SessionState()
 
 
 class SessionContext:
@@ -3546,7 +3567,7 @@ def _format_deep_project_brief(memory: Dict[str, Any], mode: str = "compact") ->
     d_count = len([d for d in memory.get("decisions", []) if not d.get("superseded")])
     s_count = len(memory.get("debug_sessions", []))
     a_count = len(memory.get("avoid", []))
-    lines.append(f"📊 Memory: {d_count} Decisions · {s_count} Solutions · {a_count} Avoid")
+    lines.append(f"📊 Project Knowledge: {d_count} Decisions · {s_count} Solved Bugs · {a_count} Avoid Patterns")
     lines.append("")
 
     # Navigator V1: Suggested first action
@@ -8633,7 +8654,7 @@ def run_memory_cleanup() -> str:
     _save_project(session.project_id, memory)
 
     # Build stats report
-    lines = ["## Memory Cleanup Report\n"]
+    lines = ["## Knowledge Cleanup Report\n"]
 
     # Show protected items count
     decisions_count = len(memory.get('decisions', []))
@@ -8712,7 +8733,7 @@ def get_memory_stats() -> str:
         avoid_count = len(memory.get('avoid', []))
         ck_available = False
 
-    lines = ["## Memory Statistics\n"]
+    lines = ["## Project Knowledge Statistics\n"]
 
     # Primary counts (from committed knowledge for consistency with fo_init)
     lines.append(f"**Decisions:** {decisions_count}")
@@ -8754,9 +8775,9 @@ def get_memory_stats() -> str:
         if never_used > 10:
             lines.append(f"⚠️ {never_used} insights never used - consider running `run_memory_cleanup()`")
         if len(insights) > 50:
-            lines.append(f"⚠️ Memory growing large ({len(insights)} insights) - consider cleanup")
+            lines.append(f"⚠️ Knowledge growing large ({len(insights)} insights) - consider cleanup")
         if never_used == 0 and len(insights) < 50:
-            lines.append("✅ Memory is healthy - no action needed")
+            lines.append("✅ Knowledge is healthy - no action needed")
 
     return '\n'.join(lines)
 
@@ -10112,7 +10133,7 @@ def _nav_v2_format_response(
 
     # === NO MEMORY, NO TARGETS ===
     if not memory_matches and not targets:
-        lines.append("**Memory:** No matches. This is new territory.")
+        lines.append("**Knowledge:** No matches. This is new territory.")
         lines.append("")
 
     # === NEXT ACTION (memory-first) ===
@@ -10347,13 +10368,153 @@ def _nav_error_investigation(error_msg: str, working_dir: str = None) -> Dict[st
 # These 8 tools replace the 45+ tools for a cleaner AI experience.
 # Old tools still work but are not documented in CLAUDE.md.
 
-def _format_minimal_init(working_dir: str) -> str:
+
+def _is_intent_fresh(intent: dict, max_age_minutes: int = 10) -> bool:
+    """
+    Check if intent is fresh enough to use for subject detection.
+
+    Returns False if:
+    - No updated_at timestamp
+    - Timestamp is older than max_age_minutes
+    """
+    from datetime import datetime, timezone
+
+    updated_at = intent.get("updated_at")
+    if not updated_at:
+        return False
+
+    try:
+        # Parse ISO timestamp
+        if updated_at.endswith('Z'):
+            updated_at = updated_at[:-1] + '+00:00'
+        intent_time = datetime.fromisoformat(updated_at)
+
+        # Make timezone-aware if needed
+        now = datetime.now(timezone.utc)
+        if intent_time.tzinfo is None:
+            intent_time = intent_time.replace(tzinfo=timezone.utc)
+
+        age_seconds = (now - intent_time).total_seconds()
+        return age_seconds < (max_age_minutes * 60)
+    except Exception:
+        return False
+
+
+def _get_subject_context_for_init(
+    working_dir: str,
+    intent: dict,
+    memory: dict,
+    task_hint: str = "",
+) -> list:
+    """
+    Get subject-relevant context to surface at session start.
+
+    Uses Subject Detection + Intervention Rules to decide
+    IF and WHAT to surface.
+
+    Signal priority:
+    1. task_hint (fresh, from current user message)
+    2. intent.last_file / intent.work_area (only if fresh, < 10 min old)
+
+    If no fresh signals available, returns empty list (silent).
+
+    Returns list of formatted context lines, or empty list if silent.
+    """
+    try:
+        # Build signals from available data
+        signals = {}
+        has_fresh_signal = False
+
+        # V1 rule: task_hint is exclusive - when provided, ignore intent entirely
+        if task_hint:
+            # task_hint is the ONLY signal source when provided
+            signals["query"] = task_hint
+            signals["task_hint"] = task_hint  # High confidence signal
+            has_fresh_signal = True
+            _log(f"[SubjectContext] Using task_hint exclusively: {task_hint[:50]}")
+        else:
+            # No task_hint - use intent signals only if fresh (< 10 min old)
+            intent_is_fresh = _is_intent_fresh(intent)
+            if intent_is_fresh:
+                if intent.get("last_file"):
+                    signals["intent.last_file"] = intent["last_file"]
+                    has_fresh_signal = True
+                if intent.get("work_area"):
+                    signals["intent.work_area"] = intent["work_area"]
+                    has_fresh_signal = True
+            else:
+                _log(f"[SubjectContext] Skipping stale intent (updated_at={intent.get('updated_at', 'missing')})")
+
+        # If no fresh signals, remain silent
+        if not has_fresh_signal:
+            _log("[SubjectContext] No fresh signals, remaining silent")
+            return []
+
+        # Derive subject tags
+        tags = derive_current_subject_tags(signals)
+        if not tags:
+            return []
+
+        # Calculate confidence
+        confidence = calculate_subject_confidence(tags, signals)
+
+        # Check intervention rules
+        session_state = _get_intervention_session_state()
+        context = SubjectContext(
+            trigger=Trigger.SESSION_START,
+            subject_tags=tags,
+            subject_confidence=confidence,
+            work_area=intent.get("work_area", ""),
+            matches=[{"placeholder": True}] if tags else [],  # Will check actual matches
+            match_confidence=confidence,
+        )
+
+        # Should we speak?
+        if not should_surface_context(context, session_state):
+            return []
+
+        # Search for relevant memories with tags
+        search_result = core_search_memory(
+            memory=memory,
+            query="",
+            tags=tags,
+            limit=5,
+        )
+
+        if not search_result.matches:
+            return []
+
+        # Mark as surfaced
+        main_subject = tags[0] if tags else ""
+        session_state.mark_surfaced(subject=main_subject)
+        session_state.last_work_area = intent.get("work_area", "")
+
+        # Format the matches for display
+        lines = []
+        lines.append(f"📚 Relevant for {', '.join(tags[:2])}:")
+        for match in search_result.matches[:3]:
+            # Extract first line of match text
+            first_line = match.text.split('\n')[0][:80]
+            lines.append(f"  • {first_line}")
+
+        return lines
+
+    except Exception as exc:
+        _log(f"[SubjectContext] Error: {exc}")
+        return []
+
+
+def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
     """
     Format the final human-visible session opener.
     This is the single source of truth for fo_init/sync openers.
 
     Priority: auto-fixes > errors > continuation context
     Data source: Uses FRESHER of intent vs resume_state (by timestamp)
+
+    Args:
+        working_dir: Project working directory
+        task_hint: Optional hint about user's current task (from fo_init parameter)
     """
     from pathlib import Path
     from datetime import datetime
@@ -10537,10 +10698,26 @@ def _format_minimal_init(working_dir: str) -> str:
         s_count = len(ck.get("solutions", []))
         a_count = len(ck.get("avoid", []))
         if d_count or s_count or a_count:
-            lines.append(f"📊 Memory: {d_count} Decisions · {s_count} Solved Bugs · {a_count} Avoid Patterns")
+            lines.append(f"📊 Project Knowledge: {d_count} Decisions · {s_count} Solved Bugs · {a_count} Avoid Patterns")
             lines.append("")
     except Exception:
         pass  # Silent fallback if committed knowledge unavailable
+
+    # Subject Context Engine: Surface relevant knowledge for current work
+    try:
+        # Build memory dict with decisions from committed knowledge
+        memory_for_search = {
+            "decisions": ck.get("decisions", []) if 'ck' in dir() else [],
+            "avoid": ck.get("avoid", []) if 'ck' in dir() else [],
+            "debug_sessions": data.get("debug_sessions", []) if data else [],
+        }
+        subject_lines = _get_subject_context_for_init(working_dir, intent, memory_for_search, task_hint=task_hint)
+        if subject_lines:
+            lines.extend(subject_lines)
+            lines.append("")
+    except Exception as exc:
+        _log(f"[SubjectContext] Init error: {exc}")
+        pass  # Silent fallback
 
     # Protocol reminder: inform user that progress is tracked
     lines.append("💾 Progress synced automatically")
@@ -10564,7 +10741,7 @@ def _format_minimal_init(working_dir: str) -> str:
 
 
 @mcp.tool()
-def fo_init(cwd: str = "") -> str:
+def fo_init(cwd: str = "", task_hint: str = "") -> str:
     """
     Initialize FixOnce session. MUST be called first.
 
@@ -10573,6 +10750,8 @@ def fo_init(cwd: str = "") -> str:
 
     Args:
         cwd: Current working directory (usually provided by Claude Code)
+        task_hint: Optional hint about user's current task (e.g., "working on website/index.html").
+                   Used for subject context detection. If provided, takes priority over stale intent.
     """
     with _FoInitTraceScope(cwd):
         _fo_init_trace("FO_INIT_BODY_ENTER")
@@ -10640,7 +10819,7 @@ def fo_init(cwd: str = "") -> str:
 
         # Return minimal formatted output
         _fo_init_trace("FO_INIT_FORMAT_RESPONSE_BEFORE")
-        result = _format_minimal_init(working_dir)
+        result = _format_minimal_init(working_dir, task_hint=task_hint)
         _fo_init_trace(f"FO_INIT_FORMAT_RESPONSE_AFTER length={len(result)}")
         _fo_init_trace("FO_INIT_RETURN_TO_FASTMCP_BEFORE")
         return result

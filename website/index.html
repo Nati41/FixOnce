@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070908">
   <title>FixOnce — Your project remembers</title>
-  <meta name="description" content="One project memory shared by Claude, Codex, Cursor, and every coding agent you use. Local, portable, and owned by your project.">
+  <meta name="description" content="Project-owned memory demonstrated with Claude, Codex, and Cursor. Local, portable, and owned by your project.">
   <meta property="og:title" content="FixOnce — Your project remembers">
-  <meta property="og:description" content="Give every coding agent the same project memory. Continue from where you left off, without explaining everything again.">
+  <meta property="og:description" content="The memory belongs to the project, not the model. Continue from where you left off, without explaining everything again.">
   <meta property="og:image" content="screenshot-dashboard.png">
   <link rel="icon" href="FixOnce.ico">
   <style>
@@ -201,16 +201,21 @@
 
     .hero {
       min-height: 100vh;
-      padding: 154px 0 80px;
+      padding: 126px 0 62px;
       display: grid;
       align-items: center;
       position: relative;
     }
 
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(350px, 0.78fr) minmax(720px, 1.22fr);
+      align-items: center;
+      gap: clamp(34px, 4.5vw, 66px);
+    }
+
     .hero-copy {
-      max-width: 850px;
-      margin: 0 auto;
-      text-align: center;
+      max-width: 560px;
     }
 
     .eyebrow {
@@ -234,26 +239,26 @@
     }
 
     h1 {
-      max-width: 840px;
-      margin: 22px auto 0;
-      font-size: clamp(3.2rem, 7.8vw, 6.6rem);
+      max-width: 940px;
+      margin: 22px 0 0;
+      font-size: clamp(3.25rem, 6.2vw, 5.8rem);
       font-weight: 640;
       line-height: 0.94;
       letter-spacing: -0.07em;
     }
 
     .hero h1 span {
+      display: block;
       color: var(--green);
-      text-shadow: 0 0 60px rgba(21, 245, 138, 0.18);
+      text-shadow: 0 0 60px rgba(21, 245, 138, 0.16);
     }
 
     .hero-lede {
-      max-width: 680px;
-      margin: 28px auto 0;
+      max-width: 520px;
+      margin: 27px 0 0;
       color: var(--muted);
       font-size: clamp(1.05rem, 2vw, 1.25rem);
-      line-height: 1.65;
-      text-wrap: balance;
+      line-height: 1.58;
     }
 
     .hero-lede strong {
@@ -261,12 +266,15 @@
       font-weight: 560;
     }
 
+    .hero-signal {
+      display: none;
+    }
+
     .hero-actions {
       display: flex;
-      justify-content: center;
       flex-wrap: wrap;
       gap: 11px;
-      margin-top: 34px;
+      margin-top: 32px;
     }
 
     .cta-note {
@@ -277,28 +285,28 @@
 
     .hero-stage {
       position: relative;
-      max-width: 1040px;
-      margin: 72px auto 0;
       padding: 1px;
-      border-radius: 23px;
-      background: linear-gradient(140deg, rgba(255, 255, 255, 0.16), rgba(21, 245, 138, 0.16), rgba(255, 255, 255, 0.05));
-      box-shadow: var(--shadow);
+      border-radius: 24px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(21, 245, 138, 0.18), rgba(121, 167, 255, 0.08));
+      box-shadow: 0 34px 100px rgba(0, 0, 0, 0.55);
     }
 
     .hero-stage::before {
       position: absolute;
-      inset: -80px 12% auto;
-      height: 120px;
+      inset: -70px 12% auto;
+      height: 110px;
       z-index: -1;
       content: "";
       filter: blur(40px);
-      background: rgba(21, 245, 138, 0.11);
+      background: rgba(21, 245, 138, 0.1);
     }
 
     .stage-inner {
       overflow: hidden;
-      border-radius: 22px;
-      background: #0a0d0b;
+      border-radius: 23px;
+      background:
+        radial-gradient(650px 420px at 80% 0%, rgba(21, 245, 138, 0.06), transparent 64%),
+        #0a0d0b;
     }
 
     .stage-bar {
@@ -325,20 +333,21 @@
       background: #2d3530;
     }
 
-    .stage-content {
+    .truth-flow {
       display: grid;
-      grid-template-columns: 235px minmax(0, 1fr);
-      min-height: 425px;
+      gap: 14px;
+      padding: 22px;
     }
 
-    .agent-rail {
-      padding: 24px 17px;
-      border-right: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.012);
+    .agent-chain {
+      display: grid;
+      grid-template-columns: auto repeat(3, minmax(0, 1fr));
+      align-items: center;
+      gap: 6px;
     }
 
-    .rail-label,
-    .mini-label {
+    .chain-label,
+    .memory-label {
       color: var(--quiet);
       font-size: 10px;
       font-weight: 700;
@@ -346,106 +355,122 @@
       text-transform: uppercase;
     }
 
-    .agent-list {
-      display: grid;
-      gap: 6px;
-      margin-top: 13px;
+    .chain-label {
+      margin-right: 3px;
     }
 
-    .agent {
+    .hero-agent {
+      position: relative;
+      overflow: hidden;
       width: 100%;
-      min-height: 49px;
+      min-height: 34px;
       display: flex;
       align-items: center;
-      gap: 11px;
-      padding: 0 12px;
+      gap: 7px;
+      padding: 0 8px;
       color: var(--muted);
-      border: 1px solid transparent;
+      border: 1px solid var(--line);
       border-radius: 10px;
-      background: transparent;
+      background: rgba(255, 255, 255, 0.025);
       text-align: left;
       cursor: pointer;
-      transition: 180ms ease;
+      transition: color 180ms ease, background 180ms ease, border-color 180ms ease, transform 180ms ease;
     }
 
-    .agent:hover {
+    .hero-agent:hover {
       color: var(--text);
-      background: rgba(255, 255, 255, 0.035);
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.045);
     }
 
-    .agent.active {
+    .hero-agent.active {
       color: var(--text);
       border-color: var(--green-line);
       background: var(--green-wash);
     }
 
+    .hero-agent.active::after {
+      position: absolute;
+      inset: 0;
+      content: "";
+      opacity: 0.35;
+      background: linear-gradient(110deg, transparent 0%, rgba(112, 255, 186, 0.18) 45%, transparent 72%);
+      transform: translateX(-120%);
+      animation: softSweep 2.8s ease-in-out infinite;
+    }
+
     .agent-mark {
-      width: 25px;
-      height: 25px;
+      width: 19px;
+      height: 19px;
       display: grid;
       place-items: center;
       flex: 0 0 auto;
       border: 1px solid var(--line-bright);
-      border-radius: 7px;
+      border-radius: 6px;
       color: #dce4df;
-      font-size: 10px;
+      font-size: 8px;
       font-weight: 800;
     }
 
-    .agent.active .agent-mark {
+    .hero-agent.active .agent-mark {
       color: var(--green);
       border-color: var(--green-line);
     }
 
+    .agent-meta {
+      display: grid;
+      gap: 1px;
+      min-width: 0;
+    }
+
+    .agent-meta strong {
+      font-size: 11px;
+      font-weight: 660;
+      letter-spacing: -0.01em;
+    }
+
+    .agent-meta span {
+      color: var(--quiet);
+      font-size: 8px;
+      white-space: nowrap;
+    }
+
     .agent-status {
       margin-left: auto;
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
       border-radius: 50%;
       background: #3b443e;
     }
 
-    .agent.active .agent-status {
+    .hero-agent.active .agent-status {
       background: var(--green);
       box-shadow: 0 0 10px rgba(21, 245, 138, 0.7);
     }
 
-    .project-card {
-      margin-top: 28px;
-      padding: 13px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: rgba(0, 0, 0, 0.18);
+    .proof-panel {
+      position: relative;
+      min-width: 0;
     }
 
-    .project-card strong {
-      display: block;
-      margin-top: 7px;
-      font-size: 13px;
-      font-weight: 600;
+    .proof-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 2px;
     }
 
-    .project-card span {
-      display: block;
-      margin-top: 2px;
-      color: var(--quiet);
-      font-size: 11px;
-    }
-
-    .terminal-area {
-      padding: 34px clamp(24px, 5vw, 58px);
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    }
-
-    .terminal-kicker {
+    .proof-title {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: var(--green);
+      color: var(--muted);
       font-size: 12px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
     }
 
-    .terminal-kicker::before {
+    .proof-title::before {
       width: 7px;
       height: 7px;
       content: "";
@@ -454,71 +479,111 @@
       box-shadow: 0 0 12px rgba(21, 245, 138, 0.7);
     }
 
-    .terminal-title {
-      margin-top: 23px;
-      font-family: Inter, ui-sans-serif, sans-serif;
-      font-size: clamp(1.5rem, 3vw, 2.15rem);
-      font-weight: 560;
-      letter-spacing: -0.035em;
+    .proof-badge {
+      color: var(--green);
+      border: 1px solid var(--green-line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: rgba(21, 245, 138, 0.07);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
     }
 
-    .memory-lines {
-      display: grid;
-      gap: 1px;
-      margin-top: 28px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      overflow: hidden;
-      background: var(--line);
+    .proof-copy {
+      display: none;
     }
 
-    .memory-row {
-      min-height: 58px;
-      display: grid;
-      grid-template-columns: 72px 1fr;
-      align-items: center;
-      gap: 16px;
-      padding: 11px 16px;
-      background: #0b0f0c;
+    .proof-copy h2 {
+      margin: 0;
+      font-size: clamp(1.35rem, 2.25vw, 1.95rem);
+      line-height: 1.08;
+      letter-spacing: -0.045em;
+      font-weight: 620;
+    }
+
+    .proof-copy p {
+      margin-top: 10px;
+      color: var(--muted);
       font-size: 13px;
+      line-height: 1.5;
     }
 
-    .memory-row span {
+    .proof-evidence-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin: 12px 2px 9px;
+      color: #d7e2dc;
+      font-size: 10px;
+      font-weight: 760;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .proof-evidence-label::before {
+      width: 7px;
+      height: 7px;
+      content: "";
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 12px rgba(21, 245, 138, 0.62);
+    }
+
+    .terminal-shot {
+      margin: 0;
+      padding: 10px;
+      border: 1px solid rgba(112, 255, 186, 0.24);
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.055);
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+        0 0 34px rgba(21, 245, 138, 0.08),
+        0 30px 76px rgba(0, 0, 0, 0.52);
+    }
+
+    .terminal-shot img {
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+    }
+
+    .memory-strip {
+      display: none;
+    }
+
+    .memory-stat {
+      min-height: 72px;
+      padding: 14px 16px;
+      background: rgba(7, 9, 8, 0.85);
+    }
+
+    .memory-stat span {
+      display: block;
       color: var(--quiet);
       font-size: 10px;
       letter-spacing: 0.1em;
       text-transform: uppercase;
     }
 
-    .memory-row strong {
+    .memory-stat strong {
+      display: block;
+      margin-top: 6px;
       color: #dde4df;
-      font-weight: 480;
-    }
-
-    .terminal-ready {
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      margin-top: 23px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .terminal-ready i {
-      width: 7px;
-      height: 14px;
-      background: var(--green);
-      animation: blink 1s step-end infinite;
+      font-size: 13px;
+      font-weight: 620;
     }
 
     .trust-bar {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      max-width: 950px;
-      margin: 30px auto 0;
+      margin: 28px 0 0;
       color: var(--muted);
       font-size: 12px;
-      text-align: center;
+      text-align: left;
     }
 
     .trust-bar span {
@@ -581,15 +646,15 @@
     }
 
     .demo-header .section-copy {
-      max-width: 420px;
+      max-width: 440px;
       margin: 0 0 4px;
     }
 
     .real-proof {
       position: relative;
       display: grid;
-      grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
-      gap: clamp(24px, 5vw, 68px);
+      grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+      gap: clamp(22px, 4.5vw, 58px);
       align-items: center;
       margin-top: 64px;
       padding: clamp(24px, 5vw, 56px);
@@ -621,13 +686,13 @@
     }
 
     .proof-shot.without {
-      opacity: 0.72;
+      opacity: 0.58;
       transform: rotate(-1.5deg);
-      filter: saturate(0.55);
+      filter: saturate(0.38) brightness(0.82);
     }
 
     .proof-shot.with {
-      transform: rotate(1deg) translateY(10px);
+      transform: rotate(0.45deg) translateY(4px) scale(1.055);
     }
 
     .proof-label {
@@ -671,12 +736,33 @@
 
     .proof-shot.with .proof-image {
       border-color: var(--green-line);
-      box-shadow: 0 30px 85px rgba(0, 0, 0, 0.52), 0 0 55px rgba(21, 245, 138, 0.08);
+      background: rgba(21, 245, 138, 0.045);
+      overflow: visible;
+      box-shadow: 0 34px 95px rgba(0, 0, 0, 0.58), 0 0 68px rgba(21, 245, 138, 0.13);
     }
 
     .proof-image img {
       width: 100%;
       border-radius: 11px;
+    }
+
+    .proof-output-line {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 13px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .proof-output-line strong {
+      color: var(--green);
+      font-weight: 720;
+    }
+
+    .proof-output-line span {
+      color: #dce6df;
     }
 
     .proof-caption {
@@ -697,7 +783,7 @@
     .proof-arrow {
       position: absolute;
       z-index: 2;
-      inset: 50% auto auto 50%;
+      inset: 52% auto auto 43%;
       width: 48px;
       height: 48px;
       display: grid;
@@ -983,171 +1069,213 @@
       border-top: 1px solid var(--line);
       border-bottom: 1px solid var(--line);
       background:
-        radial-gradient(600px 420px at 80% 50%, rgba(21, 245, 138, 0.07), transparent 70%),
+        radial-gradient(760px 520px at 82% 48%, rgba(21, 245, 138, 0.08), transparent 70%),
         var(--bg-soft);
     }
 
     .product-grid {
       display: grid;
-      gap: 58px;
+      grid-template-columns: minmax(0, 0.84fr) minmax(420px, 1.16fr);
+      align-items: center;
+      gap: 82px;
     }
 
     .product-intro {
       display: grid;
-      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-      align-items: end;
-      gap: 80px;
+      gap: 30px;
     }
 
     .product-intro .section-copy {
-      max-width: 680px;
+      max-width: 590px;
     }
 
-    .product-points {
+    .state-steps {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 22px;
       margin: 0;
     }
 
-    .product-point {
+    .state-step {
       display: grid;
-      grid-template-columns: 27px 1fr;
-      gap: 13px;
+      grid-template-columns: 28px 1fr;
+      gap: 15px;
       color: var(--muted);
       font-size: 14px;
+      line-height: 1.65;
     }
 
-    .product-point i {
-      width: 23px;
-      height: 23px;
+    .state-step i {
+      position: relative;
+      width: 24px;
+      height: 24px;
       display: grid;
       place-items: center;
-      border: 1px solid var(--green-line);
+      margin-top: 1px;
+      border: 1px solid rgba(21, 245, 138, 0.34);
       border-radius: 50%;
-      color: var(--green);
+      color: rgba(21, 245, 138, 0.92);
+      background: rgba(21, 245, 138, 0.08);
       font-style: normal;
       font-size: 11px;
+      font-weight: 720;
     }
 
-    .product-point strong {
+    .state-step:not(:last-child) i::after {
+      position: absolute;
+      top: 31px;
+      left: 50%;
+      width: 1px;
+      height: 32px;
+      content: "";
+      background: linear-gradient(180deg, rgba(21, 245, 138, 0.22), transparent);
+    }
+
+    .state-step strong {
       display: block;
-      margin-bottom: 3px;
+      margin-bottom: 4px;
       color: var(--text);
       font-weight: 590;
     }
 
-    .screenshot-wrap {
+    .state-handoff {
+      max-width: 470px;
+      margin-top: 2px;
+      padding-top: 23px;
+      border-top: 1px solid var(--line);
+      color: rgba(245, 248, 245, 0.7);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .dashboard-proof {
       position: relative;
-      width: min(100%, 980px);
-      margin: 0 auto;
-      padding: 1px;
-      overflow: hidden;
-      border-radius: 18px;
-      background: linear-gradient(145deg, var(--green-line), var(--line), transparent);
-      box-shadow: var(--shadow);
+      width: min(100%, 650px);
+      margin-left: auto;
     }
 
-    .screenshot-wrap::before {
-      position: absolute;
-      inset: 16px auto auto 16px;
-      z-index: 2;
-      padding: 7px 10px;
-      content: "PENDING YOUR APPROVAL";
-      border: 1px solid var(--green-line);
-      border-radius: 999px;
-      color: var(--green);
-      background: rgba(7, 9, 8, 0.84);
-      backdrop-filter: blur(10px);
-      font-size: 9px;
-      font-weight: 750;
-      letter-spacing: 0.12em;
+    .dashboard-frame {
+      position: relative;
+      width: min(500px, calc(100% - 150px));
+      padding: 14px;
+      border: 1px solid rgba(21, 245, 138, 0.18);
+      border-radius: 26px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+        rgba(8, 12, 10, 0.84);
+      box-shadow:
+        0 34px 90px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+        0 0 54px rgba(21, 245, 138, 0.09);
     }
 
-    .screenshot-wrap::after {
+    .dashboard-frame::before {
       position: absolute;
-      inset: 1px;
-      z-index: 1;
+      inset: 0;
       content: "";
-      border-radius: 17px;
+      border-radius: inherit;
       pointer-events: none;
       background:
-        linear-gradient(180deg, rgba(4, 9, 7, 0.08), rgba(4, 9, 7, 0.2)),
-        rgba(8, 18, 13, 0.08);
-      box-shadow: inset 0 0 90px rgba(2, 7, 4, 0.2);
+        radial-gradient(320px 220px at 50% 0%, rgba(21, 245, 138, 0.12), transparent 72%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 36%);
     }
 
-    .screenshot-wrap img {
-      display: block;
-      width: 100%;
-      border-radius: 17px;
-      filter: brightness(0.84) saturate(0.9) contrast(1.02);
-      transition: filter 220ms ease;
-    }
-
-    .screenshot-button {
-      display: block;
-      width: 100%;
-      padding: 0;
+    .dashboard-crop {
+      position: relative;
       overflow: hidden;
-      border: 0;
-      border-radius: 17px;
-      background: transparent;
-      cursor: zoom-in;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      background: #f4f2fb;
     }
 
-    .screenshot-button:hover img {
-      filter: brightness(0.9) saturate(0.94) contrast(1.02);
-    }
-
-    .screenshot-zoom-hint {
-      position: absolute;
-      right: 16px;
-      bottom: 16px;
-      z-index: 3;
-      padding: 7px 10px;
-      border: 1px solid rgba(22, 28, 24, 0.12);
-      border-radius: 999px;
-      color: #343b37;
-      background: rgba(255, 255, 255, 0.88);
-      backdrop-filter: blur(10px);
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      pointer-events: none;
-    }
-
-    .approval-proof {
-      display: grid;
-      grid-template-columns: 34px minmax(0, 1fr);
-      align-items: center;
-      gap: 13px;
-      max-width: 680px;
-      margin: 22px auto 0;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.55;
-    }
-
-    .approval-proof i {
-      width: 34px;
-      height: 34px;
-      display: grid;
-      place-items: center;
-      border: 1px solid var(--green-line);
-      border-radius: 50%;
-      color: var(--green);
-      background: var(--green-wash);
-      font-style: normal;
-      font-weight: 750;
-    }
-
-    .approval-proof strong {
+    .dashboard-crop img {
       display: block;
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 610;
+      width: 100%;
+      border-radius: 17px;
+      filter: saturate(0.98) contrast(1.01);
+    }
+
+    .state-callout {
+      position: absolute;
+      z-index: 2;
+      display: grid;
+      gap: 4px;
+      width: 132px;
+      color: rgba(245, 248, 245, 0.7);
+      font-size: 11px;
+      line-height: 1.35;
+      letter-spacing: 0.01em;
+    }
+
+    .state-callout strong {
+      color: rgba(245, 248, 245, 0.92);
+      font-size: 12px;
+      font-weight: 620;
+    }
+
+    .state-callout::before {
+      width: 6px;
+      height: 6px;
+      content: "";
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 18px rgba(21, 245, 138, 0.68);
+    }
+
+    .state-callout::after {
+      position: absolute;
+      top: 4px;
+      height: 1px;
+      content: "";
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.58), rgba(21, 245, 138, 0.12));
+      transform-origin: left center;
+    }
+
+    .state-callout.connected {
+      top: 52px;
+      right: 0;
+    }
+
+    .state-callout.connected::after {
+      right: 100%;
+      width: 92px;
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.12), rgba(21, 245, 138, 0.52));
+      transform: rotate(180deg);
+    }
+
+    .state-callout.project {
+      top: 186px;
+      right: 0;
+    }
+
+    .state-callout.project::after {
+      right: 100%;
+      width: 92px;
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.12), rgba(21, 245, 138, 0.52));
+      transform: rotate(180deg);
+    }
+
+    .state-callout.stopped {
+      top: 326px;
+      right: 0;
+    }
+
+    .state-callout.stopped::after {
+      right: 100%;
+      width: 92px;
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.12), rgba(21, 245, 138, 0.52));
+      transform: rotate(180deg);
+    }
+
+    .state-callout.memory {
+      top: 500px;
+      right: 0;
+    }
+
+    .state-callout.memory::after {
+      right: 100%;
+      width: 92px;
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.12), rgba(21, 245, 138, 0.52));
+      transform: rotate(180deg);
     }
 
     .screenshot-lightbox {
@@ -1192,62 +1320,381 @@
 
     .ownership-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
       align-items: center;
-      gap: 90px;
+      gap: clamp(48px, 7vw, 92px);
     }
 
-    .folder-card {
-      padding: 18px;
+    .ownership-copy .section-copy {
+      max-width: 590px;
+    }
+
+    .ownership-points {
+      display: grid;
+      gap: 13px;
+      max-width: 560px;
+      margin-top: 30px;
+    }
+
+    .ownership-point {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      gap: 13px;
+      align-items: start;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .ownership-point i {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      margin-top: 1px;
+      border: 1px solid var(--green-line);
+      border-radius: 8px;
+      color: var(--green);
+      background: rgba(21, 245, 138, 0.07);
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .ownership-point strong {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--text);
+      font-weight: 620;
+      letter-spacing: -0.01em;
+    }
+
+    .ownership-proof-line {
+      max-width: 560px;
+      margin-top: 30px;
+      padding-top: 22px;
+      border-top: 1px solid var(--line);
+      color: rgba(245, 248, 245, 0.72);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .ownership-proof-line code {
+      color: var(--green);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .ownership-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      max-width: 560px;
+      margin-top: 22px;
+    }
+
+    .ownership-summary span {
+      min-height: 74px;
+      display: grid;
+      align-content: center;
+      gap: 5px;
+      padding: 12px;
       border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--panel);
+      border-radius: 14px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.02);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .ownership-summary strong {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 640;
+      letter-spacing: -0.01em;
+    }
+
+    .repo-memory-visual {
+      position: relative;
+      min-height: 520px;
+      display: grid;
+      place-items: center;
+      padding: 46px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background:
+        radial-gradient(520px 320px at 50% 46%, rgba(21, 245, 138, 0.08), transparent 68%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
+        var(--panel);
       box-shadow: var(--shadow);
     }
 
-    .folder-bar {
-      display: flex;
+    .repo-memory-visual::before {
+      position: absolute;
+      inset: 1px;
+      content: "";
+      border-radius: inherit;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.035), transparent 28%, transparent 72%, rgba(255, 255, 255, 0.025)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%);
+    }
+
+    .repo-handoff {
+      position: relative;
+      z-index: 1;
+      width: min(100%, 520px);
+      display: grid;
+      gap: 18px;
+    }
+
+    .repo-flow-label {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
       align-items: center;
+      gap: 12px;
+      color: rgba(245, 248, 245, 0.5);
+      font-size: 10px;
+      font-weight: 760;
+      letter-spacing: 0.12em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .repo-flow-label::before,
+    .repo-flow-label::after {
+      height: 1px;
+      content: "";
+      background: linear-gradient(90deg, transparent, rgba(21, 245, 138, 0.26));
+    }
+
+    .repo-flow-label::after {
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.26), transparent);
+    }
+
+    .repo-node {
+      position: relative;
+      padding: 24px;
+      border: 1px solid rgba(21, 245, 138, 0.22);
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)),
+        #0a0e0c;
+      box-shadow:
+        0 28px 80px rgba(0, 0, 0, 0.42),
+        0 0 70px rgba(21, 245, 138, 0.08);
+    }
+
+    .repo-node-head {
+      display: flex;
       justify-content: space-between;
-      padding: 0 4px 15px;
-      color: var(--quiet);
-      font-family: "SFMono-Regular", Consolas, monospace;
-      font-size: 11px;
-    }
-
-    .file-tree {
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: #090c0a;
-      font-family: "SFMono-Regular", Consolas, monospace;
-      font-size: 13px;
-    }
-
-    .file-row {
-      min-height: 48px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 0 17px;
-      color: var(--muted);
+      gap: 20px;
+      padding-bottom: 17px;
       border-bottom: 1px solid var(--line);
     }
 
-    .file-row:last-child {
-      border-bottom: 0;
+    .repo-node-head strong {
+      display: block;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: -0.025em;
     }
 
-    .file-row.highlight {
+    .repo-node-head span,
+    .repo-caption,
+    .tool-strip span {
+      color: var(--quiet);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .repo-pill {
+      align-self: start;
+      padding: 6px 9px;
+      border: 1px solid var(--green-line);
+      border-radius: 999px;
       color: var(--green);
       background: var(--green-wash);
+      font-size: 10px;
+      font-weight: 760;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      white-space: nowrap;
     }
 
-    .file-row em {
-      margin-left: auto;
+    .repo-memory-stack {
+      display: grid;
+      grid-template-columns: 0.86fr 1.14fr;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .repo-row {
+      min-height: 122px;
+      display: grid;
+      align-content: space-between;
+      gap: 16px;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.055);
+      border-radius: 16px;
+      color: var(--muted);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .repo-row.memory {
+      color: var(--green);
+      border-color: var(--green-line);
+      background: rgba(21, 245, 138, 0.075);
+      box-shadow: 0 0 34px rgba(21, 245, 138, 0.08);
+    }
+
+    .repo-row strong {
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      font-size: 15px;
+      font-weight: 620;
+      letter-spacing: -0.015em;
+    }
+
+    .repo-row em {
       color: var(--quiet);
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
       font-size: 10px;
       font-style: normal;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .tool-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .tool-strip span {
+      min-height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .tool-strip span.active-owner {
+      color: var(--text);
+      border-color: rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .tool-strip span.memory-owner {
+      grid-column: 1 / -1;
+      color: var(--green);
+      border-color: var(--green-line);
+      background: var(--green-wash);
+      box-shadow: 0 0 28px rgba(21, 245, 138, 0.08);
+    }
+
+    .repo-ledger {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .ledger-card {
+      min-height: 74px;
+      display: grid;
+      align-content: center;
+      gap: 5px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .ledger-card span {
+      color: var(--quiet);
+      font-size: 10px;
+      font-weight: 730;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .ledger-card strong {
+      color: #dce6df;
+      font-size: 13px;
+      font-weight: 620;
+    }
+
+    .ledger-card.memory {
+      border-color: rgba(21, 245, 138, 0.2);
+      background: rgba(21, 245, 138, 0.055);
+    }
+
+    .repo-clone {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .clone-card {
+      min-height: 76px;
+      display: grid;
+      gap: 5px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .clone-card span {
+      color: var(--quiet);
+      font-size: 10px;
+      font-weight: 720;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .clone-card strong {
+      color: #dce6df;
+      font-size: 13px;
+      font-weight: 620;
+    }
+
+    .clone-arrow {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--green-line);
+      border-radius: 50%;
+      color: var(--green);
+      background: var(--green-wash);
+      font-size: 16px;
+    }
+
+    .repo-caption {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: center;
+      padding-top: 2px;
+      color: rgba(245, 248, 245, 0.58);
+      text-align: center;
+    }
+
+    .repo-caption::before,
+    .repo-caption::after {
+      width: 46px;
+      height: 1px;
+      content: "";
+      background: rgba(21, 245, 138, 0.24);
     }
 
     .trust-section {
@@ -1517,13 +1964,23 @@
       94% { transform: translate(0, -122px); opacity: 1; }
     }
 
+    @keyframes softSweep {
+      0%, 35% { transform: translateX(-120%); }
+      70%, 100% { transform: translateX(120%); }
+    }
+
     @media (max-width: 900px) {
       .nav-links > a:not(.button) {
         display: none;
       }
 
-      .stage-content {
-        grid-template-columns: 180px minmax(0, 1fr);
+      .hero-grid {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+
+      .hero-copy {
+        max-width: 760px;
       }
 
       .demo-header {
@@ -1576,13 +2033,22 @@
         gap: 52px;
       }
 
-      .product-intro {
-        grid-template-columns: 1fr;
-        gap: 34px;
+      .dashboard-proof {
+        width: min(100%, 560px);
+        margin-inline: auto;
+      }
+
+      .state-callout {
+        display: none;
       }
 
       .ownership-grid {
         gap: 50px;
+      }
+
+      .repo-memory-visual {
+        max-width: 620px;
+        margin-inline: auto;
       }
 
       .trust-items {
@@ -1621,6 +2087,37 @@
         font-size: 16px;
       }
 
+      .hero-signal {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        margin-top: 24px;
+      }
+
+      .hero-signal span {
+        min-height: 42px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.025);
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .hero-signal strong {
+        grid-column: 1 / -1;
+        min-height: 42px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--green-line);
+        border-radius: 10px;
+        color: var(--green);
+        background: var(--green-wash);
+        font-size: 12px;
+      }
+
       .hero-actions {
         display: grid;
       }
@@ -1630,34 +2127,29 @@
       }
 
       .hero-stage {
-        margin-top: 50px;
-      }
-
-      .stage-content {
-        display: block;
-      }
-
-      .agent-rail {
-        padding: 13px;
-        border-right: 0;
-        border-bottom: 1px solid var(--line);
-      }
-
-      .rail-label,
-      .project-card {
-        display: none;
-      }
-
-      .agent-list {
-        grid-template-columns: repeat(3, 1fr);
         margin-top: 0;
       }
 
-      .agent {
+      .truth-flow {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        padding: 14px;
+      }
+
+      .agent-chain {
+        grid-template-columns: repeat(3, 1fr);
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .chain-label {
+        display: none;
+      }
+
+      .hero-agent {
         justify-content: center;
         min-height: 43px;
         padding: 0 8px;
-        font-size: 11px;
       }
 
       .agent-mark,
@@ -1665,15 +2157,26 @@
         display: none;
       }
 
-      .terminal-area {
-        min-height: 365px;
-        padding: 27px 19px;
+      .agent-meta {
+        text-align: center;
       }
 
-      .memory-row {
-        grid-template-columns: 1fr;
-        gap: 4px;
-        padding-block: 12px;
+      .agent-meta strong {
+        font-size: 12px;
+      }
+
+      .agent-meta span {
+        font-size: 9px;
+      }
+
+      .proof-header {
+        align-items: flex-start;
+        flex-direction: column;
+        padding-inline: 2px;
+      }
+
+      .terminal-shot {
+        margin: 0;
       }
 
       .trust-bar {
@@ -1720,16 +2223,96 @@
         font-size: 12px;
       }
 
-      .product-points {
+      .product-grid {
+        gap: 38px;
+      }
+
+      .state-steps {
+        gap: 18px;
+      }
+
+      .state-handoff {
+        margin-top: 0;
+        padding-top: 18px;
+      }
+
+      .dashboard-frame {
+        width: auto;
+        padding: 9px;
+        border-radius: 21px;
+      }
+
+      .dashboard-crop {
+        max-height: 680px;
+        border-radius: 14px;
+      }
+
+      .dashboard-crop img {
+        border-radius: 13px;
+      }
+
+      .repo-memory-visual {
+        min-height: auto;
+        padding: 20px;
+        border-radius: 22px;
+      }
+
+      .repo-flow-label {
         grid-template-columns: 1fr;
       }
 
-      .screenshot-wrap::before {
-        inset: 10px auto auto 10px;
+      .repo-flow-label::before,
+      .repo-flow-label::after {
+        display: none;
       }
 
-      .screenshot-zoom-hint {
-        display: none;
+      .repo-node {
+        padding: 18px;
+        border-radius: 19px;
+      }
+
+      .repo-node-head {
+        gap: 12px;
+      }
+
+      .repo-pill {
+        padding-inline: 8px;
+      }
+
+      .repo-memory-stack {
+        grid-template-columns: 1fr;
+      }
+
+      .ownership-summary,
+      .repo-ledger {
+        grid-template-columns: 1fr;
+      }
+
+      .repo-row {
+        min-height: 92px;
+      }
+
+      .repo-clone {
+        grid-template-columns: 1fr;
+      }
+
+      .clone-arrow {
+        justify-self: center;
+        transform: rotate(90deg);
+      }
+
+      .tool-strip {
+        gap: 7px;
+      }
+
+      .tool-strip span {
+        min-height: 36px;
+        font-size: 9px;
+      }
+
+      .repo-caption::before,
+      .repo-caption::after {
+        width: 22px;
       }
 
       .demo-side,
@@ -1841,72 +2424,78 @@
 
   <main>
     <section class="hero">
-      <div class="container">
+      <div class="container hero-grid">
         <div class="hero-copy">
-          <div class="eyebrow"><span class="eyebrow-dot"></span>Project memory for coding agents</div>
-          <h1>Your project <span>remembers.</span></h1>
+          <div class="eyebrow"><span class="eyebrow-dot"></span>Persistent project memory for coding agents</div>
+          <div class="hero-signal" aria-label="Claude, Codex, and Cursor use the same project truth">
+            <span>Claude</span>
+            <span>Codex</span>
+            <span>Cursor</span>
+            <strong>Same project truth</strong>
+          </div>
+          <h1>The AI changes. <span>The project remains.</span></h1>
           <p class="hero-lede">
-            One memory shared by Claude, Codex, and Cursor. <strong>Every agent starts with your decisions, solved bugs, and exact next step.</strong>
+            Demonstrated with Claude, Codex, and Cursor, so the next AI resumes from the same project context.
           </p>
-          <div class="hero-actions">
-            <a class="button button-primary os-download" href="downloads/FixOnce_Setup_1.0.13.exe">
+          <div class="hero-actions" aria-label="Download FixOnce">
+            <a class="button button-primary" href="downloads/FixOnce_Setup_1.0.13.exe">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5"/><path d="M5 21h14"/></svg>
-              <span class="os-label">Download for Windows</span>
+              Download for Windows
             </a>
-            <a class="button button-secondary" href="#demo">
-              <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
-              See it remember
+            <a class="button button-secondary" href="downloads/FixOnce-mac.dmg">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5"/><path d="M5 21h14"/></svg>
+              Download for macOS
             </a>
           </div>
-          <p class="cta-note">Free during beta · No account · Setup takes about 30 seconds</p>
+          <p class="cta-note">Free during beta · Local-first · No account required</p>
+
+          <div class="trust-bar" aria-label="Product assurances">
+            <span><b class="check">✓</b> Runs locally</span>
+            <span><b class="check">✓</b> No FixOnce cloud memory</span>
+            <span><b class="check">✓</b> Demonstrated across Claude, Codex, Cursor</span>
+            <span><b class="check">✓</b> Project-owned memory</span>
+          </div>
         </div>
 
-        <div class="hero-stage" aria-label="Interactive demonstration of shared project memory">
+        <div class="hero-stage" aria-label="Claude, Codex, and Cursor continuing from the same FixOnce project memory">
           <div class="stage-inner">
             <div class="stage-bar">
               <div class="window-dots"><i></i><i></i><i></i></div>
-              <span>~/checkout-api · project memory active</span>
+              <span>~/FixOnce · shared project truth</span>
               <span>local</span>
             </div>
-            <div class="stage-content">
-              <aside class="agent-rail">
-                <div class="rail-label">Continue with</div>
-                <div class="agent-list">
-                  <button class="agent active" data-agent="Claude" type="button">
-                    <span class="agent-mark">CL</span>Claude<span class="agent-status"></span>
-                  </button>
-                  <button class="agent" data-agent="Codex" type="button">
-                    <span class="agent-mark">CX</span>Codex<span class="agent-status"></span>
-                  </button>
-                  <button class="agent" data-agent="Cursor" type="button">
-                    <span class="agent-mark">CU</span>Cursor<span class="agent-status"></span>
-                  </button>
-                </div>
-                <div class="project-card">
-                  <div class="mini-label">Memory source</div>
-                  <strong>checkout-api/.fixonce</strong>
-                  <span>Owned by this project</span>
-                </div>
+            <div class="truth-flow">
+              <aside class="agent-chain" aria-label="AI agents using the same project memory">
+                <div class="chain-label">Continue with</div>
+                <button class="hero-agent active" data-agent="Claude" data-action="fixed the bug" type="button">
+                  <span class="agent-mark">CL</span>
+                  <span class="agent-meta"><strong>Claude</strong><span>yesterday</span></span>
+                  <span class="agent-status"></span>
+                </button>
+                <button class="hero-agent" data-agent="Codex" data-action="continues the task" type="button">
+                  <span class="agent-mark">CX</span>
+                  <span class="agent-meta"><strong>Codex</strong><span>today</span></span>
+                  <span class="agent-status"></span>
+                </button>
+                <button class="hero-agent" data-agent="Cursor" data-action="restores the context" type="button">
+                  <span class="agent-mark">CU</span>
+                  <span class="agent-meta"><strong>Cursor</strong><span>context restored</span></span>
+                  <span class="agent-status"></span>
+                </button>
               </aside>
-              <div class="terminal-area">
-                <div class="terminal-kicker">Back to checkout-api</div>
-                <div class="terminal-title"><span class="active-agent-name">Claude</span> already knows where you left off.</div>
-                <div class="memory-lines">
-                  <div class="memory-row"><span>Last</span><strong>Fixed duplicate webhook processing with an idempotency key</strong></div>
-                  <div class="memory-row"><span>Next</span><strong>Add retry logic for failed webhook deliveries</strong></div>
-                  <div class="memory-row"><span>Remember</span><strong>Use Stripe for payments · Store monetary amounts in cents</strong></div>
+
+              <div class="proof-panel">
+                <div class="proof-header">
+                  <div class="proof-title"><span class="active-agent-name">Claude</span> <span class="active-agent-action">fixed the bug</span></div>
+                  <div class="proof-badge">Shared project memory</div>
                 </div>
-                <div class="terminal-ready"><i></i><span>Context loaded from the project. Ready.</span></div>
+                <div class="proof-evidence-label">Actual fo_init output</div>
+                <figure class="terminal-shot">
+                  <img src="real-session-with-fixonce.png" alt="Real FixOnce fo_init output showing project goal, area, last work, next action, memory counts, and Ready state">
+                </figure>
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="trust-bar" aria-label="Product assurances">
-          <span><b class="check">✓</b> Runs locally</span>
-          <span><b class="check">✓</b> No code uploads</span>
-          <span><b class="check">✓</b> Works across agents</span>
-          <span><b class="check">✓</b> You approve memory</span>
         </div>
       </div>
     </section>
@@ -1918,47 +2507,30 @@
             <div class="section-kicker">The 20-second demo</div>
             <h2 class="section-title">Switch the agent.<br>Keep the context.</h2>
           </div>
-          <p class="section-copy">FixOnce makes the project the source of truth. Change tools whenever you want without resetting the work.</p>
+          <p class="section-copy">You don't continue the chat. You continue the project.</p>
         </div>
 
         <div class="real-proof reveal">
           <article class="proof-shot without">
-            <div class="proof-label">Without project memory</div>
+            <div class="proof-label">Yesterday: Claude worked</div>
             <div class="proof-image">
               <img src="real-session-without-memory.png" alt="Claude Code session without FixOnce asking what the user wants to work on" loading="lazy">
             </div>
-            <p class="proof-caption"><strong>Git status is not context.</strong>The agent can see changed files, but it does not know the goal, decisions, or next move.</p>
+            <p class="proof-caption"><strong>The next AI starts cold.</strong>Changed files don't explain the goal, the decisions, or what should happen next.</p>
           </article>
 
           <div class="proof-arrow" aria-hidden="true">→</div>
 
           <article class="proof-shot with">
-            <div class="proof-label">With FixOnce</div>
+            <div class="proof-label">Today: Codex opens it</div>
             <div class="proof-image">
-              <img src="real-session-with-fixonce.png" alt="Claude session restored by FixOnce with project goal, last work, next step, and memory counts" loading="lazy">
+              <img src="real-session-with-fixonce.png" alt="Real FixOnce session restored with project goal, last work, next step, and memory counts" loading="lazy">
             </div>
-            <p class="proof-caption"><strong>The whole project state is back.</strong>Goal, area, last work, exact next step, and durable memory load automatically.</p>
+            <div class="proof-output-line"><strong>Actual fo_init output</strong><span>Goal · Last work · Next step · Memory · Ready</span></div>
+            <p class="proof-caption"><strong>Nothing had to be explained again.</strong>The project loads the goal, last work, next step, memory, and ready state before coding starts.</p>
           </article>
         </div>
-        <p class="real-proof-note reveal"><b>Real sessions.</b> Same project. Same AI. One call to FixOnce.</p>
-
-        <div class="benefits reveal">
-          <article class="benefit">
-            <div class="benefit-icon">→_</div>
-            <h3>Resume, don't restart</h3>
-            <p>Open the project tomorrow and your agent knows what changed, why it changed, and what comes next.</p>
-          </article>
-          <article class="benefit">
-            <div class="benefit-icon">✓✓</div>
-            <h3>Solve it once</h3>
-            <p>Before debugging, agents search the project's solved issues and reuse what already worked.</p>
-          </article>
-          <article class="benefit">
-            <div class="benefit-icon">◇</div>
-            <h3>Keep decisions alive</h3>
-            <p>Architecture choices and hard-won constraints stay active instead of disappearing into old chats.</p>
-          </article>
-        </div>
+        <p class="real-proof-note reveal"><b>Real session output.</b> Same project memory, even when the agent changes.</p>
       </div>
     </section>
 
@@ -1966,54 +2538,82 @@
       <div class="container product-grid">
         <div class="product-intro reveal">
           <div>
-            <div class="section-kicker">Memory you control</div>
-            <h2 class="section-title">See exactly what your project will remember.</h2>
-            <p class="section-copy">FixOnce proposes useful memory from real work. You review it before it becomes project truth.</p>
+            <div class="section-kicker">Project state</div>
+            <h2 class="section-title">The project state is always visible.</h2>
+            <p class="section-copy">FixOnce shows exactly what the next AI agent will inherit: the connected project, where work stopped, saved decisions, solved fixes, recent code changes, and the current project state.</p>
           </div>
-          <div class="product-points">
-            <div class="product-point"><i>✓</i><div><strong>Decisions</strong>Architecture and product choices that should not be reopened every session.</div></div>
-            <div class="product-point"><i>✓</i><div><strong>Solved bugs</strong>Errors, root causes, and fixes your next agent can search first.</div></div>
-            <div class="product-point"><i>✓</i><div><strong>Avoids and next steps</strong>Known dead ends and a precise continuation point.</div></div>
+          <div class="state-steps">
+            <div class="state-step"><i>1</i><div><strong>Project connected</strong>FixOnce knows which project is active.</div></div>
+            <div class="state-step"><i>2</i><div><strong>Where we stopped</strong>Last work and the next action remain visible.</div></div>
+            <div class="state-step"><i>3</i><div><strong>Memory that compounds</strong>Decisions, solved bugs and avoid patterns accumulate over time.</div></div>
           </div>
+          <p class="state-handoff">Then open Claude, Codex, or Cursor and simply say "hi".</p>
         </div>
-        <div class="reveal">
-          <div class="screenshot-wrap">
-            <button class="screenshot-button" type="button" aria-label="Enlarge the FixOnce dashboard screenshot">
-              <img src="real-dashboard.png" alt="Full FixOnce dashboard showing Next Action, Proposed Memories approval, project state, and synchronized AI tools" loading="lazy">
-            </button>
-            <span class="screenshot-zoom-hint">Click to enlarge</span>
+        <div class="dashboard-proof reveal">
+          <div class="dashboard-frame">
+            <div class="dashboard-crop">
+              <img src="real-dashboard-current.png" alt="FixOnce dashboard showing the active Codex connection, connected project, last work, next action, saved memories, and recent code changes" loading="lazy">
+            </div>
           </div>
-          <div class="approval-proof">
-            <i>✓</i>
-            <div><strong>Nothing becomes project truth automatically.</strong>Review the proposed memory, edit it, or reject it before any agent can inherit it.</div>
-          </div>
+          <div class="state-callout connected" aria-hidden="true"><strong>Connected agent</strong>Codex is active now.</div>
+          <div class="state-callout project" aria-hidden="true"><strong>Active project</strong>The project is connected.</div>
+          <div class="state-callout stopped" aria-hidden="true"><strong>Where we stopped</strong>Last work and next action remain visible.</div>
+          <div class="state-callout memory" aria-hidden="true"><strong>Durable memory</strong>Decisions, fixes and avoid patterns stay with the project.</div>
         </div>
       </div>
     </section>
 
-    <dialog class="screenshot-lightbox" aria-label="FixOnce dashboard screenshot">
-      <button class="lightbox-close" type="button" aria-label="Close screenshot">×</button>
-      <img src="real-dashboard.png" alt="Enlarged FixOnce dashboard showing user-controlled project memory approval">
-    </dialog>
-
     <section class="ownership-section">
       <div class="container ownership-grid">
-        <div class="folder-card reveal">
-          <div class="folder-bar"><span>checkout-api</span><span>project files</span></div>
-          <div class="file-tree">
-            <div class="file-row">⌄ src/</div>
-            <div class="file-row">⌄ tests/</div>
-            <div class="file-row">◇ package.json</div>
-            <div class="file-row highlight">⌄ .fixonce/ <em>project memory</em></div>
-            <div class="file-row">&nbsp;&nbsp; decisions.json</div>
-            <div class="file-row">&nbsp;&nbsp; solved-bugs.json</div>
-            <div class="file-row">&nbsp;&nbsp; context.json</div>
+        <div class="ownership-copy reveal">
+          <div class="section-kicker">Dashboard ownership</div>
+          <h2 class="section-title">The dashboard shows who owns the work.</h2>
+          <p class="section-copy">FixOnce makes project state visible as something the repository owns. Claude, Codex, and Cursor can all connect to it, but none of them become the permanent source of truth.</p>
+          <div class="ownership-points">
+            <div class="ownership-point"><i>1</i><div><strong>The project is identified first.</strong> The dashboard anchors memory to the active repository before any agent starts coding.</div></div>
+            <div class="ownership-point"><i>2</i><div><strong>The agent is a connection.</strong> Claude, Codex, or Cursor reads the same goal, decisions, solved fixes, avoid patterns, and next action.</div></div>
+            <div class="ownership-point"><i>3</i><div><strong>The handoff is inspectable.</strong> Last work, next action, and recent changes stay visible instead of disappearing into a chat transcript.</div></div>
           </div>
+          <div class="ownership-summary" aria-label="Project ownership summary">
+            <span><strong>Owner</strong>the active repository</span>
+            <span><strong>Connectors</strong>Claude, Codex, Cursor</span>
+            <span><strong>Proof</strong>the next step loads again</span>
+          </div>
+          <p class="ownership-proof-line">The important boundary is simple: <code>.git/</code> remembers what changed. <code>.fixonce/</code> remembers why it changed and what should happen next.</p>
         </div>
-        <div class="reveal">
-          <div class="section-kicker">The ownership model</div>
-          <h2 class="section-title">Memory belongs to the project. Not the AI.</h2>
-          <p class="section-copy">Your memory lives in a <code>.fixonce/</code> folder alongside the code. Switch agents, close the app, or reinstall FixOnce. The project still knows what it knows.</p>
+        <div class="repo-memory-visual reveal" aria-label="Project-owned memory travels with the repository, while Claude, Codex, and Cursor can change">
+          <div class="repo-handoff">
+            <div class="tool-strip" aria-hidden="true">
+              <span class="active-owner">Claude</span>
+              <span class="active-owner">Codex</span>
+              <span class="active-owner">Cursor</span>
+              <span class="memory-owner">Project memory</span>
+            </div>
+            <div class="repo-flow-label">Agents connect. The project owns.</div>
+            <div class="repo-node">
+              <div class="repo-node-head">
+                <div>
+                  <span>Repository</span>
+                  <strong>active project</strong>
+                </div>
+                <div class="repo-pill">source of truth</div>
+              </div>
+              <div class="repo-memory-stack">
+                <div class="repo-row"><span>.git/</span><strong>Code history</strong><em>commits</em></div>
+                <div class="repo-row memory"><span>.fixonce/</span><strong>Working context</strong><em>decisions · fixes · next step</em></div>
+              </div>
+            </div>
+            <div class="repo-ledger" aria-hidden="true">
+              <div class="ledger-card"><span>Dashboard reads</span><strong>project · last · next · memory</strong></div>
+              <div class="ledger-card memory"><span>New agent gets</span><strong>the same inherited state</strong></div>
+            </div>
+            <div class="repo-clone" aria-hidden="true">
+              <div class="clone-card"><span>Session A</span><strong>Records the handoff</strong></div>
+              <div class="clone-arrow">→</div>
+              <div class="clone-card"><span>Session B</span><strong>Loads the handoff</strong></div>
+            </div>
+            <div class="repo-caption">The visible owner is the project, not the current AI window.</div>
+          </div>
         </div>
       </div>
     </section>
@@ -2063,7 +2663,7 @@
         <div class="faq-list">
           <details>
             <summary>How is this different from an AI's built-in memory?</summary>
-            <p>Built-in memory belongs to one product. FixOnce belongs to the project, uses explicit engineering structure, and can be loaded by Claude, Codex, Cursor, and other MCP-compatible tools.</p>
+            <p>Built-in memory belongs to one product. FixOnce belongs to the project. It is demonstrated with Claude, Codex, and Cursor, and is not memory locked to one AI product.</p>
           </details>
           <details>
             <summary>Does FixOnce read or upload my entire codebase?</summary>
@@ -2075,7 +2675,7 @@
           </details>
           <details>
             <summary>Which tools are supported?</summary>
-            <p>FixOnce currently works with Claude Code, Codex, Cursor, and other clients that support MCP.</p>
+            <p>The landing page currently demonstrates Claude, Codex, and Cursor. FixOnce is project-owned memory for AI coding tools that can connect to project context.</p>
           </details>
         </div>
       </div>
@@ -2141,19 +2741,23 @@
       }
     }
 
-    const agents = [...document.querySelectorAll(".agent")];
+    const agents = [...document.querySelectorAll(".hero-agent")];
     const agentName = document.querySelector(".active-agent-name");
+    const agentAction = document.querySelector(".active-agent-action");
     let activeAgent = 0;
     let agentTimer;
 
     function selectAgent(index, restart = true) {
+      if (!agents.length) return;
       activeAgent = index;
       agents.forEach((agent, i) => agent.classList.toggle("active", i === index));
       if (agentName) agentName.textContent = agents[index].dataset.agent;
+      if (agentAction) agentAction.textContent = agents[index].dataset.action;
       if (restart) startAgentCycle();
     }
 
     function startAgentCycle() {
+      if (!agents.length) return;
       clearInterval(agentTimer);
       agentTimer = setInterval(() => selectAgent((activeAgent + 1) % agents.length, false), 2800);
     }
