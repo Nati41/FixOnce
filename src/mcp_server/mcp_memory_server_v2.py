@@ -10409,8 +10409,13 @@ def _get_subject_context_for_init(
     """
     Get subject-relevant context to surface at session start.
 
-    Uses Subject Detection + Intervention Rules to decide
-    IF and WHAT to surface.
+    Uses the Project Librarian architecture to decide IF and WHAT to surface.
+
+    Architecture contract guarantees:
+    - No Critical Knowledge Left Behind
+    - Knowledge Before Code
+    - Silence Over Noise
+    - Tiered selection (must-know, should-check, may-help)
 
     Signal priority:
     1. task_hint (fresh, from current user message)
@@ -10424,83 +10429,63 @@ def _get_subject_context_for_init(
         # Build signals from available data
         signals = {}
         has_fresh_signal = False
+        current_file = ""
 
         # V1 rule: task_hint is exclusive - when provided, ignore intent entirely
         if task_hint:
-            # task_hint is the ONLY signal source when provided
             signals["query"] = task_hint
-            signals["task_hint"] = task_hint  # High confidence signal
+            signals["task_hint"] = task_hint
             has_fresh_signal = True
-            _log(f"[SubjectContext] Using task_hint exclusively: {task_hint[:50]}")
+            _log(f"[Librarian] Using task_hint: {task_hint[:50]}")
         else:
-            # No task_hint - use intent signals only if fresh (< 10 min old)
             intent_is_fresh = _is_intent_fresh(intent)
             if intent_is_fresh:
                 if intent.get("last_file"):
                     signals["intent.last_file"] = intent["last_file"]
+                    current_file = intent["last_file"]
                     has_fresh_signal = True
                 if intent.get("work_area"):
                     signals["intent.work_area"] = intent["work_area"]
                     has_fresh_signal = True
             else:
-                _log(f"[SubjectContext] Skipping stale intent (updated_at={intent.get('updated_at', 'missing')})")
+                _log(f"[Librarian] Skipping stale intent")
 
-        # If no fresh signals, remain silent
+        # If no fresh signals, remain silent (Silence Over Noise)
         if not has_fresh_signal:
-            _log("[SubjectContext] No fresh signals, remaining silent")
+            _log("[Librarian] No fresh signals, remaining silent")
             return []
 
-        # Derive subject tags
-        tags = derive_current_subject_tags(signals)
-        if not tags:
+        # Use the Project Librarian for tiered knowledge selection
+        from core.librarian import create_librarian
+
+        librarian = create_librarian(memory, working_dir)
+        response = librarian.on_session_start(
+            task_hint=task_hint,
+            current_file=current_file,
+        )
+
+        if not response.should_speak:
+            _log(f"[Librarian] Silent: {response.reason}")
             return []
 
-        # Calculate confidence
-        confidence = calculate_subject_confidence(tags, signals)
-
-        # Check intervention rules
+        # Update session state for intervention rules
         session_state = _get_intervention_session_state()
-        context = SubjectContext(
-            trigger=Trigger.SESSION_START,
-            subject_tags=tags,
-            subject_confidence=confidence,
-            work_area=intent.get("work_area", ""),
-            matches=[{"placeholder": True}] if tags else [],  # Will check actual matches
-            match_confidence=confidence,
-        )
+        if response.knowledge_package:
+            main_subject = response.knowledge_package.subject_tags[0] if response.knowledge_package.subject_tags else ""
+            session_state.mark_surfaced(subject=main_subject)
+            session_state.last_work_area = intent.get("work_area", "")
 
-        # Should we speak?
-        if not should_surface_context(context, session_state):
+        # Parse briefing into lines
+        if not response.briefing:
             return []
 
-        # Search for relevant memories with tags
-        search_result = core_search_memory(
-            memory=memory,
-            query="",
-            tags=tags,
-            limit=5,
-        )
-
-        if not search_result.matches:
-            return []
-
-        # Mark as surfaced
-        main_subject = tags[0] if tags else ""
-        session_state.mark_surfaced(subject=main_subject)
-        session_state.last_work_area = intent.get("work_area", "")
-
-        # Format the matches for display
-        lines = []
-        lines.append(f"📚 Relevant for {', '.join(tags[:2])}:")
-        for match in search_result.matches[:3]:
-            # Extract first line of match text
-            first_line = match.text.split('\n')[0][:80]
-            lines.append(f"  • {first_line}")
-
-        return lines
+        lines = response.briefing.strip().split('\n')
+        return [line for line in lines if line.strip()]
 
     except Exception as exc:
-        _log(f"[SubjectContext] Error: {exc}")
+        _log(f"[Librarian] Error: {exc}")
+        import traceback
+        _log(traceback.format_exc())
         return []
 
 
@@ -10639,13 +10624,57 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
 
     freshest_time = intent_time if use_intent_first else resume_time
     stale_context = False
+    days_since_last = 0
     if freshest_time:
         try:
-            stale_context = (now - freshest_time).days >= 14
+            days_since_last = (now - freshest_time).days
+            stale_context = days_since_last >= 14
         except:
             stale_context = False
 
-    # Build final opener with explicit grounding and stable formatting.
+    # Briefing Mode Detection: continuation vs reorientation
+    # Reorientation triggers when:
+    # 1. Time gap > 7 days, OR
+    # 2. task_hint explicitly indicates need for reorientation
+    from core.briefing_composer import detect_reorientation_hint, compose_for_reorientation
+
+    needs_reorientation = days_since_last >= 7 or detect_reorientation_hint(task_hint)
+    _fo_init_trace(f"FORMAT_INIT_MODE days_since_last={days_since_last} hint_reorient={detect_reorientation_hint(task_hint)} needs_reorientation={needs_reorientation}")
+
+    if needs_reorientation:
+        # Build memory dict for reorientation briefing
+        try:
+            from core.committed_knowledge import read_committed_knowledge
+            ck = read_committed_knowledge(working_dir)
+        except Exception:
+            ck = {}
+
+        reorientation_memory = {
+            "decisions": ck.get("decisions", []),
+            "avoid": ck.get("avoid", []),
+            "debug_sessions": data.get("debug_sessions", []) if data else [],
+            "decision_conflicts": data.get("decision_conflicts", []) if data else [],
+            "live_record": data.get("live_record", {}) if data else {},
+        }
+
+        # Build knowledge stats line
+        d_count = len(ck.get("decisions", []))
+        s_count = len(ck.get("solutions", []))
+        a_count = len(ck.get("avoid", []))
+        knowledge_stats = ""
+        if d_count or s_count or a_count:
+            knowledge_stats = f"📊 Project Knowledge: {d_count} Decisions · {s_count} Solved Bugs · {a_count} Avoid Patterns"
+
+        result = compose_for_reorientation(
+            memory=reorientation_memory,
+            project_name=project_name,
+            active_goal=current_goal,
+            knowledge_stats=knowledge_stats,
+        )
+        _fo_init_trace(f"FORMAT_INIT_RETURN_REORIENTATION length={len(result)}")
+        return result
+
+    # CONTINUATION MODE: Build final opener with explicit grounding and stable formatting.
     line1 = f"🧠 Back to {project_name}"
 
     context_bits = []

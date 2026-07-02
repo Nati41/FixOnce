@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Set
 from datetime import datetime, timedelta
 from pathlib import Path
+import hashlib
+import json
 
 from core.intent_detection import (
     Intent,
@@ -121,6 +123,48 @@ class LibrarianResponse:
     strategy: RetrievalStrategy
 
 
+@dataclass
+class SubjectShelf:
+    """
+    Presentation cache for one subject.
+
+    This is never authority. The shelf is restorable only when its memory
+    fingerprint still matches Project Knowledge.
+    """
+    subject_key: str
+    subject_tags: List[str]
+    knowledge_package: KnowledgePackage
+    briefing_text: str
+    metadata: Dict[str, str]
+    memory_fingerprint: str
+    created_at: datetime
+    restored_at: Optional[datetime] = None
+
+
+@dataclass
+class SubjectShelfCache:
+    """In-memory subject shelf cache for one librarian session."""
+    shelves: Dict[str, SubjectShelf] = field(default_factory=dict)
+
+    def get(self, subject_key: str, memory_fingerprint: str) -> Optional[SubjectShelf]:
+        shelf = self.shelves.get(subject_key)
+        if not shelf:
+            return None
+        if shelf.memory_fingerprint != memory_fingerprint:
+            return None
+        shelf.restored_at = datetime.now()
+        return shelf
+
+    def put(self, shelf: SubjectShelf) -> None:
+        self.shelves[shelf.subject_key] = shelf
+
+    def has_subject(self, subject_key: str) -> bool:
+        return subject_key in self.shelves
+
+    def clear(self) -> None:
+        self.shelves.clear()
+
+
 class ProjectLibrarian:
     """
     The Project Librarian.
@@ -151,6 +195,7 @@ class ProjectLibrarian:
         self._surfaced_items: Set[str] = set()
         self._last_subject: str = ""
         self._last_intervention: Optional[datetime] = None
+        self._shelves = SubjectShelfCache()
 
     def on_session_start(
         self,
@@ -184,29 +229,10 @@ class ProjectLibrarian:
                 strategy=RetrievalStrategy.BRIEFING,
             )
 
-        # Select knowledge
-        package = select_for_briefing(
-            memory=self.memory,
-            subject_tags=context.subject_tags,
-            intent=context.intent,
-        )
-
-        # Compose briefing
-        briefing = compose_for_init(package)
-
-        # Get code guidance (LAST)
-        code_guidance = self._get_code_guidance(context, package)
-
-        # Update session state
-        self._mark_surfaced(context, package)
-
-        return LibrarianResponse(
-            should_speak=bool(briefing),
-            briefing=briefing,
-            knowledge_package=package,
-            code_guidance=code_guidance,
+        return self._build_and_store_shelf_response(
+            context=context,
+            composer="init",
             reason="Session start briefing",
-            strategy=RetrievalStrategy.BRIEFING,
         )
 
     def on_subject_change(
@@ -238,6 +264,21 @@ class ProjectLibrarian:
                 strategy=RetrievalStrategy.BRIEFING,
             )
 
+        memory_fingerprint = self._memory_fingerprint()
+        restored = self._restore_shelf_response(context, memory_fingerprint)
+        if restored:
+            return restored
+
+        subject_key = self._subject_key(context.subject_tags)
+        if self._shelves.has_subject(subject_key):
+            return self._build_and_store_shelf_response(
+                context=context,
+                composer="subject_change",
+                reason="Subject shelf stale; rebuilt from Project Knowledge",
+                old_subject=old_subject,
+                memory_fingerprint=memory_fingerprint,
+            )
+
         # Check if we should speak
         should_speak, reason = self._should_intervene(context)
 
@@ -251,33 +292,12 @@ class ProjectLibrarian:
                 strategy=RetrievalStrategy.BRIEFING,
             )
 
-        # Select knowledge
-        package = select_for_briefing(
-            memory=self.memory,
-            subject_tags=context.subject_tags,
-            intent=context.intent,
-        )
-
-        # Compose briefing for subject change
-        briefing = compose_for_subject_change(
-            package,
-            old_subject=old_subject,
-            new_subject=context.primary_subject(),
-        )
-
-        # Get code guidance (LAST)
-        code_guidance = self._get_code_guidance(context, package)
-
-        # Update session state
-        self._mark_surfaced(context, package)
-
-        return LibrarianResponse(
-            should_speak=bool(briefing) or package.has_must_know(),
-            briefing=briefing,
-            knowledge_package=package,
-            code_guidance=code_guidance,
+        return self._build_and_store_shelf_response(
+            context=context,
+            composer="subject_change",
             reason="Subject change briefing",
-            strategy=RetrievalStrategy.BRIEFING,
+            old_subject=old_subject,
+            memory_fingerprint=memory_fingerprint,
         )
 
     def on_error_detected(
@@ -430,11 +450,6 @@ class ProjectLibrarian:
         # Check if subject already surfaced this session
         primary = context.primary_subject()
         if primary and primary in self._surfaced_subjects:
-            # Allow if must-know items exist (guaranteed representation)
-            if has_relevant_knowledge(self.memory, context.subject_tags):
-                counts = count_by_tier(self.memory, context.subject_tags)
-                if counts.get("must_know", 0) > 0:
-                    return True, "Must-know items exist for this subject"
             return False, f"Subject already surfaced: {primary}"
 
         # Check if any relevant knowledge exists
@@ -460,6 +475,119 @@ class ProjectLibrarian:
 
         # Update last intervention time
         self._last_intervention = datetime.now()
+
+    def _build_and_store_shelf_response(
+        self,
+        context: LibrarianContext,
+        composer: str,
+        reason: str,
+        old_subject: str = "",
+        memory_fingerprint: Optional[str] = None,
+    ) -> LibrarianResponse:
+        """Select from Project Knowledge, compose a briefing, and cache presentation."""
+        fingerprint = memory_fingerprint or self._memory_fingerprint()
+        package = select_for_briefing(
+            memory=self.memory,
+            subject_tags=context.subject_tags,
+            intent=context.intent,
+        )
+
+        if composer == "subject_change":
+            briefing = compose_for_subject_change(
+                package,
+                old_subject=old_subject,
+                new_subject=context.primary_subject(),
+            )
+        else:
+            briefing = compose_for_init(package)
+
+        code_guidance = self._get_code_guidance(context, package)
+        self._store_shelf(context, package, briefing, code_guidance, fingerprint)
+        self._mark_surfaced(context, package)
+
+        return LibrarianResponse(
+            should_speak=bool(briefing) or package.has_must_know(),
+            briefing=briefing,
+            knowledge_package=package,
+            code_guidance=code_guidance,
+            reason=reason,
+            strategy=RetrievalStrategy.BRIEFING,
+        )
+
+    def _restore_shelf_response(
+        self,
+        context: LibrarianContext,
+        memory_fingerprint: str,
+    ) -> Optional[LibrarianResponse]:
+        """Restore a subject shelf only when Project Knowledge has not changed."""
+        subject_key = self._subject_key(context.subject_tags)
+        if not subject_key:
+            return None
+
+        shelf = self._shelves.get(subject_key, memory_fingerprint)
+        if not shelf:
+            return None
+
+        self._last_subject = context.primary_subject()
+        self._last_intervention = datetime.now()
+        return LibrarianResponse(
+            should_speak=True,
+            briefing=shelf.briefing_text,
+            knowledge_package=shelf.knowledge_package,
+            code_guidance=self._get_code_guidance(context, shelf.knowledge_package),
+            reason="Restored subject shelf",
+            strategy=RetrievalStrategy.BRIEFING,
+        )
+
+    def _store_shelf(
+        self,
+        context: LibrarianContext,
+        package: KnowledgePackage,
+        briefing: str,
+        code_guidance: List[Dict[str, str]],
+        memory_fingerprint: str,
+    ) -> None:
+        """Store only the presentation package for a subject."""
+        subject_key = self._subject_key(context.subject_tags)
+        if not subject_key or not briefing:
+            return
+
+        self._shelves.put(SubjectShelf(
+            subject_key=subject_key,
+            subject_tags=list(context.subject_tags),
+            knowledge_package=package,
+            briefing_text=briefing,
+            metadata={
+                "strategy": RetrievalStrategy.BRIEFING.value,
+                "primary_subject": context.primary_subject(),
+                "code_guidance_count": str(len(code_guidance)),
+            },
+            memory_fingerprint=memory_fingerprint,
+            created_at=datetime.now(),
+        ))
+
+    @staticmethod
+    def _subject_key(subject_tags: List[str]) -> str:
+        """Stable subject shelf key from normalized subject tags."""
+        normalized = sorted({tag.strip().lower() for tag in subject_tags if tag and tag.strip()})
+        return "|".join(normalized)
+
+    def _memory_fingerprint(self) -> str:
+        """
+        Fingerprint authoritative Project Knowledge.
+
+        Shelves are presentation caches only. Any Project Knowledge change
+        invalidates the shelf and forces a rebuild from memory.
+        """
+        projection = {
+            "decisions": self.memory.get("decisions", []),
+            "debug_sessions": self.memory.get("debug_sessions", []),
+            "avoid": self.memory.get("avoid", []),
+            "lessons": self.memory.get("live_record", {}).get("lessons", {}),
+            "decision_conflicts": self.memory.get("decision_conflicts", []),
+        }
+        payload = json.dumps(projection, sort_keys=True, ensure_ascii=False, default=str)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def _time_since_last_intervention(self) -> Optional[timedelta]:
         """Get time since last intervention."""
@@ -500,6 +628,7 @@ class ProjectLibrarian:
         self._surfaced_items.clear()
         self._last_subject = ""
         self._last_intervention = None
+        self._shelves.clear()
 
 
 def create_librarian(memory: Dict[str, Any], working_dir: str = "") -> ProjectLibrarian:

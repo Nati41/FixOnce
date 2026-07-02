@@ -353,3 +353,363 @@ def merge_briefings(briefings: List[Briefing]) -> str:
         sections.append("\n".join(all_may_help))
 
     return "\n\n".join(sections)
+
+
+# =============================================================================
+# Reorientation Briefing
+# =============================================================================
+
+def compose_for_reorientation(
+    memory: Dict[str, Any],
+    project_name: str,
+    active_goal: str = "",
+    knowledge_stats: str = "",
+    working_tree: str = "",
+) -> str:
+    """
+    Compose full project reorientation briefing.
+
+    Used when returning after a long break (>7 days) or when user
+    explicitly indicates they need reorientation.
+
+    Answers: "What should the engineer know about this project?"
+    NOT: "What was the last thing touched?"
+
+    Structure (empty sections hidden):
+    1. Project Status (header + knowledge stats)
+    2. Current Focus (active goal, blocking items)
+    3. Recently Completed (milestones from last 30 days)
+    4. Active Decisions
+    5. Known Risks (avoid patterns, conflicts)
+    6. Working Tree (git status, uncommitted changes)
+    7. Suggested Next Step
+
+    Project knowledge comes before git/worktree state.
+    """
+    sections = []
+
+    # 1. Project Status (header)
+    sections.append(f"🧠 **Project Status:** {project_name}")
+    if knowledge_stats:
+        sections.append(knowledge_stats)
+    sections.append("")
+
+    # 2. Current Focus
+    focus_items = _extract_focus(memory, active_goal)
+    if focus_items:
+        sections.append("📍 **Current Focus**")
+        for item in focus_items[:2]:
+            sections.append(f"  {_truncate(item, 100)}")
+        sections.append("")
+
+    # 3. Recently Completed
+    milestones = _extract_milestones(memory, days=30)
+    if milestones:
+        sections.append("✅ **Recently Completed**")
+        for m in milestones[:3]:
+            sections.append(f"  • {_truncate(m, 100)}")
+        sections.append("")
+
+    # 4. Active Decisions
+    decisions = _extract_active_decisions(memory, limit=3)
+    if decisions:
+        sections.append("🔒 **Active Decisions**")
+        for d in decisions:
+            sections.append(f"  • {_truncate(d, 100)}")
+        sections.append("")
+
+    # 5. Known Risks
+    risks = _extract_risks(memory, limit=2)
+    if risks:
+        sections.append("⚠️ **Known Risks**")
+        for r in risks:
+            sections.append(f"  • {_truncate(r, 100)}")
+        sections.append("")
+
+    # 6. Working Tree (git status - optional, should not dominate)
+    if working_tree:
+        sections.append("📂 **Working Tree**")
+        sections.append(f"  {_truncate(working_tree, 120)}")
+        sections.append("")
+
+    # 7. Suggested Next Step (at the end)
+    next_action = _extract_suggested_next(memory, active_goal)
+    if next_action:
+        sections.append(f"→ **Next:** {_truncate(next_action, 120)}")
+        sections.append("")
+
+    sections.append("Ready.")
+
+    return "\n".join(sections)
+
+
+def _extract_focus(memory: Dict[str, Any], active_goal: str) -> List[str]:
+    """
+    Extract current focus: active goal and blocking items.
+
+    Simpler than priorities - focuses on what needs attention NOW.
+    """
+    focus = []
+
+    if active_goal:
+        focus.append(active_goal)
+
+    # Open conflicts are blocking
+    conflicts = memory.get("decision_conflicts", [])
+    for conflict in conflicts:
+        if isinstance(conflict, dict) and conflict.get("status", "open") == "open":
+            desc = conflict.get("description", "")
+            if desc and desc not in focus:
+                focus.append(f"⚠️ {desc}")
+                break
+
+    # Blocking decisions
+    decisions = memory.get("decisions", [])
+    for dec in decisions:
+        if isinstance(dec, dict) and not dec.get("superseded"):
+            if dec.get("blocking"):
+                text = dec.get("decision", "")
+                if text and text not in focus:
+                    focus.append(f"🔒 {text}")
+                    if len(focus) >= 2:
+                        break
+
+    return focus[:2]
+
+
+def _truncate(text: str, limit: int) -> str:
+    """Truncate text to limit, adding ellipsis if needed."""
+    text = " ".join(str(text).strip().split())
+    if len(text) <= limit:
+        return text
+    return text[:limit - 1].rstrip() + "…"
+
+
+def _extract_priorities(memory: Dict[str, Any], active_goal: str) -> List[str]:
+    """
+    Extract top priorities: active goal, open conflicts, blocking decisions.
+
+    Prioritizes project-level importance over recency.
+    """
+    priorities = []
+
+    # Active goal is always first priority if set
+    if active_goal:
+        priorities.append(active_goal)
+
+    # Open conflicts are high priority
+    conflicts = memory.get("decision_conflicts", [])
+    for conflict in conflicts:
+        if isinstance(conflict, dict) and conflict.get("status", "open") == "open":
+            desc = conflict.get("description", conflict.get("text", ""))
+            if desc and desc not in priorities:
+                priorities.append(f"Unresolved: {desc}")
+                break
+
+    # Blocking/critical decisions
+    decisions = memory.get("decisions", [])
+    for dec in decisions:
+        if isinstance(dec, dict) and not dec.get("superseded"):
+            if dec.get("blocking") or dec.get("is_critical"):
+                text = dec.get("decision", "")
+                if text and text not in priorities:
+                    priorities.append(text)
+                    if len(priorities) >= 2:
+                        break
+
+    return priorities[:2]
+
+
+def _extract_milestones(memory: Dict[str, Any], days: int = 30) -> List[str]:
+    """
+    Extract recent milestones: solved bugs, resolved decisions.
+
+    Looks at items completed in the last N days.
+    """
+    from datetime import datetime, timedelta
+
+    milestones = []
+    cutoff = datetime.now() - timedelta(days=days)
+
+    # Solved bugs
+    debug_sessions = memory.get("debug_sessions", [])
+    for ds in debug_sessions:
+        if not isinstance(ds, dict):
+            continue
+        resolved_at = ds.get("resolved_at") or ds.get("timestamp")
+        if resolved_at:
+            try:
+                ts = datetime.fromisoformat(str(resolved_at).replace('Z', '+00:00'))
+                ts = ts.replace(tzinfo=None) if ts.tzinfo else ts
+                if ts >= cutoff:
+                    problem = ds.get("problem", "")
+                    if problem:
+                        milestones.append(f"Fixed: {problem}")
+            except:
+                pass
+
+    # Resolved decisions (look for recent ones)
+    decisions = memory.get("decisions", [])
+    for dec in decisions:
+        if not isinstance(dec, dict):
+            continue
+        if dec.get("superseded"):
+            continue
+        created_at = dec.get("created_at") or dec.get("timestamp")
+        if created_at:
+            try:
+                ts = datetime.fromisoformat(str(created_at).replace('Z', '+00:00'))
+                ts = ts.replace(tzinfo=None) if ts.tzinfo else ts
+                if ts >= cutoff:
+                    text = dec.get("decision", "")
+                    if text:
+                        milestones.append(f"Decided: {text}")
+            except:
+                pass
+
+    return milestones[:3]
+
+
+def _extract_active_decisions(memory: Dict[str, Any], limit: int = 3) -> List[str]:
+    """
+    Extract active (non-superseded) decisions.
+
+    Sorted by importance markers, not recency.
+    """
+    decisions = memory.get("decisions", [])
+    active = []
+
+    # First pass: blocking/critical decisions
+    for dec in decisions:
+        if not isinstance(dec, dict):
+            continue
+        if dec.get("superseded"):
+            continue
+        if dec.get("blocking") or dec.get("is_critical"):
+            text = dec.get("decision", "")
+            reason = dec.get("reason", "")
+            if text:
+                entry = text
+                if reason:
+                    entry += f" ({reason[:50]}…)" if len(reason) > 50 else f" ({reason})"
+                active.append(entry)
+
+    # Second pass: regular decisions (if room)
+    if len(active) < limit:
+        for dec in decisions:
+            if not isinstance(dec, dict):
+                continue
+            if dec.get("superseded"):
+                continue
+            if dec.get("blocking") or dec.get("is_critical"):
+                continue  # Already added
+            text = dec.get("decision", "")
+            if text and text not in [a.split(" (")[0] for a in active]:
+                active.append(text)
+                if len(active) >= limit:
+                    break
+
+    return active[:limit]
+
+
+def _extract_risks(memory: Dict[str, Any], limit: int = 2) -> List[str]:
+    """
+    Extract known risks: avoid patterns, open conflicts.
+    """
+    risks = []
+
+    # Avoid patterns
+    avoid = memory.get("avoid", [])
+    for av in avoid:
+        if isinstance(av, dict):
+            what = av.get("what", "")
+            reason = av.get("reason", "")
+            if what:
+                entry = f"Avoid: {what}"
+                if reason:
+                    entry += f" — {reason[:40]}" if len(reason) > 40 else f" — {reason}"
+                risks.append(entry)
+        elif isinstance(av, str):
+            risks.append(f"Avoid: {av}")
+
+    # Open conflicts
+    conflicts = memory.get("decision_conflicts", [])
+    for conflict in conflicts:
+        if isinstance(conflict, dict) and conflict.get("status", "open") == "open":
+            desc = conflict.get("description", "")
+            if desc:
+                risks.append(f"Conflict: {desc}")
+
+    return risks[:limit]
+
+
+def _extract_suggested_next(memory: Dict[str, Any], active_goal: str) -> str:
+    """
+    Extract suggested next action.
+
+    Prefers: open conflicts > blocking decisions > active goal continuation.
+    """
+    # Open conflicts need resolution
+    conflicts = memory.get("decision_conflicts", [])
+    for conflict in conflicts:
+        if isinstance(conflict, dict) and conflict.get("status", "open") == "open":
+            return f"Resolve conflict: {conflict.get('description', 'pending decision')}"
+
+    # If there's an active goal, continue it
+    if active_goal:
+        return f"Continue: {active_goal}"
+
+    # Look for handoff/next_step in live_record
+    live_record = memory.get("live_record", {})
+    intent = live_record.get("intent", {})
+    next_step = intent.get("next_step", "")
+    if next_step:
+        return next_step
+
+    return ""
+
+
+def detect_reorientation_hint(task_hint: str) -> bool:
+    """
+    Detect if task_hint indicates user needs reorientation.
+
+    Triggers on phrases like:
+    - "returning after a long break"
+    - "forgot where I stopped"
+    - "need reorientation"
+    - "continue after not working"
+    - "been a while"
+    - "catch me up"
+    """
+    if not task_hint:
+        return False
+
+    hint_lower = task_hint.lower()
+
+    reorientation_phrases = [
+        "long break",
+        "forgot where",
+        "don't remember",
+        "dont remember",
+        "need reorientation",
+        "reorient",
+        "been a while",
+        "been away",
+        "catch me up",
+        "catch up",
+        "where were we",
+        "where did we",
+        "remind me",
+        "what were we",
+        "haven't worked",
+        "havent worked",
+        "not worked",
+        "returning after",
+        "back after",
+        "continue after",
+        "help me continue",
+        "lost track",
+        "lost context",
+    ]
+
+    return any(phrase in hint_lower for phrase in reorientation_phrases)

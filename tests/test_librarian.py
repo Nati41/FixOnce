@@ -10,6 +10,8 @@ Validates behavior according to the Architecture Contract:
 
 import sys
 import unittest
+from copy import deepcopy
+from unittest.mock import patch
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -361,6 +363,402 @@ class TestSilenceOverNoise(unittest.TestCase):
         librarian = create_librarian(memory)
         response = librarian.on_session_start(task_hint="working on rust code")
         self.assertFalse(response.should_speak)
+
+
+class TestSubjectShelfCache(unittest.TestCase):
+    """Tests for subject shelf presentation caching."""
+
+    def setUp(self):
+        self.memory = {
+            "decisions": [
+                {
+                    "decision": "Use Windows runtime QA before installer validation.",
+                    "reason": "Avoid costly VM loops.",
+                    "tags": ["windows", "installer"],
+                },
+                {
+                    "decision": "Dashboard settings stay compact.",
+                    "reason": "Keep the UI focused.",
+                    "tags": ["dashboard"],
+                },
+            ],
+            "avoid": [
+                {
+                    "what": "Do not use SHOW_WINDOW for Windows startup.",
+                    "reason": "Console flashes.",
+                    "tags": ["windows"],
+                },
+            ],
+            "debug_sessions": [
+                {
+                    "problem": "Dashboard polling noise",
+                    "solution": "Ignore transient fetch failures.",
+                    "tags": ["dashboard"],
+                },
+            ],
+        }
+
+    def test_subject_a_b_a_restores_a_from_shelf(self):
+        librarian = create_librarian(self.memory)
+
+        first = librarian.on_subject_change(new_work_area="windows installer")
+        second = librarian.on_subject_change(new_work_area="dashboard")
+
+        with patch("core.librarian.select_for_briefing", wraps=select_for_briefing) as select_mock:
+            restored = librarian.on_subject_change(new_work_area="windows installer")
+
+        self.assertTrue(first.should_speak)
+        self.assertTrue(second.should_speak)
+        self.assertTrue(restored.should_speak)
+        self.assertEqual(restored.reason, "Restored subject shelf")
+        self.assertEqual(restored.briefing, first.briefing)
+        select_mock.assert_not_called()
+
+    def test_same_subject_twice_stays_silent(self):
+        librarian = create_librarian(self.memory)
+
+        first = librarian.on_session_start(task_hint="working on windows installer")
+        second = librarian.on_session_start(task_hint="working on windows installer")
+
+        self.assertTrue(first.should_speak)
+        self.assertFalse(second.should_speak)
+        self.assertEqual(second.reason, "Subject already surfaced: installer")
+
+    def test_memory_change_invalidates_shelf(self):
+        librarian = create_librarian(self.memory)
+        librarian.on_subject_change(new_work_area="windows installer")
+        librarian.on_subject_change(new_work_area="dashboard")
+
+        self.memory["live_record"] = {
+            "lessons": {
+                "insights": [
+                    {"text": "Windows installer insight", "tags": ["windows", "installer"]},
+                ]
+            }
+        }
+
+        with patch("core.librarian.select_for_briefing", wraps=select_for_briefing) as select_mock:
+            response = librarian.on_subject_change(new_work_area="windows installer")
+
+        self.assertTrue(response.should_speak)
+        self.assertEqual(response.reason, "Subject shelf stale; rebuilt from Project Knowledge")
+        self.assertGreater(select_mock.call_count, 0)
+
+    def test_added_must_know_invalidates_and_appears_after_rebuild(self):
+        librarian = create_librarian(self.memory)
+        librarian.on_subject_change(new_work_area="windows installer")
+        librarian.on_subject_change(new_work_area="dashboard")
+
+        self.memory["decisions"].append({
+            "decision": "New Windows installer release gate must stay visible.",
+            "reason": "It is a beta blocker.",
+            "tags": ["windows", "installer"],
+        })
+
+        response = librarian.on_subject_change(new_work_area="windows installer")
+
+        self.assertTrue(response.should_speak)
+        self.assertEqual(response.reason, "Subject shelf stale; rebuilt from Project Knowledge")
+        self.assertIn("New Windows installer release gate", response.briefing)
+
+    def test_cache_never_changes_project_knowledge(self):
+        original = deepcopy(self.memory)
+        librarian = create_librarian(self.memory)
+
+        librarian.on_subject_change(new_work_area="windows installer")
+        librarian.on_subject_change(new_work_area="dashboard")
+        librarian.on_subject_change(new_work_area="windows installer")
+
+        self.assertEqual(self.memory, original)
+
+    def test_librarian_subject_shelves_do_not_affect_fo_search(self):
+        import inspect
+        import core.librarian as librarian_module
+
+        source = inspect.getsource(librarian_module.ProjectLibrarian)
+
+        self.assertNotIn("fo_search(", source)
+        self.assertNotIn("search_past_solutions", source)
+
+
+class TestReorientationMode(unittest.TestCase):
+    """Tests for reorientation briefing mode."""
+
+    def test_detect_reorientation_hint_long_break(self):
+        """Long break task_hint triggers reorientation."""
+        from core.briefing_composer import detect_reorientation_hint
+
+        self.assertTrue(detect_reorientation_hint("returning after a long break"))
+        self.assertTrue(detect_reorientation_hint("I've been away for a while"))
+        self.assertTrue(detect_reorientation_hint("forgot where I stopped"))
+        self.assertTrue(detect_reorientation_hint("help me continue"))
+        self.assertTrue(detect_reorientation_hint("catch me up"))
+        self.assertTrue(detect_reorientation_hint("where were we"))
+        self.assertTrue(detect_reorientation_hint("haven't worked on this in weeks"))
+
+    def test_detect_reorientation_hint_normal_work(self):
+        """Normal task hints do not trigger reorientation."""
+        from core.briefing_composer import detect_reorientation_hint
+
+        self.assertFalse(detect_reorientation_hint("working on the installer"))
+        self.assertFalse(detect_reorientation_hint("fix the login bug"))
+        self.assertFalse(detect_reorientation_hint("add new feature"))
+        self.assertFalse(detect_reorientation_hint(""))
+        self.assertFalse(detect_reorientation_hint(None))
+
+    def test_compose_for_reorientation_structure(self):
+        """Reorientation output includes project-status sections when available."""
+        from core.briefing_composer import compose_for_reorientation
+
+        memory = {
+            "decisions": [
+                {"decision": "Use PostgreSQL for main DB", "reason": "Better scaling", "blocking": True},
+                {"decision": "Dashboard UI in English", "reason": "User preference"},
+            ],
+            "avoid": [
+                {"what": "Never use eval()", "reason": "Security risk"},
+            ],
+            "debug_sessions": [
+                {"problem": "Login timeout", "solution": "Increased timeout to 30s", "resolved_at": "2026-06-15T10:00:00Z"},
+            ],
+            "decision_conflicts": [
+                {"status": "open", "description": "Auth method needs decision"},
+            ],
+        }
+
+        result = compose_for_reorientation(
+            memory=memory,
+            project_name="TestProject",
+            active_goal="Complete authentication module",
+            knowledge_stats="📊 Project Knowledge: 5 Decisions · 3 Solved Bugs · 2 Avoid Patterns",
+        )
+
+        # Check new structure - project status briefing format
+        self.assertIn("🧠 **Project Status:** TestProject", result)
+        self.assertIn("📍 **Current Focus**", result)
+        self.assertIn("Complete authentication module", result)
+        self.assertIn("🔒 **Active Decisions**", result)
+        self.assertIn("PostgreSQL", result)
+        self.assertIn("⚠️ **Known Risks**", result)
+        self.assertIn("eval()", result)
+        self.assertIn("📊 Project Knowledge", result)
+        self.assertIn("→ **Next:**", result)
+        self.assertIn("Ready.", result)
+
+    def test_reorientation_hides_empty_sections(self):
+        """Empty sections are hidden in reorientation."""
+        from core.briefing_composer import compose_for_reorientation
+
+        memory = {
+            "decisions": [],
+            "avoid": [],
+            "debug_sessions": [],
+        }
+
+        result = compose_for_reorientation(
+            memory=memory,
+            project_name="EmptyProject",
+        )
+
+        # Should not have section headers for empty sections
+        self.assertNotIn("📍 **Current Focus**", result)
+        self.assertNotIn("🔒 **Active Decisions**", result)
+        self.assertNotIn("⚠️ **Known Risks**", result)
+        self.assertNotIn("✅ **Recently Completed**", result)
+        self.assertNotIn("📂 **Working Tree**", result)
+        self.assertNotIn("→ **Next:**", result)
+        # Should still have project status header and Ready
+        self.assertIn("🧠 **Project Status:** EmptyProject", result)
+        self.assertIn("Ready.", result)
+
+    def test_reorientation_not_dominated_by_last_work_area(self):
+        """Reorientation prioritizes project-level importance over last-edited topic."""
+        from core.briefing_composer import compose_for_reorientation
+
+        memory = {
+            "decisions": [
+                {"decision": "Critical security fix needed", "reason": "Vulnerability", "blocking": True, "tags": ["security"]},
+                {"decision": "Minor UI tweak", "reason": "Polish", "tags": ["dashboard"]},
+            ],
+            "avoid": [
+                {"what": "Never skip auth validation", "reason": "Security", "tags": ["security"]},
+            ],
+            "live_record": {
+                "intent": {
+                    "work_area": "dashboard",
+                    "last_file": "dashboard.html",
+                }
+            }
+        }
+
+        result = compose_for_reorientation(
+            memory=memory,
+            project_name="TestProject",
+            active_goal="",
+        )
+
+        # Security decisions should appear regardless of last work area being "dashboard"
+        self.assertIn("security fix", result.lower())
+        # The blocking decision should be prioritized
+        self.assertIn("Critical security fix", result)
+
+    def test_working_tree_appears_separately(self):
+        """Working tree state appears as a separate section from project knowledge."""
+        from core.briefing_composer import compose_for_reorientation
+
+        memory = {
+            "decisions": [
+                {"decision": "Use PostgreSQL", "reason": "Better scaling"},
+            ],
+            "avoid": [],
+            "debug_sessions": [],
+        }
+
+        result = compose_for_reorientation(
+            memory=memory,
+            project_name="TestProject",
+            knowledge_stats="📊 Project Knowledge: 5 Decisions",
+            working_tree="3 files modified, 1 untracked",
+        )
+
+        # Working tree should be separate from knowledge stats
+        self.assertIn("📂 **Working Tree**", result)
+        self.assertIn("3 files modified", result)
+        # Knowledge stats should appear earlier (in header area)
+        knowledge_pos = result.find("📊 Project Knowledge")
+        working_tree_pos = result.find("📂 **Working Tree**")
+        self.assertLess(knowledge_pos, working_tree_pos)
+
+    def test_working_tree_hidden_when_empty(self):
+        """Working tree section is hidden when not provided."""
+        from core.briefing_composer import compose_for_reorientation
+
+        memory = {"decisions": [], "avoid": [], "debug_sessions": []}
+
+        result = compose_for_reorientation(
+            memory=memory,
+            project_name="TestProject",
+            working_tree="",
+        )
+
+        self.assertNotIn("📂 **Working Tree**", result)
+
+    def test_reorientation_does_not_collapse_to_last_next(self):
+        """Reorientation output maintains project-status structure, not simple Last/Next."""
+        from core.briefing_composer import compose_for_reorientation
+
+        memory = {
+            "decisions": [
+                {"decision": "Use PostgreSQL", "reason": "Scaling"},
+            ],
+            "avoid": [
+                {"what": "No eval()", "reason": "Security"},
+            ],
+            "debug_sessions": [],
+            "live_record": {
+                "intent": {
+                    "last_change": "Fixed login",
+                    "next_step": "Add tests",
+                }
+            },
+        }
+
+        result = compose_for_reorientation(
+            memory=memory,
+            project_name="TestProject",
+            active_goal="Complete auth module",
+        )
+
+        # Should have project-status sections, NOT Last:/Next: format
+        self.assertIn("🧠 **Project Status:**", result)
+        self.assertNotIn("Last:\n", result)
+        self.assertNotIn("Next:\n", result)
+        # Should have structured sections
+        self.assertIn("📍 **Current Focus**", result)
+        self.assertIn("🔒 **Active Decisions**", result)
+        self.assertIn("⚠️ **Known Risks**", result)
+
+    def test_reorientation_section_order(self):
+        """Reorientation sections appear in correct order."""
+        from core.briefing_composer import compose_for_reorientation
+
+        memory = {
+            "decisions": [{"decision": "Use PostgreSQL", "reason": "Scaling", "blocking": True}],
+            "avoid": [{"what": "No eval()", "reason": "Security"}],
+            "debug_sessions": [
+                {"problem": "Fixed login", "solution": "Added timeout", "resolved_at": "2026-06-15T10:00:00Z"}
+            ],
+            "decision_conflicts": [{"status": "open", "description": "Auth method"}],
+        }
+
+        result = compose_for_reorientation(
+            memory=memory,
+            project_name="TestProject",
+            active_goal="Complete auth",
+            knowledge_stats="📊 5 Decisions",
+            working_tree="2 files modified",
+        )
+
+        # Verify order: Status -> Focus -> Completed -> Decisions -> Risks -> Tree -> Next
+        status_pos = result.find("🧠 **Project Status:**")
+        focus_pos = result.find("📍 **Current Focus**")
+        completed_pos = result.find("✅ **Recently Completed**")
+        decisions_pos = result.find("🔒 **Active Decisions**")
+        risks_pos = result.find("⚠️ **Known Risks**")
+        tree_pos = result.find("📂 **Working Tree**")
+        next_pos = result.find("→ **Next:**")
+
+        self.assertLess(status_pos, focus_pos)
+        self.assertLess(focus_pos, completed_pos)
+        self.assertLess(completed_pos, decisions_pos)
+        self.assertLess(decisions_pos, risks_pos)
+        self.assertLess(risks_pos, tree_pos)
+        self.assertLess(tree_pos, next_pos)
+
+
+class TestBriefingModeSelection(unittest.TestCase):
+    """Tests for continuation vs reorientation mode selection."""
+
+    def test_extract_priorities_uses_active_goal(self):
+        """Active goal appears first in priorities."""
+        from core.briefing_composer import _extract_priorities
+
+        memory = {
+            "decisions": [{"decision": "Other decision", "blocking": True}],
+        }
+
+        priorities = _extract_priorities(memory, active_goal="Main project goal")
+        self.assertEqual(priorities[0], "Main project goal")
+
+    def test_extract_risks_includes_avoid_patterns(self):
+        """Avoid patterns appear in risks."""
+        from core.briefing_composer import _extract_risks
+
+        memory = {
+            "avoid": [
+                {"what": "Risk 1", "reason": "Because"},
+                {"what": "Risk 2", "reason": "Also because"},
+            ],
+        }
+
+        risks = _extract_risks(memory, limit=2)
+        self.assertEqual(len(risks), 2)
+        self.assertTrue(all("Avoid:" in r for r in risks))
+
+    def test_extract_active_decisions_excludes_superseded(self):
+        """Superseded decisions are excluded."""
+        from core.briefing_composer import _extract_active_decisions
+
+        memory = {
+            "decisions": [
+                {"decision": "Old approach", "superseded": True},
+                {"decision": "Current approach", "superseded": False},
+            ],
+        }
+
+        decisions = _extract_active_decisions(memory)
+        self.assertEqual(len(decisions), 1)
+        self.assertIn("Current approach", decisions[0])
 
 
 if __name__ == '__main__':
