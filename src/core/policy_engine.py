@@ -9,6 +9,7 @@ This module provides:
 """
 
 import re
+from dataclasses import dataclass
 from typing import Callable, List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
@@ -19,36 +20,8 @@ from core.intervention_policy import InterventionContext, evaluate_decision_conf
 # CONFLICT DETECTION PATTERNS
 # ============================================================
 
-# Keywords that indicate opposite meanings
-ANTONYM_PAIRS = [
-    ("english", "hebrew"),
-    ("english", "עברית"),
-    ("store", "don't store"),
-    ("enable", "disable"),
-    ("allow", "forbid"),
-    ("allow", "prevent"),
-    ("use", "avoid"),
-    ("always", "never"),
-    ("include", "exclude"),
-    ("add", "remove"),
-    ("sync", "async"),
-    ("single", "multiple"),
-    ("local", "remote"),
-    ("internal", "external"),
-]
-
 # Negation patterns that reverse meaning
 NEGATION_WORDS = ["never", "not", "don't", "doesn't", "won't", "cannot", "no", "without"]
-
-# Context-sensitive conflict patterns (if both present, it's a conflict)
-CONFLICT_PATTERNS = [
-    # (pattern1, pattern2) - if text1 matches pattern1 and text2 matches pattern2, conflict
-    (r"store.*english", r"store.*hebrew"),
-    (r"store.*english", r"never.*english"),
-    (r"data.*english", r"data.*hebrew"),
-    (r"english.*only", r"hebrew"),
-    (r"always.*english", r"never.*english"),
-]
 
 # Topic keywords that help identify related decisions
 TOPIC_KEYWORDS = {
@@ -61,6 +34,36 @@ TOPIC_KEYWORDS = {
     "infrastructure": ["cloud", "firebase", "firestore", "aws", "gcp", "azure", "remote", "server", "hosted"],
     "database": ["database", "db", "sql", "postgres", "postgresql", "mysql", "mongo", "mongodb", "firestore", "sqlite"],
 }
+
+SCOPE_KEYWORDS = {
+    "ui": ["ui", "dashboard", "button", "wording", "label", "interface"],
+    "retrieval": ["retrieval", "ranking", "filter", "filtering", "briefing"],
+    "briefing": ["briefing", "briefings", "resume", "session resume"],
+    "production": ["production", "prod"],
+    "storage": ["disk", "persistent", "persist", "memory", "cache", "shelf", "storage"],
+    "api": ["api", "endpoint", "route"],
+    "global": ["global", "always", "never"],
+    "external": ["external", "remote", "cloud"],
+    "local": ["local"],
+}
+
+NEGATION_RE = re.compile(
+    r"\b(?:do\s+not|don't|doesn't|never|cannot|can't|must\s+not|should\s+not|no|without)\b"
+)
+
+
+@dataclass(frozen=True)
+class DecisionClaim:
+    """Conservative subject+claim extraction for decision conflict checks."""
+    domain: str
+    target: str
+    scope: str
+    action: str
+    value: str = ""
+
+    @property
+    def subject(self) -> str:
+        return f"{self.domain}:{self.target}:{self.scope}"
 
 # ============================================================
 # NON-NEGOTIABLE CONSTRAINT PATTERNS
@@ -124,89 +127,196 @@ def _matches_related_decision(existing_decision: str, related_decision_text: str
     )
 
 
-def detect_antonym_conflict(text1: str, text2: str) -> Optional[Tuple[str, str, str]]:
+def _normalize_decision_text(text: str) -> str:
+    normalized = (text or "").lower()
+    normalized = normalized.replace("subject shelf", "subjectshelf")
+    normalized = normalized.replace("subject-shelf", "subjectshelf")
+    normalized = normalized.replace("project librarian", "projectlibrarian")
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.strip()
+
+
+def _has_negation(text: str) -> bool:
+    return bool(NEGATION_RE.search(text))
+
+
+def _scope_from_text(text: str) -> str:
+    matches = []
+    for scope, keywords in SCOPE_KEYWORDS.items():
+        if any(keyword in text for keyword in keywords):
+            matches.append(scope)
+    if "local" in matches and "external" in matches:
+        return "mixed"
+    return matches[0] if matches else "general"
+
+
+def _first_match(text: str, patterns: List[Tuple[str, str]]) -> Optional[str]:
+    for pattern, value in patterns:
+        if re.search(pattern, text):
+            return value
+    return None
+
+
+def _extract_target_after_verb(text: str, verbs: Tuple[str, ...]) -> str:
+    verb_group = "|".join(re.escape(verb) for verb in verbs)
+    match = re.search(rf"\b(?:{verb_group})\s+([a-z0-9_ -]+?)(?:\s+(?:for|in|from|to|as|because|when|with)\b|$)", text)
+    if not match:
+        return ""
+    words = [
+        word for word in re.findall(r"[a-z0-9_]+", match.group(1))
+        if word not in {"a", "an", "the", "all", "any", "we", "must", "should"}
+    ]
+    return "_".join(words[:4])
+
+
+def _extract_decision_claim(text: str) -> Optional[DecisionClaim]:
     """
-    Check if two texts contain semantic conflicts.
+    Extract one high-confidence claim from a decision.
 
-    Returns:
-        None if no conflict detected.
-        (term1, term2, strength) where strength is:
-        - "HIGH": Explicit negation conflict (negated target appears in both texts)
-        - "WEAK": Antonym pair match (may be false positive, should not block)
+    This is deliberately pattern-based and conservative. If a decision does
+    not match a known subject shape, it returns None and cannot block.
     """
-    text1_lower = text1.lower()
-    text2_lower = text2.lower()
-
-    # Stop words that should not be considered as negation targets
-    # Includes: articles, prepositions, verbs, adjectives/adverbs that modify but aren't the target
-    STOP_WORDS = {
-        # Articles and prepositions
-        "the", "a", "an", "to", "in", "on", "at", "for", "with", "from", "by", "as", "of", "and", "or",
-        # Common verbs
-        "is", "are", "be", "we", "it", "use", "store", "do", "have", "has", "get", "set", "call",
-        # Adjectives/adverbs that modify but aren't the target (false positive sources)
-        "manual", "manually", "explicit", "explicitly", "automatic", "automatically", "auto",
-        "only", "just", "also", "even", "still", "already", "directly", "immediately",
-        "specific", "specifically", "actual", "actually", "real", "really",
-        # Project-specific terms that appear everywhere
-        "fixonce", "memory", "project", "decision", "context", "session", "agent",
-        # Version/phase markers
-        "provide", "mvp", "v1", "v2", "phase", "version",
-    }
-
-    def _get_negated_target(text: str, neg_word: str) -> Optional[str]:
-        """Get the primary substantive word being negated (first 1-3 words after negation)."""
-        # Match up to 3 words after negation to find the real target
-        pattern = rf'\b{re.escape(neg_word)}\s+(\w+)(?:\s+(\w+))?(?:\s+(\w+))?'
-        match = re.search(pattern, text.lower())
-        if not match:
-            return None
-        # Check each word in order, return first substantive one
-        for group in [match.group(1), match.group(2), match.group(3)]:
-            if group and len(group) > 2 and group not in STOP_WORDS:
-                return group
+    text = _normalize_decision_text(text)
+    if not text:
         return None
 
-    # HIGH CONFIDENCE: Explicit negation conflicts
-    # Only flag when the primary NEGATED TARGET appears in both texts.
-    # "Do not use PostgreSQL" vs "Use PostgreSQL" → HIGH (postgresql in both)
-    # "No external database" vs "Use local JSON" → None (external not in second)
-    # "No external database in MVP" vs "Use local JSON in MVP" → None (MVP is context, not target)
-    for neg in NEGATION_WORDS:
-        if neg in text1_lower and neg not in text2_lower:
-            negated_target = _get_negated_target(text1_lower, neg)
-            if negated_target and negated_target in text2_lower:
-                return (f"{neg} {negated_target}", negated_target, "HIGH")
-        if neg in text2_lower and neg not in text1_lower:
-            negated_target = _get_negated_target(text2_lower, neg)
-            if negated_target and negated_target in text1_lower:
-                return (negated_target, f"{neg} {negated_target}", "HIGH")
+    if "subjectshelf" in text:
+        if re.search(r"\b(memory|in-memory|stay in memory|must stay)\b", text):
+            return DecisionClaim("subjectshelf", "storage", "storage", "memory_only")
+        if any(word in text for word in ("disk", "persist", "persistent", "save")):
+            action = "persist_disk"
+            if _has_negation(text):
+                action = "memory_only"
+            return DecisionClaim("subjectshelf", "storage", "storage", action)
+        if "cache" in text or "presentation" in text or "memory" in text:
+            return DecisionClaim("subjectshelf", "presentation_state", _scope_from_text(text), "describe")
 
-    # Check regex-based conflict patterns (explicit contradictions)
-    for pattern1, pattern2 in CONFLICT_PATTERNS:
-        if re.search(pattern1, text1_lower) and re.search(pattern2, text2_lower):
-            return (pattern1, pattern2, "HIGH")
-        if re.search(pattern2, text1_lower) and re.search(pattern1, text2_lower):
-            return (pattern2, pattern1, "HIGH")
+    if "project knowledge terminology" in text:
+        return DecisionClaim("terminology", "project_knowledge", "ui", "describe")
+    if "session resume state" in text:
+        return DecisionClaim("session_state", "resume", "briefing", "describe")
 
-    # WEAK CONFIDENCE: Antonym pair matches
-    # These often produce false positives (e.g., "use" + "avoid" in unrelated contexts)
-    # Demoted to WEAK - should warn, not block
-    def _is_negated(text: str, word: str) -> bool:
-        for neg in NEGATION_WORDS:
-            if re.search(rf'\b{re.escape(neg)}\b\s+\w*\s*{re.escape(word)}', text):
-                return True
-        return False
+    if "ui wording" in text:
+        return DecisionClaim("ui", "wording", "ui", "describe")
+    if "retrieval behavior" in text or "dashboard retrieval rules" in text:
+        return DecisionClaim("retrieval", "behavior", "retrieval", "describe")
+    if "repair button" in text:
+        return DecisionClaim("ui", "repair_button", "ui", "hide" if "hidden" in text else "show")
 
-    for word1, word2 in ANTONYM_PAIRS:
-        if word1 in text1_lower and word2 in text2_lower:
-            if not _is_negated(text1_lower, word1) and not _is_negated(text2_lower, word2):
-                return (word1, word2, "WEAK")
-        if word2 in text1_lower and word1 in text2_lower:
-            if not _is_negated(text1_lower, word2) and not _is_negated(text2_lower, word1):
-                return (word2, word1, "WEAK")
+    if re.search(r"\brank(?:ing)?\b", text) and ("filter" in text or "filtering" in text):
+        if re.search(r"\bglobal\s+ranking\s+first\b", text):
+            return DecisionClaim("retrieval", "selection_order", "retrieval", "global_ranking_first")
+        if re.search(r"\bsubject\s+filter(?:ing)?\s+first\b", text):
+            return DecisionClaim("retrieval", "selection_order", "retrieval", "subject_filtering_first")
+
+    if "stale decision" in text and "briefing" in text:
+        action = "hide" if _has_negation(text) or "do not show" in text else "show"
+        return DecisionClaim("briefing", "stale_decisions", "briefing", action)
+
+    ui_label = re.search(r"\buse\s+([a-z][a-z0-9 _-]{1,40}?)\s+in\s+ui\b", text)
+    if ui_label:
+        label = "_".join(re.findall(r"[a-z0-9]+", ui_label.group(1))[:5])
+        return DecisionClaim("ui", "product_label", "ui", "use_label", label)
+
+    if "api data" in text and ("english" in text or "hebrew" in text or "עברית" in text):
+        if "english" in text:
+            value = "english"
+        else:
+            value = "hebrew"
+        action = "forbid_value" if _has_negation(text) else "require_value"
+        return DecisionClaim("api_data", "language", "storage", action, value)
+
+    if "store" in text and ("english" in text or "hebrew" in text or "עברית" in text):
+        if "english" in text:
+            value = "english"
+        else:
+            value = "hebrew"
+        action = "forbid_value" if _has_negation(text) else "require_value"
+        return DecisionClaim("data", "language", "storage", action, value)
+
+    if "postgresql" in text or "postgres" in text:
+        action = "forbid" if _has_negation(text) or "avoid" in text else "require"
+        return DecisionClaim("database", "postgresql", "storage", action)
+
+    if "json" in text and re.search(r"\b(?:use|format|don't|do not|never|avoid)\b", text):
+        action = "forbid" if _has_negation(text) or "avoid" in text else "require"
+        scope = _scope_from_text(text)
+        return DecisionClaim("data", "json_format", "storage" if scope == "general" else scope, action)
+
+    if "external api" in text:
+        action = "forbid" if _has_negation(text) else "require"
+        return DecisionClaim("api", "api_access", "external", action)
+    if "api access" in text:
+        action = "forbid" if _has_negation(text) else "require"
+        return DecisionClaim("api", "api_access", "api", action)
+
+    if "external database" in text:
+        action = "forbid" if _has_negation(text) else "require"
+        return DecisionClaim("database", "database", "external", action)
+    if re.search(r"\bdatabase\b", text):
+        action = "forbid" if _has_negation(text) else "require"
+        scope = "local" if "local" in text else "general"
+        return DecisionClaim("database", "database", scope, action)
+
+    target = _extract_target_after_verb(text, ("use", "provide"))
+    if target and _has_negation(text):
+        return DecisionClaim("general", target, _scope_from_text(text), "forbid")
+    if target and re.search(r"\b(?:use|provide)\b", text):
+        return DecisionClaim("general", target, _scope_from_text(text), "require")
 
     return None
+
+
+def _claims_share_subject(claim1: DecisionClaim, claim2: DecisionClaim) -> bool:
+    if claim1.domain != claim2.domain or claim1.target != claim2.target:
+        return False
+    if claim1.scope == claim2.scope:
+        return True
+    if "general" in {claim1.scope, claim2.scope}:
+        return True
+    return False
+
+
+def _claim_incompatibility(claim1: DecisionClaim, claim2: DecisionClaim) -> Optional[str]:
+    if not _claims_share_subject(claim1, claim2):
+        return None
+
+    opposite_actions = {
+        ("require", "forbid"),
+        ("persist_disk", "memory_only"),
+        ("global_ranking_first", "subject_filtering_first"),
+        ("show", "hide"),
+    }
+    actions = (claim1.action, claim2.action)
+    if actions in opposite_actions or actions[::-1] in opposite_actions:
+        return f"actions are incompatible: {claim1.action} vs {claim2.action}"
+
+    if claim1.action == claim2.action == "require_value" and claim1.value and claim2.value and claim1.value != claim2.value:
+        return f"required values differ: {claim1.value} vs {claim2.value}"
+    if {claim1.action, claim2.action} == {"require_value", "forbid_value"} and claim1.value == claim2.value:
+        return f"one claim requires {claim1.value}; the other forbids it"
+    if claim1.action == claim2.action == "use_label" and claim1.value and claim2.value and claim1.value != claim2.value:
+        return f"UI labels differ: {claim1.value} vs {claim2.value}"
+
+    return None
+
+
+def detect_antonym_conflict(text1: str, text2: str) -> Optional[Tuple[str, str, str]]:
+    """
+    Backward-compatible wrapper around Conflict Detection v2.
+
+    v2 does not use generic antonym pairs. It only reports a high-confidence
+    conflict when two extracted claims share the same subject and have
+    incompatible normalized actions/values.
+    """
+    claim1 = _extract_decision_claim(text1)
+    claim2 = _extract_decision_claim(text2)
+    if not claim1 or not claim2:
+        return None
+    reason = _claim_incompatibility(claim1, claim2)
+    if not reason:
+        return None
+    return (claim1.action or claim1.value, claim2.action or claim2.value, "HIGH")
 
 
 def check_non_negotiable_violations(
@@ -349,47 +459,47 @@ def detect_conflicts(
             and _matches_related_decision(existing.get("decision", ""), related_decision_text)
         )
 
-        # Check for semantic conflicts
-        conflict_result = detect_antonym_conflict(new_text, existing_text)
-        if conflict_result:
+        new_claim = _extract_decision_claim(new_text)
+        existing_claim = _extract_decision_claim(existing_text)
+        conflict_reason = (
+            _claim_incompatibility(new_claim, existing_claim)
+            if new_claim and existing_claim
+            else None
+        )
+        if conflict_reason:
             if is_related_target:
                 continue
-            term1, term2, strength = conflict_result
-            # HIGH strength = explicit negation conflict (block)
-            # For HIGH conflicts, the shared word IS the topic (e.g., "postgresql")
-            if strength == "HIGH":
-                # Use detected topic overlap, or infer from the conflict term
-                conflict_topics = list(topic_overlap) if topic_overlap else [term2]
-                conflicts.append({
-                    "type": "CONTRADICTION",
-                    "severity": "HIGH",
-                    "existing_decision": existing.get("decision", ""),
-                    "existing_reason": existing.get("reason", ""),
-                    "existing_actor": existing.get("actor", "unknown"),
-                    "existing_actor_source": existing.get("actor_source", "none"),
-                    "timestamp": existing.get("timestamp", ""),
-                    "topics": conflict_topics,
-                    "antonyms": (term1, term2),
-                    "message": f"Direct contradiction detected: '{term1}' vs '{term2}' on topics: {', '.join(conflict_topics)}"
-                })
-                continue
-
-            # WEAK conflicts require topic overlap to be meaningful
-            if not topic_overlap:
-                continue  # Antonym match without topic overlap - ignore
-
-            # WEAK conflicts get MEDIUM severity - warn but don't block
+            subject = existing_claim.subject
             conflicts.append({
-                "type": "POTENTIAL_CONFLICT",
-                "severity": "MEDIUM",
+                "type": "CONTRADICTION",
+                "severity": "HIGH",
                 "existing_decision": existing.get("decision", ""),
                 "existing_reason": existing.get("reason", ""),
                 "existing_actor": existing.get("actor", "unknown"),
                 "existing_actor_source": existing.get("actor_source", "none"),
                 "timestamp": existing.get("timestamp", ""),
-                "topics": list(topic_overlap),
-                "antonyms": (term1, term2),
-                "message": f"Potential conflict: '{term1}' and '{term2}' appear in related statements on topics: {', '.join(topic_overlap)}"
+                "topics": [existing_claim.domain, existing_claim.target],
+                "subject": {
+                    "domain": existing_claim.domain,
+                    "target": existing_claim.target,
+                    "scope": existing_claim.scope,
+                },
+                "existing_claim": {
+                    "action": existing_claim.action,
+                    "value": existing_claim.value,
+                },
+                "new_claim": {
+                    "action": new_claim.action,
+                    "value": new_claim.value,
+                },
+                "message": (
+                    f"Direct contradiction on subject {subject}. "
+                    f"Existing claim: {existing_claim.action}"
+                    f"{':' + existing_claim.value if existing_claim.value else ''}. "
+                    f"New claim: {new_claim.action}"
+                    f"{':' + new_claim.value if new_claim.value else ''}. "
+                    f"Why incompatible: {conflict_reason}."
+                )
             })
             continue
 

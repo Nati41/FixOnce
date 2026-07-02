@@ -132,7 +132,7 @@ class TestConflictLifecycle(unittest.TestCase):
         self.assertEqual(len(saved["decision_conflicts"]), 1)
         self.assertEqual(saved["decision_conflicts"][0]["status"], "open")
 
-    def test_warn_conflict_becomes_durable(self):
+    def test_similar_decision_warning_does_not_block_logging(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             project_file = self._activate(root, {
@@ -148,10 +148,10 @@ class TestConflictLifecycle(unittest.TestCase):
             )
             saved = json.loads(project_file.read_text(encoding="utf-8"))
 
-        self.assertIn("Logged decision", result)
+        self.assertIn("Decision recorded", result)
         self.assertEqual(len(saved["decisions"]), 2)
-        self.assertEqual(saved["decision_conflicts"][0]["status"], "open")
-        self.assertEqual(saved["decision_conflicts"][0]["severity"], "MEDIUM")
+        self.assertNotIn("Decision NOT logged", result)
+        self.assertEqual(saved.get("decision_conflicts", []), [])
 
     def test_force_resolves_only_matching_conflict(self):
         unrelated_memory, _ = upsert_decision_conflicts(
@@ -278,7 +278,8 @@ class TestConflictLifecycle(unittest.TestCase):
 
         brief = server._format_deep_project_brief(memory)
 
-        self.assertIn("Unresolved conflicts: 0", brief)
+        self.assertIn("📊 Project Knowledge: 0 Decisions · 0 Solved Bugs · 0 Avoid Patterns", brief)
+        self.assertNotIn("decision conflict(s)", brief)
         self.assertNotIn(memory["decision_conflicts"][0]["id"], brief)
 
     def test_concurrent_creation_loses_no_conflicts(self):

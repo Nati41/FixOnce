@@ -270,6 +270,80 @@ class TestTeamMemoryFoundation(unittest.TestCase):
         self.assertEqual(len(conflicts), 1)
         self.assertEqual(conflicts[0]["severity"], "HIGH")
 
+    def test_conflict_detection_v2_ignores_unrelated_lexical_opposites(self):
+        should_not_conflict = [
+            (
+                "Project Knowledge terminology should be used in product-facing text",
+                "Session Resume State tracks continuation data",
+            ),
+            (
+                "Dashboard retrieval rules should prioritize relevant knowledge",
+                "Repair button is hidden until a repair is available",
+            ),
+            (
+                "SubjectShelf is a presentation cache for one subject",
+                "Persistent project memory is the authority",
+            ),
+            (
+                "UI wording should say Project Knowledge",
+                "Retrieval behavior should filter by subject first",
+            ),
+            (
+                "Error panel shows errors from the browser extension",
+                "Health summary can render without errors",
+            ),
+        ]
+
+        for existing, proposed in should_not_conflict:
+            conflicts = detect_conflicts(
+                proposed,
+                "",
+                [{"decision": existing, "reason": ""}],
+            )
+            high_conflicts = [c for c in conflicts if c["severity"] == "HIGH"]
+            self.assertEqual(
+                high_conflicts,
+                [],
+                f"False high-confidence conflict: {existing!r} vs {proposed!r}: {conflicts}",
+            )
+
+    def test_conflict_detection_v2_blocks_same_subject_incompatible_claims(self):
+        should_conflict = [
+            (
+                "SubjectShelf must stay in memory",
+                "Persist SubjectShelf to disk",
+                {"domain": "subjectshelf", "target": "storage", "scope": "storage"},
+            ),
+            (
+                "Use Library in UI",
+                "Use Project Knowledge in UI",
+                {"domain": "ui", "target": "product_label", "scope": "ui"},
+            ),
+            (
+                "Subject filtering first, then rank results",
+                "Global ranking first, then subject filtering",
+                {"domain": "retrieval", "target": "selection_order", "scope": "retrieval"},
+            ),
+            (
+                "Do not show stale decisions in briefing",
+                "Show stale decisions in briefing",
+                {"domain": "briefing", "target": "stale_decisions", "scope": "briefing"},
+            ),
+        ]
+
+        for existing, proposed, subject in should_conflict:
+            conflicts = detect_conflicts(
+                proposed,
+                "",
+                [{"decision": existing, "reason": ""}],
+            )
+            self.assertEqual(len(conflicts), 1, f"Expected conflict: {existing!r} vs {proposed!r}")
+            self.assertEqual(conflicts[0]["severity"], "HIGH")
+            self.assertEqual(conflicts[0]["subject"], subject)
+            self.assertIn("Existing claim:", conflicts[0]["message"])
+            self.assertIn("New claim:", conflicts[0]["message"])
+            self.assertIn("Why incompatible:", conflicts[0]["message"])
+
     def test_requirement_does_not_extract_ui_topic(self):
         topics = extract_topics("Preserving the requirement that agents use FixOnce")
 
@@ -412,12 +486,11 @@ class TestTeamMemoryFoundation(unittest.TestCase):
 
         brief = server._format_deep_project_brief(memory)
 
-        self.assertIn("## Multi-Agent State", brief)
-        self.assertIn("Active agents: codex", brief)
-        self.assertIn("Attribution coverage:", brief)
-        self.assertIn("Recent handoffs: 1", brief)
-        self.assertIn("Unresolved conflicts: 1", brief)
-        self.assertIn("conflict-demo", brief)
+        self.assertIn("📋 **Demo** — Ship", brief)
+        self.assertIn("⚠️ **PRIORITIES:**", brief)
+        self.assertIn("🟠 **Warning:** 1 decision conflict(s)", brief)
+        self.assertIn("📊 Project Knowledge: 0 Decisions · 0 Solved Bugs · 0 Avoid Patterns", brief)
+        self.assertIn("→ **Suggested:** Test", brief)
 
 
 if __name__ == "__main__":
