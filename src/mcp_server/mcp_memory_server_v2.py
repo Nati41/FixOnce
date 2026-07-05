@@ -4315,6 +4315,14 @@ def _save_project(project_id: str, data: Dict[str, Any]):
         _fo_init_trace("_save_project update_snapshot_after")
         _persist_portable_team_memory(project_id, session.working_dir, data)
 
+        # Phase 0.2: Sync to local .fixonce/ files (BUG-002 fix)
+        # This ensures decisions.json, avoid.json, etc. stay in sync
+        try:
+            from core.committed_knowledge import update_committed_on_save
+            update_committed_on_save(project_id, data)
+        except Exception as e:
+            _log(f"[CommittedKnowledge] Sync error: {e}")
+
 
 def _persist_portable_team_memory(
     project_id: str,
@@ -5060,7 +5068,7 @@ def _get_browser_errors_summary(limit: int = 3) -> Optional[str]:
                 if solution_key not in injected_solutions:
                     solutions_found += 1
                     injected_solutions.add(solution_key)
-                    lines.append(f"  💡 **Solved before ({solution['similarity']}%):** {solution['text'][:80]}...")
+                    lines.append(f"  💡 **Solved before ({min(100, solution['similarity'])}%):** {solution['text'][:80]}...")
 
         if solutions_found > 0:
             lines.append(f"\n✅ **{solutions_found} known fix(es).** Apply them.")
@@ -5210,7 +5218,7 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
                 if solution_key not in injected_solutions:
                     solutions_found += 1
                     injected_solutions.add(solution_key)
-                    lines.append(f"  💡 **Solved before ({solution['similarity']}%):** {solution['text'][:100]}...")
+                    lines.append(f"  💡 **Solved before ({min(100, solution['similarity'])}%):** {solution['text'][:100]}...")
 
         if len(live_errors) > 3:
             lines.append(f"• ...and {len(live_errors) - 3} more")
@@ -5550,7 +5558,7 @@ def _format_init_response(data: Dict[str, Any], status: str, working_dir: str) -
                 if solution_key not in injected_solutions:
                     solutions_found += 1
                     injected_solutions.add(solution_key)
-                    lines.append(f"  💡 **Solved before ({solution['similarity']}%):** {solution['text'][:100]}...")
+                    lines.append(f"  💡 **Solved before ({min(100, solution['similarity'])}%):** {solution['text'][:100]}...")
 
         if len(live_errors) > 3:
             lines.append(f"• ...and {len(live_errors) - 3} more")
@@ -10111,8 +10119,8 @@ def _nav_v2_format_response(
             lines.append(f"{_compact_text(text, 200)}")
             lines.append("")
 
-        # Show similarity
-        similarity = strong_memory.get('similarity', 0)
+        # Show similarity (BUG-004 fix: cap display at 100%)
+        similarity = min(100, strong_memory.get('similarity', 0))
         lines.append(f"Match: {similarity}% similar to query")
         lines.append("")
 
@@ -10177,7 +10185,7 @@ def _nav_v2_format_response(
                 lines.append(f"  (Apply solution: check this location)")
             else:
                 lines.append(f"  Apply the solution above")
-                lines.append(f"  ({strong_memory.get('similarity', 0)}% match to past fix)")
+                lines.append(f"  ({min(100, strong_memory.get('similarity', 0))}% match to past fix)")
 
         elif memory_type == 'avoid':
             lines.append(f"  Do NOT repeat this pattern")
@@ -10202,7 +10210,7 @@ def _nav_v2_format_response(
                 lines.append(f"  (With context from memory above)")
             else:
                 lines.append(f"  Review the context above")
-                lines.append(f"  ({strong_memory.get('similarity', 0)}% relevant)")
+                lines.append(f"  ({min(100, strong_memory.get('similarity', 0))}% relevant)")
 
     elif targets:
         # Code-based next action (no strong memory)

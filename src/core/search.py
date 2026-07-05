@@ -263,7 +263,7 @@ def search_memory(
                 matches.append(_make_match(
                     text=result.text,
                     match_type=result.metadata.get('doc_type', 'insight'),
-                    similarity=int(result.score * 100),
+                    similarity=min(100, int(result.score * 100)),  # BUG-004 fix: cap at 100%
                     confidence=80,
                     metadata=result.metadata,
                 ))
