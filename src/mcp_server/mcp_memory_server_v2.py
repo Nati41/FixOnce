@@ -10682,13 +10682,13 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
             "live_record": data.get("live_record", {}) if data else {},
         }
 
-        # Build knowledge stats line
-        d_count = len(ck.get("decisions", []))
-        s_count = len(ck.get("solutions", []))
-        a_count = len(ck.get("avoid", []))
+        # Build live project knowledge stats line. Committed knowledge remains
+        # the source for briefing content, not live UI/session counters.
+        from core.knowledge_counters import get_live_project_counters, format_project_knowledge_line
+        counters = get_live_project_counters(data)
         knowledge_stats = ""
-        if d_count or s_count or a_count:
-            knowledge_stats = f"📊 Project Knowledge: {d_count} Decisions · {s_count} Solved Bugs · {a_count} Avoid Patterns"
+        if any(counters.values()):
+            knowledge_stats = format_project_knowledge_line(counters)
 
         result = compose_for_reorientation(
             memory=reorientation_memory,
@@ -10746,19 +10746,18 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
 
     # Compact memory summary (counts only, no details)
     try:
-        from core.committed_knowledge import read_committed_knowledge
-        ck = read_committed_knowledge(working_dir)
-        d_count = len(ck.get("decisions", []))
-        s_count = len(ck.get("solutions", []))
-        a_count = len(ck.get("avoid", []))
-        if d_count or s_count or a_count:
-            lines.append(f"📊 Project Knowledge: {d_count} Decisions · {s_count} Solved Bugs · {a_count} Avoid Patterns")
+        from core.knowledge_counters import get_live_project_counters, format_project_knowledge_line
+        counters = get_live_project_counters(data)
+        if any(counters.values()):
+            lines.append(format_project_knowledge_line(counters))
             lines.append("")
     except Exception:
-        pass  # Silent fallback if committed knowledge unavailable
+        pass  # Silent fallback if live counters unavailable
 
     # Subject Context Engine: Surface relevant knowledge for current work
     try:
+        from core.committed_knowledge import read_committed_knowledge
+        ck = read_committed_knowledge(working_dir)
         # Build memory dict with decisions from committed knowledge
         memory_for_search = {
             "decisions": ck.get("decisions", []) if 'ck' in dir() else [],

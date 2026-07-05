@@ -20,6 +20,7 @@ from config import PROJECT_ROOT, USER_DATA_DIR, VERSION
 from core.runtime_log import log_runtime_event
 from core.system_mode import get_system_mode, set_system_mode, VALID_MODES
 from core.windows_subprocess import no_window_creationflags
+from core.knowledge_counters import get_live_project_counters
 
 # Global state (will be set by main app)
 EXTENSION_CONNECTED = False
@@ -952,25 +953,14 @@ def api_dashboard_snapshot():
                 decisions = memory.get("decisions", [])
                 avoids = memory.get("avoid", [])
                 project_rules = memory.get("project_rules", [])
-                committed_solutions_count = 0
-                try:
-                    working_dir = (
-                        memory.get("live_record", {}).get("gps", {}).get("working_dir")
-                        or memory.get("project_info", {}).get("working_dir")
-                    )
-                    if working_dir:
-                        from core.committed_knowledge import read_committed_knowledge
-                        committed = read_committed_knowledge(working_dir)
-                        committed_solutions_count = len(committed.get("solutions", []))
-                except Exception:
-                    committed_solutions_count = len(memory.get("debug_sessions", []))
+                live_counts = get_live_project_counters(memory)
 
                 snapshot["knowledge"]["total_insights"] = len(insights)
-                snapshot["knowledge"]["total_decisions"] = len(decisions)
-                snapshot["knowledge"]["total_avoids"] = len(avoids)
-                snapshot["knowledge"]["total_solutions"] = committed_solutions_count
-                snapshot["knowledge"]["solutions_count"] = committed_solutions_count
-                snapshot["knowledge"]["solved_bugs"] = committed_solutions_count
+                snapshot["knowledge"]["total_decisions"] = live_counts["decisions"]
+                snapshot["knowledge"]["total_avoids"] = live_counts["avoid"]
+                snapshot["knowledge"]["total_solutions"] = live_counts["solved"]
+                snapshot["knowledge"]["solutions_count"] = live_counts["solved"]
+                snapshot["knowledge"]["solved_bugs"] = live_counts["solved"]
                 snapshot["knowledge"]["total_rules"] = len([r for r in project_rules if r.get("enabled", True)])
                 snapshot["knowledge"]["project_rules"] = project_rules
                 snapshot["knowledge"]["decisions"] = decisions[-10:]  # Last 10
@@ -1052,18 +1042,7 @@ def api_dashboard_snapshot():
                 lessons = live_record.get("lessons", {})
                 decisions = memory.get("decisions", [])
                 avoids = memory.get("avoid", [])
-                committed_solutions_count = 0
-                try:
-                    working_dir = (
-                        live_record.get("gps", {}).get("working_dir")
-                        or project_info.get("working_dir")
-                    )
-                    if working_dir:
-                        from core.committed_knowledge import read_committed_knowledge
-                        committed = read_committed_knowledge(working_dir)
-                        committed_solutions_count = len(committed.get("solutions", []))
-                except Exception:
-                    committed_solutions_count = len(memory.get("debug_sessions", []))
+                live_counts = get_live_project_counters(memory)
 
                 last_decision = decisions[-1] if decisions else None
                 last_insight_raw = (lessons.get("insights") or [])
@@ -1088,12 +1067,12 @@ def api_dashboard_snapshot():
                         (last_avoid.get("what") or last_avoid.get("text") or "")[:120]
                     ) if last_avoid else None,
                     "counts": {
-                        "decisions": len(decisions),
-                        "solved_bugs": committed_solutions_count,
-                        "solutions_count": committed_solutions_count,
-                        "total_solutions": committed_solutions_count,
+                        "decisions": live_counts["decisions"],
+                        "solved_bugs": live_counts["solved"],
+                        "solutions_count": live_counts["solved"],
+                        "total_solutions": live_counts["solved"],
                         "insights": len(last_insight_raw),
-                        "avoids": len(avoids),
+                        "avoids": live_counts["avoid"],
                     }
                 }
 
@@ -1698,23 +1677,12 @@ def api_tray_status():
             if _known_agent_name(actor):
                 ai_client = _agent_display_name(actor)
 
-        # Get memory stats
-        decisions_count = len(memory.get("decisions", []))
-        avoid_count = len(memory.get("avoid", []))
-
-        # Get solved bugs from committed_knowledge (same source as dashboard)
-        solved_count = 0
-        try:
-            working_dir = (
-                memory.get("live_record", {}).get("gps", {}).get("working_dir")
-                or memory.get("project_info", {}).get("working_dir")
-            )
-            if working_dir:
-                from core.committed_knowledge import read_committed_knowledge
-                committed = read_committed_knowledge(working_dir)
-                solved_count = len(committed.get("solutions", []))
-        except Exception:
-            pass
+        live_counts = get_live_project_counters(memory)
+        tray_counts = {
+            "decisions": live_counts["decisions"],
+            "solved": live_counts["solved"],
+            "avoid": live_counts["avoid"],
+        }
 
         # Get last sync time
         last_sync = session_health.get("last_success_at")
@@ -1724,11 +1692,8 @@ def api_tray_status():
             "pending_count": pending_count,
             "project_name": project_name,
             "ai_client": ai_client,
-            "knowledge": {
-                "decisions": decisions_count,
-                "solved": solved_count,
-                "avoid": avoid_count
-            },
+            "knowledge": tray_counts,
+            "memory": tray_counts,
             "last_sync": last_sync,
             "needs_attention": needs_attention,
             "attention_reason": attention_reason,
