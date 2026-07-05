@@ -87,6 +87,33 @@ class TestAppLauncher(unittest.TestCase):
         with patch.object(app_launcher.os, "kill", side_effect=SystemError("WinError 6")):
             self.assertFalse(app_launcher.is_pid_running(12345))
 
+    def test_is_pid_running_returns_false_for_negative_pid_without_os_kill(self):
+        """PID -1 must not reach os.kill from the launcher."""
+        with patch.object(app_launcher.os, "kill") as mock_kill:
+            self.assertFalse(app_launcher.is_pid_running(-1))
+            mock_kill.assert_not_called()
+
+    def test_clear_stale_state_removes_invalid_negative_runtime(self):
+        """Stale runtime.json with pid -1 is removed without signaling."""
+        with tempfile.TemporaryDirectory(prefix="fixonce-launcher-") as temp_dir:
+            temp_home = Path(temp_dir)
+            fixonce_dir = temp_home / ".fixonce"
+            fixonce_dir.mkdir(parents=True, exist_ok=True)
+            runtime = fixonce_dir / "runtime.json"
+            lock_file = fixonce_dir / "server.lock"
+
+            runtime.write_text(json.dumps({"pid": -1, "port": 5001}), encoding="utf-8")
+            lock_file.write_text("-1", encoding="utf-8")
+
+            with patch.object(app_launcher, "RUNTIME_FILE", runtime), \
+                 patch.object(app_launcher, "LOCK_FILE", lock_file), \
+                 patch.object(app_launcher.os, "kill") as mock_kill:
+                app_launcher.clear_stale_state()
+
+            self.assertFalse(runtime.exists())
+            self.assertFalse(lock_file.exists())
+            mock_kill.assert_not_called()
+
     def test_discover_running_port_clears_stale_runtime_before_checking(self):
         """If runtime.json has a dead PID, clear it before trusting saved ports."""
         with tempfile.TemporaryDirectory(prefix="fixonce-launcher-") as temp_dir:

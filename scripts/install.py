@@ -1560,6 +1560,8 @@ def _kill_stale_fixonce_processes(current_install_dir: Path) -> list[int]:
                 pid = int(parts[0])
             except ValueError:
                 continue
+            if pid <= 0:
+                continue
 
             command = parts[1]
             command_lower = command.lower()

@@ -314,6 +314,15 @@ def format_port_report() -> str:
 # Runtime State Management (SINGLE SOURCE OF TRUTH)
 # ---------------------------------------------------------------------------
 
+def _positive_pid(pid: Any) -> Optional[int]:
+    """Return pid as a positive integer, or None when unsafe/invalid."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return None
+    return pid if pid > 0 else None
+
+
 def is_pid_running(pid: int) -> bool:
     """Check if a process with given PID is running.
 
@@ -321,6 +330,10 @@ def is_pid_running(pid: int) -> bool:
     can terminate the process, so use WinAPI for a non-destructive liveness
     check there.
     """
+    pid = _positive_pid(pid)
+    if pid is None:
+        return False
+
     if sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
@@ -368,6 +381,8 @@ def get_runtime_state() -> Optional[Dict[str, Any]]:
     try:
         with open(RUNTIME_FILE, 'r', encoding='utf-8') as f:
             state = json.load(f)
+        if not isinstance(state, dict):
+            return None
 
         # Validate PID is still running
         pid = state.get("pid")
@@ -485,6 +500,10 @@ def _kill_process(pid: int) -> bool:
     import signal
     import time
 
+    pid = _positive_pid(pid)
+    if pid is None:
+        return True
+
     if not is_pid_running(pid):
         return True
 
@@ -546,6 +565,11 @@ def cleanup_stale_runtime() -> bool:
     try:
         with open(RUNTIME_FILE, 'r', encoding='utf-8') as f:
             state = json.load(f)
+        if not isinstance(state, dict):
+            RUNTIME_FILE.unlink()
+            if LOCK_FILE.exists():
+                LOCK_FILE.unlink()
+            return True
 
         pid = state.get("pid")
         if pid and not is_pid_running(pid):
@@ -653,6 +677,11 @@ def get_stale_server_info() -> Optional[Dict[str, Any]]:
     try:
         with open(RUNTIME_FILE, 'r', encoding='utf-8') as f:
             state = json.load(f)
+        if not isinstance(state, dict):
+            return {
+                "status": "corrupted",
+                "message": "runtime.json is corrupted",
+            }
 
         pid = state.get("pid")
         port = state.get("port")

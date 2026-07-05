@@ -43,6 +43,14 @@ class TestIsPidRunning(unittest.TestCase):
             result = port_manager.is_pid_running(9999)
             self.assertFalse(result, "Should return False on SystemError (WinError 6)")
 
+    def test_is_pid_running_returns_false_for_negative_pid_without_os_kill(self):
+        """PID -1 must not reach os.kill because it has Unix signal semantics."""
+        with patch.object(port_manager.os, "kill") as mock_kill:
+            result = port_manager.is_pid_running(-1)
+
+        self.assertFalse(result)
+        mock_kill.assert_not_called()
+
     def test_is_pid_running_returns_false_on_os_error(self):
         """is_pid_running returns False when process doesn't exist."""
         with patch.object(port_manager.os, "kill", side_effect=OSError("No such process")):
@@ -60,6 +68,14 @@ class TestIsPidRunning(unittest.TestCase):
         with patch.object(port_manager.os, "kill", return_value=None):
             result = port_manager.is_pid_running(9999)
             self.assertTrue(result)
+
+    def test_kill_process_returns_without_signaling_negative_pid(self):
+        """The stale cleanup killer must not signal PID -1."""
+        with patch.object(port_manager.os, "kill") as mock_kill:
+            result = port_manager._kill_process(-1)
+
+        self.assertTrue(result)
+        mock_kill.assert_not_called()
 
 
 class TestPortSelectionRegression(unittest.TestCase):

@@ -275,7 +275,8 @@ def set_dock_icon():
 
 def read_json(path: Path) -> dict:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
     except Exception:
         return {}
 
@@ -295,13 +296,29 @@ def read_saved_ports() -> list[int]:
     return candidates
 
 
+def _positive_pid(pid: Any) -> int | None:
+    """Return pid as a positive integer, or None when unsafe/invalid."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return None
+    return pid if pid > 0 else None
+
+
 def is_pid_running(pid: int) -> bool:
     """Check if a process with given PID is running.
 
     Windows does not support POSIX signal 0 semantics. Calling os.kill(pid, 0)
     can terminate the process, so use WinAPI for a non-destructive liveness
     check there.
+
+    CRITICAL: PIDs <= 0 are special in Unix (0 = process group, -1 = all processes).
+    We must reject them to avoid dangerous signal operations.
     """
+    pid = _positive_pid(pid)
+    if pid is None:
+        return False
+
     if sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
@@ -339,13 +356,14 @@ def is_pid_running(pid: int) -> bool:
 def clear_stale_state():
     """Remove stale runtime and lock files that point to dead processes."""
     runtime = read_json(RUNTIME_FILE)
-    runtime_pid = runtime.get("pid")
-    if runtime_pid:
+    runtime_pid = _positive_pid(runtime.get("pid"))
+    if runtime.get("pid") is not None and runtime_pid is None:
         try:
-            runtime_pid = int(runtime_pid)
-        except (TypeError, ValueError):
-            runtime_pid = None
-    if runtime_pid and not is_pid_running(runtime_pid):
+            RUNTIME_FILE.unlink()
+            log_event("Removed invalid runtime.json")
+        except OSError:
+            pass
+    elif runtime_pid and not is_pid_running(runtime_pid):
         try:
             RUNTIME_FILE.unlink()
             log_event("Removed stale runtime.json")
@@ -415,15 +433,14 @@ def discover_running_port() -> int | None:
     """
     # Validate runtime PID before trusting saved ports
     runtime = read_json(RUNTIME_FILE)
-    runtime_pid = runtime.get("pid")
-    if runtime_pid:
-        try:
-            runtime_pid = int(runtime_pid)
-        except (TypeError, ValueError):
-            runtime_pid = None
-        if runtime_pid and not is_pid_running(runtime_pid):
-            log_event(f"Runtime PID {runtime_pid} is dead, clearing stale state")
-            clear_stale_state()
+    raw_runtime_pid = runtime.get("pid")
+    runtime_pid = _positive_pid(raw_runtime_pid)
+    if raw_runtime_pid is not None and runtime_pid is None:
+        log_event(f"Runtime PID {raw_runtime_pid} is invalid, clearing stale state")
+        clear_stale_state()
+    elif runtime_pid and not is_pid_running(runtime_pid):
+        log_event(f"Runtime PID {runtime_pid} is dead, clearing stale state")
+        clear_stale_state()
 
     checked: list[int] = []
     for port in read_saved_ports():
@@ -516,12 +533,8 @@ def configure_packaged_windows_mcp(log_fn: Callable[[str], None] | None = None) 
 
 def _read_runtime_pid_port() -> tuple[int | None, int | None]:
     runtime = read_json(RUNTIME_FILE)
-    runtime_pid = runtime.get("pid")
+    runtime_pid = _positive_pid(runtime.get("pid"))
     runtime_port = runtime.get("port")
-    try:
-        runtime_pid = int(runtime_pid) if runtime_pid is not None else None
-    except (TypeError, ValueError):
-        runtime_pid = None
     try:
         runtime_port = int(runtime_port) if runtime_port is not None else None
     except (TypeError, ValueError):
@@ -1291,6 +1304,15 @@ def ensure_server_ready(progress: Callable[[str], None] | None = None) -> int:
     """Reuse an existing server or start one quietly in the background."""
     if progress:
         progress("checking")
+
+    # Terminate any stale servers from old installs before proceeding
+    try:
+        sys.path.insert(0, str(SRC_DIR))
+        from core.lifecycle import ensure_no_stale_servers
+        ensure_no_stale_servers(PROJECT_DIR)
+    except Exception as exc:
+        log_event(f"Stale server check failed (non-fatal): {exc}")
+
     port = discover_running_port()
     if port is not None and endpoint_responds(port, "/api/health", timeout=1.5):
         log_event("Reused existing server")
