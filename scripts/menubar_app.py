@@ -33,6 +33,10 @@ DATA_DIR = PROJECT_DIR / "data"
 USER_DATA_DIR = Path.home() / ".fixonce"
 ASSETS_DIR = PROJECT_DIR / "assets"
 
+# Add src to path for lifecycle import
+if str(SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(SERVER_DIR))
+
 # Menu bar icon path (color version for branding visibility)
 MENUBAR_ICON = ASSETS_DIR / "menubar" / "icon_18x18@2x.png"
 MENUBAR_ICON_TEMPLATE = ASSETS_DIR / "menubar" / "icon_18x18@2x_template.png"
@@ -342,6 +346,12 @@ class FixOnceMenuBar(rumps.App):
 
     def _expand_app(self, _):
         """Open the native FixOnce app in dashboard mode."""
+        # Refresh status immediately so tray reflects latest state
+        try:
+            self._update_status()
+        except Exception:
+            pass
+
         # Run app_launcher.py directly with --dashboard flag
         launcher_path = PROJECT_DIR / "scripts" / "app_launcher.py"
         subprocess.Popen(
@@ -353,6 +363,12 @@ class FixOnceMenuBar(rumps.App):
 
     def _open_full_view(self, _):
         """Open the full dashboard in browser."""
+        # Refresh status immediately so tray reflects latest state
+        try:
+            self._update_status()
+        except Exception:
+            pass
+
         if self.server_running:
             self._open_dashboard_url()
         else:
@@ -488,7 +504,12 @@ class FixOnceMenuBar(rumps.App):
         )
 
     def _quit_app(self, _):
-        """Quit the menu bar app."""
+        """Quit FixOnce completely - stops Flask server and menu bar app."""
+        try:
+            from core.lifecycle import shutdown_fixonce
+            shutdown_fixonce(PROJECT_DIR)
+        except Exception as e:
+            pass
         rumps.quit_application()
 
 

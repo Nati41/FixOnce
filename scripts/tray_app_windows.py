@@ -36,6 +36,10 @@ DATA_DIR = PROJECT_DIR / "data"
 USER_DATA_DIR = Path.home() / ".fixonce"
 ASSETS_DIR = PROJECT_DIR / "assets"
 
+# Add src to path for lifecycle import
+if str(SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(SERVER_DIR))
+
 # Icon paths
 ICON_ICO = PROJECT_DIR / "FixOnce.ico"
 ICON_PNG = ASSETS_DIR / "FixOnce.iconset" / "icon_64x64@2x.png"
@@ -445,6 +449,12 @@ class FixOnceTray:
 
     def _open_full_view(self, icon=None, item=None):
         """Open the full dashboard in browser."""
+        # Refresh status immediately so tray reflects latest state
+        try:
+            self._update_status()
+        except Exception:
+            pass
+
         if self.server_running:
             webbrowser.open(f"http://localhost:{self.server_port}/")
         else:
@@ -502,8 +512,13 @@ class FixOnceTray:
         )
 
     def _quit_app(self, icon=None, item=None):
-        """Quit the tray app."""
+        """Quit FixOnce completely - stops Flask server and tray app."""
         self.is_running = False
+        try:
+            from core.lifecycle import shutdown_fixonce
+            shutdown_fixonce(PROJECT_DIR)
+        except Exception:
+            pass
         self.icon.stop()
 
     def run(self):
