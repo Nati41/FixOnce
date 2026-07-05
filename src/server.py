@@ -9,6 +9,7 @@ import threading
 import time
 import traceback
 import os
+import signal
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -131,6 +132,7 @@ def _asset_path(filename: str) -> Path:
 # Port Management (uses core.port_manager for multi-user support)
 # ---------------------------------------------------------------------------
 ACTUAL_PORT = DEFAULT_PORT
+_FLASK_SERVER_HANDLE = None
 
 
 def is_port_in_use(port: int) -> bool:
@@ -195,6 +197,28 @@ _startup_log("register blueprints: ok")
 def minimal_alive():
     """Minimal route inside the real FixOnce Flask app for lifecycle isolation."""
     return "ok"
+
+
+@flask_app.route("/api/shutdown", methods=["POST"])
+def api_shutdown():
+    """Stop the local FixOnce Flask server for menu/tray Quit."""
+    remote_addr = request.remote_addr or ""
+    if remote_addr not in {"127.0.0.1", "::1", "localhost"}:
+        return jsonify({"status": "error", "message": "local requests only"}), 403
+
+    def shutdown_later():
+        time.sleep(0.1)
+        handle = _FLASK_SERVER_HANDLE
+        if handle is not None and hasattr(handle, "shutdown"):
+            try:
+                handle.shutdown()
+                return
+            except Exception as exc:
+                _write_server_log("Server handle shutdown failed; falling back to SIGTERM", exc)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=shutdown_later, daemon=True).start()
+    return jsonify({"status": "shutting_down", "pid": os.getpid(), "port": ACTUAL_PORT})
 
 
 def _send_dashboard_file(path):
@@ -767,6 +791,7 @@ def _serve_flask_blocking(host: str, port: int):
     WinError 10038 / "serve_forever returned without exception" when serving
     the dashboard. macOS/Linux keep using Werkzeug.
     """
+    global _FLASK_SERVER_HANDLE
     _startup_log(f"_serve_flask_blocking enter host={host} port={port} platform={sys.platform!r}")
 
     if sys.platform == "win32":
@@ -778,6 +803,7 @@ def _serve_flask_blocking(host: str, port: int):
         _startup_log(f"waitress create_server: start http://{host}:{port}")
         try:
             server = create_server(flask_app, host=host, port=port, threads=8)
+            _FLASK_SERVER_HANDLE = server
             _startup_log(f"waitress create_server: ok server={server}")
         except BaseException as e:
             _startup_log(f"waitress create_server: CRASH {type(e).__name__}: {e}")
@@ -815,6 +841,7 @@ def _serve_flask_blocking(host: str, port: int):
             raise
         finally:
             _startup_log("waitress server.run: finally block reached")
+            _FLASK_SERVER_HANDLE = None
 
         print("[ERROR] Waitress returned unexpectedly", file=sys.stderr, flush=True)
         _startup_log("_serve_flask_blocking returned unexpectedly from waitress")
@@ -826,6 +853,7 @@ def _serve_flask_blocking(host: str, port: int):
     try:
         _startup_log("werkzeug make_server: start")
         server = make_server(host, port, flask_app, threaded=True)
+        _FLASK_SERVER_HANDLE = server
         _startup_log(f"werkzeug serve_forever: start http://{host}:{port}")
         print(f" * Running on http://{host}:{port}", flush=True)
         server.serve_forever()
@@ -842,6 +870,7 @@ def _serve_flask_blocking(host: str, port: int):
             _startup_log("_serve_flask_blocking finally: server_close starting")
             server.server_close()
             _startup_log("_serve_flask_blocking finally: server_close complete")
+        _FLASK_SERVER_HANDLE = None
         _startup_log("_serve_flask_blocking exit")
 
     print("[ERROR] Flask run returned unexpectedly (serve_forever returned without exception)", file=sys.stderr, flush=True)

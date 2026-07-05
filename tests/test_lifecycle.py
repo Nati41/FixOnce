@@ -33,6 +33,8 @@ class TestLifecycleModuleExists:
             terminate_server_by_runtime,
             ensure_no_stale_servers,
             find_stale_server_port,
+            terminate_child_processes,
+            terminate_servers_for_install,
             is_pid_running,
             terminate_process,
         )
@@ -40,6 +42,8 @@ class TestLifecycleModuleExists:
         assert callable(terminate_server_by_runtime)
         assert callable(ensure_no_stale_servers)
         assert callable(find_stale_server_port)
+        assert callable(terminate_child_processes)
+        assert callable(terminate_servers_for_install)
 
     def test_read_runtime_state(self):
         """Should read runtime state from file."""
@@ -119,7 +123,9 @@ class TestShutdownFixonce:
         """Should return True when no server is running."""
         from core.lifecycle import shutdown_fixonce
 
-        with patch("core.lifecycle.read_runtime_state", return_value={}):
+        with patch("core.lifecycle.read_runtime_state", return_value={}), \
+             patch("core.lifecycle.terminate_servers_for_install", return_value=0), \
+             patch("core.lifecycle.terminate_child_processes", return_value=0):
             result = shutdown_fixonce()
         assert result is True
 
@@ -130,7 +136,9 @@ class TestShutdownFixonce:
         mock_runtime = {"port": 5000, "pid": 99999999}
 
         with patch("core.lifecycle.read_runtime_state", return_value=mock_runtime):
-            with patch("core.lifecycle.is_pid_running", return_value=False):
+            with patch("core.lifecycle.is_pid_running", return_value=False), \
+                 patch("core.lifecycle.terminate_servers_for_install", return_value=0), \
+                 patch("core.lifecycle.terminate_child_processes", return_value=0):
                 result = shutdown_fixonce()
 
         assert result is True
@@ -181,7 +189,9 @@ class TestShutdownFixonce:
 
             with patch("core.lifecycle.RUNTIME_FILE", runtime_file), \
                  patch("core.lifecycle.LOCK_FILE", lock_file), \
-                 patch("core.lifecycle.os.kill") as mock_kill:
+                 patch("core.lifecycle.os.kill") as mock_kill, \
+                 patch("core.lifecycle.terminate_servers_for_install", return_value=0), \
+                 patch("core.lifecycle.terminate_child_processes", return_value=0):
                 result = shutdown_fixonce()
 
             assert result is True
@@ -197,10 +207,63 @@ class TestShutdownFixonce:
             lock_file.write_text("12345", encoding="utf-8")
 
             with patch("core.lifecycle.read_runtime_state", return_value={}), \
-                 patch("core.lifecycle.LOCK_FILE", lock_file):
+                 patch("core.lifecycle.LOCK_FILE", lock_file), \
+                 patch("core.lifecycle.terminate_servers_for_install", return_value=0), \
+                 patch("core.lifecycle.terminate_child_processes", return_value=0):
                 shutdown_fixonce()
 
             assert not lock_file.exists()
+
+    def test_quit_fully_shuts_down_server_children_and_runtime_state(self):
+        """Quit should stop Flask, stop helper children, and clean runtime files."""
+        from core.lifecycle import shutdown_fixonce
+
+        with tempfile.TemporaryDirectory(prefix="fixonce-lifecycle-") as temp_dir:
+            runtime_file = Path(temp_dir) / "runtime.json"
+            lock_file = Path(temp_dir) / "server.lock"
+            runtime_file.write_text(json.dumps({"port": 5000, "pid": 12345}), encoding="utf-8")
+            lock_file.write_text("12345", encoding="utf-8")
+
+            calls = {"is_running": 0}
+
+            def is_running(pid):
+                calls["is_running"] += 1
+                return calls["is_running"] == 1
+
+            with patch("core.lifecycle.RUNTIME_FILE", runtime_file), \
+                 patch("core.lifecycle.LOCK_FILE", lock_file), \
+                 patch("core.lifecycle.is_pid_running", side_effect=is_running), \
+                 patch("core.lifecycle._request_graceful_shutdown", return_value=True) as request_shutdown, \
+                 patch("core.lifecycle.terminate_servers_for_install", return_value=0) as terminate_servers, \
+                 patch("core.lifecycle.terminate_child_processes", return_value=2) as terminate_children, \
+                 patch("core.lifecycle.terminate_process") as terminate_process:
+                result = shutdown_fixonce(Path("/Users/test/FixOnce"))
+
+            assert result is True
+            request_shutdown.assert_called_once_with(5000)
+            terminate_process.assert_not_called()
+            terminate_servers.assert_called_once_with(Path("/Users/test/FixOnce"))
+            terminate_children.assert_called_once_with(Path("/Users/test/FixOnce"))
+            assert not runtime_file.exists()
+            assert not lock_file.exists()
+
+    def test_quit_shuts_down_current_install_server_without_runtime(self):
+        """Quit should stop a current-install server found by /api/ping."""
+        from core.lifecycle import shutdown_fixonce
+
+        with tempfile.TemporaryDirectory(prefix="fixonce-lifecycle-") as temp_dir:
+            runtime_file = Path(temp_dir) / "runtime.json"
+            lock_file = Path(temp_dir) / "server.lock"
+
+            with patch("core.lifecycle.RUNTIME_FILE", runtime_file), \
+                 patch("core.lifecycle.LOCK_FILE", lock_file), \
+                 patch("core.lifecycle.terminate_server_by_runtime", return_value=True), \
+                 patch("core.lifecycle.terminate_servers_for_install", return_value=1) as terminate_servers, \
+                 patch("core.lifecycle.terminate_child_processes", return_value=0):
+                result = shutdown_fixonce(Path("/Users/test/FixOnce"))
+
+            assert result is True
+            terminate_servers.assert_called_once_with(Path("/Users/test/FixOnce"))
 
 
 class TestFindStaleServerPort:
@@ -258,6 +321,27 @@ class TestFindStaleServerPort:
         assert result[0] == 5000  # port
         assert result[1] == 12345  # pid
 
+    def test_returns_port_without_pid_for_stale_server_found_by_ping(self):
+        """A stale server can be replaced by shutdown API even without runtime PID."""
+        from core.lifecycle import find_stale_server_port
+
+        current_install = Path("/Users/test/FixOnce")
+
+        def ping_payload(port, timeout=1.0):
+            if port == 5000:
+                return {
+                    "service": "fixonce",
+                    "install_path": "/Users/test/Downloads/FixOnce-old",
+                }
+            return {}
+
+        with patch("core.lifecycle.PORT_RANGE", range(5000, 5001)), \
+             patch("core.lifecycle.read_runtime_state", return_value={}), \
+             patch("core.lifecycle._get_ping_payload", side_effect=ping_payload):
+            result = find_stale_server_port(current_install)
+
+        assert result == (5000, None)
+
 
 class TestTerminateStaleServers:
     """Test stale server termination."""
@@ -292,10 +376,125 @@ class TestTerminateStaleServers:
         with patch("core.lifecycle.find_stale_server_port", side_effect=mock_find):
             with patch("core.lifecycle._request_graceful_shutdown", return_value=False):
                 with patch("core.lifecycle.terminate_process", return_value=True):
-                    with patch("core.lifecycle.read_runtime_state", return_value={}):
-                        count = terminate_stale_servers(current_install)
+                    with patch("core.lifecycle._wait_for_fixonce_server_to_stop", return_value=True):
+                        with patch("core.lifecycle.read_runtime_state", return_value={}):
+                            count = terminate_stale_servers(current_install)
 
         assert count == 1
+
+    def test_stale_server_from_another_install_is_replaced_by_shutdown_api(self):
+        """Stale FixOnce server from another install should be shut down by port."""
+        from core.lifecycle import terminate_stale_servers
+
+        current_install = Path("/Users/test/FixOnce")
+
+        with patch("core.lifecycle.find_stale_server_port", side_effect=[(5000, None), None]), \
+             patch("core.lifecycle._request_graceful_shutdown", return_value=True) as request_shutdown, \
+             patch("core.lifecycle._wait_for_fixonce_server_to_stop", return_value=True) as wait_stop, \
+             patch("core.lifecycle.terminate_process") as terminate_process, \
+             patch("core.lifecycle.read_runtime_state", return_value={}):
+            count = terminate_stale_servers(current_install)
+
+        assert count == 1
+        request_shutdown.assert_called_once_with(5000)
+        wait_stop.assert_called_once_with(5000)
+        terminate_process.assert_not_called()
+
+
+class TestTerminateServersForInstall:
+    """Test current-install server shutdown by /api/ping."""
+
+    def test_terminates_current_install_server_by_ping(self):
+        from core.lifecycle import terminate_servers_for_install
+
+        current_install = Path("/Users/test/FixOnce")
+
+        def ping_payload(port, timeout=1.0):
+            if port == 5000:
+                return {
+                    "service": "fixonce",
+                    "install_path": "/Users/test/FixOnce",
+                }
+            return {}
+
+        with patch("core.lifecycle.PORT_RANGE", range(5000, 5001)), \
+             patch("core.lifecycle._get_ping_payload", side_effect=ping_payload), \
+             patch("core.lifecycle._request_graceful_shutdown", return_value=True) as request_shutdown, \
+             patch("core.lifecycle._wait_for_fixonce_server_to_stop", return_value=True) as wait_stop:
+            count = terminate_servers_for_install(current_install)
+
+        assert count == 1
+        request_shutdown.assert_called_once_with(5000)
+        wait_stop.assert_called_once_with(5000)
+
+    def test_falls_back_to_server_pid_when_shutdown_api_does_not_stop_server(self):
+        from core.lifecycle import terminate_servers_for_install
+
+        current_install = Path("/Users/test/FixOnce")
+        ps_result = MagicMock(
+            returncode=0,
+            stdout="969 1 /usr/bin/python /Users/test/FixOnce/src/server.py --flask-only --quiet\n",
+        )
+
+        def ping_payload(port, timeout=1.0):
+            if port == 5000:
+                return {
+                    "service": "fixonce",
+                    "install_path": "/Users/test/FixOnce",
+                }
+            return {}
+
+        with patch("core.lifecycle.PORT_RANGE", range(5000, 5001)), \
+             patch("core.lifecycle._get_ping_payload", side_effect=ping_payload), \
+             patch("core.lifecycle._request_graceful_shutdown", return_value=False), \
+             patch("core.lifecycle.subprocess.run", return_value=ps_result), \
+             patch("core.lifecycle.terminate_process", return_value=True) as terminate_process, \
+             patch("core.lifecycle._wait_for_fixonce_server_to_stop", return_value=True):
+            count = terminate_servers_for_install(current_install)
+
+        assert count == 1
+        terminate_process.assert_called_once_with(969)
+
+    def test_finds_server_pid_even_when_runtime_and_ping_are_missing(self):
+        from core.lifecycle import terminate_servers_for_install
+
+        current_install = Path("/Users/test/FixOnce")
+        ps_result = MagicMock(
+            returncode=0,
+            stdout="969 1 /usr/bin/python /Users/test/FixOnce/src/server.py --flask-only --quiet\n",
+        )
+
+        with patch("core.lifecycle.PORT_RANGE", range(5000, 5001)), \
+             patch("core.lifecycle._get_ping_payload", return_value={}), \
+             patch("core.lifecycle.subprocess.run", return_value=ps_result), \
+             patch("core.lifecycle.terminate_process", return_value=True) as terminate_process:
+            count = terminate_servers_for_install(current_install)
+
+        assert count == 1
+        terminate_process.assert_called_once_with(969)
+
+
+class TestTerminateChildProcesses:
+    """Test child process cleanup."""
+
+    def test_terminates_only_fixonce_owned_direct_children(self):
+        from core.lifecycle import terminate_child_processes
+
+        current_pid = os.getpid()
+        ps_output = "\n".join([
+            f"111 {current_pid} /usr/bin/python /Users/test/FixOnce/src/server.py --flask-only",
+            f"222 {current_pid} /usr/bin/python /Users/test/Other/src/server.py --flask-only",
+            "333 1 /usr/bin/python /Users/test/FixOnce/src/server.py --flask-only",
+            f"444 {current_pid} /usr/bin/python /Users/test/FixOnce/scripts/random.py",
+        ])
+        ps_result = MagicMock(returncode=0, stdout=ps_output)
+
+        with patch("core.lifecycle.subprocess.run", return_value=ps_result), \
+             patch("core.lifecycle.terminate_process", return_value=True) as terminate_process:
+            count = terminate_child_processes(Path("/Users/test/FixOnce"))
+
+        assert count == 1
+        terminate_process.assert_called_once_with(111)
 
 
 class TestEnsureNoStaleServers:
@@ -373,6 +572,18 @@ class TestAppLauncherStaleServerCheck:
 
         assert "ensure_no_stale_servers" in func_body, \
             "ensure_server_ready should call ensure_no_stale_servers"
+
+
+class TestServerShutdownEndpoint:
+    """Test that Flask exposes lifecycle shutdown endpoint."""
+
+    def test_server_registers_shutdown_endpoint(self):
+        server_path = Path(__file__).parent.parent / "src" / "server.py"
+        source = server_path.read_text()
+
+        assert '@flask_app.route("/api/shutdown", methods=["POST"])' in source
+        assert "def api_shutdown" in source
+        assert "_FLASK_SERVER_HANDLE" in source
 
 
 class TestSafetyGuards:

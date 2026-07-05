@@ -139,7 +139,11 @@ class TestAppLauncher(unittest.TestCase):
 
     def test_ensure_server_ready_reuses_existing_server(self):
         progress_steps = []
-        with patch.object(app_launcher, "discover_running_port", return_value=5003), patch.object(
+        with patch("core.lifecycle.ensure_no_stale_servers"), patch.object(
+            app_launcher,
+            "discover_running_port",
+            return_value=5003,
+        ), patch.object(
             app_launcher,
             "endpoint_responds",
             side_effect=lambda port, endpoint, timeout=1.0: port == 5003 and endpoint == "/api/health",
@@ -150,7 +154,11 @@ class TestAppLauncher(unittest.TestCase):
 
     def test_ensure_server_ready_reports_starting_server_before_wait(self):
         progress_steps = []
-        with patch.object(app_launcher, "discover_running_port", return_value=None), patch.object(
+        with patch("core.lifecycle.ensure_no_stale_servers"), patch.object(
+            app_launcher,
+            "discover_running_port",
+            return_value=None,
+        ), patch.object(
             app_launcher,
             "start_server",
         ) as start_server, patch.object(app_launcher, "wait_for_server", return_value=5000):
@@ -158,6 +166,33 @@ class TestAppLauncher(unittest.TestCase):
 
         start_server.assert_called_once()
         self.assertEqual(progress_steps, ["checking", "connecting"])
+
+    def test_ensure_server_ready_stale_cleanup_runs_before_relaunch(self):
+        """Relaunch should clear stale servers before starting a fresh server."""
+        events = []
+
+        def cleanup(project_dir):
+            events.append(("cleanup", project_dir))
+
+        def discover():
+            events.append(("discover", None))
+            return None
+
+        def start():
+            events.append(("start", None))
+
+        def wait():
+            events.append(("wait", None))
+            return 5000
+
+        with patch("core.lifecycle.ensure_no_stale_servers", side_effect=cleanup) as cleanup_stale, \
+             patch.object(app_launcher, "discover_running_port", side_effect=discover), \
+             patch.object(app_launcher, "start_server", side_effect=start), \
+             patch.object(app_launcher, "wait_for_server", side_effect=wait):
+            self.assertEqual(app_launcher.ensure_server_ready(), 5000)
+
+        cleanup_stale.assert_called_once_with(app_launcher.PROJECT_DIR)
+        self.assertEqual([event[0] for event in events], ["cleanup", "discover", "start", "wait"])
 
     def test_packaged_server_running_waits_for_alive_runtime_without_starting_another(self):
         with patch.object(app_launcher, "clear_stale_state"), \
