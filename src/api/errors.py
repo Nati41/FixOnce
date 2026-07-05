@@ -317,14 +317,22 @@ def api_live_errors():
 
     Query params:
         since: Filter to errors from the last N seconds (optional)
+        project_id: Filter to errors for a specific project (optional)
     """
     from core.db_solutions import find_solution_hybrid
 
     # Check for 'since' parameter (seconds)
     since_seconds = request.args.get('since', type=int)
+    # Phase 0.2: Add project_id filtering to fix cross-project error leakage
+    project_id = request.args.get('project_id', type=str)
 
     with log_lock:
-        errors = list(error_log)
+        if project_id:
+            # Filter errors by project_id
+            errors = [e for e in error_log if e.get('_project_id') == project_id]
+        else:
+            # No project filter - return all (for dashboard aggregate views)
+            errors = list(error_log)
 
     # Filter by time if 'since' is provided
     if since_seconds:

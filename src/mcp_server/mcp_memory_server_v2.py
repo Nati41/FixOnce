@@ -24,6 +24,7 @@ import copy
 import tempfile
 import traceback
 import re
+from urllib.parse import urlencode
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dataclasses import replace
 from pathlib import Path
@@ -1298,11 +1299,32 @@ def _auto_create_session() -> bool:
     return False
 
 
-def _get_live_errors() -> list:
+def _current_session_project_id() -> Optional[str]:
+    """Return the initialized MCP session project_id, if available."""
+    session = _get_session()
+    if session and session.project_id:
+        return session.project_id
+    return None
+
+
+def _live_errors_url(**params) -> str:
+    """Build /api/live-errors URL scoped to the current MCP project."""
+    query = {key: value for key, value in params.items() if value is not None}
+    project_id = query.get("project_id") or _current_session_project_id()
+    if project_id:
+        query["project_id"] = project_id
+
+    url = f"{_get_api_url()}/api/live-errors"
+    if query:
+        url += f"?{urlencode(query)}"
+    return url
+
+
+def _get_live_errors(project_id: Optional[str] = None) -> list:
     """Get unacknowledged browser errors."""
     try:
         _fo_init_trace("BROWSER_STATE_LOAD_BEFORE source=/api/live-errors")
-        url = f'{_get_api_url()}/api/live-errors?since=600'
+        url = _live_errors_url(since=600, project_id=project_id)
         _fo_init_trace(f"HTTP_GET_BEFORE _get_live_errors url={url} timeout=2")
         res = requests.get(url, timeout=2)
         _fo_init_trace(f"HTTP_GET_AFTER _get_live_errors status={res.status_code}")
@@ -2251,7 +2273,7 @@ def _require_project() -> str:
 def _get_browser_errors_reminder() -> str:
     """Get reminder about browser errors if there are any recent ones."""
     try:
-        res = requests.get(f'{_get_api_url()}/api/live-errors?since=300', timeout=2)
+        res = requests.get(_live_errors_url(since=300), timeout=2)
         if res.status_code == 200:
             data = res.json()
             count = data.get('count', 0)
@@ -5010,7 +5032,7 @@ def _is_meaningful_snapshot(snapshot: Dict[str, Any]) -> bool:
 def _get_browser_errors_summary(limit: int = 3) -> Optional[str]:
     """Get summary of recent browser errors for init response with auto-injected solutions."""
     try:
-        res = requests.get(f'{_get_api_url()}/api/live-errors', timeout=2)
+        res = requests.get(_live_errors_url(), timeout=2)
         if res.status_code != 200:
             return None
 
@@ -5166,7 +5188,8 @@ def _format_from_snapshot(snapshot: Dict[str, Any], working_dir: str) -> str:
     lines = []
 
     # LIVE ERRORS FIRST (Universal Gate principle) + AUTO-INJECT SOLUTIONS
-    live_errors = _get_live_errors()
+    project_id = _get_project_id(working_dir)
+    live_errors = _get_live_errors(project_id=project_id)
     if live_errors:
         lines.append("═══════════════════════════════════════")
         lines.append(f"## ⚠️ {len(live_errors)} LIVE ERRORS - FIX BEFORE PROCEEDING")
@@ -8320,7 +8343,9 @@ def get_browser_errors(limit: int = 10) -> str:
 
     try:
         # Try to fetch from the dashboard API
-        res = requests.get(f'{_get_api_url()}/api/live-errors', timeout=3)
+        # Phase 0.2: Pass project_id to filter errors to current project
+        url = _live_errors_url()
+        res = requests.get(url, timeout=3)
         if res.status_code != 200:
             return "No browser errors available (dashboard not running or no errors)."
 
@@ -8861,7 +8886,7 @@ import time
 def _get_new_errors_since(timestamp: str) -> list:
     """Get errors that occurred after the given timestamp."""
     try:
-        res = requests.get(f'{_get_api_url()}/api/live-errors?since=10', timeout=2)
+        res = requests.get(_live_errors_url(since=10), timeout=2)
         if res.status_code == 200:
             data = res.json()
             errors = data.get('errors', [])
@@ -10516,7 +10541,7 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
     auto_fixes = _get_auto_fixes()
     _fo_init_trace(f"FORMAT_INIT_AUTO_FIXES_AFTER count={len(auto_fixes)}")
     _fo_init_trace("FORMAT_INIT_LIVE_ERRORS_BEFORE")
-    live_errors = _get_live_errors()
+    live_errors = _get_live_errors(project_id=project_id)
     _fo_init_trace(f"FORMAT_INIT_LIVE_ERRORS_AFTER count={len(live_errors)}")
     _fo_init_trace("FORMAT_INIT_ERROR_GATE_BEFORE")
     gate_result = _evaluate_current_error_gate(
