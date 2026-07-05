@@ -469,7 +469,7 @@ def get_project_metadata(working_dir: str) -> Optional[Dict[str, Any]]:
     Contains project_id that remains stable across machines.
 
     Returns:
-        Metadata dict or None if not found
+        Metadata dict or None if not found, or repaired metadata if corrupted
     """
     fixonce_dir = get_fixonce_dir(working_dir)
     metadata_path = fixonce_dir / "metadata.json"
@@ -479,10 +479,43 @@ def get_project_metadata(working_dir: str) -> Optional[Dict[str, Any]]:
 
     try:
         if SAFE_FILE_AVAILABLE:
-            return atomic_json_read(str(metadata_path), default=None)
+            result = atomic_json_read(str(metadata_path), default=None)
+            if result is not None:
+                return result
+            # atomic_json_read returned None - file might be corrupted
+            raise json.JSONDecodeError("Invalid JSON", "", 0)
         else:
             with open(metadata_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
+    except (json.JSONDecodeError, ValueError) as e:
+        # BUG-003 fix: Handle corrupted metadata files
+        print(f"[CommittedKnowledge] WARNING: Corrupted metadata.json detected in {working_dir}")
+        print(f"[CommittedKnowledge] Error: {e}")
+
+        # Try to restore from backup
+        backup_dir = fixonce_dir / ".backups"
+        if backup_dir.exists():
+            backups = sorted(backup_dir.glob("metadata.json.*"), reverse=True)
+            for backup in backups[:3]:  # Try up to 3 most recent backups
+                try:
+                    with open(backup, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    if data and data.get("project_id"):
+                        print(f"[CommittedKnowledge] Restored from backup: {backup.name}")
+                        # Restore the file
+                        with open(metadata_path, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, ensure_ascii=False, indent=2)
+                        return data
+                except Exception:
+                    continue
+
+        print(f"[CommittedKnowledge] No valid backup found - metadata will be regenerated")
+        # Delete corrupted file so it can be regenerated
+        try:
+            metadata_path.unlink()
+        except Exception:
+            pass
+        return None
     except Exception:
         return None
 
