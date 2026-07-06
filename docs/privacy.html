@@ -85,7 +85,7 @@
         <a href="index.html" class="back-link">&larr; Back to FixOnce</a>
 
         <h1>Privacy Policy</h1>
-        <p class="updated">Last updated: March 2026</p>
+        <p class="updated">Last updated: June 2026</p>
 
         <div class="highlight">
             <strong>Summary:</strong> FixOnce stores all data locally on your machine.
@@ -116,20 +116,30 @@
         <p>If you install the optional browser extension:</p>
         <ul>
             <li>It captures JavaScript errors from websites you choose to monitor</li>
-            <li>Errors are sent to your local FixOnce server (localhost only)</li>
-            <li>Sensitive data is automatically sanitized (emails, tokens, API keys)</li>
+            <li>Errors are sent to the local FixOnce app on your machine</li>
+            <li>FixOnce attempts to redact common sensitive patterns before saving structured project memory.</li>
             <li>You control which sites are monitored via whitelist</li>
         </ul>
 
+        <h2>Memory Review</h2>
+        <p>FixOnce allows AI assistants to propose memories (decisions, solutions, rules).
+        These proposals appear in the FixOnce desktop app for review.</p>
+        <ul>
+            <li><strong>You approve</strong> - Only memories you approve are saved</li>
+            <li><strong>You edit</strong> - Modify any proposed memory before saving</li>
+            <li><strong>You reject</strong> - Rejected memories are never stored</li>
+        </ul>
+        <p>Nothing is saved to project memory without your explicit approval.</p>
+
         <h2>AI Integration</h2>
         <div class="warning">
-            <strong>Note:</strong> FixOnce shares your project context with AI assistants
+            <strong>Note:</strong> FixOnce shares your approved project context with AI assistants
             (Claude, Cursor, Codex) that you use. This is the core feature -
             enabling AI to remember your decisions and context.
         </div>
         <p>The AI assistant sees:</p>
         <ul>
-            <li>Project decisions and insights you've saved</li>
+            <li>Project decisions and insights you've approved</li>
             <li>Current goals and work context</li>
             <li>Error history (if extension is installed)</li>
         </ul>
@@ -141,7 +151,7 @@
             <li>No telemetry</li>
             <li>No personal information</li>
             <li>No data sent to FixOnce servers (we don't have any)</li>
-            <li>No third-party services receive your data</li>
+            <li>FixOnce does not send your data to a FixOnce-operated cloud service. Connected AI tools may process context according to their own settings and policies.</li>
         </ul>
 
         <h2>Data Control</h2>
@@ -162,7 +172,7 @@
 
         <h2>Contact</h2>
         <p>Questions about privacy? Open an issue:</p>
-        <p><a href="https://github.com/Nati41/FixOnce">github.com/anthropics/fixonce</a></p>
+        <p><a href="https://github.com/Nati41/FixOnce">github.com/Nati41/FixOnce</a></p>
 
         <div class="footer">
             <p>FixOnce - Never debug the same bug twice.</p>

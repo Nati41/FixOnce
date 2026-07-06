@@ -1,11 +1,2806 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta http-equiv="refresh" content="0; url=install.html">
-<title>FixOnce</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070908">
+  <title>FixOnce — Your project remembers</title>
+  <meta name="description" content="Project-owned memory demonstrated with Claude, Codex, and Cursor. Local, portable, and owned by your project.">
+  <meta property="og:title" content="FixOnce — Your project remembers">
+  <meta property="og:description" content="The memory belongs to the project, not the model. Continue from where you left off, without explaining everything again.">
+  <meta property="og:image" content="screenshot-dashboard.png">
+  <link rel="icon" href="FixOnce.ico">
+  <style>
+    :root {
+      --bg: #070908;
+      --bg-soft: #0b0e0c;
+      --panel: #0e1210;
+      --panel-2: #121714;
+      --line: rgba(255, 255, 255, 0.09);
+      --line-bright: rgba(255, 255, 255, 0.16);
+      --text: #f4f7f4;
+      --muted: #9aa49d;
+      --quiet: #68716b;
+      --green: #15f58a;
+      --green-2: #70ffba;
+      --green-wash: rgba(21, 245, 138, 0.09);
+      --green-line: rgba(21, 245, 138, 0.25);
+      --blue: #79a7ff;
+      --radius: 20px;
+      --shadow: 0 34px 100px rgba(0, 0, 0, 0.55);
+      --max: 1180px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      color-scheme: dark;
+    }
+
+    body {
+      background:
+        radial-gradient(900px 620px at 50% -150px, rgba(21, 245, 138, 0.1), transparent 68%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      content: "";
+      pointer-events: none;
+      opacity: 0.18;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button,
+    a {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    img {
+      display: block;
+      max-width: 100%;
+    }
+
+    .container {
+      width: min(calc(100% - 40px), var(--max));
+      margin-inline: auto;
+    }
+
+    .nav {
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 100;
+      height: 72px;
+      transition: background 180ms ease, border-color 180ms ease;
+      border-bottom: 1px solid transparent;
+    }
+
+    .nav.scrolled {
+      background: rgba(7, 9, 8, 0.82);
+      border-bottom-color: var(--line);
+      backdrop-filter: blur(18px);
+    }
+
+    .nav-inner {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 680;
+      letter-spacing: -0.02em;
+    }
+
+    .brand img {
+      width: 29px;
+      height: 29px;
+      border-radius: 7px;
+    }
+
+    .brand small {
+      color: var(--green);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-left: 3px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 26px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .nav-links > a:not(.button):hover {
+      color: var(--text);
+    }
+
+    .button {
+      display: inline-flex;
+      min-height: 48px;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      padding: 0 20px;
+      border: 1px solid transparent;
+      border-radius: 11px;
+      font-size: 14px;
+      font-weight: 680;
+      cursor: pointer;
+      transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease, border-color 180ms ease;
+    }
+
+    .button:hover {
+      transform: translateY(-2px);
+    }
+
+    .button-primary {
+      color: #041209;
+      background: var(--green);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset, 0 10px 32px rgba(21, 245, 138, 0.16);
+    }
+
+    .button-primary:hover {
+      background: var(--green-2);
+      box-shadow: 0 13px 40px rgba(21, 245, 138, 0.24);
+    }
+
+    .button-secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.035);
+      border-color: var(--line-bright);
+    }
+
+    .button-secondary:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .button-small {
+      min-height: 38px;
+      padding: 0 15px;
+      border-radius: 9px;
+      font-size: 13px;
+    }
+
+    .icon {
+      width: 17px;
+      height: 17px;
+      flex: 0 0 auto;
+    }
+
+    .hero {
+      min-height: 100vh;
+      padding: 126px 0 62px;
+      display: grid;
+      align-items: center;
+      position: relative;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(350px, 0.78fr) minmax(720px, 1.22fr);
+      align-items: center;
+      gap: clamp(34px, 4.5vw, 66px);
+    }
+
+    .hero-copy {
+      max-width: 560px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      color: #c0c9c3;
+      font-size: 12px;
+      font-weight: 650;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 16px var(--green);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    h1 {
+      max-width: 940px;
+      margin: 22px 0 0;
+      font-size: clamp(3.25rem, 6.2vw, 5.8rem);
+      font-weight: 640;
+      line-height: 0.94;
+      letter-spacing: -0.07em;
+    }
+
+    .hero h1 span {
+      display: block;
+      color: var(--green);
+      text-shadow: 0 0 60px rgba(21, 245, 138, 0.16);
+    }
+
+    .hero-lede {
+      max-width: 520px;
+      margin: 27px 0 0;
+      color: var(--muted);
+      font-size: clamp(1.05rem, 2vw, 1.25rem);
+      line-height: 1.58;
+    }
+
+    .hero-lede strong {
+      color: var(--text);
+      font-weight: 560;
+    }
+
+    .hero-signal {
+      display: none;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 11px;
+      margin-top: 32px;
+    }
+
+    .cta-note {
+      margin-top: 12px;
+      color: var(--quiet);
+      font-size: 12px;
+    }
+
+    .hero-stage {
+      position: relative;
+      padding: 1px;
+      border-radius: 24px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(21, 245, 138, 0.18), rgba(121, 167, 255, 0.08));
+      box-shadow: 0 34px 100px rgba(0, 0, 0, 0.55);
+    }
+
+    .hero-stage::before {
+      position: absolute;
+      inset: -70px 12% auto;
+      height: 110px;
+      z-index: -1;
+      content: "";
+      filter: blur(40px);
+      background: rgba(21, 245, 138, 0.1);
+    }
+
+    .stage-inner {
+      overflow: hidden;
+      border-radius: 23px;
+      background:
+        radial-gradient(650px 420px at 80% 0%, rgba(21, 245, 138, 0.06), transparent 64%),
+        #0a0d0b;
+    }
+
+    .stage-bar {
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 17px;
+      color: var(--quiet);
+      border-bottom: 1px solid var(--line);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+    }
+
+    .window-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .window-dots i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #2d3530;
+    }
+
+    .truth-flow {
+      display: grid;
+      gap: 14px;
+      padding: 22px;
+    }
+
+    .agent-chain {
+      display: grid;
+      grid-template-columns: auto repeat(3, minmax(0, 1fr));
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chain-label,
+    .memory-label {
+      color: var(--quiet);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .chain-label {
+      margin-right: 3px;
+    }
+
+    .hero-agent {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 8px;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.025);
+      text-align: left;
+      cursor: pointer;
+      transition: color 180ms ease, background 180ms ease, border-color 180ms ease, transform 180ms ease;
+    }
+
+    .hero-agent:hover {
+      color: var(--text);
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .hero-agent.active {
+      color: var(--text);
+      border-color: var(--green-line);
+      background: var(--green-wash);
+    }
+
+    .hero-agent.active::after {
+      position: absolute;
+      inset: 0;
+      content: "";
+      opacity: 0.35;
+      background: linear-gradient(110deg, transparent 0%, rgba(112, 255, 186, 0.18) 45%, transparent 72%);
+      transform: translateX(-120%);
+      animation: softSweep 2.8s ease-in-out infinite;
+    }
+
+    .agent-mark {
+      width: 19px;
+      height: 19px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border: 1px solid var(--line-bright);
+      border-radius: 6px;
+      color: #dce4df;
+      font-size: 8px;
+      font-weight: 800;
+    }
+
+    .hero-agent.active .agent-mark {
+      color: var(--green);
+      border-color: var(--green-line);
+    }
+
+    .agent-meta {
+      display: grid;
+      gap: 1px;
+      min-width: 0;
+    }
+
+    .agent-meta strong {
+      font-size: 11px;
+      font-weight: 660;
+      letter-spacing: -0.01em;
+    }
+
+    .agent-meta span {
+      color: var(--quiet);
+      font-size: 8px;
+      white-space: nowrap;
+    }
+
+    .agent-status {
+      margin-left: auto;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #3b443e;
+    }
+
+    .hero-agent.active .agent-status {
+      background: var(--green);
+      box-shadow: 0 0 10px rgba(21, 245, 138, 0.7);
+    }
+
+    .proof-panel {
+      position: relative;
+      min-width: 0;
+    }
+
+    .proof-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 2px;
+    }
+
+    .proof-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    .proof-title::before {
+      width: 7px;
+      height: 7px;
+      content: "";
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 12px rgba(21, 245, 138, 0.7);
+    }
+
+    .proof-badge {
+      color: var(--green);
+      border: 1px solid var(--green-line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: rgba(21, 245, 138, 0.07);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .proof-copy {
+      display: none;
+    }
+
+    .proof-copy h2 {
+      margin: 0;
+      font-size: clamp(1.35rem, 2.25vw, 1.95rem);
+      line-height: 1.08;
+      letter-spacing: -0.045em;
+      font-weight: 620;
+    }
+
+    .proof-copy p {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .proof-evidence-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin: 12px 2px 9px;
+      color: #d7e2dc;
+      font-size: 10px;
+      font-weight: 760;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .proof-evidence-label::before {
+      width: 7px;
+      height: 7px;
+      content: "";
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 12px rgba(21, 245, 138, 0.62);
+    }
+
+    .terminal-shot {
+      margin: 0;
+      padding: 10px;
+      border: 1px solid rgba(112, 255, 186, 0.24);
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.055);
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+        0 0 34px rgba(21, 245, 138, 0.08),
+        0 30px 76px rgba(0, 0, 0, 0.52);
+    }
+
+    .terminal-shot img {
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+    }
+
+    .memory-strip {
+      display: none;
+    }
+
+    .memory-stat {
+      min-height: 72px;
+      padding: 14px 16px;
+      background: rgba(7, 9, 8, 0.85);
+    }
+
+    .memory-stat span {
+      display: block;
+      color: var(--quiet);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .memory-stat strong {
+      display: block;
+      margin-top: 6px;
+      color: #dde4df;
+      font-size: 13px;
+      font-weight: 620;
+    }
+
+    .trust-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      margin: 28px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: left;
+    }
+
+    .trust-bar span {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 7px;
+      min-height: 42px;
+      border-right: 1px solid var(--line);
+    }
+
+    .trust-bar span:last-child {
+      border-right: 0;
+    }
+
+    .check {
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    section:not(.hero) {
+      padding: 118px 0;
+    }
+
+    .section-kicker {
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 730;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    .section-title {
+      max-width: 760px;
+      margin-top: 15px;
+      font-size: clamp(2.35rem, 5vw, 4.35rem);
+      font-weight: 600;
+      line-height: 1.02;
+      letter-spacing: -0.055em;
+      text-wrap: balance;
+    }
+
+    .section-copy {
+      max-width: 610px;
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.7;
+    }
+
+    .demo-section {
+      border-top: 1px solid var(--line);
+    }
+
+    .demo-header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 40px;
+    }
+
+    .demo-header .section-copy {
+      max-width: 440px;
+      margin: 0 0 4px;
+    }
+
+    .real-proof {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+      gap: clamp(22px, 4.5vw, 58px);
+      align-items: center;
+      margin-top: 64px;
+      padding: clamp(24px, 5vw, 56px);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      overflow: hidden;
+      background:
+        radial-gradient(420px 280px at 78% 45%, rgba(21, 245, 138, 0.09), transparent 72%),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.025), transparent 50%),
+        var(--panel);
+    }
+
+    .real-proof::before {
+      position: absolute;
+      inset: 0;
+      content: "";
+      pointer-events: none;
+      opacity: 0.5;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to right, black, transparent 78%);
+    }
+
+    .proof-shot {
+      position: relative;
+      z-index: 1;
+    }
+
+    .proof-shot.without {
+      opacity: 0.58;
+      transform: rotate(-1.5deg);
+      filter: saturate(0.38) brightness(0.82);
+    }
+
+    .proof-shot.with {
+      transform: rotate(0.45deg) translateY(4px) scale(1.055);
+    }
+
+    .proof-label {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 15px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 720;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .proof-label::before {
+      width: 7px;
+      height: 7px;
+      content: "";
+      border-radius: 50%;
+      background: #69716c;
+    }
+
+    .proof-shot.with .proof-label {
+      color: var(--green);
+    }
+
+    .proof-shot.with .proof-label::before {
+      background: var(--green);
+      box-shadow: 0 0 14px rgba(21, 245, 138, 0.7);
+    }
+
+    .proof-image {
+      position: relative;
+      overflow: hidden;
+      padding: 7px;
+      border: 1px solid var(--line-bright);
+      border-radius: 17px;
+      background: rgba(255, 255, 255, 0.035);
+      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.42);
+    }
+
+    .proof-shot.with .proof-image {
+      border-color: var(--green-line);
+      background: rgba(21, 245, 138, 0.045);
+      overflow: visible;
+      box-shadow: 0 34px 95px rgba(0, 0, 0, 0.58), 0 0 68px rgba(21, 245, 138, 0.13);
+    }
+
+    .proof-image img {
+      width: 100%;
+      border-radius: 11px;
+    }
+
+    .proof-output-line {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 13px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .proof-output-line strong {
+      color: var(--green);
+      font-weight: 720;
+    }
+
+    .proof-output-line span {
+      color: #dce6df;
+    }
+
+    .proof-caption {
+      margin-top: 17px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .proof-caption strong {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .proof-arrow {
+      position: absolute;
+      z-index: 2;
+      inset: 52% auto auto 43%;
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      transform: translate(-50%, -50%);
+      border: 1px solid var(--green-line);
+      border-radius: 50%;
+      color: #041209;
+      background: var(--green);
+      box-shadow: 0 0 35px rgba(21, 245, 138, 0.24);
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .real-proof-note {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .real-proof-note b {
+      color: var(--green);
+      font-weight: 650;
+    }
+
+    .demo-shell {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 1px;
+      margin-top: 54px;
+      padding: 1px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--line);
+    }
+
+    .demo-side,
+    .demo-output {
+      min-height: 445px;
+      padding: clamp(25px, 4vw, 45px);
+      background: var(--panel);
+    }
+
+    .demo-side {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .demo-step {
+      display: flex;
+      gap: 15px;
+      padding: 17px 0;
+      color: var(--quiet);
+      border-bottom: 1px solid var(--line);
+      transition: color 180ms ease;
+    }
+
+    .demo-step.active {
+      color: var(--text);
+    }
+
+    .step-number {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border: 1px solid var(--line-bright);
+      border-radius: 50%;
+      font-size: 10px;
+      transition: 180ms ease;
+    }
+
+    .demo-step.active .step-number {
+      color: #041209;
+      border-color: var(--green);
+      background: var(--green);
+    }
+
+    .demo-step strong {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .demo-step p {
+      margin-top: 4px;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .demo-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 30px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .play-button {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-bright);
+      border-radius: 50%;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+      cursor: pointer;
+    }
+
+    .play-button:hover {
+      border-color: var(--green-line);
+      background: var(--green-wash);
+    }
+
+    .demo-output {
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(rgba(21, 245, 138, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(21, 245, 138, 0.035) 1px, transparent 1px),
+        #090c0a;
+      background-size: 34px 34px;
+    }
+
+    .project-orbit {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: min(72%, 360px);
+      aspect-ratio: 1;
+      transform: translate(-50%, -50%);
+      border: 1px solid rgba(21, 245, 138, 0.13);
+      border-radius: 50%;
+    }
+
+    .project-orbit::before {
+      position: absolute;
+      inset: 15%;
+      content: "";
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      animation: spin 26s linear infinite;
+    }
+
+    .project-core {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 138px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      transform: translate(-50%, -50%);
+      border: 1px solid var(--green-line);
+      border-radius: 30px;
+      background: rgba(10, 20, 14, 0.95);
+      box-shadow: 0 0 70px rgba(21, 245, 138, 0.12);
+      text-align: center;
+    }
+
+    .project-core img {
+      width: 38px;
+      height: 38px;
+      margin: auto;
+      border-radius: 9px;
+    }
+
+    .project-core strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    .project-core span {
+      color: var(--green);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 10px;
+    }
+
+    .orbit-agent {
+      position: absolute;
+      width: 74px;
+      min-height: 44px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-bright);
+      border-radius: 10px;
+      color: var(--muted);
+      background: #0f1411;
+      font-size: 11px;
+      font-weight: 650;
+      transition: 250ms ease;
+    }
+
+    .orbit-agent.active {
+      color: var(--text);
+      border-color: var(--green);
+      box-shadow: 0 0 25px rgba(21, 245, 138, 0.16);
+      transform: scale(1.06);
+    }
+
+    .orbit-agent:nth-of-type(1) {
+      top: -23px;
+      left: calc(50% - 37px);
+    }
+
+    .orbit-agent:nth-of-type(2) {
+      right: -37px;
+      bottom: 52px;
+    }
+
+    .orbit-agent:nth-of-type(3) {
+      left: -37px;
+      bottom: 52px;
+    }
+
+    .signal {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 8px;
+      height: 8px;
+      margin: -4px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 17px var(--green);
+      animation: signal 2.6s ease-in-out infinite;
+    }
+
+    .benefits {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin-top: 76px;
+      padding: 1px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--line);
+    }
+
+    .benefit {
+      min-height: 285px;
+      padding: 34px;
+      background: var(--panel);
+    }
+
+    .benefit-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--green-line);
+      border-radius: 12px;
+      color: var(--green);
+      background: var(--green-wash);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 14px;
+    }
+
+    .benefit h3 {
+      margin-top: 62px;
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+    }
+
+    .benefit p {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .product-section {
+      overflow: hidden;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      background:
+        radial-gradient(760px 520px at 82% 48%, rgba(21, 245, 138, 0.08), transparent 70%),
+        var(--bg-soft);
+    }
+
+    .product-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.84fr) minmax(420px, 1.16fr);
+      align-items: center;
+      gap: 82px;
+    }
+
+    .product-intro {
+      display: grid;
+      gap: 30px;
+    }
+
+    .product-intro .section-copy {
+      max-width: 590px;
+    }
+
+    .state-steps {
+      display: grid;
+      gap: 22px;
+      margin: 0;
+    }
+
+    .state-step {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 15px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .state-step i {
+      position: relative;
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      margin-top: 1px;
+      border: 1px solid rgba(21, 245, 138, 0.34);
+      border-radius: 50%;
+      color: rgba(21, 245, 138, 0.92);
+      background: rgba(21, 245, 138, 0.08);
+      font-style: normal;
+      font-size: 11px;
+      font-weight: 720;
+    }
+
+    .state-step:not(:last-child) i::after {
+      position: absolute;
+      top: 31px;
+      left: 50%;
+      width: 1px;
+      height: 32px;
+      content: "";
+      background: linear-gradient(180deg, rgba(21, 245, 138, 0.22), transparent);
+    }
+
+    .state-step strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--text);
+      font-weight: 590;
+    }
+
+    .state-handoff {
+      max-width: 470px;
+      margin-top: 2px;
+      padding-top: 23px;
+      border-top: 1px solid var(--line);
+      color: rgba(245, 248, 245, 0.7);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .dashboard-proof {
+      position: relative;
+      width: min(100%, 650px);
+      margin-left: auto;
+    }
+
+    .dashboard-frame {
+      position: relative;
+      width: min(500px, calc(100% - 150px));
+      padding: 14px;
+      border: 1px solid rgba(21, 245, 138, 0.18);
+      border-radius: 26px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+        rgba(8, 12, 10, 0.84);
+      box-shadow:
+        0 34px 90px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+        0 0 54px rgba(21, 245, 138, 0.09);
+    }
+
+    .dashboard-frame::before {
+      position: absolute;
+      inset: 0;
+      content: "";
+      border-radius: inherit;
+      pointer-events: none;
+      background:
+        radial-gradient(320px 220px at 50% 0%, rgba(21, 245, 138, 0.12), transparent 72%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 36%);
+    }
+
+    .dashboard-crop {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      background: #f4f2fb;
+    }
+
+    .dashboard-crop img {
+      display: block;
+      width: 100%;
+      border-radius: 17px;
+      filter: saturate(0.98) contrast(1.01);
+    }
+
+    .state-callout {
+      position: absolute;
+      z-index: 2;
+      display: grid;
+      gap: 4px;
+      width: 132px;
+      color: rgba(245, 248, 245, 0.7);
+      font-size: 11px;
+      line-height: 1.35;
+      letter-spacing: 0.01em;
+    }
+
+    .state-callout strong {
+      color: rgba(245, 248, 245, 0.92);
+      font-size: 12px;
+      font-weight: 620;
+    }
+
+    .state-callout::before {
+      width: 6px;
+      height: 6px;
+      content: "";
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 18px rgba(21, 245, 138, 0.68);
+    }
+
+    .state-callout::after {
+      position: absolute;
+      top: 4px;
+      height: 1px;
+      content: "";
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.58), rgba(21, 245, 138, 0.12));
+      transform-origin: left center;
+    }
+
+    .state-callout.connected {
+      top: 52px;
+      right: 0;
+    }
+
+    .state-callout.connected::after {
+      right: 100%;
+      width: 92px;
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.12), rgba(21, 245, 138, 0.52));
+      transform: rotate(180deg);
+    }
+
+    .state-callout.project {
+      top: 186px;
+      right: 0;
+    }
+
+    .state-callout.project::after {
+      right: 100%;
+      width: 92px;
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.12), rgba(21, 245, 138, 0.52));
+      transform: rotate(180deg);
+    }
+
+    .state-callout.stopped {
+      top: 326px;
+      right: 0;
+    }
+
+    .state-callout.stopped::after {
+      right: 100%;
+      width: 92px;
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.12), rgba(21, 245, 138, 0.52));
+      transform: rotate(180deg);
+    }
+
+    .state-callout.memory {
+      top: 500px;
+      right: 0;
+    }
+
+    .state-callout.memory::after {
+      right: 100%;
+      width: 92px;
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.12), rgba(21, 245, 138, 0.52));
+      transform: rotate(180deg);
+    }
+
+    .screenshot-lightbox {
+      width: min(94vw, 1180px);
+      max-height: 94vh;
+      padding: 12px;
+      border: 1px solid var(--line-bright);
+      border-radius: 20px;
+      color: var(--text);
+      background: #0b0f0c;
+      box-shadow: 0 34px 100px rgba(0, 0, 0, 0.72);
+    }
+
+    .screenshot-lightbox::backdrop {
+      background: rgba(2, 4, 3, 0.84);
+      backdrop-filter: blur(10px);
+    }
+
+    .screenshot-lightbox img {
+      display: block;
+      width: 100%;
+      max-height: calc(94vh - 24px);
+      object-fit: contain;
+      border-radius: 12px;
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: 22px;
+      right: 22px;
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 50%;
+      color: #fff;
+      background: rgba(7, 9, 8, 0.78);
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    .ownership-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+      align-items: center;
+      gap: clamp(48px, 7vw, 92px);
+    }
+
+    .ownership-copy .section-copy {
+      max-width: 590px;
+    }
+
+    .ownership-points {
+      display: grid;
+      gap: 13px;
+      max-width: 560px;
+      margin-top: 30px;
+    }
+
+    .ownership-point {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      gap: 13px;
+      align-items: start;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .ownership-point i {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      margin-top: 1px;
+      border: 1px solid var(--green-line);
+      border-radius: 8px;
+      color: var(--green);
+      background: rgba(21, 245, 138, 0.07);
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .ownership-point strong {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--text);
+      font-weight: 620;
+      letter-spacing: -0.01em;
+    }
+
+    .ownership-proof-line {
+      max-width: 560px;
+      margin-top: 30px;
+      padding-top: 22px;
+      border-top: 1px solid var(--line);
+      color: rgba(245, 248, 245, 0.72);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .ownership-proof-line code {
+      color: var(--green);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .ownership-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      max-width: 560px;
+      margin-top: 22px;
+    }
+
+    .ownership-summary span {
+      min-height: 74px;
+      display: grid;
+      align-content: center;
+      gap: 5px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.02);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .ownership-summary strong {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 640;
+      letter-spacing: -0.01em;
+    }
+
+    .repo-memory-visual {
+      position: relative;
+      min-height: 520px;
+      display: grid;
+      place-items: center;
+      padding: 46px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background:
+        radial-gradient(520px 320px at 50% 46%, rgba(21, 245, 138, 0.08), transparent 68%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
+        var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .repo-memory-visual::before {
+      position: absolute;
+      inset: 1px;
+      content: "";
+      border-radius: inherit;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.035), transparent 28%, transparent 72%, rgba(255, 255, 255, 0.025)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%);
+    }
+
+    .repo-handoff {
+      position: relative;
+      z-index: 1;
+      width: min(100%, 520px);
+      display: grid;
+      gap: 18px;
+    }
+
+    .repo-flow-label {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+      color: rgba(245, 248, 245, 0.5);
+      font-size: 10px;
+      font-weight: 760;
+      letter-spacing: 0.12em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .repo-flow-label::before,
+    .repo-flow-label::after {
+      height: 1px;
+      content: "";
+      background: linear-gradient(90deg, transparent, rgba(21, 245, 138, 0.26));
+    }
+
+    .repo-flow-label::after {
+      background: linear-gradient(90deg, rgba(21, 245, 138, 0.26), transparent);
+    }
+
+    .repo-node {
+      position: relative;
+      padding: 24px;
+      border: 1px solid rgba(21, 245, 138, 0.22);
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)),
+        #0a0e0c;
+      box-shadow:
+        0 28px 80px rgba(0, 0, 0, 0.42),
+        0 0 70px rgba(21, 245, 138, 0.08);
+    }
+
+    .repo-node-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding-bottom: 17px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .repo-node-head strong {
+      display: block;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: -0.025em;
+    }
+
+    .repo-node-head span,
+    .repo-caption,
+    .tool-strip span {
+      color: var(--quiet);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .repo-pill {
+      align-self: start;
+      padding: 6px 9px;
+      border: 1px solid var(--green-line);
+      border-radius: 999px;
+      color: var(--green);
+      background: var(--green-wash);
+      font-size: 10px;
+      font-weight: 760;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .repo-memory-stack {
+      display: grid;
+      grid-template-columns: 0.86fr 1.14fr;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .repo-row {
+      min-height: 122px;
+      display: grid;
+      align-content: space-between;
+      gap: 16px;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.055);
+      border-radius: 16px;
+      color: var(--muted);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .repo-row.memory {
+      color: var(--green);
+      border-color: var(--green-line);
+      background: rgba(21, 245, 138, 0.075);
+      box-shadow: 0 0 34px rgba(21, 245, 138, 0.08);
+    }
+
+    .repo-row strong {
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      font-size: 15px;
+      font-weight: 620;
+      letter-spacing: -0.015em;
+    }
+
+    .repo-row em {
+      color: var(--quiet);
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      font-size: 10px;
+      font-style: normal;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .tool-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .tool-strip span {
+      min-height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .tool-strip span.active-owner {
+      color: var(--text);
+      border-color: rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .tool-strip span.memory-owner {
+      grid-column: 1 / -1;
+      color: var(--green);
+      border-color: var(--green-line);
+      background: var(--green-wash);
+      box-shadow: 0 0 28px rgba(21, 245, 138, 0.08);
+    }
+
+    .repo-ledger {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .ledger-card {
+      min-height: 74px;
+      display: grid;
+      align-content: center;
+      gap: 5px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .ledger-card span {
+      color: var(--quiet);
+      font-size: 10px;
+      font-weight: 730;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .ledger-card strong {
+      color: #dce6df;
+      font-size: 13px;
+      font-weight: 620;
+    }
+
+    .ledger-card.memory {
+      border-color: rgba(21, 245, 138, 0.2);
+      background: rgba(21, 245, 138, 0.055);
+    }
+
+    .repo-clone {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .clone-card {
+      min-height: 76px;
+      display: grid;
+      gap: 5px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .clone-card span {
+      color: var(--quiet);
+      font-size: 10px;
+      font-weight: 720;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .clone-card strong {
+      color: #dce6df;
+      font-size: 13px;
+      font-weight: 620;
+    }
+
+    .clone-arrow {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--green-line);
+      border-radius: 50%;
+      color: var(--green);
+      background: var(--green-wash);
+      font-size: 16px;
+    }
+
+    .repo-caption {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: center;
+      padding-top: 2px;
+      color: rgba(245, 248, 245, 0.58);
+      text-align: center;
+    }
+
+    .repo-caption::before,
+    .repo-caption::after {
+      width: 46px;
+      height: 1px;
+      content: "";
+      background: rgba(21, 245, 138, 0.24);
+    }
+
+    .trust-section {
+      padding-top: 0 !important;
+    }
+
+    .trust-panel {
+      padding: clamp(32px, 6vw, 72px);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background:
+        linear-gradient(135deg, rgba(21, 245, 138, 0.055), transparent 44%),
+        var(--panel);
+    }
+
+    .trust-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 50px;
+    }
+
+    .trust-head .section-title {
+      max-width: 610px;
+      margin-top: 0;
+    }
+
+    .trust-seal {
+      width: 130px;
+      height: 130px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border: 1px solid var(--green-line);
+      border-radius: 50%;
+      color: var(--green);
+      background: var(--green-wash);
+      box-shadow: 0 0 50px rgba(21, 245, 138, 0.08);
+      text-align: center;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .trust-items {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 30px;
+      margin-top: 70px;
+    }
+
+    .trust-item {
+      padding-top: 18px;
+      border-top: 1px solid var(--line-bright);
+    }
+
+    .trust-item strong {
+      display: block;
+      font-size: 14px;
+      font-weight: 610;
+    }
+
+    .trust-item p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .download-section {
+      position: relative;
+      overflow: hidden;
+      padding: 145px 0 !important;
+      text-align: center;
+      border-top: 1px solid var(--line);
+      background:
+        radial-gradient(550px 350px at 50% 50%, rgba(21, 245, 138, 0.11), transparent 70%),
+        #080b09;
+    }
+
+    .download-section::before {
+      position: absolute;
+      inset: 0;
+      content: "";
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: radial-gradient(circle at center, black, transparent 70%);
+    }
+
+    .download-content {
+      position: relative;
+      max-width: 780px;
+      margin: auto;
+    }
+
+    .download-content .section-title {
+      margin-inline: auto;
+    }
+
+    .download-content .section-copy {
+      margin-inline: auto;
+    }
+
+    .download-actions {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 11px;
+      margin-top: 34px;
+    }
+
+    .download-actions .button {
+      min-width: 210px;
+    }
+
+    .download-assurances {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 22px;
+      margin-top: 25px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .download-warning {
+      max-width: 600px;
+      margin: 24px auto 0;
+      color: var(--quiet);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    .faq {
+      max-width: 840px;
+    }
+
+    .faq .section-title {
+      font-size: clamp(2.2rem, 4vw, 3.4rem);
+    }
+
+    .faq-list {
+      margin-top: 48px;
+      border-top: 1px solid var(--line);
+    }
+
+    details {
+      border-bottom: 1px solid var(--line);
+    }
+
+    summary {
+      min-height: 74px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 25px;
+      list-style: none;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 560;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+    }
+
+    summary::after {
+      color: var(--quiet);
+      content: "+";
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 20px;
+      font-weight: 400;
+    }
+
+    details[open] summary::after {
+      content: "−";
+    }
+
+    details p {
+      max-width: 700px;
+      padding: 0 0 24px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    footer {
+      padding: 34px 0 42px;
+      border-top: 1px solid var(--line);
+    }
+
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 30px;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 22px;
+      color: var(--quiet);
+      font-size: 12px;
+    }
+
+    .footer-links a:hover {
+      color: var(--text);
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1), transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    section:target .reveal {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .mobile-cta {
+      position: fixed;
+      inset: auto 12px 12px;
+      z-index: 90;
+      display: none;
+      padding: 8px;
+      border: 1px solid var(--line-bright);
+      border-radius: 14px;
+      background: rgba(7, 9, 8, 0.88);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+    }
+
+    .mobile-cta .button {
+      width: 100%;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.55; transform: scale(0.85); }
+      50% { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes signal {
+      0%, 100% { transform: translate(0, -122px); opacity: 0; }
+      12% { opacity: 1; }
+      42% { transform: translate(101px, 58px); opacity: 1; }
+      52% { opacity: 0; }
+      60% { transform: translate(-101px, 58px); opacity: 0; }
+      70% { opacity: 1; }
+      94% { transform: translate(0, -122px); opacity: 1; }
+    }
+
+    @keyframes softSweep {
+      0%, 35% { transform: translateX(-120%); }
+      70%, 100% { transform: translateX(120%); }
+    }
+
+    @media (max-width: 900px) {
+      .nav-links > a:not(.button) {
+        display: none;
+      }
+
+      .hero-grid {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+
+      .hero-copy {
+        max-width: 760px;
+      }
+
+      .demo-header {
+        display: block;
+      }
+
+      .demo-header .section-copy {
+        max-width: 610px;
+        margin-top: 20px;
+      }
+
+      .demo-shell,
+      .product-grid,
+      .ownership-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .real-proof {
+        grid-template-columns: 1fr;
+        max-width: 680px;
+        margin-inline: auto;
+      }
+
+      .proof-shot.without {
+        transform: rotate(-0.7deg);
+      }
+
+      .proof-shot.with {
+        transform: rotate(0.7deg);
+      }
+
+      .proof-arrow {
+        inset: 50% auto auto 50%;
+        transform: translate(-50%, -50%) rotate(90deg);
+      }
+
+      .benefits {
+        grid-template-columns: 1fr;
+      }
+
+      .benefit {
+        min-height: 220px;
+      }
+
+      .benefit h3 {
+        margin-top: 40px;
+      }
+
+      .product-grid {
+        gap: 52px;
+      }
+
+      .dashboard-proof {
+        width: min(100%, 560px);
+        margin-inline: auto;
+      }
+
+      .state-callout {
+        display: none;
+      }
+
+      .ownership-grid {
+        gap: 50px;
+      }
+
+      .repo-memory-visual {
+        max-width: 620px;
+        margin-inline: auto;
+      }
+
+      .trust-items {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 650px) {
+      .container {
+        width: min(calc(100% - 28px), var(--max));
+      }
+
+      .nav {
+        height: 62px;
+      }
+
+      .brand small {
+        display: none;
+      }
+
+      .nav-links .button {
+        min-height: 36px;
+        padding-inline: 12px;
+      }
+
+      .hero {
+        min-height: auto;
+        padding: 125px 0 65px;
+      }
+
+      h1 {
+        font-size: clamp(3.25rem, 17vw, 5rem);
+      }
+
+      .hero-lede {
+        font-size: 16px;
+      }
+
+      .hero-signal {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        margin-top: 24px;
+      }
+
+      .hero-signal span {
+        min-height: 42px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.025);
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .hero-signal strong {
+        grid-column: 1 / -1;
+        min-height: 42px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--green-line);
+        border-radius: 10px;
+        color: var(--green);
+        background: var(--green-wash);
+        font-size: 12px;
+      }
+
+      .hero-actions {
+        display: grid;
+      }
+
+      .hero-actions .button {
+        width: 100%;
+      }
+
+      .hero-stage {
+        margin-top: 0;
+      }
+
+      .truth-flow {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        padding: 14px;
+      }
+
+      .agent-chain {
+        grid-template-columns: repeat(3, 1fr);
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .chain-label {
+        display: none;
+      }
+
+      .hero-agent {
+        justify-content: center;
+        min-height: 43px;
+        padding: 0 8px;
+      }
+
+      .agent-mark,
+      .agent-status {
+        display: none;
+      }
+
+      .agent-meta {
+        text-align: center;
+      }
+
+      .agent-meta strong {
+        font-size: 12px;
+      }
+
+      .agent-meta span {
+        font-size: 9px;
+      }
+
+      .proof-header {
+        align-items: flex-start;
+        flex-direction: column;
+        padding-inline: 2px;
+      }
+
+      .terminal-shot {
+        margin: 0;
+      }
+
+      .trust-bar {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .trust-bar span:nth-child(2) {
+        border-right: 0;
+      }
+
+      .trust-bar span:nth-child(-n + 2) {
+        border-bottom: 1px solid var(--line);
+      }
+
+      section:not(.hero) {
+        padding: 84px 0;
+      }
+
+      .section-title {
+        font-size: clamp(2.3rem, 12vw, 3.25rem);
+      }
+
+      .section-copy {
+        font-size: 15px;
+      }
+
+      .demo-shell {
+        margin-top: 38px;
+      }
+
+      .real-proof {
+        gap: 48px;
+        margin-top: 38px;
+        padding: 20px;
+        border-radius: 18px;
+      }
+
+      .proof-arrow {
+        width: 42px;
+        height: 42px;
+      }
+
+      .proof-caption {
+        font-size: 12px;
+      }
+
+      .product-grid {
+        gap: 38px;
+      }
+
+      .state-steps {
+        gap: 18px;
+      }
+
+      .state-handoff {
+        margin-top: 0;
+        padding-top: 18px;
+      }
+
+      .dashboard-frame {
+        width: auto;
+        padding: 9px;
+        border-radius: 21px;
+      }
+
+      .dashboard-crop {
+        max-height: 680px;
+        border-radius: 14px;
+      }
+
+      .dashboard-crop img {
+        border-radius: 13px;
+      }
+
+      .repo-memory-visual {
+        min-height: auto;
+        padding: 20px;
+        border-radius: 22px;
+      }
+
+      .repo-flow-label {
+        grid-template-columns: 1fr;
+      }
+
+      .repo-flow-label::before,
+      .repo-flow-label::after {
+        display: none;
+      }
+
+      .repo-node {
+        padding: 18px;
+        border-radius: 19px;
+      }
+
+      .repo-node-head {
+        gap: 12px;
+      }
+
+      .repo-pill {
+        padding-inline: 8px;
+      }
+
+      .repo-memory-stack {
+        grid-template-columns: 1fr;
+      }
+
+      .ownership-summary,
+      .repo-ledger {
+        grid-template-columns: 1fr;
+      }
+
+      .repo-row {
+        min-height: 92px;
+      }
+
+      .repo-clone {
+        grid-template-columns: 1fr;
+      }
+
+      .clone-arrow {
+        justify-self: center;
+        transform: rotate(90deg);
+      }
+
+      .tool-strip {
+        gap: 7px;
+      }
+
+      .tool-strip span {
+        min-height: 36px;
+        font-size: 9px;
+      }
+
+      .repo-caption::before,
+      .repo-caption::after {
+        width: 22px;
+      }
+
+      .demo-side,
+      .demo-output {
+        min-height: 390px;
+        padding: 25px 20px;
+      }
+
+      .demo-side {
+        min-height: auto;
+      }
+
+      .demo-control {
+        margin-top: 22px;
+      }
+
+      .project-orbit {
+        width: 280px;
+      }
+
+      .benefits {
+        margin-top: 45px;
+      }
+
+      .benefit {
+        padding: 27px;
+      }
+
+      .trust-head {
+        display: block;
+      }
+
+      .trust-seal {
+        width: 100px;
+        height: 100px;
+        margin-top: 35px;
+      }
+
+      .trust-items {
+        grid-template-columns: 1fr;
+        gap: 25px;
+        margin-top: 50px;
+      }
+
+      .download-section {
+        padding: 105px 0 120px !important;
+      }
+
+      .download-actions {
+        display: grid;
+      }
+
+      .download-actions .button {
+        width: 100%;
+      }
+
+      .footer-inner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .mobile-cta {
+        display: block;
+        transform: translateY(140%);
+        transition: transform 250ms ease;
+      }
+
+      .mobile-cta.visible {
+        transform: translateY(0);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+
+      .reveal {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  </style>
 </head>
 <body>
-<p>Redirecting to <a href="install.html">Install page</a>...</p>
+  <nav class="nav" aria-label="Primary navigation">
+    <div class="container nav-inner">
+      <a class="brand" href="#" aria-label="FixOnce home">
+        <img src="FixOnce.ico" alt="">
+        <span>FixOnce</span>
+        <small>Public beta</small>
+      </a>
+      <div class="nav-links">
+        <a href="#demo">Demo</a>
+        <a href="#product">Product</a>
+        <a href="#trust">Security</a>
+        <a class="button button-primary button-small os-download" href="https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13.exe">Get the beta</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="eyebrow-dot"></span>Persistent project memory for coding agents</div>
+          <div class="hero-signal" aria-label="Claude, Codex, and Cursor use the same project truth">
+            <span>Claude</span>
+            <span>Codex</span>
+            <span>Cursor</span>
+            <strong>Same project truth</strong>
+          </div>
+          <h1>The AI changes. <span>The project remains.</span></h1>
+          <p class="hero-lede">
+            Demonstrated with Claude, Codex, and Cursor, so the next AI resumes from the same project context.
+          </p>
+          <div class="hero-actions" aria-label="Download FixOnce">
+            <a class="button button-primary" href="https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13.exe">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5"/><path d="M5 21h14"/></svg>
+              Download for Windows
+            </a>
+            <a class="button button-secondary" href="https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce-mac.dmg">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5"/><path d="M5 21h14"/></svg>
+              Download for macOS
+            </a>
+          </div>
+          <p class="cta-note">Free during beta · Local-first · No account required</p>
+
+          <div class="trust-bar" aria-label="Product assurances">
+            <span><b class="check">✓</b> Runs locally</span>
+            <span><b class="check">✓</b> No FixOnce cloud memory</span>
+            <span><b class="check">✓</b> Demonstrated across Claude, Codex, Cursor</span>
+            <span><b class="check">✓</b> Project-owned memory</span>
+          </div>
+        </div>
+
+        <div class="hero-stage" aria-label="Claude, Codex, and Cursor continuing from the same FixOnce project memory">
+          <div class="stage-inner">
+            <div class="stage-bar">
+              <div class="window-dots"><i></i><i></i><i></i></div>
+              <span>~/FixOnce · shared project truth</span>
+              <span>local</span>
+            </div>
+            <div class="truth-flow">
+              <aside class="agent-chain" aria-label="AI agents using the same project memory">
+                <div class="chain-label">Continue with</div>
+                <button class="hero-agent active" data-agent="Claude" data-action="fixed the bug" type="button">
+                  <span class="agent-mark">CL</span>
+                  <span class="agent-meta"><strong>Claude</strong><span>yesterday</span></span>
+                  <span class="agent-status"></span>
+                </button>
+                <button class="hero-agent" data-agent="Codex" data-action="continues the task" type="button">
+                  <span class="agent-mark">CX</span>
+                  <span class="agent-meta"><strong>Codex</strong><span>today</span></span>
+                  <span class="agent-status"></span>
+                </button>
+                <button class="hero-agent" data-agent="Cursor" data-action="restores the context" type="button">
+                  <span class="agent-mark">CU</span>
+                  <span class="agent-meta"><strong>Cursor</strong><span>context restored</span></span>
+                  <span class="agent-status"></span>
+                </button>
+              </aside>
+
+              <div class="proof-panel">
+                <div class="proof-header">
+                  <div class="proof-title"><span class="active-agent-name">Claude</span> <span class="active-agent-action">fixed the bug</span></div>
+                  <div class="proof-badge">Shared project memory</div>
+                </div>
+                <div class="proof-evidence-label">Actual fo_init output</div>
+                <figure class="terminal-shot">
+                  <img src="real-session-with-fixonce.png" alt="Real FixOnce fo_init output showing project goal, area, last work, next action, memory counts, and Ready state">
+                </figure>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="demo-section" id="demo">
+      <div class="container">
+        <div class="demo-header reveal">
+          <div>
+            <div class="section-kicker">The 20-second demo</div>
+            <h2 class="section-title">Switch the agent.<br>Keep the context.</h2>
+          </div>
+          <p class="section-copy">You don't continue the chat. You continue the project.</p>
+        </div>
+
+        <div class="real-proof reveal">
+          <article class="proof-shot without">
+            <div class="proof-label">Yesterday: Claude worked</div>
+            <div class="proof-image">
+              <img src="real-session-without-memory.png" alt="Claude Code session without FixOnce asking what the user wants to work on" loading="lazy">
+            </div>
+            <p class="proof-caption"><strong>The next AI starts cold.</strong>Changed files don't explain the goal, the decisions, or what should happen next.</p>
+          </article>
+
+          <div class="proof-arrow" aria-hidden="true">→</div>
+
+          <article class="proof-shot with">
+            <div class="proof-label">Today: Codex opens it</div>
+            <div class="proof-image">
+              <img src="real-session-with-fixonce.png" alt="Real FixOnce session restored with project goal, last work, next step, and memory counts" loading="lazy">
+            </div>
+            <div class="proof-output-line"><strong>Actual fo_init output</strong><span>Goal · Last work · Next step · Memory · Ready</span></div>
+            <p class="proof-caption"><strong>Nothing had to be explained again.</strong>The project loads the goal, last work, next step, memory, and ready state before coding starts.</p>
+          </article>
+        </div>
+        <p class="real-proof-note reveal"><b>Real session output.</b> Same project memory, even when the agent changes.</p>
+      </div>
+    </section>
+
+    <section class="product-section" id="product">
+      <div class="container product-grid">
+        <div class="product-intro reveal">
+          <div>
+            <div class="section-kicker">Project state</div>
+            <h2 class="section-title">The project state is always visible.</h2>
+            <p class="section-copy">FixOnce shows exactly what the next AI agent will inherit: the connected project, where work stopped, saved decisions, solved fixes, recent code changes, and the current project state.</p>
+          </div>
+          <div class="state-steps">
+            <div class="state-step"><i>1</i><div><strong>Project connected</strong>FixOnce knows which project is active.</div></div>
+            <div class="state-step"><i>2</i><div><strong>Where we stopped</strong>Last work and the next action remain visible.</div></div>
+            <div class="state-step"><i>3</i><div><strong>Memory that compounds</strong>Decisions, solved bugs and avoid patterns accumulate over time.</div></div>
+          </div>
+          <p class="state-handoff">Open Claude, Codex, or Cursor and continue the project. FixOnce restores the current project state before work continues.</p>
+        </div>
+        <div class="dashboard-proof reveal">
+          <div class="dashboard-frame">
+            <div class="dashboard-crop">
+              <img src="real-dashboard-current.png" alt="FixOnce desktop app showing the active Codex connection, connected project, last work, next action, saved memories, and recent code changes" loading="lazy">
+            </div>
+          </div>
+          <div class="state-callout connected" aria-hidden="true"><strong>Connected agent</strong>Codex is active now.</div>
+          <div class="state-callout project" aria-hidden="true"><strong>Active project</strong>The project is connected.</div>
+          <div class="state-callout stopped" aria-hidden="true"><strong>Where we stopped</strong>Last work and next action remain visible.</div>
+          <div class="state-callout memory" aria-hidden="true"><strong>Durable memory</strong>Decisions, fixes and avoid patterns stay with the project.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ownership-section">
+      <div class="container ownership-grid">
+        <div class="ownership-copy reveal">
+          <div class="section-kicker">Desktop app ownership</div>
+          <h2 class="section-title">The app shows who owns the work.</h2>
+          <p class="section-copy">FixOnce makes project state visible as something the repository owns. Claude, Codex, and Cursor can all connect to it, but none of them become the permanent source of truth.</p>
+          <div class="ownership-points">
+            <div class="ownership-point"><i>1</i><div><strong>The project is identified first.</strong> The app anchors memory to the active repository before any agent starts coding.</div></div>
+            <div class="ownership-point"><i>2</i><div><strong>The agent is a connection.</strong> Claude, Codex, or Cursor reads the same goal, decisions, solved fixes, avoid patterns, and next action.</div></div>
+            <div class="ownership-point"><i>3</i><div><strong>The handoff is inspectable.</strong> Last work, next action, and recent changes stay visible instead of disappearing into a chat transcript.</div></div>
+          </div>
+          <div class="ownership-summary" aria-label="Project ownership summary">
+            <span><strong>Owner</strong>the active repository</span>
+            <span><strong>Connectors</strong>Claude, Codex, Cursor</span>
+            <span><strong>Proof</strong>the next step loads again</span>
+          </div>
+          <p class="ownership-proof-line">The important boundary is simple: <code>.git/</code> remembers what changed. <code>.fixonce/</code> remembers why it changed and what should happen next.</p>
+        </div>
+        <div class="repo-memory-visual reveal" aria-label="Project-owned memory travels with the repository, while Claude, Codex, and Cursor can change">
+          <div class="repo-handoff">
+            <div class="tool-strip" aria-hidden="true">
+              <span class="active-owner">Claude</span>
+              <span class="active-owner">Codex</span>
+              <span class="active-owner">Cursor</span>
+              <span class="memory-owner">Project memory</span>
+            </div>
+            <div class="repo-flow-label">Agents connect. The project owns.</div>
+            <div class="repo-node">
+              <div class="repo-node-head">
+                <div>
+                  <span>Repository</span>
+                  <strong>active project</strong>
+                </div>
+                <div class="repo-pill">source of truth</div>
+              </div>
+              <div class="repo-memory-stack">
+                <div class="repo-row"><span>.git/</span><strong>Code history</strong><em>commits</em></div>
+                <div class="repo-row memory"><span>.fixonce/</span><strong>Working context</strong><em>decisions · fixes · next step</em></div>
+              </div>
+            </div>
+            <div class="repo-ledger" aria-hidden="true">
+              <div class="ledger-card"><span>Desktop app reads</span><strong>project · last · next · memory</strong></div>
+              <div class="ledger-card memory"><span>New agent gets</span><strong>the same inherited state</strong></div>
+            </div>
+            <div class="repo-clone" aria-hidden="true">
+              <div class="clone-card"><span>Session A</span><strong>Records the handoff</strong></div>
+              <div class="clone-arrow">→</div>
+              <div class="clone-card"><span>Session B</span><strong>Loads the handoff</strong></div>
+            </div>
+            <div class="repo-caption">The visible owner is the project, not the current AI window.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="trust-section" id="trust">
+      <div class="container">
+        <div class="trust-panel reveal">
+          <div class="trust-head">
+            <h2 class="section-title">Private by architecture, not by promise.</h2>
+            <div class="trust-seal">Local<br>first</div>
+          </div>
+          <div class="trust-items">
+            <div class="trust-item"><strong>Runs locally</strong><p>FixOnce operates on your machine as a desktop app. There is no hosted memory account.</p></div>
+            <div class="trust-item"><strong>No code uploads</strong><p>Your source code and project memory are not sent to a FixOnce server.</p></div>
+            <div class="trust-item"><strong>Human approval</strong><p>Review, edit, or reject proposed memory before it is saved.</p></div>
+            <div class="trust-item"><strong>Delete with a folder</strong><p>Your data is plain local project data. Remove it whenever you choose.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="download-section" id="download">
+      <div class="container download-content reveal">
+        <div class="section-kicker">Public beta</div>
+        <h2 class="section-title">Give your project a memory.</h2>
+        <p class="section-copy">Install FixOnce, open a real project, and let your next coding session start where the last one ended.</p>
+        <div class="download-actions">
+          <a class="button button-primary os-download" href="https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13.exe">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5"/><path d="M5 21h14"/></svg>
+            <span class="os-label">Download for Windows</span>
+          </a>
+          <a class="button button-secondary alternate-download" href="https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce-mac.dmg">Download for macOS</a>
+        </div>
+        <div class="download-assurances">
+          <span><b class="check">✓</b> Free during beta</span>
+          <span><b class="check">✓</b> No signup</span>
+          <span><b class="check">✓</b> Uninstall anytime</span>
+        </div>
+        <p class="download-warning" id="download-warning">Beta installers are not code-signed yet. Windows may show a SmartScreen warning; choose “More info” and “Run anyway.”</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="container faq reveal">
+        <div class="section-kicker">Before you install</div>
+        <h2 class="section-title">The short answers.</h2>
+        <div class="faq-list">
+          <details>
+            <summary>Why does FixOnce exist?</summary>
+            <p>AI conversations end. Projects continue. FixOnce defines project memory as a layer that keeps decisions, fixes, and the next step with the project instead of one chat.</p>
+          </details>
+          <details>
+            <summary>How is FixOnce different from an AI tool's built-in memory?</summary>
+            <p>Built-in memory usually belongs to one AI product or account. FixOnce belongs to the project, so context stays useful when you switch between supported coding agents.</p>
+          </details>
+          <details>
+            <summary>Is my code uploaded to FixOnce?</summary>
+            <p>No. FixOnce runs locally. Your source code and project memory are not uploaded to a FixOnce cloud service.</p>
+          </details>
+          <details>
+            <summary>Where is project memory stored?</summary>
+            <p>Project memory belongs to the active project. It is stored on your machine and, where enabled, can travel with the repository through the project's <code>.fixonce/</code> context.</p>
+          </details>
+          <details>
+            <summary>Do I approve what gets saved?</summary>
+            <p>Yes. Proposed decisions, solved bugs, avoid patterns, notes, and next steps can be reviewed, edited, or rejected before they become project memory.</p>
+          </details>
+          <details>
+            <summary>Which AI coding tools does FixOnce support?</summary>
+            <p>The beta is demonstrated with Claude, Codex, and Cursor. Support depends on the coding agent's local integration capabilities.</p>
+          </details>
+          <details>
+            <summary>What happens if I uninstall FixOnce?</summary>
+            <p>Uninstalling removes the app and integrations. Your memory is not sent anywhere. You can also delete the local FixOnce data folders to remove stored project memory from the machine.</p>
+          </details>
+          <details>
+            <summary>Can I switch between AI agents?</summary>
+            <p>Yes. One agent can leave the project state behind, and another supported agent can load the same decisions, fixes, and next step later.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <a class="brand" href="#">
+        <img src="FixOnce.ico" alt="">
+        <span>FixOnce</span>
+      </a>
+      <div class="footer-links">
+        <a href="privacy.html">Privacy</a>
+        <a href="security.html">Security</a>
+        <a href="terms.html">Terms</a>
+        <a href="https://github.com/Nati41/FixOnce" target="_blank" rel="noreferrer">GitHub</a>
+        <span>© 2026 FixOnce</span>
+      </div>
+    </div>
+  </footer>
+
+  <div class="mobile-cta" aria-hidden="true">
+    <a class="button button-primary os-download" href="https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13.exe">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5"/><path d="M5 21h14"/></svg>
+      <span class="os-label">Download beta</span>
+    </a>
+  </div>
+
+  <script>
+    const nav = document.querySelector(".nav");
+    const mobileCta = document.querySelector(".mobile-cta");
+    const downloadSection = document.querySelector("#download");
+
+    function updateChrome() {
+      nav.classList.toggle("scrolled", window.scrollY > 16);
+      if (!mobileCta || !downloadSection) return;
+      const downloadTop = downloadSection.getBoundingClientRect().top;
+      mobileCta.classList.toggle("visible", window.scrollY > 620 && downloadTop > window.innerHeight * 0.5);
+      mobileCta.setAttribute("aria-hidden", mobileCta.classList.contains("visible") ? "false" : "true");
+    }
+
+    window.addEventListener("scroll", updateChrome, { passive: true });
+    updateChrome();
+
+    const platform = navigator.userAgentData?.platform || navigator.platform || "";
+    const isMac = /Mac/i.test(platform);
+    if (isMac) {
+      document.querySelectorAll(".os-download").forEach(link => {
+        link.href = "https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce-mac.dmg";
+      });
+      document.querySelectorAll(".os-label").forEach(label => {
+        label.textContent = "Download for macOS";
+      });
+      const alternate = document.querySelector(".alternate-download");
+      if (alternate) {
+        alternate.href = "https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13.exe";
+        alternate.textContent = "Download for Windows";
+      }
+      const warning = document.querySelector("#download-warning");
+      if (warning) {
+        warning.textContent = "The macOS beta is not notarized yet. Control-click the installer and choose “Open” if Gatekeeper blocks the first launch.";
+      }
+    }
+
+    const agents = [...document.querySelectorAll(".hero-agent")];
+    const agentName = document.querySelector(".active-agent-name");
+    const agentAction = document.querySelector(".active-agent-action");
+    let activeAgent = 0;
+    let agentTimer;
+
+    function selectAgent(index, restart = true) {
+      if (!agents.length) return;
+      activeAgent = index;
+      agents.forEach((agent, i) => agent.classList.toggle("active", i === index));
+      if (agentName) agentName.textContent = agents[index].dataset.agent;
+      if (agentAction) agentAction.textContent = agents[index].dataset.action;
+      if (restart) startAgentCycle();
+    }
+
+    function startAgentCycle() {
+      if (!agents.length) return;
+      clearInterval(agentTimer);
+      agentTimer = setInterval(() => selectAgent((activeAgent + 1) % agents.length, false), 2800);
+    }
+
+    agents.forEach((agent, index) => agent.addEventListener("click", () => selectAgent(index)));
+    startAgentCycle();
+
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
+
+    document.querySelectorAll(".reveal").forEach(element => observer.observe(element));
+
+    const screenshotButton = document.querySelector(".screenshot-button");
+    const screenshotLightbox = document.querySelector(".screenshot-lightbox");
+    const lightboxClose = document.querySelector(".lightbox-close");
+
+    screenshotButton?.addEventListener("click", () => screenshotLightbox?.showModal());
+    lightboxClose?.addEventListener("click", () => screenshotLightbox?.close());
+    screenshotLightbox?.addEventListener("click", event => {
+      if (event.target === screenshotLightbox) screenshotLightbox.close();
+    });
+  </script>
 </body>
 </html>

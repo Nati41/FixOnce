@@ -1,38 +1,54 @@
-# FixOnce v1.0.13
+# FixOnce Release Notes
 
-## Install
+Current beta: `v1.0.13`
 
-**👉 Let your AI install it:**
-```
-Install FixOnce for me
-```
+## Public Release Assets
 
-Or download from [install page](https://nati41.github.io/FixOnce/install.html).
+The public beta release should publish these installer assets on GitHub Releases:
 
----
+- Windows: `FixOnce_Setup_1.0.13.exe`
+- macOS: `FixOnce-mac.dmg`
 
-## Build (for maintainers)
+Release page:
 
-```bash
-python3 scripts/build_release.py --version 1.0.13
+```text
+https://github.com/Nati41/FixOnce/releases
 ```
 
-Output:
-- `dist/FixOnce-v1.0.13/FixOnce-macOS-v1.0.13.zip`
-- `dist/FixOnce-v1.0.13/FixOnce-Windows-v1.0.13.zip`
+Expected direct URLs:
 
----
+```text
+https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13.exe
+https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce-mac.dmg
+```
 
-## Verify
+## Release Source Of Truth
 
-1. Open `http://localhost:5000`
-2. Start AI session, say "היי"
-3. Verify project context appears in response
+- Public landing page source: `website/`
+- GitHub Pages source: `docs/`
+- Windows installer config: `installer/fixonce_setup.iss`
+- macOS installer script: `installer/macos/build_installer.sh`
 
----
+The website download buttons should point to GitHub Release assets, not local `website/downloads/` files.
 
-## Version Info
+## Public Beta Verification
 
-- **Version:** v1.0.13
-- **Port:** 5000
-- **MCP Tools:** fo_init, fo_errors, fo_apply, fo_sync, fo_search, fo_solved, fo_decide
+Before publishing the beta:
+
+1. Confirm `https://nati41.github.io/FixOnce/` serves the current landing page.
+2. Confirm the Windows installer URL returns the real `FixOnce_Setup_1.0.13.exe` asset.
+3. Confirm the macOS installer URL returns the real `FixOnce-mac.dmg` asset.
+4. Install FixOnce on a clean machine or VM.
+5. Open Claude, Codex, or Cursor from a real project folder.
+6. Confirm FixOnce restores the current project state before work continues.
+7. Confirm the desktop app shows the active project, connected AI tool, current project state, and recent memories accurately.
+
+## Product Positioning
+
+FixOnce beta is positioned as:
+
+```text
+One developer. Multiple AI agents. One project memory.
+```
+
+Do not publish release copy that depends on a specific prompt phrase or an old ZIP/script install flow.

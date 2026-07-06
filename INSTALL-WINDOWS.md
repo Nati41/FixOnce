@@ -1,110 +1,87 @@
-# FixOnce - Installation Guide for Windows
+# FixOnce Windows Installation
 
-## Quick Start (2 minutes)
+This guide is for the public beta Windows installer.
 
-### Step 1: Extract
-1. Right-click on `FixOnce-Windows.zip`
-2. Click "Extract All..."
-3. Choose a location (recommended: `C:\Users\YourName\FixOnce`)
+## Download
 
-### Step 2: Run Installer
-1. Open the extracted `FixOnce` folder
-2. Preferred: **Right-click** on `install.ps1` → **"Run with PowerShell"**
-3. Fallback: double-click `install.bat` (uses `py -3` / `python`)
+Download the current Windows installer from GitHub Releases:
 
-> If you see a security warning, click "Run anyway" or type `Y` to continue.
+```text
+FixOnce_Setup_1.0.13.exe
+```
 
-### Step 3: Done!
-The installer will:
-- Install Python dependencies
-- Configure Claude Code / Cursor
-- Set up auto-start on login
-- Open the main dashboard (`/`)
+Release page:
 
----
+```text
+https://github.com/Nati41/FixOnce/releases
+```
+
+Direct installer URL:
+
+```text
+https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13.exe
+```
+
+## Install
+
+1. Download `FixOnce_Setup_1.0.13.exe`.
+2. Run the installer.
+3. Follow the installer prompts.
+4. Open the FixOnce desktop app when installation finishes.
+5. Open Claude, Codex, or Cursor from your project and continue work.
+
+FixOnce restores the current project state before work continues, including relevant decisions, solved fixes, avoid patterns, and the next step.
 
 ## What Gets Installed
 
-| Component | Description |
-|-----------|-------------|
-| **FixOnce Server** | Runs in background on port 5000 |
-| **MCP Connection** | Connects to Claude Code / Cursor |
-| **Chrome Extension** | Captures browser errors (optional) |
-| **Dashboard** | Main web UI at http://localhost:5000/ |
+| Component | Purpose |
+| --- | --- |
+| FixOnce app | Runs the local desktop app and project memory service |
+| MCP companion | Connects supported AI coding tools to project memory |
+| Desktop app | Shows the active project, connected AI tool, current state, and saved memory |
+| Local project memory | Stores project context on your machine and, where enabled, with the project |
 
----
+## Supported AI Coding Tools
 
-## Requirements
+The beta is demonstrated with:
 
-- **Python 3.9+** - [Download here](https://www.python.org/downloads/)
-  - **IMPORTANT:** Check "Add Python to PATH" during installation!
-- **Claude Code** or **Cursor** - At least one AI editor
+- Claude
+- Codex
+- Cursor
 
----
+Support depends on each coding agent's local integration capabilities.
 
-## Chrome Extension (Optional)
+## After Installation
 
-To capture browser errors:
+Use FixOnce from a real project folder:
 
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable "Developer mode" (toggle in top right)
-3. Click "Load unpacked"
-4. Select the `extension` folder inside FixOnce
+1. Open your project.
+2. Start Claude, Codex, or Cursor from that project.
+3. Continue the task.
 
----
+The connected AI tool should receive the current project context before work continues.
 
-## Troubleshooting
+## Desktop App
 
-### "Python not found"
-Install Python from https://www.python.org/downloads/
-Make sure to check "Add Python to PATH"!
-
-If `python` still fails, run with launcher:
-```powershell
-py -3 install.py
-```
-
-### "Script cannot be loaded" (Execution Policy)
-Run PowerShell as Administrator and type:
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-Then try again.
-
-### "VC++ Build Tools required"
-Some packages need C++ compiler. Download from:
-https://visualstudio.microsoft.com/visual-cpp-build-tools/
-Install "Desktop development with C++"
-
-### Server not starting
-Run manually:
-```
-cd C:\path\to\FixOnce
-python src\server.py --flask-only
-```
-
----
+Use the FixOnce desktop app to confirm the active project, connected AI tool, recent memories, saved decisions, solved fixes, and current handoff state.
 
 ## Uninstall
 
-Run `uninstall.ps1` to:
-- Stop the server
-- Remove auto-start task
-- (Does NOT delete your data)
+Use Windows Apps & Features / Installed Apps to uninstall FixOnce.
 
----
+Uninstalling removes the app and integrations. Stored project memory is not sent anywhere. You can also delete local FixOnce data folders if you want to remove stored memory from the machine.
 
-## Usage
+## Troubleshooting
 
-After installation, just say in Claude Code or Cursor:
-- "hi" / "hello" / "היי"
+If FixOnce does not appear connected:
 
-FixOnce will respond with your project context!
+1. Restart the AI coding tool.
+2. Confirm you opened the AI tool from the intended project folder.
+3. Open the FixOnce desktop app and check the active project and connection state.
+4. Check the release page for the latest installer.
 
-**Main dashboard:** http://localhost:5000/
+Issues:
 
----
-
-## Support
-
-Issues: https://github.com/Nati41/FixOnce/issues
+```text
+https://github.com/Nati41/FixOnce/issues
+```

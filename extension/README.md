@@ -1,6 +1,6 @@
 # FixOnce Chrome Extension
 
-> AI Memory Layer for developers - Never debug the same bug twice.
+> Optional development extension for sending selected browser errors to the local FixOnce app.
 
 ## Installation (Development)
 
@@ -14,8 +14,8 @@
 
 1. **Enable on a site** - Click extension icon → "Enable on this site"
 2. **Errors captured** - JavaScript errors and HTTP failures are sent to FixOnce server
-3. **View in dashboard** - Open `localhost:5000/brain` to see captured errors
-4. **AI fixes bugs** - AI assistants read errors and apply fixes
+3. **Review in FixOnce** - Captured errors can appear in the local FixOnce app
+4. **Use as context** - AI assistants can use approved project context while you continue work
 
 ## Files
 
@@ -44,7 +44,7 @@ extension/
 ## Requirements
 
 - Chrome 88+ (Manifest V3 support)
-- FixOnce server running on `localhost:5000`
+- FixOnce desktop app running locally
 
 ## Chrome Web Store
 
