@@ -29,8 +29,8 @@ With FixOnce:
 - Website: https://nati41.github.io/FixOnce/
 - Releases: https://github.com/Nati41/FixOnce/releases
 - Downloads: https://github.com/Nati41/FixOnce/releases
-- Windows installer: `FixOnce_Setup_1.0.13.exe`
-- macOS installer: `FixOnce-mac.dmg`
+- Windows installer: https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13.exe
+- macOS installer: https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce-mac.dmg
 
 1. Download FixOnce from GitHub Releases.
 2. Install it.
