@@ -97,11 +97,12 @@ copy_scripts_allowlist() {
     local target="$1"
     mkdir -p "$target/scripts"
 
-    local files=(
-        "install.py"
-        "app_launcher.py"
-        "semantic_setup.py"
-    )
+	    local files=(
+	        "install.py"
+	        "app_launcher.py"
+	        "menubar_app.py"
+	        "semantic_setup.py"
+	    )
 
     for file in "${files[@]}"; do
         copy_if_exists "$PROJECT_ROOT/scripts/$file" "$target/scripts/$file"
@@ -114,7 +115,18 @@ copy_scripts_allowlist() {
     exclude_path "scripts/build_release.py"
     exclude_path "scripts/create_icons.py"
     exclude_path "scripts/macos_app_launcher.c"
-    exclude_path "scripts/menubar_app.py"
+	}
+
+copy_assets_allowlist() {
+    local target="$1"
+    mkdir -p "$target/assets"
+
+    if [ -d "$PROJECT_ROOT/assets/menubar" ]; then
+        cp -R "$PROJECT_ROOT/assets/menubar" "$target/assets/"
+        echo "INCLUDED $target/assets/menubar" >> "$AUDIT_REPORT"
+    else
+        echo "MISSING_OPTIONAL $PROJECT_ROOT/assets/menubar" >> "$AUDIT_REPORT"
+    fi
 }
 
 copy_extension_allowlist() {
@@ -200,11 +212,17 @@ audit_bundle() {
 }
 
 create_app_icon() {
+    local source_icns="$PROJECT_ROOT/assets/FixOnce.icns"
     local source_png="$PROJECT_ROOT/data/app-icon.png"
     local output_icns="$1"
 
+    if [ -f "$source_icns" ]; then
+        cp "$source_icns" "$output_icns"
+        return
+    fi
+
     if [ ! -f "$source_png" ]; then
-        echo "Missing FixOnce icon asset: $source_png"
+        echo "Missing FixOnce icon asset: $source_icns or $source_png"
         exit 1
     fi
 
@@ -312,7 +330,6 @@ cat > "$RUNTIME_MACOS/fixonce" << 'RUNTIME_SCRIPT'
 # FixOnce.app - daily product launcher
 
 FIXONCE_DIR="$HOME/FixOnce"
-PLIST="$HOME/Library/LaunchAgents/com.fixonce.server.plist"
 LOG_FILE="$HOME/.fixonce/logs/app-launcher.log"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ICON_FILE="$SCRIPT_DIR/../Resources/AppIcon.icns"
@@ -330,43 +347,6 @@ display dialog "$message" with title "FixOnce" buttons {"OK"} default button "OK
 OSA
 }
 
-discover_port() {
-    local runtime_file="$HOME/.fixonce/runtime.json"
-    if [ -f "$runtime_file" ]; then
-        local port
-        port=$(/usr/bin/python3 -c "import json; print(json.load(open('$runtime_file')).get('port', ''))" 2>/dev/null || true)
-        if [ -n "$port" ] && curl -fsS --connect-timeout 1 "http://localhost:$port/api/health" >/dev/null 2>&1; then
-            echo "$port"
-            return 0
-        fi
-    fi
-
-    for port in 5000 5001 5002 5003 5004 5005 5006 5007 5008 5009; do
-        if curl -fsS --connect-timeout 1 "http://localhost:$port/api/health" >/dev/null 2>&1; then
-            echo "$port"
-            return 0
-        fi
-    done
-
-    return 1
-}
-
-start_service() {
-    if [ ! -f "$PLIST" ]; then
-        return 1
-    fi
-
-    local domain="gui/$(id -u)"
-    local label="com.fixonce.server"
-    launchctl bootstrap "$domain" "$PLIST" >/dev/null 2>&1 || launchctl load "$PLIST" >/dev/null 2>&1 || true
-    launchctl kickstart -k "$domain/$label" >/dev/null 2>&1 || true
-}
-
-open_dashboard() {
-    local port="$1"
-    open "http://localhost:$port" >/dev/null 2>&1
-}
-
 main() {
     log "FixOnce.app launched"
 
@@ -375,28 +355,12 @@ main() {
         exit 1
     fi
 
-    local port
-    if port=$(discover_port); then
-        log "Server already healthy on port $port"
-        open_dashboard "$port"
+    if pgrep -f "$FIXONCE_DIR/scripts/app_launcher.py --menubar" >/dev/null 2>&1; then
+        log "FixOnce menu bar app already running"
         exit 0
     fi
 
-    log "Server not running; starting LaunchAgent"
-    start_service
-
-    for _ in {1..35}; do
-        sleep 1
-        if port=$(discover_port); then
-            log "Server became healthy on port $port"
-            open_dashboard "$port"
-            exit 0
-        fi
-    done
-
-    log "Server failed to become healthy"
-    show_error "FixOnce could not start automatically.\n\nTry opening FixOnce Installer.app and choose Repair Installation."
-    exit 1
+    exec "$FIXONCE_DIR/venv/bin/python" "$FIXONCE_DIR/scripts/app_launcher.py" --menubar
 }
 
 main
@@ -421,6 +385,7 @@ rm -rf "$RESOURCES/src/.fixonce"
 exclude_path "src/.fixonce/"
 copy_scripts_allowlist "$RESOURCES"
 copy_data_allowlist "$RESOURCES"
+copy_assets_allowlist "$RESOURCES"
 cp -R "$PROJECT_ROOT/hooks" "$RESOURCES/" 2>/dev/null || true
 echo "INCLUDED $RESOURCES/hooks" >> "$AUDIT_REPORT"
 copy_extension_allowlist "$RESOURCES"
@@ -461,8 +426,10 @@ INSTALL_DIR="$HOME/FixOnce"
 RUNTIME_APP_SOURCE="$RESOURCES/FixOnce.app"
 RUNTIME_APP_PATH="/Applications/FixOnce.app"
 RUNTIME_APP_FALLBACK="$HOME/Applications/FixOnce.app"
-LOG_FILE="/tmp/fixonce_install.log"
-PROGRESS_FILE="/tmp/fixonce_install_progress.html"
+INSTALL_LOG_DIR="$HOME/.fixonce/logs"
+LOG_FILE="$INSTALL_LOG_DIR/install.log"
+LAUNCHCTL_LOG="$INSTALL_LOG_DIR/launchctl.log"
+PROGRESS_FILE="$HOME/.fixonce/install_progress.html"
 PROGRESS_OPENED=0
 PROGRESS_STEP=0
 PROGRESS_PERCENT=0
@@ -484,6 +451,7 @@ NC='\033[0m' # No Color
 # ============================================================
 
 log() {
+    mkdir -p "$INSTALL_LOG_DIR"
     echo -e "$1" | tee -a "$LOG_FILE"
 }
 
@@ -559,12 +527,12 @@ step_mark() {
 
 detect_server_status() {
     local port
-    port=$(discover_runtime_port 2>/dev/null || true)
-    if [ -n "$port" ] && curl -fsS --connect-timeout 1 "http://localhost:$port/api/health" >/dev/null 2>&1; then
-        echo "connected|Connected|FixOnce is running on port $port"
-    else
-        echo "warning|Starting|FixOnce is still starting"
-    fi
+	    port=$(discover_runtime_port 2>/dev/null || true)
+	    if [ -n "$port" ] && curl -fsS --connect-timeout 1 "http://localhost:$port/api/health" >/dev/null 2>&1; then
+	        echo "connected|Connected|FixOnce is running"
+	    else
+	        echo "warning|Starting|FixOnce is still starting"
+	    fi
 }
 
 detect_mcp_status() {
@@ -606,7 +574,7 @@ render_progress_window() {
 
     if [ "$PROGRESS_STATE" = "success" ]; then
         meta_refresh=""
-        success_block='<section class="result ok"><strong>Installation complete.</strong><span>FixOnce is installed, running, and the dashboard has been opened.</span></section>'
+        success_block='<section class="result ok"><strong>Installation complete.</strong><span>FixOnce is installed and running from the menu bar.</span></section>'
 
         local server_status mcp_status extension_status
         local server_state server_label server_detail
@@ -641,7 +609,7 @@ render_progress_window() {
         </section>'
     elif [ "$PROGRESS_STATE" = "failed" ]; then
         meta_refresh=""
-        failure_block='<section class="result error"><strong>Installation failed.</strong><span>Check the installer log at <code>/tmp/fixonce_install.log</code>.</span></section>'
+        failure_block='<section class="result error"><strong>Installation failed.</strong><span>Check the installer log in <code>~/.fixonce/logs/</code>.</span></section>'
     fi
 
     local s1 s2 s3 s4 s5 s6
@@ -719,7 +687,7 @@ render_progress_window() {
         <li class="$s3"><span>$m3</span><span>Installing files</span></li>
         <li class="$s4"><span>$m4</span><span>Configuring integrations</span></li>
         <li class="$s5"><span>$m5</span><span>Starting FixOnce services</span></li>
-        <li class="$s6"><span>$m6</span><span>Opening dashboard</span></li>
+        <li class="$s6"><span>$m6</span><span>Starting menu bar app</span></li>
     </ol>
     $success_block
     $failure_block
@@ -1178,10 +1146,11 @@ install_files() {
     start_progress_pulse 3 30 36 "Installing files" "Copying FixOnce application files"
     cp -a "$RESOURCES/src" "$INSTALL_DIR/"
     set_progress_at 3 32 "Installing files" "Copying installer scripts."
-    cp -a "$RESOURCES/scripts" "$INSTALL_DIR/"
-    set_progress_at 3 34 "Installing files" "Copying dashboard assets."
-    cp -a "$RESOURCES/data" "$INSTALL_DIR/"
-    set_progress_at 3 35 "Installing files" "Copying browser extension files."
+	    cp -a "$RESOURCES/scripts" "$INSTALL_DIR/"
+	    set_progress_at 3 34 "Installing files" "Copying dashboard assets."
+	    cp -a "$RESOURCES/data" "$INSTALL_DIR/"
+	    cp -a "$RESOURCES/assets" "$INSTALL_DIR/" 2>/dev/null || true
+	    set_progress_at 3 35 "Installing files" "Copying browser extension files."
     cp -a "$RESOURCES/extension" "$INSTALL_DIR/" 2>/dev/null || true
     cp -a "$RESOURCES/requirements.txt" "$INSTALL_DIR/"
     cp -a "$RESOURCES/CLAUDE.md" "$INSTALL_DIR/" 2>/dev/null || true
@@ -1197,10 +1166,11 @@ install_files() {
         "src/server.py"
         "src/version.py"
         "src/mcp_server/mcp_memory_server_v2.py"
-        "src/core/port_manager.py"
-        "scripts/install.py"
-        "requirements.txt"
-        "data/dashboard.html"
+	        "src/core/port_manager.py"
+	        "scripts/install.py"
+	        "scripts/menubar_app.py"
+	        "requirements.txt"
+	        "data/dashboard.html"
     )
 
     MISSING_FILES=""
@@ -1326,17 +1296,26 @@ install_dependencies() {
     # Install dependencies with explicit path and error checking
     log "  Installing dependencies from requirements.txt..."
     start_progress_pulse 3 51 57 "Installing files" "Installing FixOnce Python dependencies"
-    if "$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements.txt" 2>&1 | tee -a "$LOG_FILE"; then
-        stop_progress_pulse
-        set_progress_at 3 58 "Installing files" "FixOnce Python dependencies installed."
+	    if "$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements.txt" 2>&1 | tee -a "$LOG_FILE"; then
+	        stop_progress_pulse
+	        set_progress_at 3 58 "Installing files" "FixOnce Python dependencies installed."
     else
         stop_progress_pulse
         log "${RED}✗${NC} pip install failed!"
         show_error "Installation failed: Could not install Python dependencies.\n\nCheck the log at:\n$LOG_FILE\n\nCommon fixes:\n• Check internet connection\n• Try: pip install flask flask-cors"
+	        exit 1
+	    fi
+
+    set_progress_at 3 58 "Installing files" "Installing FixOnce menu bar support."
+    if "$VENV_PYTHON" -m pip install "rumps>=0.4.0" 2>&1 | tee -a "$LOG_FILE"; then
+        log "    ${GREEN}✓${NC} rumps"
+    else
+        log "${RED}✗${NC} Could not install menu bar support"
+        show_error "Installation failed: Could not install FixOnce menu bar support.\n\nCheck the log at:\n$LOG_FILE"
         exit 1
     fi
 
-    # Verify critical packages are installed
+	    # Verify critical packages are installed
     log "  Verifying packages..."
     set_progress_at 3 59 "Installing files" "Verifying installed Python packages."
     MISSING_PACKAGES=""
@@ -1380,10 +1359,19 @@ install_dependencies() {
 
     # watchdog (optional but helpful)
     set_progress_at 3 64 "Installing files" "Checking optional watchdog support."
-    if "$VENV_PYTHON" -c "import watchdog" 2>/dev/null; then
-        log "    ${GREEN}✓${NC} watchdog"
+	    if "$VENV_PYTHON" -c "import watchdog" 2>/dev/null; then
+	        log "    ${GREEN}✓${NC} watchdog"
+	    else
+	        log "    ${YELLOW}!${NC} watchdog (optional)"
+	    fi
+
+    # rumps (macOS menu bar)
+    set_progress_at 3 65 "Installing files" "Verifying menu bar support."
+    if "$VENV_PYTHON" -c "import rumps" 2>/dev/null; then
+        log "    ${GREEN}✓${NC} rumps"
     else
-        log "    ${YELLOW}!${NC} watchdog (optional)"
+        log "    ${RED}✗${NC} rumps"
+        MISSING_PACKAGES="$MISSING_PACKAGES rumps"
     fi
 
     if [ -n "$MISSING_PACKAGES" ]; then
@@ -1472,25 +1460,30 @@ configure_mcp() {
 }
 
 # ============================================================
-# Setup LaunchAgent (creates plist but does NOT load yet)
-# ============================================================
+	# Setup LaunchAgent (creates plist but does NOT load yet)
+	# ============================================================
 
-setup_launchagent() {
-    log "${BLUE}Setting up auto-start...${NC}"
-    set_progress_at 5 80 "Starting FixOnce services" "Preparing automatic startup."
-    write_install_state "STARTING" "Preparing automatic startup"
+	setup_launchagent() {
+	    log "${BLUE}Setting up auto-start...${NC}"
+	    set_progress_at 5 80 "Starting FixOnce services" "Preparing automatic startup."
+	    write_install_state "STARTING" "Preparing automatic startup"
 
-    LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
-    PLIST_FILE="$LAUNCH_AGENTS/com.fixonce.server.plist"
-    USER_LOGS="$HOME/.fixonce/logs"
+	    LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
+	    SERVER_PLIST_FILE="$LAUNCH_AGENTS/com.fixonce.server.plist"
+	    TRAY_PLIST_FILE="$LAUNCH_AGENTS/com.fixonce.tray.plist"
+	    USER_LOGS="$HOME/.fixonce/logs"
 
-    mkdir -p "$LAUNCH_AGENTS"
-    mkdir -p "$USER_LOGS"
+	    mkdir -p "$LAUNCH_AGENTS"
+	    mkdir -p "$USER_LOGS"
 
-    # Unload any existing agent first
-    launchctl unload "$PLIST_FILE" 2>/dev/null || true
+	    # Unload any existing agents first.
+	    launchctl unload "$SERVER_PLIST_FILE" 2>/dev/null || true
+	    launchctl unload "$TRAY_PLIST_FILE" 2>/dev/null || true
+	    launchctl remove com.fixonce.server 2>/dev/null || true
+	    launchctl remove com.fixonce.tray 2>/dev/null || true
+	    pkill -f "$INSTALL_DIR/scripts/app_launcher.py --menubar" 2>/dev/null || true
 
-    cat > "$PLIST_FILE" << EOF
+	    cat > "$SERVER_PLIST_FILE" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -1522,9 +1515,48 @@ setup_launchagent() {
 </plist>
 EOF
 
-    touch "$USER_LOGS/server.log" "$USER_LOGS/server.error.log"
-    log "${GREEN}✓${NC} Auto-start service prepared"
-}
+	    cat > "$TRAY_PLIST_FILE" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.fixonce.tray</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$INSTALL_DIR/venv/bin/python</string>
+        <string>$INSTALL_DIR/scripts/app_launcher.py</string>
+        <string>--menubar</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$INSTALL_DIR</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>StandardOutPath</key>
+    <string>$USER_LOGS/tray.log</string>
+    <key>StandardErrorPath</key>
+    <string>$USER_LOGS/tray.error.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>$INSTALL_DIR/venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>PYTHONPATH</key>
+        <string>$INSTALL_DIR/src</string>
+    </dict>
+</dict>
+</plist>
+EOF
+
+	    touch "$USER_LOGS/server.log" "$USER_LOGS/server.error.log" "$USER_LOGS/tray.log" "$USER_LOGS/tray.error.log"
+	    log "${GREEN}✓${NC} Auto-start services prepared"
+	}
 
 # ============================================================
 # Startup Recovery: load service, wait for readiness, retry once
@@ -1551,24 +1583,35 @@ clear_stale_runtime_state() {
     fi
 }
 
-load_launchagent_service() {
-    PLIST_FILE="$HOME/Library/LaunchAgents/com.fixonce.server.plist"
+load_launchagent() {
+    local label="$1"
+    local plist_file="$2"
     local domain="gui/$(id -u)"
-    local label="com.fixonce.server"
 
     launchctl bootout "$domain/$label" >/dev/null 2>&1 || true
-    launchctl unload "$PLIST_FILE" >/dev/null 2>&1 || true
+    launchctl unload "$plist_file" >/dev/null 2>&1 || true
 
-    if launchctl bootstrap "$domain" "$PLIST_FILE" >/tmp/fixonce_launchctl.log 2>&1; then
-        launchctl kickstart -k "$domain/$label" >> /tmp/fixonce_launchctl.log 2>&1 || true
+    if launchctl bootstrap "$domain" "$plist_file" >"$LAUNCHCTL_LOG" 2>&1; then
         return 0
     fi
 
-    if launchctl load "$PLIST_FILE" >> /tmp/fixonce_launchctl.log 2>&1; then
+    if launchctl kickstart -k "$domain/$label" >> "$LAUNCHCTL_LOG" 2>&1; then
+        return 0
+    fi
+
+    if launchctl load "$plist_file" >> "$LAUNCHCTL_LOG" 2>&1; then
         return 0
     fi
 
     return 1
+}
+
+load_launchagent_service() {
+    load_launchagent "com.fixonce.server" "$HOME/Library/LaunchAgents/com.fixonce.server.plist"
+}
+
+load_launchagent_tray() {
+    load_launchagent "com.fixonce.tray" "$HOME/Library/LaunchAgents/com.fixonce.tray.plist"
 }
 
 discover_runtime_port() {
@@ -1681,7 +1724,7 @@ wait_for_runtime_health() {
                 echo "$runtime_port"
                 return 0
             fi
-            echo "$ownership_result" >> /tmp/fixonce_launchctl.log
+            echo "$ownership_result" >> "$LAUNCHCTL_LOG"
         fi
 
         if [ $((attempt % 5)) -eq 0 ]; then
@@ -1694,7 +1737,7 @@ wait_for_runtime_health() {
 
 inspect_startup_failure() {
     local user_logs="$HOME/.fixonce/logs"
-    local launchctl_log="/tmp/fixonce_launchctl.log"
+    local launchctl_log="$LAUNCHCTL_LOG"
     local runtime_file="$HOME/.fixonce/runtime.json"
 
     log "  Last launchctl output:"
@@ -1753,7 +1796,7 @@ verify_and_enable_service() {
                 return 1
             fi
             log "${GREEN}✓${NC} FixOnce is ready on port $port"
-            set_progress_at 5 95 "Starting FixOnce services" "FixOnce service is ready on port $port."
+	            set_progress_at 5 95 "Starting FixOnce services" "FixOnce service is ready."
             write_install_state "READY" "FixOnce is ready"
             mkdir -p "$HOME/.fixonce"
             cat > "$HOME/.fixonce/config.json" << EOF
@@ -1776,20 +1819,16 @@ EOF
     return 1
 }
 
-open_dashboard() {
-    log "${BLUE}Opening FixOnce...${NC}"
+start_menu_bar_app() {
+    log "${BLUE}Starting FixOnce menu bar app...${NC}"
 
-    local port
-    port=$(discover_runtime_port)
-
-    if [ -z "$port" ]; then
-        log "${YELLOW}!${NC} Could not determine the FixOnce address yet"
-        return 1
+    if load_launchagent_tray; then
+        log "${GREEN}✓${NC} FixOnce menu bar app started"
+        return 0
     fi
 
-    DASHBOARD_URL="http://localhost:$port"
-    open "$DASHBOARD_URL"
-    log "${GREEN}✓${NC} FixOnce opened at $DASHBOARD_URL"
+    log "${YELLOW}!${NC} Could not load menu bar auto-start service; opening FixOnce.app directly"
+    open_fixonce_app
 }
 
 # ============================================================
@@ -2048,7 +2087,7 @@ main() {
 
     # Show welcome dialog
     osascript <<OSA >/dev/null 2>&1 || exit 0
-display dialog "Install FixOnce\n\nThis setup will:\n• Install FixOnce\n• Connect your AI tools\n• Start FixOnce automatically\n• Open FixOnce when ready\n\nClick Continue to begin." with title "FixOnce Installer" buttons {"Cancel", "Continue"} default button "Continue" with icon POSIX file "$ICON_FILE"
+display dialog "Install FixOnce\n\nThis setup will:\n• Install FixOnce\n• Connect your AI tools\n• Start FixOnce automatically\n• Start the FixOnce menu bar app\n\nClick Continue to begin." with title "FixOnce Installer" buttons {"Cancel", "Continue"} default button "Continue" with icon POSIX file "$ICON_FILE"
 OSA
 
     # Run installation steps
@@ -2082,8 +2121,8 @@ OSA
         exit 1
     fi
 
-    set_progress_at 6 98 "Opening dashboard" "Opening the FixOnce dashboard and preparing post-install status."
-    open_dashboard
+    set_progress_at 6 98 "Starting FixOnce" "Starting the FixOnce menu bar app and preparing post-install status."
+    start_menu_bar_app
 
     log ""
     log "${GREEN}========================================"
@@ -2102,11 +2141,11 @@ OSA
 
     local result
     result=$(osascript <<OSA 2>/dev/null || true
-display dialog "Installation complete.\n\nFixOnce has been installed successfully.\n\nUse FixOnce.app for daily use." with title "FixOnce Installer" buttons {"Done", "Create Desktop Shortcut", "Open FixOnce"} default button "Open FixOnce" with icon POSIX file "$ICON_FILE"
+display dialog "Installation complete.\n\nFixOnce has been installed successfully.\n\nUse FixOnce.app for daily use." with title "FixOnce Installer" buttons {"Done", "Create Desktop Shortcut", "Open FixOnce"} default button "Done" with icon POSIX file "$ICON_FILE"
 OSA
 )
     if [[ "$result" == *"Open FixOnce"* ]]; then
-        open_fixonce_app || open_dashboard
+        open_fixonce_app || show_error "Could not open FixOnce.app."
     elif [[ "$result" == *"Create Desktop Shortcut"* ]]; then
         create_desktop_shortcut
     fi

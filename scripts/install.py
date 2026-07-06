@@ -1688,7 +1688,7 @@ def configure_auto_start() -> bool:
 
         # --- Tray LaunchAgent ---
         tray_plist_path = launch_agents_dir / "com.fixonce.tray.plist"
-        tray_script = fixonce_dir / "scripts" / "menubar_app.py"
+        tray_script = fixonce_dir / "scripts" / "app_launcher.py"
         pythonw = get_pythonw()
 
         tray_plist_content = f'''<?xml version="1.0" encoding="UTF-8"?>
@@ -1701,9 +1701,10 @@ def configure_auto_start() -> bool:
     <array>
         <string>{pythonw}</string>
         <string>{tray_script}</string>
+        <string>--menubar</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>{fixonce_dir / "scripts"}</string>
+    <string>{fixonce_dir}</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -1716,7 +1717,14 @@ def configure_auto_start() -> bool:
     <key>StandardOutPath</key>
     <string>{logs_dir / "tray.log"}</string>
     <key>StandardErrorPath</key>
-    <string>{logs_dir / "tray.log"}</string>
+    <string>{logs_dir / "tray.error.log"}</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>{fixonce_dir / "venv" / "bin"}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>PYTHONPATH</key>
+        <string>{fixonce_dir / "src"}</string>
+    </dict>
 </dict>
 </plist>
 '''
