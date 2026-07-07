@@ -131,7 +131,7 @@ MEMORY_REVIEW_ENABLED = os.environ.get(
 # - tray: Runs as menu bar/system tray app (new tray-first mode)
 # - auto: Tray mode if available, fallback to dashboard
 VALID_LAUNCH_MODES = ("dashboard", "tray", "auto")
-DEFAULT_LAUNCH_MODE = "dashboard"  # Keep current behavior as default
+DEFAULT_LAUNCH_MODE = "tray"  # Tray-first: click app shows menubar, Expand opens dashboard
 
 
 def get_launch_mode() -> str:

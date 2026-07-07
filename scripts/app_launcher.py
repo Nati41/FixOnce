@@ -1413,12 +1413,12 @@ def get_launch_mode() -> str:
     config_file = USER_DATA_DIR / "config.json"
     try:
         config = json.loads(config_file.read_text(encoding="utf-8"))
-        mode = config.get("launch_mode", "dashboard")
+        mode = config.get("launch_mode", "tray")
         if mode in ("dashboard", "tray", "auto"):
             return mode
     except Exception:
         pass
-    return "dashboard"
+    return "tray"
 
 
 def can_run_tray() -> bool:
