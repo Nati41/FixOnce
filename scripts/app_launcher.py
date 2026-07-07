@@ -67,7 +67,8 @@ def _detect_run_mode() -> tuple[str, Path, Path]:
 
 # Initialize paths based on run mode
 _RUN_MODE, PROJECT_DIR, SRC_DIR = _detect_run_mode()
-SCRIPT_DIR = PROJECT_DIR / "scripts" if _RUN_MODE == "dev" else PROJECT_DIR
+# Scripts are always in a 'scripts' subdirectory, even in frozen mode
+SCRIPT_DIR = PROJECT_DIR / "scripts"
 SERVER_SCRIPT = SRC_DIR / "server.py"
 
 # Add src to path for imports
