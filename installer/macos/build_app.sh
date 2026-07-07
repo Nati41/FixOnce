@@ -40,7 +40,7 @@ echo "[3/4] Installing dependencies..."
 pip install -r "$PROJECT_ROOT/requirements.txt" -q
 
 # Install macOS-specific dependencies
-pip install rumps pyobjc-framework-Cocoa -q
+pip install rumps pyobjc-framework-Cocoa pywebview -q
 
 # Build the app
 echo "[4/4] Building FixOnce.app..."
@@ -61,11 +61,19 @@ if [ -d "$BUILD_DIR/FixOnce.app" ]; then
     echo ""
     echo "Output: $BUILD_DIR/FixOnce.app"
     echo ""
+
+    # Touch the app bundle to update modification time (helps Finder refresh icon)
+    touch "$BUILD_DIR/FixOnce.app"
+
     echo "To install:"
     echo "  cp -r $BUILD_DIR/FixOnce.app /Applications/"
     echo ""
     echo "To test:"
     echo "  open $BUILD_DIR/FixOnce.app"
+    echo ""
+    echo "If icon appears generic, run:"
+    echo "  sudo rm -rf /Library/Caches/com.apple.iconservices.store"
+    echo "  killall Finder Dock"
     echo ""
 else
     echo ""

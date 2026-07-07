@@ -388,21 +388,48 @@ class FixOnceMenuBar(rumps.App):
             webbrowser.open(full_url)
 
     def _expand_app(self, _):
-        """Open the native FixOnce app in dashboard mode."""
+        """Open the dashboard - native window, not browser."""
         # Refresh status immediately so tray reflects latest state
         try:
             self._update_status()
         except Exception:
             pass
 
-        # Run app_launcher.py directly with --dashboard flag
-        launcher_path = PROJECT_DIR / "scripts" / "app_launcher.py"
-        subprocess.Popen(
-            [sys.executable, str(launcher_path), "--dashboard"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True
-        )
+        # Ensure server is running first
+        if not self.server_running:
+            self._start_server()
+            time.sleep(2)
+            port = self._discover_port()
+            if not port:
+                rumps.notification(
+                    title="FixOnce",
+                    subtitle="Could not open dashboard",
+                    message="Server failed to start"
+                )
+                return
+            self.server_port = port
+            self.server_running = True
+
+        # Launch native dashboard window in a separate process
+        # This works for both frozen (PyInstaller) and dev mode
+        if getattr(sys, "frozen", False):
+            # Frozen mode: use the bundled executable with --dashboard flag
+            # This opens the native pywebview window without starting another tray
+            subprocess.Popen(
+                [sys.executable, "--dashboard"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+        else:
+            # Dev mode: run app_launcher.py with --dashboard flag
+            launcher_path = PROJECT_DIR / "scripts" / "app_launcher.py"
+            subprocess.Popen(
+                [sys.executable, str(launcher_path), "--dashboard"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
 
     def _open_full_view(self, _):
         """Open the full dashboard in browser."""
@@ -537,10 +564,17 @@ class FixOnceMenuBar(rumps.App):
 
     def _start_server(self):
         """Start the Flask server."""
-        server_script = SERVER_DIR / "server.py"
+        if is_bundle_mode():
+            # In frozen/bundle mode, use --server flag (binary handles it)
+            command = [sys.executable, "--server", "--flask-only"]
+        else:
+            # In dev mode, run the server script directly
+            server_script = SERVER_DIR / "server.py"
+            command = [sys.executable, str(server_script), "--flask-only"]
+
         subprocess.Popen(
-            [sys.executable, str(server_script), "--flask-only"],
-            cwd=str(SERVER_DIR),
+            command,
+            cwd=str(PROJECT_DIR),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True

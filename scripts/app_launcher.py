@@ -905,8 +905,16 @@ def launch_dashboard_detached(log_fn: Callable[[str], None] | None = None) -> bo
                 creationflags=windows_process_creationflags(detached=True),
             )
         else:
+            # macOS/Linux
+            if is_frozen():
+                # In frozen mode, use --dashboard flag
+                command = [sys.executable, "--dashboard"]
+            else:
+                # In dev mode, run app_launcher.py directly
+                command = [sys.executable, str(SCRIPT_DIR / "app_launcher.py")]
+
             subprocess.Popen(
-                [sys.executable, str(SCRIPT_DIR / "app_launcher.py")],
+                command,
                 cwd=str(PROJECT_DIR),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -1136,14 +1144,22 @@ def start_server():
         )
         log_event(f"Requested background server start: pid={process.pid} command={subprocess.list2cmdline(command)}")
     else:
+        # macOS/Linux
+        if is_frozen():
+            # In frozen mode, use --server flag (binary handles it)
+            command = [sys.executable, "--server", "--flask-only", "--quiet"]
+        else:
+            # In dev mode, run the server script directly
+            command = [sys.executable, str(SERVER_SCRIPT), "--flask-only", "--quiet"]
+
         process = subprocess.Popen(
-            [sys.executable, str(SERVER_SCRIPT), "--flask-only", "--quiet"],
+            command,
             cwd=str(PROJECT_DIR),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-        log_event(f"Requested background server start: pid={process.pid}")
+        log_event(f"Requested background server start: pid={process.pid} command={command}")
 
 
 def open_external_url(url: str):
@@ -1402,6 +1418,52 @@ def launch_app() -> bool:
     return True
 
 
+TRAY_LOCK_FILE = USER_DATA_DIR / "tray.lock"
+
+
+def is_tray_already_running() -> bool:
+    """Check if another tray instance is already running."""
+    if not TRAY_LOCK_FILE.exists():
+        return False
+    try:
+        pid = int(TRAY_LOCK_FILE.read_text(encoding="utf-8").strip())
+        if is_pid_running(pid):
+            log_event(f"Tray already running (PID {pid})")
+            return True
+        else:
+            log_event(f"Stale tray lock (PID {pid} not running), removing")
+            TRAY_LOCK_FILE.unlink(missing_ok=True)
+            return False
+    except Exception:
+        return False
+
+
+def acquire_tray_lock() -> bool:
+    """Acquire the tray lock. Returns True if acquired, False if already held."""
+    if is_tray_already_running():
+        return False
+    try:
+        USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        TRAY_LOCK_FILE.write_text(str(os.getpid()), encoding="utf-8")
+        log_event(f"Acquired tray lock (PID {os.getpid()})")
+        return True
+    except Exception as e:
+        log_event(f"Failed to acquire tray lock: {e}")
+        return False
+
+
+def release_tray_lock():
+    """Release the tray lock on exit."""
+    try:
+        if TRAY_LOCK_FILE.exists():
+            pid = int(TRAY_LOCK_FILE.read_text(encoding="utf-8").strip())
+            if pid == os.getpid():
+                TRAY_LOCK_FILE.unlink(missing_ok=True)
+                log_event("Released tray lock")
+    except Exception:
+        pass
+
+
 def run_menubar_app(explicit_request: bool = False):
     """
     macOS menu bar mode.
@@ -1410,9 +1472,24 @@ def run_menubar_app(explicit_request: bool = False):
         explicit_request: True if user explicitly requested tray mode via --tray flag.
                          If True and rumps is unavailable, show error instead of fallback.
     """
+    # Single-instance protection
+    if is_tray_already_running():
+        log_event("Tray already running, opening dashboard instead")
+        # Open dashboard instead of starting another tray
+        if launch_app():
+            return
+        # If dashboard fails, just exit silently
+        log_event("Dashboard launch also failed, exiting")
+        return
+
+    if not acquire_tray_lock():
+        log_event("Could not acquire tray lock, exiting")
+        return
+
     try:
         import rumps
     except ImportError:
+        release_tray_lock()
         if explicit_request:
             log_event("rumps not available, --tray explicitly requested, showing error")
             print("Error: Tray mode requires 'rumps' package.")
@@ -1425,6 +1502,9 @@ def run_menubar_app(explicit_request: bool = False):
             if not launch_app():
                 show_failure_window(launch_app, lambda: run_repair_action() and launch_app())
             return
+
+    import atexit
+    atexit.register(release_tray_lock)
 
     sys.path.insert(0, str(SCRIPT_DIR))
     from menubar_app import FixOnceMenuBar
@@ -1558,6 +1638,15 @@ def run_mcp_mode():
 
 
 def main():
+    # Log startup info
+    log_event(f"=== FixOnce starting ===")
+    log_event(f"Run mode: {_RUN_MODE}")
+    log_event(f"Frozen: {is_frozen()}")
+    log_event(f"Platform: {sys.platform}")
+    log_event(f"Executable: {sys.executable}")
+    log_event(f"Args: {sys.argv}")
+    log_event(f"PROJECT_DIR: {PROJECT_DIR}")
+
     if "--mcp" in sys.argv:
         run_mcp_mode()
         return
@@ -1572,11 +1661,13 @@ def main():
 
     # Explicit tray mode flags (backward compatible)
     if "--menubar" in sys.argv or "-m" in sys.argv or "--tray" in sys.argv:
+        log_event("Explicit tray mode requested via flag")
         run_tray_mode(explicit_request=True)
         return
 
     # Explicit dashboard mode flag
     if "--dashboard" in sys.argv:
+        log_event("Explicit dashboard mode requested via flag")
         if launch_app():
             return
         show_failure_window(launch_app, lambda: run_repair_action() and launch_app())

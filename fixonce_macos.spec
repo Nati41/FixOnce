@@ -131,6 +131,8 @@ hiddenimports = [
     "markupsafe",
     "itsdangerous",
     "click",
+    # Native dashboard window
+    "webview",
     # macOS menu bar
     "rumps",
     "PyObjCTools",
@@ -182,7 +184,6 @@ excludes = [
     "tensorflow",
     "keras",
     # Windows-specific
-    "webview",
     "pywin32",
     "win32api",
     "win32con",
