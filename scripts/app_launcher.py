@@ -20,11 +20,57 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-# Get the directory where this script is located
-SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = SCRIPT_DIR.parent
-SERVER_SCRIPT = PROJECT_DIR / "src" / "server.py"
-SRC_DIR = PROJECT_DIR / "src"
+# ============================================================
+# Path detection: bundle mode vs dev mode
+# ============================================================
+
+def _detect_run_mode() -> tuple[str, Path, Path]:
+    """
+    Detect whether running from:
+    - 'frozen': PyInstaller bundle (Windows exe or macOS app)
+    - 'macos_app': macOS app bundle in /Applications
+    - 'dev': Development/repo mode
+
+    Returns (mode, project_dir, src_dir)
+    """
+    if getattr(sys, "frozen", False):
+        # PyInstaller frozen mode
+        if sys.platform == "darwin":
+            # macOS: executable is in FixOnce.app/Contents/MacOS/
+            exe_path = Path(sys.executable).resolve()
+            app_bundle = exe_path.parent.parent.parent  # .app directory
+            resources = app_bundle / "Contents" / "Resources"
+            return "frozen", resources, resources / "src"
+        else:
+            # Windows: executable is in dist/FixOnce/
+            exe_dir = Path(sys.executable).resolve().parent
+            return "frozen", exe_dir, exe_dir / "src"
+
+    # Script mode - check if inside a macOS app bundle
+    script_path = Path(__file__).resolve()
+
+    # Check if we're inside /Applications/FixOnce.app
+    if sys.platform == "darwin":
+        path_str = str(script_path)
+        if "/Applications/FixOnce.app/" in path_str:
+            # Running from installed app
+            app_match = path_str.split("/Applications/FixOnce.app/")[0]
+            app_bundle = Path(app_match) / "Applications" / "FixOnce.app"
+            resources = app_bundle / "Contents" / "Resources"
+            return "macos_app", resources, resources / "src"
+
+    # Dev/repo mode: script is in scripts/, project is parent
+    script_dir = script_path.parent
+    project_dir = script_dir.parent
+    return "dev", project_dir, project_dir / "src"
+
+
+# Initialize paths based on run mode
+_RUN_MODE, PROJECT_DIR, SRC_DIR = _detect_run_mode()
+SCRIPT_DIR = PROJECT_DIR / "scripts" if _RUN_MODE == "dev" else PROJECT_DIR
+SERVER_SCRIPT = SRC_DIR / "server.py"
+
+# Add src to path for imports
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
@@ -63,6 +109,16 @@ DEFENDER_BLOCKED_DETAIL = (
 
 def is_frozen() -> bool:
     return bool(getattr(sys, "frozen", False))
+
+
+def is_bundle_mode() -> bool:
+    """Check if running from installed bundle (not dev/repo mode)."""
+    return _RUN_MODE in ("frozen", "macos_app")
+
+
+def get_macos_app_path() -> Path:
+    """Get the path to the installed macOS app bundle."""
+    return Path("/Applications/FixOnce.app")
 
 
 def windows_process_creationflags(detached: bool = True) -> int:

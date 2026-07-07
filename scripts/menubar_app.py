@@ -25,13 +25,55 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-# Get the directory where this script is located
-SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = SCRIPT_DIR.parent
-SERVER_DIR = PROJECT_DIR / "src"
+# ============================================================
+# Path detection: bundle mode vs dev mode
+# ============================================================
+
+def _detect_run_mode() -> tuple[str, Path, Path]:
+    """
+    Detect whether running from:
+    - 'frozen': PyInstaller bundle
+    - 'macos_app': macOS app bundle in /Applications
+    - 'dev': Development/repo mode
+
+    Returns (mode, project_dir, src_dir)
+    """
+    if getattr(sys, "frozen", False):
+        # PyInstaller frozen mode
+        exe_path = Path(sys.executable).resolve()
+        app_bundle = exe_path.parent.parent.parent  # .app directory
+        resources = app_bundle / "Contents" / "Resources"
+        return "frozen", resources, resources / "src"
+
+    # Script mode - check if inside a macOS app bundle
+    script_path = Path(__file__).resolve()
+
+    # Check if we're inside /Applications/FixOnce.app
+    path_str = str(script_path)
+    if "/Applications/FixOnce.app/" in path_str:
+        app_match = path_str.split("/Applications/FixOnce.app/")[0]
+        app_bundle = Path(app_match) / "Applications" / "FixOnce.app"
+        resources = app_bundle / "Contents" / "Resources"
+        return "macos_app", resources, resources / "src"
+
+    # Dev/repo mode: script is in scripts/, project is parent
+    script_dir = script_path.parent
+    project_dir = script_dir.parent
+    return "dev", project_dir, project_dir / "src"
+
+
+# Initialize paths based on run mode
+_RUN_MODE, PROJECT_DIR, SERVER_DIR = _detect_run_mode()
+SCRIPT_DIR = PROJECT_DIR / "scripts" if _RUN_MODE == "dev" else PROJECT_DIR
 DATA_DIR = PROJECT_DIR / "data"
 USER_DATA_DIR = Path.home() / ".fixonce"
 ASSETS_DIR = PROJECT_DIR / "assets"
+
+
+def is_bundle_mode() -> bool:
+    """Check if running from installed bundle (not dev/repo mode)."""
+    return _RUN_MODE in ("frozen", "macos_app")
+
 
 # Add src to path for lifecycle import
 if str(SERVER_DIR) not in sys.path:
