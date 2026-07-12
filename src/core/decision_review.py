@@ -130,6 +130,22 @@ REVERSAL_CUES = {
     "remains", "stick", "sticks", "revert", "reverts", "restore", "restores",
 }
 
+DECOUPLING_PHRASES = [
+    "independent from", "independent of",
+    "decoupled from", "decoupled of",
+    "separate from", "separated from",
+    "agnostic", "transport-agnostic", "framework-agnostic",
+    "isolated from", "abstracted from",
+]
+
+RULE_VIOLATION_CUES = {
+    "bypass", "bypasses", "bypassing",
+    "skip", "skips", "skipping",
+    "ignore", "ignores", "ignoring",
+    "does not apply", "do not apply",
+    "not required", "not mandatory",
+}
+
 STEM_RULES = [
     ("ingly", ""),
     ("edly", ""),
@@ -428,7 +444,11 @@ def classify_relationship(
         return RelationshipType.SAME, "Near duplicate of active decision", 0.9
 
     replacement = _contains_any(new_raw, REPLACEMENT_CUES)
-    exception = _contains_any(new_raw, EXCEPTION_CUES) or _has_phrase(new_combined, ["without", "except for"])
+    exception_cues = _contains_any(new_raw, EXCEPTION_CUES)
+    exception_phrase = _has_phrase(new_combined, ["without", "except for"])
+    decoupling = _has_phrase(new_combined, DECOUPLING_PHRASES)
+    rule_violation = _contains_any(new_raw, RULE_VIOLATION_CUES)
+    exception = (exception_cues or exception_phrase) and (rule_violation or not decoupling)
     strict_existing = _contains_any(existing_raw, STRICT_CUES)
     permissive_new = _contains_any(new_raw, PERMISSIVE_OR_WEAKENING_CUES)
     extension = _contains_any(new_raw, EXTENSION_CUES)

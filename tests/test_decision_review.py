@@ -720,6 +720,74 @@ class TestReversalDetectionRegression(unittest.TestCase):
         self.assertEqual(review.primary_candidate.relationship.value, "potential_conflict")
 
 
+class TestDecouplingFalsePositiveRegression(unittest.TestCase):
+    """Regression tests for architectural decoupling language NOT triggering exception_to."""
+
+    def test_click_cli_vs_business_logic_independent_no_review(self):
+        from core.decision_review import review_decision
+
+        existing = [decision("dec_click", "Use Click for the CLI interface.")]
+        proposed = "Keep business logic independent from transport layers."
+
+        review = review_decision(proposed, "Architecture rule.", {"decisions": existing})
+
+        if review.requires_review:
+            self.assertNotEqual(
+                review.primary_candidate.relationship.value, "exception_to",
+                "Architectural decoupling must NOT be classified as exception_to"
+            )
+
+    def test_rest_api_vs_transport_agnostic_core_no_review(self):
+        from core.decision_review import review_decision
+
+        existing = [decision("dec_rest", "Use REST API for public integrations.")]
+        proposed = "Core business logic must be transport-agnostic."
+
+        review = review_decision(proposed, "Clean architecture.", {"decisions": existing})
+
+        if review.requires_review:
+            self.assertNotEqual(
+                review.primary_candidate.relationship.value, "exception_to",
+                "transport-agnostic must NOT trigger exception_to"
+            )
+
+    def test_ui_framework_vs_business_logic_decoupled_no_review(self):
+        from core.decision_review import review_decision
+
+        existing = [decision("dec_react", "Use React for frontend components.")]
+        proposed = "Business logic must be decoupled from UI frameworks."
+
+        review = review_decision(proposed, "Testability.", {"decisions": existing})
+
+        if review.requires_review:
+            self.assertNotEqual(
+                review.primary_candidate.relationship.value, "exception_to",
+                "decoupled from must NOT trigger exception_to"
+            )
+
+    def test_activity_logging_vs_bulk_import_bypasses_is_exception(self):
+        from core.decision_review import review_decision
+
+        existing = [decision("dec_logging", "Activity logging is mandatory for all writes.")]
+        proposed = "Bulk import bypasses activity logging."
+
+        review = review_decision(proposed, "Performance.", {"decisions": existing})
+
+        self.assertTrue(review.requires_review, "Rule bypass must trigger review")
+        self.assertEqual(review.primary_candidate.relationship.value, "exception_to")
+
+    def test_validation_vs_trusted_import_may_skip_is_exception(self):
+        from core.decision_review import review_decision
+
+        existing = [decision("dec_val", "All customer data must be validated before storage.")]
+        proposed = "Trusted bulk import may skip validation."
+
+        review = review_decision(proposed, "Migration speed.", {"decisions": existing})
+
+        self.assertTrue(review.requires_review, "Rule skip must trigger review")
+        self.assertEqual(review.primary_candidate.relationship.value, "exception_to")
+
+
 class TestBriefingSurfacing(unittest.TestCase):
     def test_pending_review_is_in_briefing_focus(self):
         from core.briefing_composer import _extract_focus
