@@ -95,6 +95,7 @@ class TestDashboardProjectSelection(unittest.TestCase):
             detected_from="fo_init",
             display_name="TestProject",
             working_dir="C:\\TestProject",
+            force=True,  # fo_init is explicit session start, so force=True
         )
 
     def test_fo_init_same_project_returns_early(self):
@@ -139,6 +140,7 @@ class TestDashboardProjectSelection(unittest.TestCase):
             detected_from="fo_init",
             display_name="Project X",
             working_dir="/projects/x",
+            force=True,  # fo_init is explicit session start, so force=True
         )
 
     def test_boundary_transition_does_not_change_dashboard_selection(self):

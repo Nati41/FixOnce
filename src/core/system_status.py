@@ -898,20 +898,33 @@ def clear_active_project():
 
 def set_active_project(project_id: str, working_dir: Optional[str] = None):
     """
-    Set the active project.
+    Set the active project using the central resolver.
+
+    DEPRECATED: Use managers.multi_project_manager.set_active_project() instead.
+    This wrapper exists for backward compatibility.
 
     Args:
         project_id: The project ID to activate
         working_dir: Optional working directory path
     """
-    data_dir = _get_data_dir()
-    active_file = data_dir / "active_project.json"
-
-    data = {
-        "active_id": project_id,
-        "working_dir": working_dir,
-        "activated_at": datetime.now().isoformat()
-    }
-
-    with open(active_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    try:
+        from core.active_project_resolver import update_active_project
+        result = update_active_project(
+            project_id=project_id,
+            detected_from="system_status",
+            working_dir=working_dir,
+            force=False,  # Don't override live sessions
+        )
+        if not result["updated"]:
+            print(f"[SystemStatus] Active project update blocked: {result.get('reason')}")
+    except ImportError:
+        # Fallback to direct write
+        data_dir = _get_data_dir()
+        active_file = data_dir / "active_project.json"
+        data = {
+            "active_id": project_id,
+            "working_dir": working_dir,
+            "activated_at": datetime.now().isoformat()
+        }
+        with open(active_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)

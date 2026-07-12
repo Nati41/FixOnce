@@ -487,10 +487,14 @@ def set_active_project(
     detected_from: str = "manual",
     display_name: str = None,
     create_if_missing: bool = True,
-    working_dir: str = None
+    working_dir: str = None,
+    force: bool = False
 ) -> Dict[str, Any]:
     """
-    Set the active project.
+    Set the active project using the central resolver.
+
+    IMPORTANT: This will NOT overwrite a newer live session unless force=True.
+    Use force=True only for explicit user actions (dashboard selection, fo_init).
 
     Args:
         project_id: The project ID to activate
@@ -498,6 +502,7 @@ def set_active_project(
         display_name: Optional display name
         create_if_missing: Create project if it doesn't exist
         working_dir: Working directory (for new projects)
+        force: If True, skip live session check and force update
     """
     with _lock:
         project_path = get_project_path(project_id)
@@ -509,7 +514,7 @@ def set_active_project(
                 print(f"[MultiProject] Project '{project_id}' not found")
                 return get_active_project() or {"active_id": None, "detected_from": "fallback"}
 
-        # Phase 1: Get working_dir from project memory if not provided
+        # Get working_dir from project memory if not provided
         actual_working_dir = working_dir
         if not actual_working_dir and project_path.exists():
             try:
@@ -522,23 +527,46 @@ def set_active_project(
             except Exception:
                 pass
 
-        active_info = {
-            "active_id": project_id,
-            "detected_from": detected_from,
-            "detected_at": datetime.now().isoformat(),
-            "display_name": display_name or project_id,
-            "working_dir": actual_working_dir  # Phase 1: Store for boundary detection
-        }
+        # Use the central resolver for atomic, conflict-aware updates
+        try:
+            from core.active_project_resolver import update_active_project
+            result = update_active_project(
+                project_id=project_id,
+                detected_from=detected_from,
+                display_name=display_name,
+                working_dir=actual_working_dir,
+                force=force,
+            )
 
-        # Use safe write for active project file
-        if SAFE_FILE_AVAILABLE:
-            atomic_json_write(str(ACTIVE_PROJECT_FILE), active_info, create_backup=False)
-        else:
-            with open(ACTIVE_PROJECT_FILE, 'w', encoding='utf-8') as f:
-                json.dump(active_info, f, ensure_ascii=False, indent=2)
+            if result["updated"]:
+                print(f"[MultiProject] Switched to: {project_id} (from {detected_from})")
+            else:
+                print(f"[MultiProject] Update blocked: {result.get('reason')}")
 
-        print(f"[MultiProject] Switched to: {project_id} (from {detected_from})")
-        return active_info
+            return {
+                "active_id": project_id if result["updated"] else result.get("previous_id"),
+                "detected_from": detected_from,
+                "detected_at": datetime.now().isoformat(),
+                "display_name": display_name or project_id,
+                "working_dir": actual_working_dir,
+                "update_result": result,
+            }
+        except ImportError:
+            # Fallback to direct write if resolver not available
+            active_info = {
+                "active_id": project_id,
+                "detected_from": detected_from,
+                "detected_at": datetime.now().isoformat(),
+                "display_name": display_name or project_id,
+                "working_dir": actual_working_dir,
+            }
+            if SAFE_FILE_AVAILABLE:
+                atomic_json_write(str(ACTIVE_PROJECT_FILE), active_info, create_backup=False)
+            else:
+                with open(ACTIVE_PROJECT_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(active_info, f, ensure_ascii=False, indent=2)
+            print(f"[MultiProject] Switched to: {project_id} (from {detected_from}) [fallback mode]")
+            return active_info
 
 
 def ensure_dashboard_project(
@@ -552,6 +580,8 @@ def ensure_dashboard_project(
 
     When fo_init connects to a project, the dashboard should reflect that
     project - users expect the dashboard to show where AI is active.
+
+    This uses force=True because fo_init is an explicit session start.
     """
     active = get_active_project()
     current_id = active.get("active_id") if active else None
@@ -561,11 +591,13 @@ def ensure_dashboard_project(
         return active
 
     # Update dashboard to show the AI's current project
+    # force=True because this is an explicit AI session initialization
     return set_active_project(
         project_id=project_id,
         detected_from=detected_from,
         display_name=display_name,
         working_dir=working_dir,
+        force=True,
     )
 
 
