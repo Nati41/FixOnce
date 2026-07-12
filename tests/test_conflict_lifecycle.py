@@ -133,6 +133,7 @@ class TestConflictLifecycle(unittest.TestCase):
         self.assertEqual(saved["decision_conflicts"][0]["status"], "open")
 
     def test_similar_decision_warning_does_not_block_logging(self):
+        """Similarity alone should not block existing warning-level behavior."""
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             project_file = self._activate(root, {

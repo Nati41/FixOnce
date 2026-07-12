@@ -8,11 +8,12 @@ Architecture:
 - MCP tool (fo_decide) is a thin wrapper over these core functions
 - All storage (V1 project_memory.json + V2 knowledge_objects) happens here
 - actor/actor_source are explicit parameters, not detected internally
+- Pre-save review checks for potential conflicts before saving
 """
 
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -21,12 +22,37 @@ class DecisionResult:
     success: bool
     decision_id: Optional[str] = None  # V2 object ID if created
     message: str = ""
-    conflicts: List[Dict[str, Any]] = None
+    conflicts: List[Dict[str, Any]] = field(default_factory=list)
     warning: str = ""
+    # Review fields (when requires_review=True, decision was not saved)
+    requires_review: bool = False
+    review_result: Optional[Dict[str, Any]] = None
 
-    def __post_init__(self):
-        if self.conflicts is None:
-            self.conflicts = []
+
+def _find_decision_by_review_id(
+    memory: Dict[str, Any],
+    target_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Find an active decision by stored ID or generated review ID."""
+    if not target_id:
+        return None
+    try:
+        from core.decision_review import decision_id_for
+    except ImportError:
+        decision_id_for = None
+
+    normalized_target = target_id.lower()
+    for decision in memory.get("decisions", []):
+        if not isinstance(decision, dict) or decision.get("superseded"):
+            continue
+        stored_id = str(decision.get("id", ""))
+        generated_id = decision_id_for(decision) if decision_id_for else ""
+        text = str(decision.get("decision", ""))
+        if stored_id == target_id or generated_id == target_id:
+            return decision
+        if normalized_target and normalized_target in text.lower():
+            return decision
+    return None
 
 
 def record_decision(
@@ -38,6 +64,10 @@ def record_decision(
     force: bool = False,
     relation: str = "",
     related_decision: str = "",
+    skip_review: bool = False,
+    resolution_action: str = "",
+    resolution_target_id: str = "",
+    session_id: str = "",
     _memory: Optional[Dict[str, Any]] = None,
     _save_fn: Optional[callable] = None,
 ) -> DecisionResult:
@@ -46,20 +76,29 @@ def record_decision(
 
     This is the core business logic - no MCP or transport dependencies.
 
+    Pre-save review: Before saving, checks for related/conflicting decisions.
+    If a potential conflict is found, returns requires_review=True with resolution options.
+    Caller must then call again with resolution_action to complete the save.
+
     Args:
         project_id: The project ID (required)
         text: The decision text
         reason: Why this decision was made
         actor: Who made this decision (e.g., "claude", "user", "dashboard")
         actor_source: How actor was determined (e.g., "mcp_session", "api_header")
-        force: If True, override conflict detection
+        force: If True, override conflict detection (deprecated, use resolution_action)
         relation: Optional relation ("refines" or "clarifies")
         related_decision: Text of related decision if relation is set
+        skip_review: If True, skip pre-save review (for internal calls)
+        resolution_action: Action to resolve a review (save_as_exception, save_as_extends, supersede_existing, etc.)
+        resolution_target_id: ID of existing decision for resolution actions
+        session_id: Session ID for attribution
         _memory: Optional pre-loaded memory (for testing/MCP integration)
         _save_fn: Optional custom save function (for testing/MCP integration)
 
     Returns:
-        DecisionResult with success status, message, and any conflicts
+        DecisionResult with success status, message, and any conflicts.
+        If requires_review=True, decision was NOT saved - call again with resolution_action.
     """
     if not project_id:
         return DecisionResult(
@@ -90,6 +129,89 @@ def record_decision(
 
     if 'decisions' not in memory:
         memory['decisions'] = []
+
+    # Handle resolution actions (called after review)
+    if resolution_action:
+        try:
+            from core.decision_review import ResolutionAction, decision_id_for
+            from core.conflict_lifecycle import resolve_decision_conflicts
+
+            action = ResolutionAction(resolution_action)
+            target_decision = _find_decision_by_review_id(memory, resolution_target_id)
+            target_text = target_decision.get("decision", "") if target_decision else ""
+            target_id = decision_id_for(target_decision) if target_decision else resolution_target_id
+
+            if action == ResolutionAction.CANCEL:
+                return DecisionResult(
+                    success=False,
+                    message="Decision cancelled by user",
+                )
+
+            if action == ResolutionAction.ACKNOWLEDGE_EXISTING:
+                return DecisionResult(
+                    success=True,
+                    message="Existing decision acknowledged; duplicate decision was not recorded",
+                )
+
+            if action == ResolutionAction.SAVE_AS_EXCEPTION:
+                if not target_decision:
+                    return DecisionResult(
+                        success=False,
+                        message="Error: target decision was not found for exception resolution",
+                    )
+                relation = "exception_to"
+                related_decision = target_text
+
+            elif action == ResolutionAction.SAVE_AS_EXTENDS:
+                if not target_decision:
+                    return DecisionResult(
+                        success=False,
+                        message="Error: target decision was not found for extends resolution",
+                    )
+                relation = "extends"
+                related_decision = target_text
+
+            elif action == ResolutionAction.SUPERSEDE_EXISTING:
+                if not target_decision:
+                    return DecisionResult(
+                        success=False,
+                        message="Error: target decision was not found for supersede resolution",
+                    )
+                target_decision["superseded"] = True
+                target_decision["superseded_at"] = datetime.now().isoformat()
+                target_decision["superseded_by"] = text
+                target_decision["supersede_reason"] = reason
+                target_decision["superseded_by_actor"] = actor
+                target_decision["superseded_by_source"] = actor_source
+
+            elif action == ResolutionAction.SAVE_ANYWAY_UNDER_REVIEW:
+                if not target_decision:
+                    return DecisionResult(
+                        success=False,
+                        message="Error: target decision was not found for under-review resolution",
+                    )
+
+            # Resolve matching legacy conflicts if this resolution came after an old block.
+            # Saving under review intentionally leaves one canonical open review.
+            if action != ResolutionAction.SAVE_ANYWAY_UNDER_REVIEW:
+                resolve_decision_conflicts(
+                    memory,
+                    status="resolved",
+                    action=resolution_action,
+                    reason=f"Resolved via {resolution_action}",
+                    attribution={
+                        "actor": actor,
+                        "actor_source": actor_source,
+                        "session_id": session_id,
+                    },
+                    existing_decision_text=target_text,
+                )
+
+        except (ImportError, ValueError) as e:
+            return DecisionResult(
+                success=False,
+                message=f"Error processing resolution action: {e}",
+            )
 
     # Policy enforcement - check for conflicts
     warning = ""
@@ -149,6 +271,36 @@ def record_decision(
         # Don't block on policy errors
         warning = f"Policy check failed: {e}"
 
+    # Pre-save review checks only gaps not already blocked by the policy engine.
+    if not skip_review and not force and not resolution_action and not relation:
+        try:
+            from core.decision_review import review_decision
+
+            semantic_search_fn = None
+            try:
+                from core.project_semantic import search_project
+                semantic_search_fn = search_project
+            except Exception:
+                semantic_search_fn = None
+
+            review = review_decision(
+                text,
+                reason,
+                memory,
+                project_id=project_id,
+                semantic_search_fn=semantic_search_fn,
+            )
+
+            if review.requires_review and review.primary_candidate:
+                return DecisionResult(
+                    success=False,
+                    requires_review=True,
+                    message=review.message,
+                    review_result=review.to_dict(),
+                )
+        except ImportError:
+            pass  # Review module not available, continue without review
+
     # Create decision record (V1)
     timestamp = datetime.now().isoformat()
     decision_record = {
@@ -160,29 +312,39 @@ def record_decision(
         "importance": "permanent",
         "actor": actor,
         "actor_source": actor_source,
+        "status": "active",
     }
 
     if force:
         decision_record["forced"] = True
 
-    # Handle relations
+    # Set status based on resolution action
+    if resolution_action == "save_anyway_under_review":
+        decision_record["status"] = "needs_review"
+
+    # Handle relations (including new types from resolution)
     relation = (relation or "").lower()
-    if relation in {"refines", "clarifies"} and related_decision:
+    if relation in {"refines", "clarifies", "exception_to", "extends"} and related_decision:
         decision_record["relation"] = relation
         decision_record["related_decision"] = related_decision
 
-        # Add fingerprint for related decision
+        # Find and link to existing decision by ID or text
         try:
+            from core.decision_review import decision_id_for
             from core.conflict_lifecycle import decision_fingerprint
             for existing in memory.get("decisions", []):
                 if existing.get("superseded"):
                     continue
+                existing_id = existing.get("id", "")
                 existing_text = existing.get("decision", "")
-                if (
-                    existing_text.lower() == related_decision.lower()
-                    or related_decision.lower() in existing_text.lower()
-                    or existing_text.lower() in related_decision.lower()
-                ):
+                review_id = decision_id_for(existing)
+                # Match by ID or text
+                if existing_id == related_decision or \
+                   review_id == related_decision or \
+                   existing_text.lower() == related_decision.lower() or \
+                   related_decision.lower() in existing_text.lower() or \
+                   existing_text.lower() in related_decision.lower():
+                    decision_record["related_decision_id"] = existing_id or review_id
                     decision_record["related_decision_fingerprint"] = decision_fingerprint(existing)
                     break
             else:
@@ -191,6 +353,43 @@ def record_decision(
             pass  # Fingerprinting is optional
 
     memory['decisions'].append(decision_record)
+
+    # Create pending review record for save_anyway_under_review
+    if resolution_action == "save_anyway_under_review" and resolution_target_id:
+        try:
+            from core.decision_review import decision_id_for
+            from core.conflict_lifecycle import upsert_decision_conflicts
+
+            existing = _find_decision_by_review_id(memory, resolution_target_id)
+            if existing:
+                decision_record["review_target_decision_id"] = decision_id_for(existing)
+                conflict_evidence = [{
+                    "type": "PENDING_DECISION_REVIEW",
+                    "severity": "MEDIUM",
+                    "existing_decision": existing.get("decision", ""),
+                    "existing_reason": existing.get("reason", ""),
+                    "existing_actor": existing.get("actor", "unknown"),
+                    "existing_actor_source": existing.get("actor_source", "none"),
+                    "timestamp": existing.get("timestamp", ""),
+                    "topics": [],
+                    "message": (
+                        "Decision saved under review; verify compatibility with: "
+                        f"{existing.get('decision', '')[:80]}"
+                    ),
+                }]
+                upsert_decision_conflicts(
+                    memory,
+                    conflict_evidence,
+                    text,
+                    reason,
+                    attribution={
+                        "actor": actor,
+                        "actor_source": actor_source,
+                        "session_id": session_id,
+                    },
+                )
+        except ImportError:
+            pass  # Conflict lifecycle not available
 
     # Save V1
     try:
@@ -229,10 +428,12 @@ def record_decision(
 
     # Index for semantic search (non-blocking)
     try:
-        from core.project_semantic import get_semantic_index
-        semantic = get_semantic_index()
-        if semantic and hasattr(semantic, 'index_decision'):
-            semantic.index_decision(project_id, text, reason)
+        from core.project_semantic import index_decision
+        from core.decision_review import decision_id_for
+        index_decision(project_id, text, reason, {
+            "decision_id": decision_id_for(decision_record),
+            "status": decision_record.get("status", "active"),
+        })
     except Exception:
         pass  # Semantic indexing is optional
 

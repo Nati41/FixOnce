@@ -206,12 +206,23 @@ def rebuild_project_index(project_id: str) -> Dict[str, Any]:
 
     # Index decisions
     for decision in memory.get('decisions', []):
+        if decision.get('superseded'):
+            continue
+        if decision.get('status') not in (None, "", "active"):
+            continue
         dec_text = decision.get('decision', '')
         reason = decision.get('reason', '')
         if dec_text:
+            try:
+                from core.decision_review import decision_id_for
+                decision_id = decision_id_for(decision)
+            except Exception:
+                decision_id = decision.get('id', '')
             index.add("decision", f"{dec_text}. Reason: {reason}", {
+                "decision_id": decision_id,
                 "decision": dec_text,
-                "reason": reason
+                "reason": reason,
+                "status": decision.get("status", "active"),
             })
             docs_added += 1
 

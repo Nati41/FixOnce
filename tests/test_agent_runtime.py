@@ -221,11 +221,11 @@ class TestAgentRuntime(unittest.TestCase):
             )
 
         self.assertIn("Decision NOT logged", result)
+        # Pre-save review must not persist either the proposed decision or a
+        # conflict record until the user chooses a resolution action.
         save_project.assert_not_called()
-        entry = get_agent_audit(limit=5)[0]
-        self.assertEqual(entry["gate"], "decision_conflict_gate")
-        self.assertEqual(entry["intent"], "decision")
-        self.assertEqual(entry["flow_classification"], "migrated")
+        self.assertEqual(len(memory["decisions"]), 1)
+        self.assertEqual(memory.get("decision_conflicts", []), [])
 
 
 if __name__ == "__main__":

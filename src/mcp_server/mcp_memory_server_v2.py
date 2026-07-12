@@ -6666,19 +6666,33 @@ def log_decision(
     force: bool = False,
     relation: str = "",
     related_decision: str = "",
+    resolution_action: str = "",
+    resolution_target_id: str = "",
 ) -> str:
     """
     Log an architectural decision. Decisions NEVER decay - they are permanent.
 
+    Pre-save review: Before saving, checks for related/conflicting decisions.
+    If a potential conflict is found, returns a review result with resolution options.
+    Call again with resolution_action to complete the save.
+
     Args:
         decision: The decision text
         reason: Why this decision was made
-        force: If True, override conflict detection and log anyway
+        force: If True, override conflict detection and log anyway (deprecated)
         relation: Optional relation to an existing decision ("refines" or "clarifies")
         related_decision: Existing decision text this relation targets
+        resolution_action: Action to resolve a review:
+            - acknowledge_existing: Acknowledge duplicate and don't save
+            - save_as_extends: Save as compatible extension to existing decision
+            - save_as_exception: Save as scoped exception to existing decision
+            - supersede_existing: Save and mark existing as superseded
+            - save_anyway_under_review: Save but flag for review
+            - cancel: Don't save
+        resolution_target_id: ID or text of existing decision for resolution
 
     Returns:
-        Success message or BLOCK message if conflict detected
+        Success message, REVIEW_REQUIRED with options, or BLOCK message
     """
     error, context = _universal_gate("log_decision")
     if error:
@@ -6703,6 +6717,7 @@ def log_decision(
     attribution = _new_record_attribution("fo_decide")
     actor = attribution.get("actor", "mcp")
     actor_source = attribution.get("actor_source", "mcp_session")
+    session_id = attribution.get("session_id", "")
 
     # Load memory using MCP's loader (allows test patching)
     memory = _load_project(session.project_id)
@@ -6718,11 +6733,54 @@ def log_decision(
         force=force,
         relation=relation,
         related_decision=related_decision,
+        resolution_action=resolution_action,
+        resolution_target_id=resolution_target_id,
+        session_id=session_id,
         _memory=memory,
         _save_fn=lambda pid, mem: _save_project(pid, mem),
     )
 
-    # Handle blocked decisions
+    # Handle review required - decision was NOT saved
+    if result.requires_review and result.review_result:
+        review = result.review_result
+        lines = ["\n⚠️ DECISION REVIEW REQUIRED\n"]
+        lines.append(review.get("message", "Related decision found"))
+        lines.append("")
+        lines.append(f"Proposed: \"{decision[:80]}...\"" if len(decision) > 80 else f"Proposed: \"{decision}\"")
+
+        if review.get("primary_candidate"):
+            pc = review["primary_candidate"]
+            lines.append(f"Existing: \"{pc['text'][:80]}...\"" if len(pc['text']) > 80 else f"Existing: \"{pc['text']}\"")
+            lines.append(f"Relationship: {pc['relationship']}")
+
+        lines.append("")
+        lines.append("Resolution options:")
+        for action in review.get("allowed_actions", []):
+            if action == "acknowledge_existing":
+                lines.append(f"  • fo_decide(..., action='resolve:acknowledge_existing:{pc['id'] if review.get('primary_candidate') else ''}')")
+                lines.append("    Acknowledge existing decision without saving a duplicate")
+            elif action == "save_as_extends":
+                lines.append(f"  • fo_decide(..., action='resolve:save_as_extends:{pc['id'] if review.get('primary_candidate') else ''}')")
+                lines.append("    Save as compatible extension to existing decision")
+            elif action == "save_as_exception":
+                lines.append(f"  • fo_decide(..., action='resolve:save_as_exception:{pc['id'] if review.get('primary_candidate') else ''}')")
+                lines.append("    Save as scoped exception to existing decision")
+            elif action == "supersede_existing":
+                lines.append(f"  • fo_decide(..., action='resolve:supersede_existing:{pc['id'] if review.get('primary_candidate') else ''}')")
+                lines.append("    Save and mark existing as superseded")
+            elif action == "save_anyway_under_review":
+                lines.append(f"  • fo_decide(..., action='resolve:save_anyway_under_review:{pc['id'] if review.get('primary_candidate') else ''}')")
+                lines.append("    Save but flag for later review")
+            elif action == "cancel":
+                lines.append("  • Don't call fo_decide again")
+                lines.append("    Cancel - don't save this decision")
+
+        lines.append("")
+        lines.append("Decision NOT logged. Choose a resolution action to proceed.")
+
+        return context + "\n".join(lines)
+
+    # Handle blocked decisions (from policy engine)
     if not result.success:
         if result.conflicts:
             # Persist conflicts for resolution UI
@@ -9512,6 +9570,7 @@ def _nav_priorities(
     auto_fixes: List[Dict] = None,
     live_errors: List[Dict] = None,
     pending_reviews: int = 0,
+    decision_reviews: int = 0,
     similar_issues: List[Dict] = None
 ) -> List[Dict[str, Any]]:
     """
@@ -9545,6 +9604,14 @@ def _nav_priorities(
             "item": f"{pending_reviews} pending memory review(s)",
             "severity": "medium",
             "action": "Review in dashboard"
+        })
+
+    if decision_reviews > 0:
+        priorities.append({
+            "type": "decision_review",
+            "item": f"{decision_reviews} unresolved decision review(s)",
+            "severity": "medium",
+            "action": "Resolve decision review"
         })
 
     # Similar issues found
@@ -10566,11 +10633,20 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
         pending_reviews = get_pending_count()
     except:
         pass
+    decision_reviews = len([
+        conflict for conflict in data.get("decision_conflicts", [])
+        if (
+            isinstance(conflict, dict)
+            and conflict.get("status", "open") == "open"
+            and conflict.get("type") == "PENDING_DECISION_REVIEW"
+        )
+    ]) if isinstance(data, dict) else 0
 
     priorities = _nav_priorities(
         auto_fixes=auto_fixes,
         live_errors=live_errors,
-        pending_reviews=pending_reviews
+        pending_reviews=pending_reviews,
+        decision_reviews=decision_reviews,
     )
 
     if gate_result.level == "block":
@@ -10948,25 +11024,63 @@ def fo_decide(text: str, reason: str, action: str = "add") -> str:
     """
     Record a decision, avoid pattern, or supersede existing decision.
 
+    Pre-save review: Before saving, checks for related/conflicting decisions.
+    If a potential conflict is found, returns review options.
+
     Args:
         text: The decision or avoid text
         reason: Why this decision was made
-        action: "add" (default), "avoid", "refine:OLD_TEXT",
-                "clarify:OLD_TEXT", "supersede:OLD_TEXT", or
-                "resolve:CONFLICT_ID"
+        action: One of:
+            - "add" (default): Add new decision (may trigger review)
+            - "avoid": Add as avoid pattern
+            - "refine:OLD_TEXT": Refine existing decision
+            - "clarify:OLD_TEXT": Clarify existing decision
+            - "supersede:OLD_TEXT": Supersede existing decision
+            - "resolve:CONFLICT_ID": Resolve legacy conflict
+            - "resolve:acknowledge_existing:TARGET_ID": Acknowledge duplicate without saving
+            - "resolve:save_as_extends:TARGET_ID": Save as extension (from review)
+            - "resolve:save_as_exception:TARGET_ID": Save as exception (from review)
+            - "resolve:supersede_existing:TARGET_ID": Supersede existing (from review)
+            - "resolve:save_anyway_under_review:TARGET_ID": Save under review (from review)
 
     Examples:
         fo_decide("Use PostgreSQL", "Better for our scale")
         fo_decide("Never use eval()", "Security risk", action="avoid")
         fo_decide("Use MySQL", "Changed requirements", action="supersede:Use PostgreSQL")
+        # After review suggests conflict:
+        fo_decide("Bulk import bypasses logging", "Performance", action="resolve:save_as_exception:dec_003")
     """
     if action == "avoid":
         result = log_avoid(text, reason)
     elif action.startswith("resolve:"):
-        conflict_id = action[len("resolve:"):].strip()
-        if not conflict_id:
-            return "Error: conflict id is required."
-        result = _resolve_decision_conflict_by_id(conflict_id, reason or text)
+        # Parse resolve action: resolve:ACTION:TARGET or resolve:CONFLICT_ID
+        parts = action[len("resolve:"):].split(":", 1)
+        resolution_action = parts[0].strip()
+
+        # Check if it's a new-style resolution (save_as_exception, supersede_existing, etc.)
+        valid_resolutions = {
+            "acknowledge_existing",
+            "save_as_extends",
+            "save_as_exception",
+            "supersede_existing",
+            "save_anyway_under_review",
+        }
+        if resolution_action in valid_resolutions:
+            target_id = parts[1].strip() if len(parts) > 1 else ""
+            if not target_id:
+                return "Error: target decision ID is required for resolution."
+            result = log_decision(
+                text,
+                reason,
+                resolution_action=resolution_action,
+                resolution_target_id=target_id,
+            )
+        else:
+            # Legacy conflict resolution by ID
+            conflict_id = action[len("resolve:"):].strip()
+            if not conflict_id:
+                return "Error: conflict id is required."
+            result = _resolve_decision_conflict_by_id(conflict_id, reason or text)
     elif action.startswith("supersede:"):
         old_text = action[10:]  # Remove "supersede:" prefix
         result = supersede_decision(
@@ -10997,7 +11111,7 @@ def fo_decide(text: str, reason: str, action: str = "add") -> str:
         )
     else:
         result = log_decision(text, reason)
-    if "Error:" not in str(result) and "Decision NOT logged." not in str(result):
+    if "Error:" not in str(result) and "Decision NOT logged." not in str(result) and "REVIEW REQUIRED" not in str(result):
         _mark_unreported_work_synced("fo_decide")
     return result
 

@@ -454,13 +454,36 @@ def _extract_focus(memory: Dict[str, Any], active_goal: str) -> List[str]:
     if active_goal:
         focus.append(active_goal)
 
-    # Open conflicts are blocking
+    # Open conflicts and pending reviews are blocking
     conflicts = memory.get("decision_conflicts", [])
     for conflict in conflicts:
         if isinstance(conflict, dict) and conflict.get("status", "open") == "open":
-            desc = conflict.get("description", "")
+            conflict_type = conflict.get("type", "")
+            # Format message based on conflict type
+            if conflict_type in ("DECISION_REVIEW", "PENDING_REVIEW", "PENDING_DECISION_REVIEW"):
+                proposed = conflict.get("proposed_decision", {})
+                existing = conflict.get("existing_decision", {})
+                proposed_text = proposed.get("text", "")[:50] if isinstance(proposed, dict) else ""
+                existing_text = ""
+                if isinstance(existing, dict):
+                    existing_text = (existing.get("text") or existing.get("decision") or "")[:50]
+                if proposed_text and existing_text:
+                    desc = f"Decision review needed: '{proposed_text}...' vs '{existing_text}...'"
+                else:
+                    desc = conflict.get("message", conflict.get("description", ""))
+            else:
+                desc = conflict.get("description", conflict.get("message", ""))
             if desc and desc not in focus:
                 focus.append(f"⚠️ {desc}")
+                break
+
+    # Decisions needing review
+    decisions = memory.get("decisions", [])
+    for dec in decisions:
+        if isinstance(dec, dict) and dec.get("status") == "needs_review":
+            text = dec.get("decision", "")[:60]
+            if text and len(focus) < 2:
+                focus.append(f"⚠️ Review pending: {text}...")
                 break
 
     # Blocking decisions
@@ -497,17 +520,38 @@ def _extract_priorities(memory: Dict[str, Any], active_goal: str) -> List[str]:
     if active_goal:
         priorities.append(active_goal)
 
-    # Open conflicts are high priority
+    # Open conflicts and pending reviews are high priority
     conflicts = memory.get("decision_conflicts", [])
     for conflict in conflicts:
         if isinstance(conflict, dict) and conflict.get("status", "open") == "open":
-            desc = conflict.get("description", conflict.get("text", ""))
+            conflict_type = conflict.get("type", "")
+            if conflict_type in ("DECISION_REVIEW", "PENDING_REVIEW", "PENDING_DECISION_REVIEW"):
+                proposed = conflict.get("proposed_decision", {})
+                existing = conflict.get("existing_decision", {})
+                proposed_text = proposed.get("text", "")[:40] if isinstance(proposed, dict) else ""
+                existing_text = ""
+                if isinstance(existing, dict):
+                    existing_text = (existing.get("text") or existing.get("decision") or "")[:40]
+                if proposed_text and existing_text:
+                    desc = f"Review: '{proposed_text}...' conflicts with '{existing_text}...'"
+                else:
+                    desc = conflict.get("message", conflict.get("description", "Decision review needed"))
+            else:
+                desc = conflict.get("description", conflict.get("text", ""))
             if desc and desc not in priorities:
                 priorities.append(f"Unresolved: {desc}")
                 break
 
-    # Blocking/critical decisions
+    # Decisions needing review (saved but flagged)
     decisions = memory.get("decisions", [])
+    for dec in decisions:
+        if isinstance(dec, dict) and dec.get("status") == "needs_review":
+            text = dec.get("decision", "")[:50]
+            if text and text not in priorities:
+                priorities.append(f"Review pending: {text}...")
+                break
+
+    # Blocking/critical decisions
     for dec in decisions:
         if isinstance(dec, dict) and not dec.get("superseded"):
             if dec.get("blocking") or dec.get("is_critical"):
