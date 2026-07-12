@@ -151,7 +151,15 @@ OPPOSITION_PAIRS = [
     ({"always", "every", "all"}, {"only when", "only if", "explicitly requested"}),
     ({"never"}, {"should", "must", "will"}),
     ({"cascade"}, {"not cascade", "never cascade"}),
+    ({"backward compatible", "compatible"}, {"breaking", "break"}),
 ]
+
+SUBJECT_NON_DOMAIN_TERMS = {
+    "only", "all", "every", "always", "never",
+    "manual", "manually", "automatic", "automatically",
+    "explicit", "explicitly", "requested",
+    "must", "may", "should", "can",
+}
 
 STEM_RULES = [
     ("ingly", ""),
@@ -426,6 +434,12 @@ def _has_phrase(text: str, phrases: Iterable[str]) -> bool:
     return any(f" {_normalize_text(phrase)} " in lower for phrase in phrases)
 
 
+def _has_meaningful_subject_overlap(left: Set[str], right: Set[str]) -> bool:
+    """Return true only when overlap contains at least one domain/content term."""
+    excluded = {simple_stem(token) for token in SUBJECT_NON_DOMAIN_TERMS}
+    return bool((left & right) - excluded)
+
+
 def _has_opposition(existing_text: str, new_text: str) -> bool:
     """Check if existing and proposed texts express opposing intents."""
     existing_lower = existing_text.lower()
@@ -476,7 +490,7 @@ def classify_relationship(
     replacement_existing = _contains_any(existing_raw, REPLACEMENT_CUES)
     reversal_new = _contains_any(new_raw, REVERSAL_CUES)
 
-    has_meaningful_subject = bool(overlap) or retrieval_score >= 0.58
+    has_meaningful_subject = _has_meaningful_subject_overlap(new_tokens, existing_tokens) or retrieval_score >= 0.58
 
     if replacement and has_meaningful_subject:
         return RelationshipType.SUPERSEDES, "Explicit replacement wording targets a related active decision", 0.86

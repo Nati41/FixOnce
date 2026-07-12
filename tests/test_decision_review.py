@@ -802,6 +802,34 @@ class TestOppositionDetectionRegression(unittest.TestCase):
         self.assertTrue(review.requires_review, "Automatic vs manual must trigger review")
         self.assertEqual(review.primary_candidate.relationship.value, "potential_conflict")
 
+    def test_activity_logging_vs_hebrew_only_is_unrelated(self):
+        from core.decision_review import classify_relationship
+
+        relationship, _explanation, _confidence = classify_relationship(
+            "Activity logging should be performed manually only when explicitly requested.",
+            "QA Case 4: direct conflict check against automatic activity logging on every CRUD operation.",
+            "Store all data in Hebrew only",
+            "Testing force override.",
+            retrieval_score=0.25,
+            retrieval_source="lexical",
+        )
+
+        self.assertEqual(relationship.value, "unrelated")
+
+    def test_quantifier_only_overlap_is_unrelated(self):
+        from core.decision_review import classify_relationship
+
+        relationship, _explanation, _confidence = classify_relationship(
+            "Reports should be generated only when requested.",
+            "Reporting workflow.",
+            "Store all records in the archive.",
+            "Archive retention.",
+            retrieval_score=0.25,
+            retrieval_source="lexical",
+        )
+
+        self.assertEqual(relationship.value, "unrelated")
+
     def test_never_cascade_vs_cascade_triggers_review(self):
         from core.decision_review import review_decision
 
@@ -811,6 +839,28 @@ class TestOppositionDetectionRegression(unittest.TestCase):
         review = review_decision(proposed, "Test.", {"decisions": existing})
 
         self.assertTrue(review.requires_review, "Never vs should must trigger review")
+        self.assertEqual(review.primary_candidate.relationship.value, "potential_conflict")
+
+    def test_atomic_vs_non_atomic_triggers_review(self):
+        from core.decision_review import review_decision
+
+        existing = [decision("dec_atomic", "Every storage write must be atomic.")]
+        proposed = "Storage writes may be non-atomic during batch import."
+
+        review = review_decision(proposed, "Migration speed.", {"decisions": existing})
+
+        self.assertTrue(review.requires_review, "Atomic vs non-atomic must trigger review")
+        self.assertEqual(review.primary_candidate.relationship.value, "potential_conflict")
+
+    def test_backward_compatible_vs_breaking_changes_triggers_review(self):
+        from core.decision_review import review_decision
+
+        existing = [decision("dec_api", "The REST API must remain backward compatible.")]
+        proposed = "Introduce breaking changes to the REST API."
+
+        review = review_decision(proposed, "Version upgrade.", {"decisions": existing})
+
+        self.assertTrue(review.requires_review, "Backward compatible vs breaking changes must trigger review")
         self.assertEqual(review.primary_candidate.relationship.value, "potential_conflict")
 
     def test_compatible_refinement_no_false_positive(self):
