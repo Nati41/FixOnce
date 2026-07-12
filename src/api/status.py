@@ -867,20 +867,37 @@ def api_dashboard_snapshot():
 
         # === Projects List ===
         try:
-            from managers.multi_project_manager import (
-                get_active_project_id,
-                list_projects,
-            )
+            from managers.multi_project_manager import list_projects
 
-            active_id = get_active_project_id()
-            snapshot["selected_project_id"] = active_id
+            # Use the resolver to get the active project (respects live sessions)
+            try:
+                from core.active_project_resolver import resolve_active_project
+                resolved = resolve_active_project()
+                active_id = resolved.project_id
+                snapshot["selected_project_id"] = active_id
+                snapshot["selected_project_name"] = resolved.display_name
+                snapshot["selected_project_source"] = resolved.source
+            except ImportError:
+                from managers.multi_project_manager import get_active_project_id
+                active_id = get_active_project_id()
+                snapshot["selected_project_id"] = active_id
             projects = list_projects(
                 user_visible_only=True,
                 migrate=True,
                 data_dir=USER_DATA_DIR,
             )
             visible_ids = {project.get("id") for project in projects}
-            if projects and active_id not in visible_ids and not _stress_or_test_mode():
+            # Only run catalog_repair if:
+            # 1. active_id is not in visible projects, AND
+            # 2. We didn't get active_id from a live session (resolver already gave correct answer)
+            resolver_source = snapshot.get("selected_project_source", "")
+            should_repair = (
+                projects
+                and active_id not in visible_ids
+                and resolver_source != "live_session"  # Trust live session from resolver
+                and not _stress_or_test_mode()
+            )
+            if should_repair:
                 from managers import multi_project_manager as project_manager
 
                 if Path(project_manager.DATA_DIR) == Path(USER_DATA_DIR):

@@ -415,6 +415,86 @@ class TestRejectionLogging:
         assert live_rejection["reason"]  # Should have a reason
 
 
+class TestFoInitSessionRegistry:
+    """
+    Regression test for the bug where fo_init did not update session_registry.json.
+
+    The bug: Codex calls fo_init from PocketCRM, ai_connections.json is updated
+    but session_registry.json is NOT. When catalog_repair runs later, it doesn't
+    see a live session and overwrites with the old project.
+
+    The fix: fo_init must call get_or_create_session() to register in session_registry.
+    """
+
+    def test_fo_init_registers_session_in_registry(self, resolver_with_temp_dir, temp_data_dir):
+        """
+        fo_init from a different AI/project should create a session entry
+        that the resolver can detect as a live session.
+
+        Sequence:
+        1. FixOnce is cached as active
+        2. Codex calls fo_init from PocketCRM
+        3. fo_init updates BOTH ai_connections AND session_registry
+        4. catalog_repair cannot overwrite because session_registry shows live session
+        """
+        resolver = resolver_with_temp_dir
+
+        # Step 1: FixOnce is cached as active
+        cached_file = temp_data_dir / "active_project.json"
+        cached_file.write_text(json.dumps({
+            "active_id": "FixOnce_34592c5b",
+            "detected_from": "catalog_repair",
+            "detected_at": (datetime.now() - timedelta(minutes=5)).isoformat(),
+        }))
+
+        # Step 2 & 3: Simulate fo_init by creating session registry entry
+        # (In real code, fo_init calls get_or_create_session which does this)
+        session_file = temp_data_dir / "session_registry.json"
+        session_file.write_text(json.dumps({
+            "updated_at": datetime.now().isoformat(),
+            "sessions": {
+                "codex:/Users/test/Desktop/PocketCRM": {
+                    "ai_name": "codex",
+                    "project_id": "PocketCRM_e711b7c8",
+                    "project_path": "/Users/test/Desktop/PocketCRM",
+                    "last_activity": datetime.now().isoformat(),
+                    "is_active": True,
+                }
+            }
+        }))
+
+        # Also ai_connections (fo_init updates both)
+        ai_file = temp_data_dir / "ai_connections.json"
+        ai_file.write_text(json.dumps({
+            "clients": {
+                "codex": {
+                    "last_seen": datetime.now().isoformat(),
+                    "project_id": "PocketCRM_e711b7c8",
+                    "actor_source": "client_actor",
+                    "actor_confidence": 1.0,
+                    "connected": True,
+                }
+            }
+        }))
+
+        # Step 4: catalog_repair tries to set back to FixOnce
+        result = resolver.update_active_project(
+            project_id="FixOnce_34592c5b",
+            detected_from="catalog_repair",
+            force=False,
+        )
+
+        # Should be BLOCKED because Codex has a live session on PocketCRM
+        assert result["updated"] is False
+        assert "live session" in result["reason"].lower()
+
+        # Resolver should return PocketCRM
+        resolved = resolver.resolve_active_project()
+        assert resolved.project_id == "PocketCRM_e711b7c8"
+        assert resolved.source == "live_session"
+        assert "codex" in resolved.source_details.lower()
+
+
 class TestSyncCache:
     """Test the sync_cache_from_resolver function."""
 

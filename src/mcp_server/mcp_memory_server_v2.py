@@ -10878,6 +10878,24 @@ def fo_init(cwd: str = "", task_hint: str = "") -> str:
 
         _persist_ai_connection(_resolve_actor_identity(), project_id=project_id)
 
+        # REGISTER IN SESSION REGISTRY (Multi-AI Isolation)
+        # This enables the resolver to detect live sessions and prevent
+        # dashboard/catalog_repair from overwriting newer sessions.
+        if _session_registry_available:
+            try:
+                actor_identity = _resolve_actor_identity()
+                ai_name = actor_identity.get("editor", "unknown")
+                isolated_session = get_or_create_session(
+                    ai_name=ai_name,
+                    project_id=project_id,
+                    project_path=working_dir
+                )
+                isolated_session.mark_initialized()
+                isolated_session.log_tool_call("fo_init")
+                _fo_init_trace(f"FO_INIT_SESSION_REGISTRY_UPDATED ai={ai_name} project={project_id}")
+            except Exception as e:
+                _fo_init_trace(f"FO_INIT_SESSION_REGISTRY_ERROR {type(e).__name__}: {e}")
+
         # Return minimal formatted output
         _fo_init_trace("FO_INIT_FORMAT_RESPONSE_BEFORE")
         result = _format_minimal_init(working_dir, task_hint=task_hint)
