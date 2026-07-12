@@ -788,6 +788,56 @@ class TestDecouplingFalsePositiveRegression(unittest.TestCase):
         self.assertEqual(review.primary_candidate.relationship.value, "exception_to")
 
 
+class TestOppositionDetectionRegression(unittest.TestCase):
+    """Regression tests for opposing intent detection triggering review."""
+
+    def test_automatic_vs_manual_triggers_review(self):
+        from core.decision_review import review_decision
+
+        existing = [decision("dec_logging", "Activity logging must happen automatically on every CRUD operation.")]
+        proposed = "Activity logging should be performed manually only when explicitly requested."
+
+        review = review_decision(proposed, "Test.", {"decisions": existing})
+
+        self.assertTrue(review.requires_review, "Automatic vs manual must trigger review")
+        self.assertEqual(review.primary_candidate.relationship.value, "potential_conflict")
+
+    def test_never_cascade_vs_cascade_triggers_review(self):
+        from core.decision_review import review_decision
+
+        existing = [decision("dec_cascade", "Customer deletion must never cascade automatically.")]
+        proposed = "Customer deletion should cascade automatically."
+
+        review = review_decision(proposed, "Test.", {"decisions": existing})
+
+        self.assertTrue(review.requires_review, "Never vs should must trigger review")
+        self.assertEqual(review.primary_candidate.relationship.value, "potential_conflict")
+
+    def test_compatible_refinement_no_false_positive(self):
+        from core.decision_review import review_decision
+
+        existing = [decision("dec_arch", "Keep business logic independent from transport layers.")]
+        proposed = "Business logic must expose transport-neutral service interfaces."
+
+        review = review_decision(proposed, "Clean arch.", {"decisions": existing})
+
+        if review.requires_review:
+            self.assertNotEqual(
+                review.primary_candidate.relationship.value, "potential_conflict",
+                "Compatible refinement must NOT be potential_conflict"
+            )
+
+    def test_unrelated_automatic_manual_no_false_positive(self):
+        from core.decision_review import review_decision
+
+        existing = [decision("dec_backup", "Database backups run automatically every hour.")]
+        proposed = "Code reviews should be done manually before merge."
+
+        review = review_decision(proposed, "Process.", {"decisions": existing})
+
+        self.assertFalse(review.requires_review, "Unrelated automatic/manual must NOT trigger review")
+
+
 class TestBriefingSurfacing(unittest.TestCase):
     def test_pending_review_is_in_briefing_focus(self):
         from core.briefing_composer import _extract_focus

@@ -146,6 +146,13 @@ RULE_VIOLATION_CUES = {
     "not required", "not mandatory",
 }
 
+OPPOSITION_PAIRS = [
+    ({"automatic", "automatically"}, {"manual", "manually"}),
+    ({"always", "every", "all"}, {"only when", "only if", "explicitly requested"}),
+    ({"never"}, {"should", "must", "will"}),
+    ({"cascade"}, {"not cascade", "never cascade"}),
+]
+
 STEM_RULES = [
     ("ingly", ""),
     ("edly", ""),
@@ -419,6 +426,20 @@ def _has_phrase(text: str, phrases: Iterable[str]) -> bool:
     return any(f" {_normalize_text(phrase)} " in lower for phrase in phrases)
 
 
+def _has_opposition(existing_text: str, new_text: str) -> bool:
+    """Check if existing and proposed texts express opposing intents."""
+    existing_lower = existing_text.lower()
+    new_lower = new_text.lower()
+    for side_a, side_b in OPPOSITION_PAIRS:
+        a_in_existing = any(term in existing_lower for term in side_a)
+        b_in_new = any(term in new_lower for term in side_b)
+        a_in_new = any(term in new_lower for term in side_a)
+        b_in_existing = any(term in existing_lower for term in side_b)
+        if (a_in_existing and b_in_new) or (b_in_existing and a_in_new):
+            return True
+    return False
+
+
 def classify_relationship(
     new_text: str,
     new_reason: str,
@@ -487,6 +508,9 @@ def classify_relationship(
 
     if retrieval_source == "semantic" and retrieval_score >= 0.62:
         return RelationshipType.UNDETERMINED, "Semantically related but no deterministic relationship evidence", 0.55
+
+    if has_meaningful_subject and _has_opposition(existing_text, new_text):
+        return RelationshipType.POTENTIAL_CONFLICT, "Proposed decision expresses opposing intent to existing decision", 0.72
 
     return RelationshipType.UNRELATED, "No concrete relationship found", 0.8
 
