@@ -407,7 +407,17 @@ def sanitize_solution(solution: Dict[str, Any]) -> Dict[str, Any]:
         "files_changed": solution.get("files_changed", []),
         "timestamp": solution.get("resolved_at", solution.get("timestamp", "")),
         "reuse_count": solution.get("reuse_count", 0),
+        "superseded": solution.get("superseded", False),
     }
+    # Preserve superseded metadata for auditability
+    if solution.get("superseded"):
+        for field in ("superseded_at", "superseded_by_problem", "superseded_by_solution",
+                      "superseded_by_actor", "superseded_by_source"):
+            if field in solution:
+                sanitized[field] = solution[field]
+    # Preserve ID for stable identification
+    if "id" in solution:
+        sanitized["id"] = solution["id"]
     for field in ("actor", "actor_source", "actor_confidence", "session_id", "tool_name"):
         if field in solution:
             sanitized[field] = solution[field]
@@ -770,11 +780,14 @@ def write_committed_knowledge(
         # Write solutions.json (only if we have quality solutions)
         if quality_solutions:
             solutions_path = fixonce_dir / "solutions.json"
+            active_solutions = [s for s in quality_solutions if not s.get("superseded")]
             solutions_data = {
                 "fixonce_version": FIXONCE_VERSION,
                 "project_id": project_id or _generate_project_id(working_dir),
                 "updated_at": datetime.now().isoformat(),
                 "count": len(quality_solutions),
+                "active_count": len(active_solutions),
+                "superseded_count": len(quality_solutions) - len(active_solutions),
                 "filter_criteria": "importance=high OR reuse_count>=1",
                 "solutions": quality_solutions
             }

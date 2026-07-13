@@ -6,9 +6,12 @@ from typing import Any, Dict
 def get_live_project_counters(memory: Dict[str, Any] | None) -> Dict[str, int]:
     """Return counters from live project memory, not committed/exported files."""
     memory = memory or {}
+    # Count only active (non-superseded) decisions and solutions
+    decisions = [d for d in (memory.get("decisions", []) or []) if not d.get("superseded")]
+    solved = [s for s in (memory.get("debug_sessions", []) or []) if not s.get("superseded")]
     return {
-        "decisions": len(memory.get("decisions", []) or []),
-        "solved": len(memory.get("debug_sessions", []) or []),
+        "decisions": len(decisions),
+        "solved": len(solved),
         "avoid": len(memory.get("avoid", []) or []),
     }
 

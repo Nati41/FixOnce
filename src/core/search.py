@@ -304,6 +304,9 @@ def search_memory(
     if tags:
         debug_sessions = [d for d in debug_sessions if _matches_tags(d, tags)]
     for ds in debug_sessions:
+        # Skip superseded solutions (search only active)
+        if ds.get('superseded'):
+            continue
         problem = ds.get('problem', '')
         solution = ds.get('solution', '')
         root_cause = ds.get('root_cause', '')

@@ -14,7 +14,31 @@ sys.path.insert(0, str(SRC_DIR))
 import unittest
 from unittest.mock import patch, MagicMock
 
-from core.solutions import record_solution, SolutionResult
+from core.solutions import record_solution, SolutionResult, _create_pending_solution_review
+
+
+def _setup_valid_review(memory, project_id, problem, solution, target_id, allowed_actions=None):
+    """Create a valid pending review for resolution tests."""
+    if allowed_actions is None:
+        allowed_actions = ["supersede_existing", "cancel"]
+
+    target = next(
+        (s for s in memory.get("debug_sessions", []) if s.get("id") == target_id),
+        {"id": target_id, "problem": "", "solution": ""}
+    )
+
+    review = _create_pending_solution_review(
+        memory=memory,
+        project_id=project_id,
+        relationship="supersedes",
+        target_solution=target,
+        proposed_problem=problem,
+        proposed_solution=solution,
+        allowed_actions=allowed_actions,
+        actor="test",
+        actor_source="test",
+    )
+    return review["id"]
 
 
 class TestRecordSolution(unittest.TestCase):
@@ -304,7 +328,8 @@ class TestSolutionReviewIntegration(unittest.TestCase):
                     "solution": "Increase timeout from 5s to 30s",
                     "reuse_count": 0,
                 }
-            ]
+            ],
+            "pending_solution_reviews": [],
         }
         saved = {}
 
@@ -326,7 +351,11 @@ class TestSolutionReviewIntegration(unittest.TestCase):
             result.review_result["primary_candidate"]["relationship"],
             "supersedes"
         )
-        self.assertEqual(saved, {}, "No storage modification for SUPERSEDES")
+        # Solution should NOT be added, only pending review stored
+        self.assertEqual(len(memory["debug_sessions"]), 1, "No solution added for SUPERSEDES")
+        # Review ID should be included in response
+        self.assertIn("review_id", result.review_result)
+        self.assertTrue(result.review_result["review_id"].startswith("solrev_"))
 
     def test_supersedes_from_solution_text_requires_review_no_storage(self):
         """SUPERSEDES: production fo_solved wording may place replacement in solution text."""
@@ -338,7 +367,8 @@ class TestSolutionReviewIntegration(unittest.TestCase):
                     "solution": "Validate required customer fields before writing the record.",
                     "reuse_count": 0,
                 }
-            ]
+            ],
+            "pending_solution_reviews": [],
         }
         saved = {}
 
@@ -360,7 +390,10 @@ class TestSolutionReviewIntegration(unittest.TestCase):
             result.review_result["primary_candidate"]["relationship"],
             "supersedes"
         )
-        self.assertEqual(saved, {}, "No storage modification for SUPERSEDES")
+        # Solution should NOT be added
+        self.assertEqual(len(memory["debug_sessions"]), 1, "No solution added for SUPERSEDES")
+        # Review ID should be included
+        self.assertIn("review_id", result.review_result)
 
     def test_exception_requires_review_no_storage(self):
         """EXCEPTION_TO: scoped bypass blocks save, requires review."""
@@ -372,7 +405,8 @@ class TestSolutionReviewIntegration(unittest.TestCase):
                     "solution": "Add client-side validation for all form fields",
                     "reuse_count": 0,
                 }
-            ]
+            ],
+            "pending_solution_reviews": [],
         }
         saved = {}
 
@@ -394,7 +428,10 @@ class TestSolutionReviewIntegration(unittest.TestCase):
             result.review_result["primary_candidate"]["relationship"],
             "exception_to"
         )
-        self.assertEqual(saved, {}, "No storage modification for EXCEPTION_TO")
+        # Solution should NOT be added
+        self.assertEqual(len(memory["debug_sessions"]), 1, "No solution added for EXCEPTION_TO")
+        # Review ID should be included
+        self.assertIn("review_id", result.review_result)
 
     def test_potential_conflict_requires_review_no_storage(self):
         """POTENTIAL_CONFLICT: opposing solutions block save, require review."""
@@ -406,7 +443,8 @@ class TestSolutionReviewIntegration(unittest.TestCase):
                     "solution": "Add automatic logging to all CRUD operations",
                     "reuse_count": 0,
                 }
-            ]
+            ],
+            "pending_solution_reviews": [],
         }
         saved = {}
 
@@ -428,7 +466,10 @@ class TestSolutionReviewIntegration(unittest.TestCase):
             result.review_result["primary_candidate"]["relationship"],
             "potential_conflict"
         )
-        self.assertEqual(saved, {}, "No storage modification for POTENTIAL_CONFLICT")
+        # Solution should NOT be added
+        self.assertEqual(len(memory["debug_sessions"]), 1, "No solution added for POTENTIAL_CONFLICT")
+        # Review ID should be included
+        self.assertIn("review_id", result.review_result)
 
     def test_unrelated_saves_normally(self):
         """UNRELATED: completely different solution saves without interruption."""
@@ -459,6 +500,435 @@ class TestSolutionReviewIntegration(unittest.TestCase):
         self.assertFalse(result.requires_review, "UNRELATED should NOT require review")
         self.assertFalse(result.is_update, "UNRELATED should be new, not update")
         self.assertEqual(len(saved["memory"]["debug_sessions"]), 2, "New solution added")
+
+
+class TestSolutionResolution(unittest.TestCase):
+    """Tests for solution resolution actions (supersede_existing, cancel)."""
+
+    def test_supersede_existing_marks_old_solution_inactive(self):
+        """SUPERSEDE_EXISTING: marks existing solution as superseded."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_timeout",
+                    "problem": "Connection timeout when calling external API",
+                    "solution": "Increase timeout from 5s to 30s",
+                    "reuse_count": 2,
+                }
+            ],
+            "pending_solution_reviews": [],
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        # Create valid pending review first
+        review_id = _setup_valid_review(
+            memory, "test-project",
+            "Connection timeout when calling external API",
+            "Use async requests with retry backoff",
+            "sol_timeout"
+        )
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="Connection timeout when calling external API",
+            solution="Use async requests with retry backoff",
+            resolution_action="supersede_existing",
+            resolution_target_id="sol_timeout",
+            resolution_review_id=review_id,
+            actor="claude",
+            actor_source="mcp",
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertTrue(result.success, f"Resolution should succeed: {result.message}")
+        self.assertFalse(result.requires_review, "No further review needed")
+
+        # Old solution should be marked superseded
+        old_solution = saved["memory"]["debug_sessions"][0]
+        self.assertTrue(old_solution.get("superseded"), "Old solution must be superseded")
+        self.assertIsNotNone(old_solution.get("superseded_at"))
+        self.assertEqual(old_solution.get("superseded_by_solution"), "Use async requests with retry backoff")
+        self.assertEqual(old_solution.get("superseded_by_actor"), "claude")
+
+    def test_supersede_existing_saves_new_solution(self):
+        """SUPERSEDE_EXISTING: saves the new solution as active."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_old",
+                    "problem": "Database connection error",
+                    "solution": "Increase pool size",
+                    "reuse_count": 0,
+                }
+            ],
+            "pending_solution_reviews": [],
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        # Create valid pending review
+        review_id = _setup_valid_review(
+            memory, "test-project",
+            "Replace pool size increase for database connection error",
+            "Use connection pooling with health checks",
+            "sol_old"
+        )
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="Replace pool size increase for database connection error",
+            solution="Use connection pooling with health checks",
+            resolution_action="supersede_existing",
+            resolution_target_id="sol_old",
+            resolution_review_id=review_id,
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertTrue(result.success)
+        self.assertEqual(len(saved["memory"]["debug_sessions"]), 2, "New solution added")
+
+        # New solution should be active
+        new_solution = saved["memory"]["debug_sessions"][1]
+        self.assertNotIn("superseded", new_solution)
+        self.assertIn("health checks", new_solution["solution"])
+
+    def test_supersede_existing_preserves_history(self):
+        """SUPERSEDE_EXISTING: old solution remains in debug_sessions for history."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_history",
+                    "problem": "Memory leak in component",
+                    "solution": "Clear intervals on unmount",
+                    "reuse_count": 5,
+                    "resolved_at": "2024-01-01T10:00:00",
+                }
+            ],
+            "pending_solution_reviews": [],
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        # Create valid pending review
+        review_id = _setup_valid_review(
+            memory, "test-project",
+            "Replace interval cleanup for memory leak in component",
+            "Use useEffect cleanup with AbortController",
+            "sol_history"
+        )
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="Replace interval cleanup for memory leak in component",
+            solution="Use useEffect cleanup with AbortController",
+            resolution_action="supersede_existing",
+            resolution_target_id="sol_history",
+            resolution_review_id=review_id,
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertTrue(result.success)
+
+        # Old solution preserved with original data
+        old_solution = saved["memory"]["debug_sessions"][0]
+        self.assertEqual(old_solution["id"], "sol_history")
+        self.assertEqual(old_solution["reuse_count"], 5)
+        self.assertEqual(old_solution["resolved_at"], "2024-01-01T10:00:00")
+        self.assertTrue(old_solution.get("superseded"))
+
+    def test_cancel_performs_no_write(self):
+        """CANCEL: saves consumed state but not the new solution."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_cancel_test",
+                    "problem": "Test error message here",
+                    "solution": "Test fix approach here",
+                }
+            ],
+            "pending_solution_reviews": [],
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        # Create valid pending review for cancel
+        review_id = _setup_valid_review(
+            memory, "test-project",
+            "Replace test fix approach",
+            "New approach to fix issue",
+            "sol_cancel_test",
+            allowed_actions=["supersede_existing", "cancel"]
+        )
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="Replace test fix approach",
+            solution="New approach to fix issue",
+            resolution_action="cancel",
+            resolution_target_id="sol_cancel_test",
+            resolution_review_id=review_id,
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertFalse(result.success, "Cancel should not succeed (no solution saved)")
+        self.assertIn("cancelled", result.message.lower())
+        # Original solution should still be active (not superseded)
+        self.assertFalse(memory["debug_sessions"][0].get("superseded"))
+
+    def test_invalid_target_rejected(self):
+        """Invalid target ID returns error without modifying storage."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_existing",
+                    "problem": "Existing error message",
+                    "solution": "Existing fix approach",
+                }
+            ],
+            "pending_solution_reviews": [],
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        # Create review targeting sol_existing but then try to supersede sol_nonexistent
+        review_id = _setup_valid_review(
+            memory, "test-project",
+            "Some error message here",
+            "Some fix approach here",
+            "sol_existing"  # Review is for sol_existing
+        )
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="Some error message here",
+            solution="Some fix approach here",
+            resolution_action="supersede_existing",
+            resolution_target_id="sol_nonexistent",  # But trying different target
+            resolution_review_id=review_id,
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertFalse(result.success, "Invalid target should fail")
+        self.assertIn("target", result.message.lower())  # Target mismatch error
+        self.assertEqual(saved, {}, "No storage modification for invalid target")
+
+    def test_unsupported_action_rejected(self):
+        """Unsupported resolution actions return error before review check."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_test",
+                    "problem": "Test error",
+                    "solution": "Test fix",
+                }
+            ],
+            "pending_solution_reviews": [],
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        # Even with a review_id, unsupported actions should fail
+        result = record_solution(
+            project_id="test-project",
+            error_message="Some error",
+            solution="Some fix",
+            resolution_action="save_as_exception",  # Not supported for solutions
+            resolution_target_id="sol_test",
+            resolution_review_id="solrev_fake",  # Won't be validated - fails earlier
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertFalse(result.success, "Unsupported action should fail")
+        # Fails during enum conversion before review validation
+        self.assertIn("error", result.message.lower())
+        self.assertEqual(saved, {}, "No storage modification for unsupported action")
+
+    def test_repeated_resolution_is_idempotent(self):
+        """Repeated identical resolution is idempotent (returns success)."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_idempotent",
+                    "problem": "Original problem here",
+                    "solution": "Original fix here",
+                }
+            ],
+            "pending_solution_reviews": [],
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        # Create valid pending review
+        review_id = _setup_valid_review(
+            memory, "test-project",
+            "Replace original fix here",
+            "New fix approach here",
+            "sol_idempotent"
+        )
+
+        # Mark the review as already consumed with same action
+        memory["pending_solution_reviews"][0]["status"] = "consumed"
+        memory["pending_solution_reviews"][0]["resolution_action"] = "supersede_existing"
+
+        # Idempotent retry with same action should succeed
+        result = record_solution(
+            project_id="test-project",
+            error_message="Replace original fix here",
+            solution="New fix approach here",
+            resolution_action="supersede_existing",
+            resolution_target_id="sol_idempotent",
+            resolution_review_id=review_id,
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        # Idempotent retry succeeds
+        self.assertTrue(result.success, "Idempotent retry should succeed")
+        self.assertIn("idempotent", result.message.lower())
+
+    def test_unrelated_solutions_unaffected(self):
+        """SUPERSEDE_EXISTING only affects the targeted solution."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_target",
+                    "problem": "Target error message here",
+                    "solution": "Target fix approach here",
+                },
+                {
+                    "id": "sol_unrelated",
+                    "problem": "Unrelated CSS error",
+                    "solution": "Unrelated CSS fix",
+                },
+            ],
+            "pending_solution_reviews": [],
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        # Create valid pending review
+        review_id = _setup_valid_review(
+            memory, "test-project",
+            "Replace target fix for target error",
+            "Better target fix approach",
+            "sol_target"
+        )
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="Replace target fix for target error",
+            solution="Better target fix approach",
+            resolution_action="supersede_existing",
+            resolution_target_id="sol_target",
+            resolution_review_id=review_id,
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertTrue(result.success)
+
+        # Target superseded
+        target = saved["memory"]["debug_sessions"][0]
+        self.assertTrue(target.get("superseded"))
+
+        # Unrelated unchanged
+        unrelated = saved["memory"]["debug_sessions"][1]
+        self.assertFalse(unrelated.get("superseded", False))
+        self.assertEqual(unrelated["id"], "sol_unrelated")
+
+    def test_same_behavior_unchanged_with_resolution(self):
+        """SAME (duplicate) behavior remains unchanged - resolution not needed."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_existing",
+                    "problem": "JSONDecodeError: Expecting value",
+                    "solution": "Check response status before parsing",
+                    "reuse_count": 0,
+                }
+            ]
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        # Identical problem text triggers duplicate detection, not review
+        result = record_solution(
+            project_id="test-project",
+            error_message="JSONDecodeError: Expecting value",
+            solution="Check response status before parsing",
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertTrue(result.success, "SAME should succeed silently")
+        self.assertTrue(result.is_update, "SAME should be an update")
+        self.assertFalse(result.requires_review, "SAME should NOT require review")
+        self.assertEqual(saved["memory"]["debug_sessions"][0]["reuse_count"], 1)
+
+    def test_resolution_skips_review_check(self):
+        """Resolution action with valid review skips the review check."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_existing",
+                    "problem": "Connection timeout when calling external API",
+                    "solution": "Increase timeout from 5s to 30s",
+                }
+            ],
+            "pending_solution_reviews": [],
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        # Create valid pending review
+        review_id = _setup_valid_review(
+            memory, "test-project",
+            "Replace timeout increase with async requests for external API",
+            "Use aiohttp for async requests",
+            "sol_existing"
+        )
+
+        # Resolution with valid review skips the re-review check
+        result = record_solution(
+            project_id="test-project",
+            error_message="Replace timeout increase with async requests for external API",
+            solution="Use aiohttp for async requests",
+            resolution_action="supersede_existing",
+            resolution_target_id="sol_existing",
+            resolution_review_id=review_id,
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertTrue(result.success, f"Resolution should succeed: {result.message}")
+        self.assertFalse(result.requires_review, "No review needed with valid resolution")
 
 
 if __name__ == "__main__":

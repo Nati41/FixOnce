@@ -3587,7 +3587,7 @@ def _format_deep_project_brief(memory: Dict[str, Any], mode: str = "compact") ->
 
     # Navigator V1: Memory stats (compact)
     d_count = len([d for d in memory.get("decisions", []) if not d.get("superseded")])
-    s_count = len(memory.get("debug_sessions", []))
+    s_count = len([s for s in memory.get("debug_sessions", []) if not s.get("superseded")])
     a_count = len(memory.get("avoid", []))
     lines.append(f"📊 Project Knowledge: {d_count} Decisions · {s_count} Solved Bugs · {a_count} Avoid Patterns")
     lines.append("")
@@ -7807,7 +7807,10 @@ def log_debug_session(
 def solution_applied(
     error_message: str,
     solution: str,
-    files_changed: str = ""
+    files_changed: str = "",
+    resolution_action: str = "",
+    resolution_target_id: str = "",
+    resolution_review_id: str = "",
 ) -> str:
     """
     Quick way to record that you fixed an error.
@@ -7820,10 +7823,19 @@ def solution_applied(
 
     This is simpler than log_debug_session() - use this for quick fixes.
 
+    Pre-save review: Before saving, checks for related/conflicting solutions.
+    If a potential conflict is found, returns a review result with resolution options
+    and a review_id. Call again with resolution params to complete the save.
+
     Args:
         error_message: The error message you just fixed (copy from browser errors)
         solution: What you did to fix it (1-2 sentences)
         files_changed: Comma-separated list of files you modified
+        resolution_action: Action to resolve a review:
+            - supersede_existing: Save and mark existing as superseded
+            - cancel: Don't save
+        resolution_target_id: ID of existing solution for resolution actions
+        resolution_review_id: Review ID from initial conflict response (required for resolution)
 
     Example:
         solution_applied(
@@ -7831,6 +7843,11 @@ def solution_applied(
             "Added null check before mapping the array",
             "src/components/List.tsx"
         )
+
+    Resolution example:
+        fo_solved(..., resolution_action="supersede_existing",
+                  resolution_target_id="sol_abc123",
+                  resolution_review_id="solrev_abc123def456")
     """
     error, context = _universal_gate("solution_applied")
     if error:
@@ -7864,6 +7881,9 @@ def solution_applied(
         files_changed=files_list,
         actor=attribution.get("actor", "unknown"),
         actor_source=attribution.get("actor_source", "unknown"),
+        resolution_action=resolution_action,
+        resolution_target_id=resolution_target_id,
+        resolution_review_id=resolution_review_id,
         _memory=_load_project(session.project_id),
         _save_fn=lambda pid, mem: _save_project(pid, mem),
     )
@@ -7873,19 +7893,29 @@ def solution_applied(
         if core_result.requires_review and core_result.review_result:
             review = core_result.review_result
             primary = review.get("primary_candidate", {})
+            target_id = primary.get("id", "")
+            review_id = review.get("review_id", "")
             lines = [
                 "⚠️ **Solution NOT logged** - review required",
                 "",
                 f"**Relationship:** {primary.get('relationship', 'unknown')}",
                 f"**Existing solution:** {primary.get('text', '')[:100]}",
                 f"**Reason:** {primary.get('explanation', '')}",
+                f"**Review ID:** {review_id}",
                 "",
-                "**Allowed actions:**",
+                "**Resolution options:**",
             ]
             for action in review.get("allowed_actions", []):
-                lines.append(f"  • {action}")
+                if action == "supersede_existing":
+                    lines.append(f"  • fo_solved(..., resolution_action='supersede_existing', resolution_target_id='{target_id}', resolution_review_id='{review_id}')")
+                    lines.append("    Save and mark existing solution as superseded")
+                elif action == "cancel":
+                    lines.append("  • Don't call fo_solved again")
+                    lines.append("    Cancel - don't save this solution")
+                else:
+                    lines.append(f"  • {action}")
             lines.append("")
-            lines.append("Resolve the conflict before saving this solution.")
+            lines.append("Solution NOT logged. Choose a resolution action to proceed.")
             return "\n".join(lines)
         return core_result.message
 
@@ -8831,14 +8861,16 @@ def get_memory_stats() -> str:
     try:
         from core.committed_knowledge import read_committed_knowledge
         ck = read_committed_knowledge(session.working_dir)
-        decisions_count = len(ck.get("decisions", []))
-        solutions_count = len(ck.get("solutions", []))
+        # Filter superseded from counts
+        decisions_count = len([d for d in ck.get("decisions", []) if not d.get("superseded")])
+        # Use active_count if available, otherwise filter superseded
+        solutions_count = ck.get("active_count") or len([s for s in ck.get("solutions", []) if not s.get("superseded")])
         avoid_count = len(ck.get("avoid", []))
         ck_available = True
     except Exception:
         # Fallback to GLOBAL project memory if LOCAL unavailable
-        decisions_count = len(memory.get('decisions', []))
-        solutions_count = len(memory.get('debug_sessions', []))
+        decisions_count = len([d for d in memory.get('decisions', []) if not d.get("superseded")])
+        solutions_count = len([s for s in memory.get('debug_sessions', []) if not s.get("superseded")])
         avoid_count = len(memory.get('avoid', []))
         ck_available = False
 
@@ -11232,18 +11264,65 @@ def fo_vision(action: str = "show", field: str = "", text: str = "", reason: str
 
 
 @mcp.tool()
-def fo_solved(error: str, solution: str, files: str = "") -> str:
+def fo_solved(
+    error: str,
+    solution: str,
+    files: str = "",
+    resolution_action: str = "",
+    resolution_target_id: str = "",
+    resolution_review_id: str = "",
+) -> str:
     """
     Record that you fixed an error. Saves solution for future use.
 
     Call this AFTER successfully fixing a bug.
 
+    Pre-save review: Before saving, checks for related/conflicting solutions.
+    If a conflict is found (SUPERSEDES, EXCEPTION_TO, POTENTIAL_CONFLICT),
+    returns review options with a review_id. Call again with resolution params.
+
     Args:
         error: The error message that was fixed
         solution: What you did to fix it (1-2 sentences)
         files: Comma-separated list of files changed
+        resolution_action: Action to resolve a conflict (from review):
+            - "supersede_existing": Save and mark existing solution as superseded
+            - "cancel": Don't save this solution
+        resolution_target_id: ID of existing solution (required for supersede_existing)
+        resolution_review_id: Review ID from the initial conflict response (required for resolution)
+
+    Examples:
+        # Normal save:
+        fo_solved("TypeError: undefined", "Added null check", "src/app.ts")
+
+        # After review returns SUPERSEDES conflict with review_id:
+        fo_solved("TypeError: undefined", "Use optional chaining",
+                  resolution_action="supersede_existing",
+                  resolution_target_id="sol_abc123",
+                  resolution_review_id="solrev_abc123def456")
     """
-    result = solution_applied(error_message=error, solution=solution, files_changed=files)
+    # Validate resolution_action if provided
+    if resolution_action:
+        valid_actions = {"supersede_existing", "cancel"}
+        if resolution_action not in valid_actions:
+            return f"Error: Invalid resolution_action '{resolution_action}'. Must be one of: {', '.join(sorted(valid_actions))}"
+
+        # supersede_existing requires a target ID
+        if resolution_action == "supersede_existing" and not resolution_target_id:
+            return "Error: resolution_target_id is required for supersede_existing"
+
+        # Resolution requires a review ID (security: prevents direct bypass)
+        if not resolution_review_id:
+            return "Error: resolution_review_id is required for resolution actions. Run fo_solved without resolution_action first to get a review_id."
+
+    result = solution_applied(
+        error_message=error,
+        solution=solution,
+        files_changed=files,
+        resolution_action=resolution_action,
+        resolution_target_id=resolution_target_id,
+        resolution_review_id=resolution_review_id,
+    )
     if str(result).strip() in {"Solution saved.", "Solution updated."}:
         _mark_unreported_work_synced("fo_solved")
     return result
