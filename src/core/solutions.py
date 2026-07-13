@@ -23,6 +23,8 @@ class SolutionResult:
     message: str = ""
     is_update: bool = False  # True if existing solution was updated
     similar_files: List[str] = None  # Files that might need same fix
+    requires_review: bool = False  # True if review needed before save
+    review_result: Optional[Dict[str, Any]] = None  # Review details if requires_review
 
     def __post_init__(self):
         if self.similar_files is None:
@@ -95,6 +97,53 @@ def record_solution(
     # Initialize debug_sessions if needed
     if 'debug_sessions' not in memory:
         memory['debug_sessions'] = []
+
+    # Review against existing solutions for relationships that require interruption
+    # Only SUPERSEDES, EXCEPTION_TO, POTENTIAL_CONFLICT interrupt - others are silent
+    try:
+        from core.decision_review import review_solution, RelationshipType
+
+        # Build solutions list in the format review_solution expects
+        solutions_for_review = [
+            {
+                "id": s.get("id", ""),
+                "problem": s.get("problem", ""),
+                "solution": s.get("solution", ""),
+                "status": "active" if not s.get("superseded") else "superseded",
+                "superseded": s.get("superseded", False),
+                "actor": s.get("actor", "unknown"),
+                "actor_source": s.get("actor_source", "unknown"),
+                "timestamp": s.get("resolved_at", ""),
+            }
+            for s in memory.get('debug_sessions', [])
+        ]
+
+        review = review_solution(
+            error_message,
+            solution,
+            {"solutions": solutions_for_review},
+        )
+
+        if review.requires_review and review.primary_candidate:
+            rel = review.primary_candidate.relationship
+            # Only interrupt for these three relationships
+            if rel in (RelationshipType.SUPERSEDES,
+                       RelationshipType.EXCEPTION_TO,
+                       RelationshipType.POTENTIAL_CONFLICT):
+                return SolutionResult(
+                    success=False,
+                    requires_review=True,
+                    message=(
+                        f"Solution review required.\n"
+                        f"Relationship: {rel.value}\n"
+                        f"Existing: {review.primary_candidate.text[:80]}...\n"
+                        f"Reason: {review.primary_candidate.explanation}"
+                    ),
+                    review_result=review.to_dict(),
+                )
+        # SAME, EXTENDS, UNRELATED, UNDETERMINED - fall through to existing logic
+    except ImportError:
+        pass  # Review module not available, continue without review
 
     # Create solution record
     timestamp = datetime.now()

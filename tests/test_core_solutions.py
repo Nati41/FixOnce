@@ -259,5 +259,207 @@ class TestSolutionResult(unittest.TestCase):
         self.assertIn("project_id", result.message)
 
 
+class TestSolutionReviewIntegration(unittest.TestCase):
+    """Regression tests for Solution Review integration with shared engine."""
+
+    def test_same_solution_remains_silent_increments_reuse(self):
+        """SAME: identical problem + solution = silent update, reuse_count++."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_existing",
+                    "problem": "JSONDecodeError: Expecting value",
+                    "solution": "Check response status before parsing JSON",
+                    "reuse_count": 3,
+                }
+            ]
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="JSONDecodeError: Expecting value",
+            solution="Check response status before parsing JSON",
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertTrue(result.success, "SAME should succeed silently")
+        self.assertTrue(result.is_update, "SAME should be an update")
+        self.assertFalse(result.requires_review, "SAME should NOT require review")
+        self.assertEqual(result.message, "Solution updated.")
+        self.assertEqual(len(saved["memory"]["debug_sessions"]), 1, "No duplicate created")
+        self.assertEqual(saved["memory"]["debug_sessions"][0]["reuse_count"], 4)
+
+    def test_supersedes_requires_review_no_storage(self):
+        """SUPERSEDES: explicit replacement blocks save, requires review."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_timeout",
+                    "problem": "Connection timeout when calling external API",
+                    "solution": "Increase timeout from 5s to 30s",
+                    "reuse_count": 0,
+                }
+            ]
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="Replace timeout increase with async requests for external API connection",
+            solution="Switch to aiohttp for async requests instead of synchronous calls",
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertFalse(result.success, "SUPERSEDES should NOT succeed")
+        self.assertTrue(result.requires_review, "SUPERSEDES requires review")
+        self.assertIsNotNone(result.review_result)
+        self.assertEqual(
+            result.review_result["primary_candidate"]["relationship"],
+            "supersedes"
+        )
+        self.assertEqual(saved, {}, "No storage modification for SUPERSEDES")
+
+    def test_supersedes_from_solution_text_requires_review_no_storage(self):
+        """SUPERSEDES: production fo_solved wording may place replacement in solution text."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_customer_validation",
+                    "problem": "Customer records were saved with invalid required fields.",
+                    "solution": "Validate required customer fields before writing the record.",
+                    "reuse_count": 0,
+                }
+            ]
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="Customer records were saved with invalid required fields after legacy validation was removed.",
+            solution="Replace the existing customer field validation solution with schema-based validation before saving customer records.",
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertFalse(result.success, "SUPERSEDES should NOT succeed")
+        self.assertTrue(result.requires_review, "SUPERSEDES requires review")
+        self.assertIsNotNone(result.review_result)
+        self.assertEqual(
+            result.review_result["primary_candidate"]["relationship"],
+            "supersedes"
+        )
+        self.assertEqual(saved, {}, "No storage modification for SUPERSEDES")
+
+    def test_exception_requires_review_no_storage(self):
+        """EXCEPTION_TO: scoped bypass blocks save, requires review."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_validation",
+                    "problem": "All customer data must be validated before storage",
+                    "solution": "Add client-side validation for all form fields",
+                    "reuse_count": 0,
+                }
+            ]
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="Bulk import bypasses validation for customer data",
+            solution="Bulk import may skip client-side validation for performance",
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertFalse(result.success, "EXCEPTION_TO should NOT succeed")
+        self.assertTrue(result.requires_review, "EXCEPTION_TO requires review")
+        self.assertIsNotNone(result.review_result)
+        self.assertEqual(
+            result.review_result["primary_candidate"]["relationship"],
+            "exception_to"
+        )
+        self.assertEqual(saved, {}, "No storage modification for EXCEPTION_TO")
+
+    def test_potential_conflict_requires_review_no_storage(self):
+        """POTENTIAL_CONFLICT: opposing solutions block save, require review."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_logging",
+                    "problem": "Activity logging must happen automatically on every write",
+                    "solution": "Add automatic logging to all CRUD operations",
+                    "reuse_count": 0,
+                }
+            ]
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="Activity logging should be performed manually only when explicitly requested",
+            solution="Remove automatic logging, add manual logging triggers",
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertFalse(result.success, "POTENTIAL_CONFLICT should NOT succeed")
+        self.assertTrue(result.requires_review, "POTENTIAL_CONFLICT requires review")
+        self.assertIsNotNone(result.review_result)
+        self.assertEqual(
+            result.review_result["primary_candidate"]["relationship"],
+            "potential_conflict"
+        )
+        self.assertEqual(saved, {}, "No storage modification for POTENTIAL_CONFLICT")
+
+    def test_unrelated_saves_normally(self):
+        """UNRELATED: completely different solution saves without interruption."""
+        memory = {
+            "debug_sessions": [
+                {
+                    "id": "sol_css",
+                    "problem": "CSS styles not loading in production",
+                    "solution": "Fix webpack configuration for CSS extraction",
+                    "reuse_count": 0,
+                }
+            ]
+        }
+        saved = {}
+
+        def mock_save(pid, mem):
+            saved["memory"] = mem
+
+        result = record_solution(
+            project_id="test-project",
+            error_message="Database connection pool exhausted",
+            solution="Increase max pool connections from 10 to 50",
+            _memory=memory,
+            _save_fn=mock_save,
+        )
+
+        self.assertTrue(result.success, "UNRELATED should succeed")
+        self.assertFalse(result.requires_review, "UNRELATED should NOT require review")
+        self.assertFalse(result.is_update, "UNRELATED should be new, not update")
+        self.assertEqual(len(saved["memory"]["debug_sessions"]), 2, "New solution added")
+
+
 if __name__ == "__main__":
     unittest.main()

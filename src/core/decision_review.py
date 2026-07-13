@@ -1,8 +1,8 @@
 """
-General pre-save review for architectural decisions.
+General pre-save review for knowledge records (decisions, solved bugs).
 
-The semantic index is used only to retrieve likely related active decisions.
-Canonical decision state and IDs always come from memory["decisions"].
+The semantic index is used only to retrieve likely related active records.
+Canonical state and IDs always come from memory[config.memory_key].
 """
 
 from dataclasses import dataclass, field
@@ -11,6 +11,33 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 import hashlib
 import re
 import time
+
+
+@dataclass
+class KnowledgeTypeConfig:
+    """Field mapping for knowledge type-specific behavior."""
+    memory_key: str       # "decisions" or "solutions"
+    text_field: str       # "decision" or "problem"
+    reason_field: str     # "reason" or "solution"
+    doc_type: str         # For semantic search
+    id_prefix: str        # "dec_" or "sol_"
+
+
+DECISION_CONFIG = KnowledgeTypeConfig(
+    memory_key="decisions",
+    text_field="decision",
+    reason_field="reason",
+    doc_type="decision",
+    id_prefix="dec_",
+)
+
+SOLUTION_CONFIG = KnowledgeTypeConfig(
+    memory_key="solutions",
+    text_field="problem",
+    reason_field="solution",
+    doc_type="solution",
+    id_prefix="sol_",
+)
 
 
 class RelationshipType(str, Enum):
@@ -83,6 +110,7 @@ class ReviewResult:
                 "id": self.primary_candidate.id,
                 "text": self.primary_candidate.text,
                 "relationship": self.primary_candidate.relationship.value,
+                "explanation": self.primary_candidate.explanation,
             }
         return result
 
@@ -108,6 +136,20 @@ REPLACEMENT_CUES = {
     "supersede", "supersedes", "superseded", "deprecate", "deprecates",
     "migrate", "migrates", "switch", "switches",
 }
+
+REASON_REPLACEMENT_CUES = {
+    "replace", "replaces", "replaced", "replacement", "instead",
+    "supersede", "supersedes", "superseded",
+}
+
+REPLACEMENT_PHRASES = [
+    "replace previous",
+    "replace the previous",
+    "replace existing",
+    "replace the existing",
+    "instead of",
+    "rather than",
+]
 
 STRICT_CUES = {
     "must", "required", "require", "requires", "mandatory", "always",
@@ -274,27 +316,44 @@ def _overlap_with_suffixes(left: Set[str], right: Set[str]) -> float:
     return total / min(len(left), len(right))
 
 
-def decision_id_for(decision: Dict[str, Any]) -> str:
-    if decision.get("id"):
-        return str(decision["id"])
+def record_id_for(record: Dict[str, Any], config: KnowledgeTypeConfig) -> str:
+    """Generate ID for any knowledge record using config field mapping."""
+    if record.get("id"):
+        return str(record["id"])
     payload = (
-        f"{_normalize_text(decision.get('decision', ''))}|"
-        f"{_normalize_text(decision.get('reason', ''))}"
+        f"{_normalize_text(record.get(config.text_field, ''))}|"
+        f"{_normalize_text(record.get(config.reason_field, ''))}"
     )
-    return f"dec_{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:12]}"
+    return f"{config.id_prefix}{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:12]}"
+
+
+def decision_id_for(decision: Dict[str, Any]) -> str:
+    """Backward-compatible wrapper for decision ID generation."""
+    return record_id_for(decision, DECISION_CONFIG)
+
+
+def solution_id_for(solution: Dict[str, Any]) -> str:
+    """Generate ID for a solved bug record."""
+    return record_id_for(solution, SOLUTION_CONFIG)
+
+
+def _active_records(memory: Dict[str, Any], config: KnowledgeTypeConfig) -> List[Dict[str, Any]]:
+    """Get active records of any knowledge type using config field mapping."""
+    active = []
+    for record in memory.get(config.memory_key, []):
+        if not isinstance(record, dict):
+            continue
+        if record.get("superseded"):
+            continue
+        if record.get("status") not in (None, "", "active"):
+            continue
+        active.append(record)
+    return active
 
 
 def _active_decisions(memory: Dict[str, Any]) -> List[Dict[str, Any]]:
-    active = []
-    for decision in memory.get("decisions", []):
-        if not isinstance(decision, dict):
-            continue
-        if decision.get("superseded"):
-            continue
-        if decision.get("status") not in (None, "", "active"):
-            continue
-        active.append(decision)
-    return active
+    """Backward-compatible wrapper for active decisions."""
+    return _active_records(memory, DECISION_CONFIG)
 
 
 def _semantic_key(text: str, reason: str = "") -> str:
@@ -309,15 +368,16 @@ def _semantic_candidates(
     limit: int,
     min_score: float,
     timeout_ms: int,
+    config: KnowledgeTypeConfig = DECISION_CONFIG,
 ) -> Tuple[List[Tuple[Dict[str, Any], float, str]], Dict[str, Any]]:
     meta = {"source": "semantic", "used": False, "elapsed_ms": 0.0, "failures": []}
     if not project_id or not semantic_search_fn:
         meta["failures"].append("semantic_unavailable")
         return [], meta
 
-    by_id = {decision_id_for(d): d for d in active}
+    by_id = {record_id_for(d, config): d for d in active}
     by_text = {
-        _semantic_key(d.get("decision", ""), d.get("reason", "")): d
+        _semantic_key(d.get(config.text_field, ""), d.get(config.reason_field, "")): d
         for d in active
     }
 
@@ -327,7 +387,7 @@ def _semantic_candidates(
             project_id,
             query,
             k=max(limit * 3, 10),
-            doc_type="decision",
+            doc_type=config.doc_type,
             min_score=min_score,
         ))
     except Exception as exc:
@@ -348,27 +408,27 @@ def _semantic_candidates(
     for result in results:
         metadata = getattr(result, "metadata", {}) or {}
         score = float(getattr(result, "score", 0.0) or 0.0)
-        decision = None
-        for key in ("decision_id", "id", "canonical_id"):
+        record = None
+        for key in ("decision_id", "solution_id", "id", "canonical_id"):
             if metadata.get(key) and str(metadata[key]) in by_id:
-                decision = by_id[str(metadata[key])]
+                record = by_id[str(metadata[key])]
                 break
-        if decision is None:
-            text = metadata.get("decision") or getattr(result, "text", "")
-            reason = metadata.get("reason", "")
-            decision = by_text.get(_semantic_key(text, reason))
-        if decision is None:
+        if record is None:
+            text = metadata.get(config.text_field) or getattr(result, "text", "")
+            reason = metadata.get(config.reason_field, "")
+            record = by_text.get(_semantic_key(text, reason))
+        if record is None:
             unmapped += 1
             continue
-        dec_id = decision_id_for(decision)
-        if dec_id in seen:
+        rec_id = record_id_for(record, config)
+        if rec_id in seen:
             continue
-        seen.add(dec_id)
-        candidates.append((decision, score, "semantic"))
+        seen.add(rec_id)
+        candidates.append((record, score, "semantic"))
 
     if unmapped:
         meta["failures"].append(f"unmapped_results:{unmapped}")
-        _log(f"semantic returned {unmapped} decision result(s) without canonical active mapping")
+        _log(f"semantic returned {unmapped} {config.doc_type} result(s) without canonical active mapping")
     meta["used"] = bool(candidates)
     return candidates[:limit], meta
 
@@ -377,25 +437,26 @@ def _lexical_candidates(
     query: str,
     active: List[Dict[str, Any]],
     limit: int,
+    config: KnowledgeTypeConfig = DECISION_CONFIG,
 ) -> List[Tuple[Dict[str, Any], float, str]]:
     query_tokens = _tokens(query)
     proposed_part = query.split(". Reason:")[0] if ". Reason:" in query else query
     proposed_tokens = _tokens(proposed_part)
     scored = []
-    for decision in active:
-        decision_text = decision.get("decision", "")
-        combined = f"{decision_text} {decision.get('reason', '')}"
-        decision_tokens = _tokens(decision_text)
+    for record in active:
+        record_text = record.get(config.text_field, "")
+        combined = f"{record_text} {record.get(config.reason_field, '')}"
+        record_tokens = _tokens(record_text)
         combined_tokens = _tokens(combined)
         score = max(
             _jaccard(query_tokens, combined_tokens),
             _overlap_ratio(query_tokens, combined_tokens) * 0.75,
-            _overlap_ratio(query_tokens, decision_tokens) * 0.75,
-            _overlap_ratio(proposed_tokens, decision_tokens) * 0.75,
-            _overlap_with_suffixes(proposed_tokens, decision_tokens) * 0.75,
+            _overlap_ratio(query_tokens, record_tokens) * 0.75,
+            _overlap_ratio(proposed_tokens, record_tokens) * 0.75,
+            _overlap_with_suffixes(proposed_tokens, record_tokens) * 0.75,
         )
         if score >= 0.18:
-            scored.append((decision, score, "lexical"))
+            scored.append((record, score, "lexical"))
     scored.sort(key=lambda item: item[1], reverse=True)
     return scored[:limit]
 
@@ -410,16 +471,17 @@ def retrieve_candidates(
     limit: int = 5,
     semantic_min_score: float = 0.45,
     timeout_ms: int = 750,
+    config: KnowledgeTypeConfig = DECISION_CONFIG,
 ) -> Tuple[List[Tuple[Dict[str, Any], float, str]], Dict[str, Any]]:
-    active = _active_decisions(memory)
+    active = _active_records(memory, config)
     query = f"{new_text}. Reason: {new_reason}"
     semantic, meta = _semantic_candidates(
-        query, active, project_id, semantic_search_fn, limit, semantic_min_score, timeout_ms
+        query, active, project_id, semantic_search_fn, limit, semantic_min_score, timeout_ms, config
     )
     if semantic:
         return semantic, meta
     meta["source"] = "lexical_fallback"
-    lexical = _lexical_candidates(query, active, limit)
+    lexical = _lexical_candidates(query, active, limit, config)
     return lexical, meta
 
 
@@ -432,6 +494,14 @@ def _contains_any(tokens: Set[str], cues: Set[str]) -> bool:
 def _has_phrase(text: str, phrases: Iterable[str]) -> bool:
     lower = f" {_normalize_text(text)} "
     return any(f" {_normalize_text(phrase)} " in lower for phrase in phrases)
+
+
+def _has_replacement_signal(text: str) -> bool:
+    return _contains_any(_raw_tokens(text), REPLACEMENT_CUES) or _has_phrase(text, REPLACEMENT_PHRASES)
+
+
+def _has_reason_replacement_signal(text: str) -> bool:
+    return _contains_any(_raw_tokens(text), REASON_REPLACEMENT_CUES) or _has_phrase(text, REPLACEMENT_PHRASES)
 
 
 def _has_meaningful_subject_overlap(left: Set[str], right: Set[str]) -> bool:
@@ -478,7 +548,7 @@ def classify_relationship(
     if _jaccard(new_tokens, existing_tokens) >= 0.82 and new_tokens:
         return RelationshipType.SAME, "Near duplicate of active decision", 0.9
 
-    replacement = _contains_any(new_raw, REPLACEMENT_CUES)
+    replacement = _has_replacement_signal(new_text) or _has_reason_replacement_signal(new_reason)
     exception_cues = _contains_any(new_raw, EXCEPTION_CUES)
     exception_phrase = _has_phrase(new_combined, ["without", "except for"])
     decoupling = _has_phrase(new_combined, DECOUPLING_PHRASES)
@@ -562,8 +632,9 @@ def find_candidates(
         new_reason,
         memory,
         limit=limit,
+        config=DECISION_CONFIG,
     )
-    return _classify_candidates(new_text, new_reason, raw_candidates, limit)
+    return _classify_candidates(new_text, new_reason, raw_candidates, limit, DECISION_CONFIG)
 
 
 def _classify_candidates(
@@ -571,11 +642,12 @@ def _classify_candidates(
     new_reason: str,
     raw_candidates: List[Tuple[Dict[str, Any], float, str]],
     limit: int,
+    config: KnowledgeTypeConfig = DECISION_CONFIG,
 ) -> List[CandidateDecision]:
     candidates: List[CandidateDecision] = []
-    for decision, score, source in raw_candidates:
-        existing_text = decision.get("decision", "")
-        existing_reason = decision.get("reason", "")
+    for record, score, source in raw_candidates:
+        existing_text = record.get(config.text_field, "")
+        existing_reason = record.get(config.reason_field, "")
         relationship, explanation, confidence = classify_relationship(
             new_text,
             new_reason,
@@ -587,7 +659,7 @@ def _classify_candidates(
         if relationship == RelationshipType.UNRELATED:
             continue
         candidates.append(CandidateDecision(
-            id=decision_id_for(decision),
+            id=record_id_for(record, config),
             text=existing_text,
             reason=existing_reason,
             similarity_score=score,
@@ -595,9 +667,9 @@ def _classify_candidates(
             explanation=explanation,
             confidence=confidence,
             metadata={
-                "actor": decision.get("actor", "unknown"),
-                "actor_source": decision.get("actor_source", "none"),
-                "timestamp": decision.get("timestamp", ""),
+                "actor": record.get("actor", "unknown"),
+                "actor_source": record.get("actor_source", "none"),
+                "timestamp": record.get("timestamp", ""),
                 "retrieval_source": source,
             },
         ))
@@ -618,7 +690,8 @@ def _classify_candidates(
     return candidates[:limit]
 
 
-def review_decision(
+def _review_knowledge(
+    config: KnowledgeTypeConfig,
     new_text: str,
     new_reason: str,
     memory: Dict[str, Any],
@@ -629,6 +702,7 @@ def review_decision(
     semantic_min_score: float = 0.45,
     timeout_ms: int = 750,
 ) -> ReviewResult:
+    """Internal generic review function for any knowledge type."""
     raw_candidates, retrieval_meta = retrieve_candidates(
         new_text,
         new_reason,
@@ -638,15 +712,16 @@ def review_decision(
         limit=candidate_limit,
         semantic_min_score=semantic_min_score,
         timeout_ms=timeout_ms,
+        config=config,
     )
-    candidates = _classify_candidates(new_text, new_reason, raw_candidates, candidate_limit)
+    candidates = _classify_candidates(new_text, new_reason, raw_candidates, candidate_limit, config)
     if not candidates:
         return ReviewResult(
             requires_review=False,
             proposed_text=new_text,
             proposed_reason=new_reason,
             candidates=[],
-            message="No related active decisions found",
+            message=f"No related active {config.memory_key} found",
             retrieval=retrieval_meta,
         )
 
@@ -660,10 +735,60 @@ def review_decision(
         primary_candidate=primary,
         allowed_actions=actions,
         message=(
-            "Decision review required against active decision:\n"
+            f"Review required against active {config.doc_type}:\n"
             f"Existing: \"{primary.text[:100]}\"\n"
             f"Relationship: {primary.relationship.value}\n"
             f"Reason: {primary.explanation}"
         ),
         retrieval=retrieval_meta,
+    )
+
+
+def review_decision(
+    new_text: str,
+    new_reason: str,
+    memory: Dict[str, Any],
+    candidate_limit: int = 5,
+    *,
+    project_id: Optional[str] = None,
+    semantic_search_fn: Optional[Callable[..., Iterable[Any]]] = None,
+    semantic_min_score: float = 0.45,
+    timeout_ms: int = 750,
+) -> ReviewResult:
+    """Review a proposed decision against active decisions."""
+    return _review_knowledge(
+        DECISION_CONFIG,
+        new_text,
+        new_reason,
+        memory,
+        candidate_limit,
+        project_id=project_id,
+        semantic_search_fn=semantic_search_fn,
+        semantic_min_score=semantic_min_score,
+        timeout_ms=timeout_ms,
+    )
+
+
+def review_solution(
+    new_problem: str,
+    new_solution: str,
+    memory: Dict[str, Any],
+    candidate_limit: int = 5,
+    *,
+    project_id: Optional[str] = None,
+    semantic_search_fn: Optional[Callable[..., Iterable[Any]]] = None,
+    semantic_min_score: float = 0.45,
+    timeout_ms: int = 750,
+) -> ReviewResult:
+    """Review a proposed solved bug against active solutions."""
+    return _review_knowledge(
+        SOLUTION_CONFIG,
+        new_problem,
+        new_solution,
+        memory,
+        candidate_limit,
+        project_id=project_id,
+        semantic_search_fn=semantic_search_fn,
+        semantic_min_score=semantic_min_score,
+        timeout_ms=timeout_ms,
     )

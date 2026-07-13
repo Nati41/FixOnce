@@ -7869,6 +7869,24 @@ def solution_applied(
     )
 
     if not core_result.success:
+        # Handle review-required case with structured output
+        if core_result.requires_review and core_result.review_result:
+            review = core_result.review_result
+            primary = review.get("primary_candidate", {})
+            lines = [
+                "⚠️ **Solution NOT logged** - review required",
+                "",
+                f"**Relationship:** {primary.get('relationship', 'unknown')}",
+                f"**Existing solution:** {primary.get('text', '')[:100]}",
+                f"**Reason:** {primary.get('explanation', '')}",
+                "",
+                "**Allowed actions:**",
+            ]
+            for action in review.get("allowed_actions", []):
+                lines.append(f"  • {action}")
+            lines.append("")
+            lines.append("Resolve the conflict before saving this solution.")
+            return "\n".join(lines)
         return core_result.message
 
     if core_result.is_update:
