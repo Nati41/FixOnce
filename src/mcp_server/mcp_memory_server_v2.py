@@ -3904,6 +3904,7 @@ _original_mcp_tool = mcp.tool
 
 PUBLIC_MCP_TOOLS = frozenset({
     "fo_init",
+    "fo_status",
     "fo_search",
     "fo_sync",
     "fo_errors",
@@ -11028,6 +11029,43 @@ def fo_init(cwd: str = "", task_hint: str = "") -> str:
         _fo_init_trace(f"FO_INIT_FORMAT_RESPONSE_AFTER length={len(result)}")
         _fo_init_trace("FO_INIT_RETURN_TO_FASTMCP_BEFORE")
         return result
+
+
+@mcp.tool()
+def fo_status() -> str:
+    """
+    Check FixOnce connection and recording status.
+
+    Read-only tool - does not write to project memory.
+    Use to verify FixOnce is recording before commits or major milestones.
+
+    Returns:
+        Connection status and recording state
+    """
+    from core.mcp_session_health import get_session_health
+
+    # PROOF OF CONNECTIVITY: If this tool executes, MCP transport is working.
+    # The tool's successful execution IS the evidence of recording capability.
+    # We still read session_health for context (last tool, actor) but the
+    # green state is justified by THIS call succeeding, not historical state.
+
+    session_health = get_session_health()
+    last_tool = session_health.get("last_tool")
+
+    # This tool executing = MCP transport works = recording is possible
+    status_icon = "🟢"
+    status_text = "FixOnce can currently record project memory."
+
+    lines = [
+        f"{status_icon} **{status_text}**",
+        "",
+        "MCP connection is working. Project memory writes will succeed.",
+    ]
+
+    if last_tool:
+        lines.append(f"Last tool: {last_tool}")
+
+    return "\n".join(lines)
 
 
 @mcp.tool()

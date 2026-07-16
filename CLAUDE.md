@@ -41,6 +41,44 @@ Use these statements to judge future decisions.
 
 ---
 
+## Connection Awareness
+
+### Before Meaningful Work
+
+Call `fo_init()`. If it fails or is unavailable:
+
+```
+⚠️ FixOnce is not connected.
+
+Project memory will NOT be recorded.
+
+Please ensure FixOnce is running,
+then open a new AI conversation.
+
+Do you want to continue without FixOnce?
+```
+
+Do NOT silently continue without user acknowledgment.
+
+### During Work
+
+If any `fo_*` tool disappears or fails due to MCP connection loss:
+
+1. Immediately notify the user
+2. Explain that FixOnce recording has stopped
+3. Recommend opening a new AI conversation after FixOnce is restored
+4. Continue only if user explicitly chooses to work without FixOnce
+
+### Before Completion
+
+Before commit, "task complete", or major milestone:
+
+1. Call `fo_status()` to verify FixOnce is still recording
+2. If not recording, warn before finishing
+3. Suggest syncing work after connection is restored
+
+---
+
 ## Opening
 
 1. Call `fo_init(cwd="project-path")` silently — ONCE only
@@ -104,6 +142,7 @@ fo_sync()    → update context
 | Tool | When |
 |------|------|
 | `fo_init(cwd)` | Start of conversation |
+| `fo_status()` | Verify connection before commit/completion |
 | `fo_errors()` | Check browser errors |
 | `fo_apply()` | **When AUTO-FIX READY** (mandatory) |
 | `fo_search(query)` | Before Read/Bash — check project history first |

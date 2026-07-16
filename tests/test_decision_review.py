@@ -154,6 +154,7 @@ class TestDecisionReviewV1(unittest.TestCase):
                 "name": "exact duplicate",
                 "existing": [decision("dec_dup", "Use REST API for public integrations.")],
                 "proposed": "Use REST API for public integrations.",
+                "reason": "Because.",  # Must match existing reason for true SAME classification
                 "semantic": semantic_for("dec_dup"),
                 "selected": "dec_dup",
                 "relationship": "same",
@@ -907,6 +908,194 @@ class TestBriefingSurfacing(unittest.TestCase):
         focus = _extract_focus(memory, "")
 
         self.assertTrue(any("Decision review needed" in item for item in focus))
+
+
+class TestReplacementSolutionClassification(unittest.TestCase):
+    """Regression tests for QA bug: replacement solutions were classified as SAME."""
+
+    def test_same_problem_replacement_solution_is_supersedes(self):
+        """QA bug: 'Superseding...' solution was merged instead of triggering review."""
+        from core.decision_review import classify_relationship, RelationshipType
+
+        new_problem = "REST normal bug: invoice fixture renderer dropped tab delimiters"
+        new_solution = "Superseding REST QA solution: normalize fixture rows with an explicit TSV writer so tab delimiters are preserved."
+
+        existing_problem = "REST normal bug: invoice fixture renderer dropped tab delimiters"
+        existing_solution = "Original fix: added tab delimiter handling in renderer"
+
+        rel, explanation, confidence = classify_relationship(
+            new_problem, new_solution,
+            existing_problem, existing_solution,
+            retrieval_score=0.9, retrieval_source="keyword",
+        )
+
+        self.assertEqual(rel, RelationshipType.SUPERSEDES,
+            f"Replacement solution must trigger SUPERSEDES, got {rel.value}")
+
+    def test_same_problem_same_solution_is_same(self):
+        """True duplicates should still be SAME."""
+        from core.decision_review import classify_relationship, RelationshipType
+
+        problem = "Invoice renderer dropped tab delimiters"
+        solution = "Added tab delimiter handling in renderer"
+
+        rel, explanation, confidence = classify_relationship(
+            problem, solution,
+            problem, solution,
+            retrieval_score=0.9, retrieval_source="keyword",
+        )
+
+        self.assertEqual(rel, RelationshipType.SAME,
+            f"True duplicate must be SAME, got {rel.value}")
+
+    def test_same_problem_different_solution_is_potential_conflict(self):
+        """Materially different solution without replacement cue = POTENTIAL_CONFLICT."""
+        from core.decision_review import classify_relationship, RelationshipType
+
+        problem = "Invoice renderer dropped tab delimiters"
+        existing_solution = "Added tab delimiter handling in renderer"
+        new_solution = "Completely different approach: convert to JSON first then parse back to TSV format"
+
+        rel, explanation, confidence = classify_relationship(
+            problem, new_solution,
+            problem, existing_solution,
+            retrieval_score=0.9, retrieval_source="keyword",
+        )
+
+        self.assertEqual(rel, RelationshipType.POTENTIAL_CONFLICT,
+            f"Different solution without replacement cue must be POTENTIAL_CONFLICT, got {rel.value}")
+
+
+class TestExceptionFalsePositiveRegression(unittest.TestCase):
+    """
+    Regression tests for false-positive EXCEPTION_TO classification.
+
+    QA bug: "report preview omitted the final summary row" was classified as
+    EXCEPTION_TO "Dashboard does not show REST fallback activity" due to:
+    1. "omit" in "omitted" triggering EXCEPTION_CUES
+    2. Generic words like "include", "rest", timestamp causing false subject overlap
+    """
+
+    def test_unrelated_solutions_not_exception(self):
+        """Report-preview fix vs dashboard-activity fix should be UNRELATED."""
+        from core.decision_review import classify_relationship, RelationshipType
+
+        new_problem = "FINAL-MANUAL-REST-SMOKE-20260715: report preview omitted the final summary row."
+        new_solution = "Include the final summary row when constructing the report preview payload."
+        existing_problem = "UI-ACTIVITY-QA-20260715 Dashboard does not show REST fallback activity"
+        existing_solution = "Updated activity logging to include REST fallback type and dashboard snapshot to track REST recording"
+
+        rel, explanation, confidence = classify_relationship(
+            new_problem, new_solution,
+            existing_problem, existing_solution,
+            retrieval_score=0.7, retrieval_source="keyword",
+        )
+
+        self.assertEqual(rel, RelationshipType.UNRELATED,
+            f"Unrelated solutions must not trigger EXCEPTION_TO, got {rel.value}: {explanation}")
+
+    def test_unrelated_proposal_saves_normally(self):
+        """Unrelated solution should not require review."""
+        from core.decision_review import classify_relationship, RelationshipType
+
+        rel, _, _ = classify_relationship(
+            "Email footer missing links",
+            "Add standard footer links to email templates",
+            "Dashboard chart needs legend",
+            "Include legend in chart component",
+            retrieval_score=0.5, retrieval_source="keyword",
+        )
+
+        self.assertEqual(rel, RelationshipType.UNRELATED)
+
+    def test_legitimate_exception_same_subject(self):
+        """Scoped exception with same technical subject should be EXCEPTION_TO."""
+        from core.decision_review import classify_relationship, RelationshipType
+
+        rel, explanation, confidence = classify_relationship(
+            "Rate limiting should omit internal health check endpoints",
+            "Exclude /health and /ready endpoints from rate limiting",
+            "Rate limiting must be enabled on all API endpoints",
+            "Implemented global rate limiter for all API routes",
+            retrieval_score=0.8, retrieval_source="keyword",
+        )
+
+        self.assertEqual(rel, RelationshipType.EXCEPTION_TO,
+            f"Legitimate scoped exception should be EXCEPTION_TO, got {rel.value}")
+
+    def test_include_alone_not_exception(self):
+        """'include' alone should not trigger EXCEPTION_TO without subject overlap."""
+        from core.decision_review import classify_relationship, RelationshipType
+
+        rel, _, _ = classify_relationship(
+            "Email template missing header",
+            "Include company logo in email header",
+            "Cache invalidation rules",
+            "Include timestamp in cache key",
+            retrieval_score=0.4, retrieval_source="keyword",
+        )
+
+        self.assertEqual(rel, RelationshipType.UNRELATED,
+            "'include' without subject overlap must be UNRELATED")
+
+    def test_only_when_alone_not_exception(self):
+        """'only when' alone should not trigger exception without subject overlap."""
+        from core.decision_review import classify_relationship, RelationshipType
+
+        rel, _, _ = classify_relationship(
+            "Log rotation timing",
+            "Only rotate logs when disk usage exceeds 80%",
+            "Cache invalidation timing",
+            "Only invalidate cache when TTL expires",
+            retrieval_score=0.4, retrieval_source="keyword",
+        )
+
+        self.assertEqual(rel, RelationshipType.UNRELATED,
+            "'only when' without subject overlap must be UNRELATED")
+
+    def test_past_tense_omitted_not_exception_signal(self):
+        """'omitted' (past tense) describes bug, not exception proposal."""
+        from core.decision_review import classify_relationship, RelationshipType
+
+        # "omitted" in problem describes what was wrong, not proposing to omit
+        rel, _, _ = classify_relationship(
+            "Report generator omitted the footer section",
+            "Add footer section to report output",
+            "Chart renderer missing axis labels",
+            "Add axis labels to chart output",
+            retrieval_score=0.5, retrieval_source="keyword",
+        )
+
+        self.assertEqual(rel, RelationshipType.UNRELATED,
+            "Past-tense 'omitted' in bug description must not trigger EXCEPTION_TO")
+
+    def test_present_tense_omit_in_solution_is_exception(self):
+        """'omit' in solution (proposing to omit) should trigger exception if subject matches."""
+        from core.decision_review import classify_relationship, RelationshipType
+
+        rel, _, _ = classify_relationship(
+            "API logging generates too much noise",
+            "Omit debug-level logs from API output",
+            "API must log all requests for audit",
+            "Implemented request logging for all API endpoints",
+            retrieval_score=0.8, retrieval_source="keyword",
+        )
+
+        self.assertEqual(rel, RelationshipType.EXCEPTION_TO,
+            "Present-tense 'omit' in solution with subject overlap should be EXCEPTION_TO")
+
+    def test_timestamp_not_meaningful_overlap(self):
+        """Timestamp strings should not count as meaningful subject overlap."""
+        from core.decision_review import _has_meaningful_subject_overlap, _tokens
+
+        # Different problems that share ONLY a timestamp and generic terms
+        new_tokens = _tokens("20260715 report preview")
+        existing_tokens = _tokens("20260715 dashboard chart")
+
+        overlap = _has_meaningful_subject_overlap(new_tokens, existing_tokens)
+
+        self.assertFalse(overlap,
+            "Timestamp-only overlap should not be considered meaningful")
 
 
 if __name__ == "__main__":

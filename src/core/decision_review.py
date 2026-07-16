@@ -131,6 +131,24 @@ EXCEPTION_CUES = {
     "bypass", "skip", "omit", "exclude", "except", "exception", "unless",
 }
 
+# Past-tense forms of exception cues - when these appear in the problem description,
+# they describe a bug (something WAS omitted) rather than proposing an exception
+EXCEPTION_PAST_TENSE = {
+    "bypassed", "skipped", "omitted", "excluded", "excepted",
+}
+
+# Implementation verbs - when solution starts with these, exception cues describe
+# code behavior (what the fix DOES) rather than proposing a policy exception
+IMPLEMENTATION_VERBS = {
+    "added", "add", "adds", "adding",
+    "fixed", "fix", "fixes", "fixing",
+    "implemented", "implement", "implements", "implementing",
+    "updated", "update", "updates", "updating",
+    "changed", "change", "changes", "changing",
+    "modified", "modify", "modifies", "modifying",
+    "included", "include", "includes", "including",
+}
+
 REPLACEMENT_CUES = {
     "replace", "replaces", "replaced", "replacement", "instead",
     "supersede", "supersedes", "superseded", "deprecate", "deprecates",
@@ -201,6 +219,16 @@ SUBJECT_NON_DOMAIN_TERMS = {
     "manual", "manually", "automatic", "automatically",
     "explicit", "explicitly", "requested",
     "must", "may", "should", "can",
+    # Generic verbs/actions that don't indicate domain overlap
+    "include", "includes", "included", "including",
+    "add", "adds", "added", "adding",
+    "update", "updates", "updated", "updating",
+    "show", "shows", "showed", "showing",
+    "fix", "fixes", "fixed", "fixing",
+    "change", "changes", "changed", "changing",
+    # Generic nouns
+    "activity", "type", "data", "payload", "row", "final",
+    # Timestamps/IDs (numbers) - handled separately
 }
 
 STEM_RULES = [
@@ -507,7 +535,16 @@ def _has_reason_replacement_signal(text: str) -> bool:
 def _has_meaningful_subject_overlap(left: Set[str], right: Set[str]) -> bool:
     """Return true only when overlap contains at least one domain/content term."""
     excluded = {simple_stem(token) for token in SUBJECT_NON_DOMAIN_TERMS}
-    return bool((left & right) - excluded)
+    overlap = left & right
+    # Also exclude pure numeric tokens (timestamps, IDs, version numbers)
+    meaningful = {
+        token for token in overlap
+        if token not in excluded
+        and simple_stem(token) not in excluded
+        and not token.isdigit()  # Pure numbers like "20260715"
+        and not (len(token) >= 6 and token.replace("-", "").replace("_", "").isdigit())  # Dated IDs
+    }
+    return bool(meaningful)
 
 
 def _has_opposition(existing_text: str, new_text: str) -> bool:
@@ -542,18 +579,49 @@ def classify_relationship(
     overlap = new_tokens & existing_tokens
     overlap_strength = _overlap_ratio(new_tokens, existing_tokens)
 
-    if _normalize_text(new_text) == _normalize_text(existing_text):
-        return RelationshipType.SAME, "Exact duplicate of active decision", 0.98
-
-    if _jaccard(new_tokens, existing_tokens) >= 0.82 and new_tokens:
-        return RelationshipType.SAME, "Near duplicate of active decision", 0.9
-
+    # Check replacement signals FIRST - even if text is identical, a replacement
+    # solution should trigger review, not silent update
     replacement = _has_replacement_signal(new_text) or _has_reason_replacement_signal(new_reason)
-    exception_cues = _contains_any(new_raw, EXCEPTION_CUES)
+
+    # Also check if the reason/solution is materially different
+    reason_jaccard = _jaccard(_tokens(new_reason), _tokens(existing_reason))
+    materially_different_reason = reason_jaccard < 0.5 and len(new_reason) > 20 and len(existing_reason) > 20
+
+    # If replacement signal is present or reason is materially different,
+    # skip the SAME early return and evaluate properly
+    if not replacement and not materially_different_reason:
+        if _normalize_text(new_text) == _normalize_text(existing_text):
+            # Also require similar reason for true SAME
+            if reason_jaccard >= 0.7:
+                return RelationshipType.SAME, "Exact duplicate of active decision", 0.98
+
+        if _jaccard(new_tokens, existing_tokens) >= 0.82 and new_tokens:
+            # Also require similar reason for true SAME
+            if reason_jaccard >= 0.6:
+                return RelationshipType.SAME, "Near duplicate of active decision", 0.9
+    # Exception detection: Check if exception cue is in the SOLUTION (proposing to omit)
+    # vs just in the PROBLEM description in past tense (describing something WAS omitted)
+    problem_raw = _raw_tokens(new_text)
+    solution_raw = _raw_tokens(new_reason)
+
+    # Check for exception cues in the solution - but only if NOT describing an implementation
+    # "Added code to skip filters" = implementation (not exception proposal)
+    # "Health checks may skip auth" = policy proposal (exception)
+    solution_has_implementation_verb = _contains_any(solution_raw, IMPLEMENTATION_VERBS)
+    exception_in_solution = _contains_any(solution_raw, EXCEPTION_CUES) and not solution_has_implementation_verb
+
+    # Check for exception cues in problem - but only count them if NOT in past tense
+    # Past tense in problem = describing a bug, not proposing an exception
+    # Note: Check actual word forms (not stemmed) for past tense detection
+    problem_text_lower = new_text.lower()
+    problem_has_past_tense_exception = any(past in problem_text_lower for past in EXCEPTION_PAST_TENSE)
+    exception_in_problem = _contains_any(problem_raw, EXCEPTION_CUES)
+    exception_cues_valid = exception_in_solution or (exception_in_problem and not problem_has_past_tense_exception)
+
     exception_phrase = _has_phrase(new_combined, ["without", "except for"])
     decoupling = _has_phrase(new_combined, DECOUPLING_PHRASES)
-    rule_violation = _contains_any(new_raw, RULE_VIOLATION_CUES)
-    exception = (exception_cues or exception_phrase) and (rule_violation or not decoupling)
+    rule_violation = _contains_any(problem_raw, RULE_VIOLATION_CUES)
+    exception = (exception_cues_valid or exception_phrase) and (rule_violation or not decoupling)
     strict_existing = _contains_any(existing_raw, STRICT_CUES)
     permissive_new = _contains_any(new_raw, PERMISSIVE_OR_WEAKENING_CUES)
     extension = _contains_any(new_raw, EXTENSION_CUES)
@@ -592,6 +660,14 @@ def classify_relationship(
 
     if retrieval_source == "semantic" and retrieval_score >= 0.62:
         return RelationshipType.UNDETERMINED, "Semantically related but no deterministic relationship evidence", 0.55
+
+    # Same problem but materially different solution approach - potential conflict
+    # This catches cases where someone proposes a different fix strategy without
+    # explicit replacement wording
+    if materially_different_reason and has_meaningful_subject:
+        text_jaccard = _jaccard(_tokens(new_text), _tokens(existing_text))
+        if text_jaccard >= 0.6:  # Problem is substantially similar
+            return RelationshipType.POTENTIAL_CONFLICT, "Same subject with materially different approach - may supersede or conflict with existing", 0.72
 
     if has_meaningful_subject and _has_opposition(existing_text, new_text):
         return RelationshipType.POTENTIAL_CONFLICT, "Proposed decision expresses opposing intent to existing decision", 0.72

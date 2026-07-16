@@ -253,6 +253,69 @@ body.powered-off .card {
   border-color: var(--red);
   color: var(--red);
 }
+
+/* Recording Banner */
+.recording-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.recording-banner.recording {
+  background: rgba(0, 230, 118, 0.1);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+  color: var(--green);
+}
+
+.recording-banner.not-recording {
+  background: rgba(255, 82, 82, 0.1);
+  border: 1px solid rgba(255, 82, 82, 0.3);
+  color: var(--red);
+}
+
+.recording-banner.unknown {
+  background: rgba(107, 119, 133, 0.1);
+  border: 1px solid rgba(107, 119, 133, 0.3);
+  color: var(--text-dim);
+}
+
+.recording-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.recording-banner.recording .recording-dot {
+  background: var(--green);
+  animation: pulse 2s infinite;
+}
+
+.recording-banner.not-recording .recording-dot {
+  background: var(--red);
+}
+
+.recording-banner.unknown .recording-dot {
+  background: var(--text-dim);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.recording-text {
+  flex: 1;
+}
+
+.recording-action {
+  font-size: 10px;
+  opacity: 0.8;
+}
 </style>
 </head>
 <body>
@@ -274,6 +337,12 @@ body.powered-off .card {
       <span class="slider"></span>
     </label>
   </div>
+</div>
+
+<!-- Recording Status Banner -->
+<div class="recording-banner unknown" id="recordingBanner">
+  <span class="recording-dot"></span>
+  <span class="recording-text" id="recordingText">Checking connection...</span>
 </div>
 
 <!-- Project -->
@@ -332,6 +401,49 @@ async function fetchData() {
 }
 
 function render(s) {
+  // Recording Status Banner
+  // Dashboard connects via HTTP, not MCP. It cannot prove MCP connectivity.
+  // Green requires: recent MCP or REST fallback activity (within threshold) AND no session_lost state.
+  const banner = document.getElementById('recordingBanner');
+  const recordingText = document.getElementById('recordingText');
+  const activeAgent = s.active_agent || {};
+  const mcpHealth = s.mcp_health || {};
+  const restFallback = s.rest_fallback || {};
+  const isSessionLost = mcpHealth.state === 'session_lost' || activeAgent.status === 'session_lost';
+
+  // Check for RECENT MCP activity (evidence of working connection)
+  const lastSeen = activeAgent.last_seen;
+  let isMcpRecentActivity = false;
+  if (lastSeen) {
+    const lastSeenTime = new Date(lastSeen).getTime();
+    const ageSeconds = (Date.now() - lastSeenTime) / 1000;
+    const ACTIVE_THRESHOLD_SECONDS = 300; // 5 minutes
+    isMcpRecentActivity = ageSeconds <= ACTIVE_THRESHOLD_SECONDS;
+  }
+
+  // Check for REST fallback recording
+  const isRestRecording = restFallback.is_recording === true;
+
+  banner.classList.remove('recording', 'not-recording', 'unknown');
+
+  if (isSessionLost && !isRestRecording) {
+    // Explicit session loss without REST fallback - red
+    banner.classList.add('not-recording');
+    recordingText.innerHTML = 'Project memory is NOT being recorded.<br><span class="recording-action">Ensure FixOnce is running, then open a new AI conversation.</span>';
+  } else if (isRestRecording) {
+    // REST fallback recording active - green with fallback indicator
+    banner.classList.add('recording');
+    recordingText.innerHTML = 'Project memory is being recorded.<br><span class="recording-action" style="color:#4ade80;">Via local fallback</span>';
+  } else if (isMcpRecentActivity) {
+    // Recent MCP activity confirms recording - green
+    banner.classList.add('recording');
+    recordingText.textContent = 'Project memory is being recorded.';
+  } else {
+    // No recent activity, cannot confirm - gray
+    banner.classList.add('unknown');
+    recordingText.textContent = 'Recording status not confirmed.';
+  }
+
   // Project
   const projectName = s.project_name || s.project_id || '—';
   const goal = s.current_goal || s.knowledge?.current_goal || '';

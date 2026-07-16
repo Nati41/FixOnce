@@ -396,17 +396,18 @@ def log_activity():
     try:
         data = request.get_json(silent=True) or {}
 
-        # Skip empty/invalid activities (but allow MCP tool activities)
+        # Skip empty/invalid activities (but allow MCP and REST fallback activities)
         is_mcp_activity = data.get("type") == "mcp_tool" or data.get("file_context") == "memory"
-        if not is_mcp_activity and not data.get("file") and not data.get("command") and not data.get("cwd"):
+        is_rest_fallback = data.get("type") == "rest_fallback"
+        if not is_mcp_activity and not is_rest_fallback and not data.get("file") and not data.get("command") and not data.get("cwd"):
             return jsonify({"status": "skipped", "reason": "no meaningful data"})
 
         file_path = data.get("file")
         cwd = data.get("cwd")
         boundary_transition = None
 
-        # For MCP activities, use the provided project_id directly
-        if is_mcp_activity and data.get("project_id"):
+        # For MCP and REST fallback activities, use the provided project_id directly
+        if (is_mcp_activity or is_rest_fallback) and data.get("project_id"):
             project_id = data.get("project_id")
         # Phase 1: Check for boundary violation (file outside active project)
         elif BOUNDARY_DETECTION_ENABLED and file_path and data.get("tool") in ["Edit", "Write", "NotebookEdit"]:
@@ -434,6 +435,9 @@ def log_activity():
         # Get current editor - use provided editor for MCP activities
         if data.get("editor"):
             current_editor = data.get("editor")
+        elif is_rest_fallback:
+            # REST fallback activities should show as rest_fallback, not unknown
+            current_editor = data.get("actor", "rest_fallback")
         else:
             # Try to get from project memory
             current_editor = None
@@ -466,7 +470,12 @@ def log_activity():
             "file_context": file_context,
             "diff": diff_stats,
             "event": data.get("event"),
-            "boundary_transition": boundary_transition  # Phase 1: Track project switches
+            "boundary_transition": boundary_transition,  # Phase 1: Track project switches
+            # REST fallback specific fields
+            "actor": data.get("actor"),
+            "actor_source": data.get("actor_source"),
+            "transport": "rest_fallback" if is_rest_fallback else None,
+            "details": data.get("details") if is_rest_fallback else None,
         }
 
         log = _load_activity()

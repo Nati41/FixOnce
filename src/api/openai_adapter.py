@@ -144,6 +144,123 @@ FIXONCE_FUNCTIONS = [
             },
             "required": []
         }
+    },
+    # === MCP Fallback Functions (for MCP disconnect scenarios) ===
+    {
+        "name": "fixonce_status",
+        "description": "Check FixOnce connection and recording status. Use to verify recording before commits.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "cwd": {
+                    "type": "string",
+                    "description": "Absolute path to the project working directory. Required for accurate project-specific status."
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "fixonce_sync",
+        "description": "Sync work context with FixOnce. Call after changes or when starting new work.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "cwd": {
+                    "type": "string",
+                    "description": "REQUIRED: Absolute path to the project working directory"
+                },
+                "goal": {
+                    "type": "string",
+                    "description": "Current goal (e.g., 'Fix login bug')"
+                },
+                "work_area": {
+                    "type": "string",
+                    "description": "Feature/module area (e.g., 'authentication')"
+                },
+                "last_change": {
+                    "type": "string",
+                    "description": "What was just done (e.g., 'Added validation')"
+                },
+                "last_file": {
+                    "type": "string",
+                    "description": "Last file modified"
+                },
+                "why": {
+                    "type": "string",
+                    "description": "Why this work matters"
+                },
+                "next_step": {
+                    "type": "string",
+                    "description": "Short continuation prompt (e.g., 'Test the fix')"
+                }
+            },
+            "required": ["cwd"]
+        }
+    },
+    {
+        "name": "fixonce_solved",
+        "description": "Record that you fixed an error. Saves solution for future use. Supports review/resolution for conflicts.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "cwd": {
+                    "type": "string",
+                    "description": "REQUIRED: Absolute path to the project working directory"
+                },
+                "error": {
+                    "type": "string",
+                    "description": "The error message that was fixed"
+                },
+                "solution": {
+                    "type": "string",
+                    "description": "What you did to fix it (1-2 sentences)"
+                },
+                "files": {
+                    "type": "string",
+                    "description": "Comma-separated list of files changed"
+                },
+                "resolution_action": {
+                    "type": "string",
+                    "description": "Action to resolve a conflict: 'supersede_existing' or 'cancel'"
+                },
+                "resolution_target_id": {
+                    "type": "string",
+                    "description": "ID of existing solution for supersede_existing"
+                },
+                "resolution_review_id": {
+                    "type": "string",
+                    "description": "Review ID from initial conflict response"
+                }
+            },
+            "required": ["cwd", "error", "solution"]
+        }
+    },
+    {
+        "name": "fixonce_decide",
+        "description": "Record a decision, avoid pattern, or resolve a decision conflict. Full MCP parity with pre-save review.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "cwd": {
+                    "type": "string",
+                    "description": "REQUIRED: Absolute path to the project working directory"
+                },
+                "text": {
+                    "type": "string",
+                    "description": "The decision or avoid text"
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Why this decision was made"
+                },
+                "action": {
+                    "type": "string",
+                    "description": "One of: 'add' (default), 'avoid', 'resolve:acknowledge_existing:TARGET_ID', 'resolve:save_as_extends:TARGET_ID', 'resolve:save_as_exception:TARGET_ID', 'resolve:supersede_existing:TARGET_ID', 'resolve:save_anyway_under_review:TARGET_ID', 'resolve:cancel'"
+                }
+            },
+            "required": ["cwd", "text", "reason"]
+        }
     }
 ]
 
@@ -191,12 +308,17 @@ def call_function():
     handlers = {
         'fixonce_init_session': _handle_init_session,
         'fixonce_search_solutions': _handle_search_solutions,
-        'fixonce_log_decision': _handle_log_decision,
-        'fixonce_log_avoid': _handle_log_avoid,
+        'fixonce_log_decision': _handle_log_decision,  # Legacy - use fixonce_decide
+        'fixonce_log_avoid': _handle_log_avoid,  # Legacy - use fixonce_decide with action='avoid'
         'fixonce_update_goal': _handle_update_goal,
         'fixonce_log_insight': _handle_log_insight,
         'fixonce_get_context': _handle_get_context,
         'fixonce_get_browser_errors': _handle_get_browser_errors,
+        # MCP Fallback functions (full parity with MCP tools)
+        'fixonce_status': _handle_status,
+        'fixonce_sync': _handle_sync,
+        'fixonce_solved': _handle_solved,
+        'fixonce_decide': _handle_decide,
     }
 
     handler = handlers.get(func_name)
@@ -498,81 +620,82 @@ def _handle_search_solutions(args: dict) -> dict:
 
 
 def _handle_log_decision(args: dict) -> dict:
-    """Handle log_decision function call."""
+    """
+    Handle log_decision function call (LEGACY - routes through core service).
+
+    Now uses the same core.decisions.record_decision() as fixonce_decide
+    to ensure review/conflict detection applies.
+    REQUIRES explicit cwd for REST fallback.
+    """
+    cwd = args.get('cwd', '').strip()
     decision = args.get('decision', '')
     reason = args.get('reason', '')
 
     if not decision or not reason:
         return {"error": "decision and reason are required"}
 
-    try:
-        from managers.multi_project_manager import get_active_project_id, load_project_memory, save_project_memory
+    # Route through the same core service as fixonce_decide
+    result = _handle_decide({
+        "cwd": cwd,
+        "text": decision,
+        "reason": reason,
+        "action": "add",
+    })
 
-        project_id = get_active_project_id()
-        if not project_id:
-            return {"error": "No active project. Call init_session first."}
-
-        memory = load_project_memory(project_id) or {}
-        rejected = _reject_synthetic_stress_write(args, memory)
-        if rejected:
-            return rejected
-
-        decisions = memory.setdefault('decisions', [])
-
-        decisions.append({
-            "decision": decision,
-            "reason": reason,
-            "timestamp": datetime.now().isoformat()
-        })
-
-        save_project_memory(project_id, memory)
-
+    # Convert to legacy response format for backwards compatibility
+    if result.get("success"):
         return {
             "logged": True,
             "decision": decision,
-            "total_decisions": len(decisions)
+            "decision_id": result.get("decision_id"),
         }
-    except Exception as e:
-        return {"error": str(e)}
+    elif result.get("requires_review"):
+        # Return review info in legacy-compatible format
+        return {
+            "logged": False,
+            "requires_review": True,
+            "relationship": result.get("relationship"),
+            "target_id": result.get("target_id"),
+            "target_text": result.get("target_text"),
+            "allowed_actions": result.get("allowed_actions"),
+            "message": result.get("message"),
+        }
+    else:
+        return {"error": result.get("error", "Decision failed")}
 
 
 def _handle_log_avoid(args: dict) -> dict:
-    """Handle log_avoid function call."""
+    """
+    Handle log_avoid function call (LEGACY - routes through core service).
+
+    Now uses the same core.decisions.record_avoid() as fixonce_decide(action="avoid")
+    to ensure proper actor attribution and storage.
+    REQUIRES explicit cwd for REST fallback.
+    """
+    cwd = args.get('cwd', '').strip()
     what = args.get('what', '')
     reason = args.get('reason', '')
 
     if not what or not reason:
         return {"error": "what and reason are required"}
 
-    try:
-        from managers.multi_project_manager import get_active_project_id, load_project_memory, save_project_memory
+    # Route through the same core service as fixonce_decide
+    result = _handle_decide({
+        "cwd": cwd,
+        "text": what,
+        "reason": reason,
+        "action": "avoid",
+    })
 
-        project_id = get_active_project_id()
-        if not project_id:
-            return {"error": "No active project. Call init_session first."}
-
-        memory = load_project_memory(project_id) or {}
-        rejected = _reject_synthetic_stress_write(args, memory)
-        if rejected:
-            return rejected
-
-        avoid_list = memory.setdefault('avoid', [])
-
-        avoid_list.append({
-            "what": what,
-            "reason": reason,
-            "timestamp": datetime.now().isoformat()
-        })
-
-        save_project_memory(project_id, memory)
-
+    # Convert to legacy response format for backwards compatibility
+    if result.get("success"):
         return {
             "logged": True,
             "what": what,
-            "total_avoids": len(avoid_list)
+            "decision_id": result.get("decision_id"),
         }
-    except Exception as e:
-        return {"error": str(e)}
+    else:
+        return {"error": result.get("error", "Avoid pattern failed")}
 
 
 def _handle_update_goal(args: dict) -> dict:
@@ -704,3 +827,670 @@ def _handle_get_browser_errors(args: dict) -> dict:
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+# ============================================================================
+# MCP Fallback Handlers
+# These call the SAME core functions as MCP tools for full parity.
+# ============================================================================
+
+
+def _resolve_project_from_cwd(cwd: str) -> dict:
+    """
+    Resolve project ID from explicit cwd path.
+
+    Returns dict with:
+    - success: bool
+    - project_id: str (if success)
+    - resolved_cwd: str (normalized path)
+    - error: str (if not success)
+    - error_code: str (if not success)
+
+    This ensures REST fallback writes ONLY to the explicitly specified project,
+    never to the server's global active project state.
+    """
+    if not cwd:
+        return {
+            "success": False,
+            "error": "cwd is required for REST fallback. Provide the absolute path to your project working directory.",
+            "error_code": "missing_cwd",
+        }
+
+    cwd = cwd.strip()
+    if not cwd:
+        return {
+            "success": False,
+            "error": "cwd cannot be empty",
+            "error_code": "empty_cwd",
+        }
+
+    # Normalize path
+    try:
+        from pathlib import Path
+        cwd_path = Path(cwd).expanduser().resolve()
+        if not cwd_path.exists():
+            return {
+                "success": False,
+                "error": f"cwd path does not exist: {cwd}",
+                "error_code": "invalid_cwd",
+            }
+        if not cwd_path.is_dir():
+            return {
+                "success": False,
+                "error": f"cwd is not a directory: {cwd}",
+                "error_code": "invalid_cwd",
+            }
+        resolved_cwd = str(cwd_path)
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Invalid cwd path: {e}",
+            "error_code": "invalid_cwd",
+        }
+
+    # Find project root using boundary detector
+    try:
+        from core.boundary_detector import find_project_root
+        root, marker, confidence = find_project_root(resolved_cwd)
+        if not root:
+            root = resolved_cwd
+    except Exception:
+        root = resolved_cwd
+
+    # Use ProjectContext for consistent ID generation (respects git remote)
+    try:
+        from core.project_context import ProjectContext
+        project_id = ProjectContext.from_path(root)
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to resolve project ID: {e}",
+            "error_code": "project_resolution_failed",
+        }
+
+    # Ensure project exists in dashboard
+    try:
+        from managers.multi_project_manager import ensure_dashboard_project
+        ensure_dashboard_project(project_id, detected_from="rest_fallback", working_dir=root)
+    except Exception:
+        pass  # Non-fatal - project may already exist
+
+    return {
+        "success": True,
+        "project_id": project_id,
+        "resolved_cwd": root,
+    }
+
+
+def _verify_project_id_matches_cwd(supplied_project_id: str, resolved_project_id: str) -> dict:
+    """
+    Verify that a supplied project_id matches the cwd-resolved one.
+
+    Returns None if match or no supplied_project_id, error dict if mismatch.
+    """
+    if not supplied_project_id:
+        return None
+
+    if supplied_project_id != resolved_project_id:
+        return {
+            "success": False,
+            "error": f"project_id mismatch: supplied '{supplied_project_id}' but cwd resolves to '{resolved_project_id}'",
+            "error_code": "project_id_mismatch",
+        }
+
+def _log_rest_fallback_activity(
+    action: str,
+    project_id: str,
+    details: dict = None,
+) -> None:
+    """Log REST fallback activity for dashboard tracking."""
+    try:
+        import requests
+        from pathlib import Path
+
+        # Get runtime port
+        runtime_file = Path.home() / ".fixonce" / "runtime.json"
+        port = 5000
+        if runtime_file.exists():
+            import json
+            with open(runtime_file, 'r', encoding='utf-8') as f:
+                port = json.load(f).get("port", 5000)
+
+        requests.post(
+            f"http://localhost:{port}/api/activity/log",
+            json={
+                "type": "rest_fallback",
+                "tool": action,
+                "human_name": f"REST fallback: {action}",
+                "project_id": project_id,
+                "actor": "rest_fallback",
+                "actor_source": "rest_api",
+                "details": details or {},
+            },
+            timeout=2,
+        )
+    except Exception:
+        pass
+
+
+def _handle_status(args: dict) -> dict:
+    """
+    Handle status check - REST fallback for fo_status.
+
+    If cwd is provided, resolves the project from cwd and reports status for that project.
+    If cwd is omitted, returns a warning that status is ambiguous without explicit cwd.
+
+    Returns structured JSON for machine parsing.
+    """
+    cwd = args.get('cwd', '').strip()
+
+    try:
+        if cwd:
+            # Resolve project from explicit cwd
+            resolution = _resolve_project_from_cwd(cwd)
+            if not resolution["success"]:
+                return {
+                    "success": False,
+                    "action": "fixonce_status",
+                    "recording": False,
+                    "transport": "rest_fallback",
+                    "error": resolution["error"],
+                    "error_code": resolution["error_code"],
+                }
+
+            project_id = resolution["project_id"]
+            resolved_cwd = resolution["resolved_cwd"]
+
+            return {
+                "success": True,
+                "action": "fixonce_status",
+                "recording": True,
+                "transport": "rest_fallback",
+                "project_id": project_id,
+                "resolved_cwd": resolved_cwd,
+                "message": f"FixOnce can record to project {project_id} via REST fallback.",
+            }
+        else:
+            # No cwd provided - warn about ambiguity
+            return {
+                "success": True,
+                "action": "fixonce_status",
+                "recording": True,
+                "transport": "rest_fallback",
+                "project_id": None,
+                "warning": "No cwd provided. Include cwd parameter to verify status for your specific project. Write operations require explicit cwd.",
+                "message": "FixOnce REST fallback is available. Provide cwd to verify project-specific recording.",
+            }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "action": "fixonce_status",
+            "recording": False,
+            "transport": "rest_fallback",
+            "error": str(e),
+            "error_code": "status_check_failed",
+        }
+
+
+def _handle_sync(args: dict) -> dict:
+    """
+    Handle sync - REST fallback for fo_sync.
+
+    REQUIRES explicit cwd to prevent cross-project writes.
+    Calls the same core function as MCP fo_sync for full parity.
+    """
+    cwd = args.get('cwd', '').strip()
+    goal = args.get('goal', '')
+    work_area = args.get('work_area', '')
+    last_change = args.get('last_change', '')
+    last_file = args.get('last_file', '')
+    why = args.get('why', '')
+    next_step = args.get('next_step', '')
+
+    # Require explicit cwd for REST fallback writes
+    resolution = _resolve_project_from_cwd(cwd)
+    if not resolution["success"]:
+        return {
+            "success": False,
+            "action": "fixonce_sync",
+            "error": resolution["error"],
+            "error_code": resolution["error_code"],
+        }
+
+    project_id = resolution["project_id"]
+
+    try:
+        from managers.multi_project_manager import (
+            load_project_memory,
+            save_project_memory,
+        )
+
+        memory = load_project_memory(project_id) or {}
+        live = memory.setdefault('live_record', {})
+        intent = live.setdefault('intent', {})
+
+        # Update all sync fields (same as MCP fo_sync)
+        now = datetime.now()
+
+        if goal:
+            old_goal = intent.get('current_goal')
+            if old_goal and old_goal != goal:
+                history = intent.setdefault('goal_history', [])
+                history.append({
+                    "goal": old_goal,
+                    "completed_at": now.isoformat()
+                })
+            intent['current_goal'] = goal
+
+        if work_area:
+            intent['work_area'] = work_area
+        if last_change:
+            intent['last_change'] = last_change
+            intent['last_change_at'] = now.isoformat()
+        if last_file:
+            intent['last_file'] = last_file
+        if why:
+            intent['why'] = why
+        if next_step:
+            intent['next_step'] = next_step
+
+        intent['updated_at'] = now.isoformat()
+        intent['synced_via'] = 'rest_fallback'
+
+        save_project_memory(project_id, memory)
+
+        # Log activity for dashboard
+        _log_rest_fallback_activity("sync", project_id, {
+            "goal": goal[:50] if goal else None,
+            "last_change": last_change[:50] if last_change else None,
+        })
+
+        return {
+            "success": True,
+            "action": "fixonce_sync",
+            "message": "Context synced via REST fallback.",
+            "transport": "rest_fallback",
+            "project_id": project_id,
+            "resolved_cwd": resolution["resolved_cwd"],
+            "synced_fields": {
+                "goal": bool(goal),
+                "work_area": bool(work_area),
+                "last_change": bool(last_change),
+                "last_file": bool(last_file),
+                "why": bool(why),
+                "next_step": bool(next_step),
+            },
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "action": "fixonce_sync",
+            "error": str(e),
+            "error_code": "sync_failed",
+        }
+
+
+def _handle_solved(args: dict) -> dict:
+    """
+    Handle solved - REST fallback for fo_solved.
+
+    REQUIRES explicit cwd to prevent cross-project writes.
+    Calls core.solutions.record_solution() for full parity with MCP,
+    including pre-save review and resolution actions.
+    """
+    cwd = args.get('cwd', '').strip()
+    error_msg = args.get('error', '')
+    solution = args.get('solution', '')
+    files = args.get('files', '')
+    resolution_action = args.get('resolution_action', '')
+    resolution_target_id = args.get('resolution_target_id', '')
+    resolution_review_id = args.get('resolution_review_id', '')
+
+    # Require explicit cwd for REST fallback writes
+    resolution = _resolve_project_from_cwd(cwd)
+    if not resolution["success"]:
+        return {
+            "success": False,
+            "action": "fixonce_solved",
+            "error": resolution["error"],
+            "error_code": resolution["error_code"],
+        }
+
+    if not error_msg:
+        return {
+            "success": False,
+            "action": "fixonce_solved",
+            "error": "error is required",
+            "error_code": "missing_error",
+        }
+
+    if not solution:
+        return {
+            "success": False,
+            "action": "fixonce_solved",
+            "error": "solution is required",
+            "error_code": "missing_solution",
+        }
+
+    # Validate resolution_action if provided
+    if resolution_action:
+        valid_actions = {"supersede_existing", "cancel"}
+        if resolution_action not in valid_actions:
+            return {
+                "success": False,
+                "action": "fixonce_solved",
+                "error": f"Invalid resolution_action '{resolution_action}'. Must be one of: {', '.join(sorted(valid_actions))}",
+                "error_code": "invalid_resolution_action",
+            }
+
+        if resolution_action == "supersede_existing" and not resolution_target_id:
+            return {
+                "success": False,
+                "action": "fixonce_solved",
+                "error": "resolution_target_id is required for supersede_existing",
+                "error_code": "missing_target_id",
+            }
+
+        if not resolution_review_id:
+            return {
+                "success": False,
+                "action": "fixonce_solved",
+                "error": "resolution_review_id is required for resolution actions. Call fixonce_solved without resolution_action first to get a review_id.",
+                "error_code": "missing_review_id",
+            }
+
+    project_id = resolution["project_id"]
+
+    try:
+        from core.solutions import record_solution
+
+        files_list = [f.strip() for f in files.split(",") if f.strip()] if files else []
+
+        # Call the SAME core function as MCP fo_solved
+        result = record_solution(
+            project_id=project_id,
+            error_message=error_msg,
+            solution=solution,
+            files_changed=files_list,
+            actor="rest_fallback",
+            actor_source="rest_api",
+            resolution_action=resolution_action,
+            resolution_target_id=resolution_target_id,
+            resolution_review_id=resolution_review_id,
+        )
+
+        if result.requires_review and result.review_result:
+            # Return structured review response
+            review = result.review_result
+            primary = review.get("primary_candidate", {})
+
+            return {
+                "success": False,
+                "action": "fixonce_solved",
+                "requires_review": True,
+                "relationship": primary.get("relationship", "unknown"),
+                "review_id": review.get("review_id", ""),
+                "target_id": primary.get("id", ""),
+                "target_text": primary.get("text", "")[:100],
+                "explanation": primary.get("explanation", ""),
+                "allowed_actions": review.get("allowed_actions", []),
+                "expires_at": review.get("expires_at", ""),
+                "message": "Solution not logged; review required.",
+                "error_code": "review_required",
+            }
+
+        if not result.success:
+            return {
+                "success": False,
+                "action": "fixonce_solved",
+                "error": result.message,
+                "error_code": "solution_failed",
+            }
+
+        # Log activity for dashboard
+        _log_rest_fallback_activity("solved", project_id, {
+            "error": error_msg[:50],
+            "is_update": result.is_update,
+        })
+
+        return {
+            "success": True,
+            "action": "fixonce_solved",
+            "message": result.message,
+            "solution_id": result.solution_id,
+            "is_update": result.is_update,
+            "transport": "rest_fallback",
+            "project_id": project_id,
+            "resolved_cwd": resolution["resolved_cwd"],
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "action": "fixonce_solved",
+            "error": str(e),
+            "error_code": "exception",
+        }
+
+
+def _handle_decide(args: dict) -> dict:
+    """
+    Handle decide - REST fallback for fo_decide.
+
+    REQUIRES explicit cwd to prevent cross-project writes.
+    Calls core.decisions.record_decision() or record_avoid() for full parity
+    with MCP, including pre-save review and resolution actions.
+
+    Action parsing mirrors MCP fo_decide:
+    - "add" (default): Add new decision (may trigger review)
+    - "avoid": Add as avoid pattern
+    - "resolve:ACTION:TARGET_ID": Resolve review with action
+    """
+    cwd = args.get('cwd', '').strip()
+    text = args.get('text', '')
+    reason = args.get('reason', '')
+    action = args.get('action', 'add').strip()
+
+    # Require explicit cwd for REST fallback writes
+    resolution = _resolve_project_from_cwd(cwd)
+    if not resolution["success"]:
+        return {
+            "success": False,
+            "action": "fixonce_decide",
+            "error": resolution["error"],
+            "error_code": resolution["error_code"],
+        }
+
+    project_id = resolution["project_id"]
+    resolved_cwd = resolution["resolved_cwd"]
+
+    if not text:
+        return {
+            "success": False,
+            "action": "fixonce_decide",
+            "error": "text is required",
+            "error_code": "missing_text",
+        }
+
+    if not reason:
+        return {
+            "success": False,
+            "action": "fixonce_decide",
+            "error": "reason is required",
+            "error_code": "missing_reason",
+        }
+
+    try:
+        # Parse action (mirrors MCP fo_decide action parsing)
+        if action == "avoid":
+            return _handle_decide_avoid(project_id, text, reason, resolved_cwd)
+
+        if action.startswith("resolve:"):
+            return _handle_decide_resolution(project_id, text, reason, action, resolved_cwd)
+
+        # Default: add new decision
+        return _handle_decide_add(project_id, text, reason, resolved_cwd)
+
+    except Exception as e:
+        return {
+            "success": False,
+            "action": "fixonce_decide",
+            "error": str(e),
+            "error_code": "exception",
+        }
+
+
+def _handle_decide_add(project_id: str, text: str, reason: str, resolved_cwd: str) -> dict:
+    """Add a new decision using core service."""
+    from core.decisions import record_decision
+
+    result = record_decision(
+        project_id=project_id,
+        text=text,
+        reason=reason,
+        actor="rest_fallback",
+        actor_source="rest_api",
+    )
+
+    if result.requires_review and result.review_result:
+        review = result.review_result
+        primary = review.get("primary_candidate", {})
+
+        return {
+            "success": False,
+            "action": "fixonce_decide",
+            "requires_review": True,
+            "relationship": primary.get("relationship", "unknown"),
+            "target_id": primary.get("id", ""),
+            "target_text": primary.get("text", "")[:100],
+            "explanation": primary.get("explanation", ""),
+            "allowed_actions": review.get("allowed_actions", []),
+            "message": review.get("message", "Decision review required."),
+            "error_code": "review_required",
+        }
+
+    if not result.success:
+        return {
+            "success": False,
+            "action": "fixonce_decide",
+            "error": result.message,
+            "conflicts": result.conflicts,
+            "error_code": "decision_blocked",
+        }
+
+    _log_rest_fallback_activity("decide", project_id, {"text": text[:50]})
+
+    return {
+        "success": True,
+        "action": "fixonce_decide",
+        "message": result.message,
+        "decision_id": result.decision_id,
+        "transport": "rest_fallback",
+        "project_id": project_id,
+        "resolved_cwd": resolved_cwd,
+        "warning": result.warning if result.warning else None,
+    }
+
+
+def _handle_decide_avoid(project_id: str, text: str, reason: str, resolved_cwd: str) -> dict:
+    """Add an avoid pattern using core service."""
+    from core.decisions import record_avoid
+
+    result = record_avoid(
+        project_id=project_id,
+        text=text,
+        reason=reason,
+        actor="rest_fallback",
+        actor_source="rest_api",
+    )
+
+    if not result.success:
+        return {
+            "success": False,
+            "action": "fixonce_decide",
+            "error": result.message,
+            "error_code": "avoid_failed",
+        }
+
+    _log_rest_fallback_activity("decide_avoid", project_id, {"text": text[:50]})
+
+    return {
+        "success": True,
+        "action": "fixonce_decide",
+        "message": result.message,
+        "decision_id": result.decision_id,
+        "transport": "rest_fallback",
+        "project_id": project_id,
+        "resolved_cwd": resolved_cwd,
+    }
+
+
+def _handle_decide_resolution(project_id: str, text: str, reason: str, action: str, resolved_cwd: str) -> dict:
+    """Resolve a decision review using core service."""
+    from core.decisions import record_decision
+
+    # Parse resolve action: resolve:ACTION:TARGET or resolve:ACTION
+    parts = action[len("resolve:"):].split(":", 1)
+    resolution_action = parts[0].strip()
+    target_id = parts[1].strip() if len(parts) > 1 else ""
+
+    valid_resolutions = {
+        "acknowledge_existing",
+        "save_as_extends",
+        "save_as_exception",
+        "supersede_existing",
+        "save_anyway_under_review",
+        "cancel",
+    }
+
+    if resolution_action not in valid_resolutions:
+        return {
+            "success": False,
+            "action": "fixonce_decide",
+            "error": f"Invalid resolution action '{resolution_action}'. Must be one of: {', '.join(sorted(valid_resolutions))}",
+            "error_code": "invalid_resolution_action",
+        }
+
+    # Most resolutions require target_id
+    if resolution_action != "cancel" and not target_id:
+        return {
+            "success": False,
+            "action": "fixonce_decide",
+            "error": f"target_id is required for {resolution_action}",
+            "error_code": "missing_target_id",
+        }
+
+    result = record_decision(
+        project_id=project_id,
+        text=text,
+        reason=reason,
+        actor="rest_fallback",
+        actor_source="rest_api",
+        resolution_action=resolution_action,
+        resolution_target_id=target_id,
+    )
+
+    if not result.success:
+        return {
+            "success": False,
+            "action": "fixonce_decide",
+            "error": result.message,
+            "error_code": "resolution_failed",
+        }
+
+    _log_rest_fallback_activity("decide_resolution", project_id, {
+        "resolution": resolution_action,
+        "target_id": target_id,
+    })
+
+    return {
+        "success": True,
+        "action": "fixonce_decide",
+        "message": result.message,
+        "decision_id": result.decision_id,
+        "resolution_action": resolution_action,
+        "transport": "rest_fallback",
+        "project_id": project_id,
+        "resolved_cwd": resolved_cwd,
+    }

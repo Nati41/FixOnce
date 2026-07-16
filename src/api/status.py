@@ -1210,22 +1210,26 @@ def api_dashboard_snapshot():
                     # Include activity if:
                     # 1. It's from the active project, OR
                     # 2. It's a global activity (fallback), OR
-                    # 3. It's an MCP tool activity (memory operations)
+                    # 3. It's an MCP tool activity (memory operations), OR
+                    # 4. It's a REST fallback activity
                     is_active_project = (act_project_id == active_project_id) if active_project_id else False
                     is_mcp_activity = act.get("type") == "mcp_tool" or act.get("file_context") == "memory"
+                    is_rest_fallback = act.get("type") == "rest_fallback"
                     is_global = act_project_id == "__global__"
 
-                    if is_active_project or is_mcp_activity or (is_global and len(snapshot["activity"]) < 10):
+                    if is_active_project or is_mcp_activity or is_rest_fallback or (is_global and len(snapshot["activity"]) < 10):
                         snapshot["activity"].append({
                             "timestamp": act.get("timestamp"),
                             "tool": act.get("tool"),
                             "file": act.get("file"),
                             "human_name": act.get("human_name"),
                             "project_id": act_project_id,
-                            "actor": act.get("editor", "unknown"),
+                            "actor": act.get("editor") or act.get("actor", "unknown"),
                             "diff": act.get("diff"),  # {added, removed} if available
-                            "type": act.get("type", "file_change"),  # Include type for MCP detection
-                            "file_context": act.get("file_context", "")  # Include context
+                            "type": act.get("type", "file_change"),  # Include type for MCP/REST detection
+                            "file_context": act.get("file_context", ""),  # Include context
+                            "transport": act.get("transport"),  # REST fallback transport
+                            "actor_source": act.get("actor_source"),  # REST fallback source
                         })
 
                 # Limit to 30 activities (already in newest-first order)
@@ -1249,6 +1253,38 @@ def api_dashboard_snapshot():
                         snapshot["protocol_watchdog"]["reason"] = "working_dir_mismatch"
         except Exception:
             pass
+
+        # === REST Fallback Status ===
+        # Check for recent REST fallback activity as evidence of recording via local fallback
+        try:
+            rest_fallback_activities = [
+                act for act in snapshot.get("activity", [])
+                if act.get("type") == "rest_fallback"
+            ]
+            last_rest_fallback = rest_fallback_activities[0] if rest_fallback_activities else None
+            is_rest_recording = False
+            if last_rest_fallback:
+                try:
+                    last_ts = datetime.fromisoformat(last_rest_fallback["timestamp"].replace('Z', '+00:00'))
+                    if last_ts.tzinfo:
+                        last_ts = last_ts.replace(tzinfo=None)
+                    age_seconds = (datetime.now() - last_ts).total_seconds()
+                    is_rest_recording = age_seconds <= 300  # 5 minutes
+                except Exception:
+                    pass
+            snapshot["rest_fallback"] = {
+                "is_recording": is_rest_recording,
+                "last_activity": last_rest_fallback.get("timestamp") if last_rest_fallback else None,
+                "last_tool": last_rest_fallback.get("tool") if last_rest_fallback else None,
+                "project_id": last_rest_fallback.get("project_id") if last_rest_fallback else None,
+            }
+        except Exception:
+            snapshot["rest_fallback"] = {
+                "is_recording": False,
+                "last_activity": None,
+                "last_tool": None,
+                "project_id": None,
+            }
 
         # === MCP Health (TRUE state, not just config) ===
         try:
