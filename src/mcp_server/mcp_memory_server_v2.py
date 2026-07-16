@@ -3585,11 +3585,10 @@ def _format_deep_project_brief(memory: Dict[str, Any], mode: str = "compact") ->
             lines.append(f"  • {problem} → {solution}")
         lines.append("")
 
-    # Navigator V1: Memory stats (compact)
-    d_count = len([d for d in memory.get("decisions", []) if not d.get("superseded")])
-    s_count = len([s for s in memory.get("debug_sessions", []) if not s.get("superseded")])
-    a_count = len(memory.get("avoid", []))
-    lines.append(f"📊 Project Knowledge: {d_count} Decisions · {s_count} Solved Bugs · {a_count} Avoid Patterns")
+    # Navigator V1: Memory stats (compact) - use canonical counter module
+    from core.knowledge_counters import get_live_project_counters, format_project_knowledge_line
+    counters = get_live_project_counters(memory)
+    lines.append(format_project_knowledge_line(counters))
     lines.append("")
 
     # Navigator V1: Suggested first action
@@ -3851,6 +3850,10 @@ def _update_snapshot(project_id: str, working_dir: str, data: Dict[str, Any]):
 
     lr = data.get('live_record', {})
 
+    # Use canonical counter module for raw counts (index snapshots include all items)
+    from core.knowledge_counters import get_raw_counts
+    raw_counts = get_raw_counts(data)
+
     snapshot = {
         "project_id": project_id,
         "working_dir": working_dir,
@@ -3860,8 +3863,8 @@ def _update_snapshot(project_id: str, working_dir: str, data: Dict[str, Any]):
         "stack": lr.get('architecture', {}).get('stack', ''),
         "current_goal": lr.get('intent', {}).get('current_goal', ''),
         "last_insight": (lr.get('lessons', {}).get('insights', []) or [''])[-1] if lr.get('lessons', {}).get('insights') else '',
-        "decisions_count": len(data.get('decisions', [])),
-        "avoid_count": len(data.get('avoid', [])),
+        "decisions_count": raw_counts["decisions_total"],
+        "avoid_count": raw_counts["avoid_total"],
         "indexed_at": datetime.now().isoformat()
     }
 
@@ -8793,24 +8796,11 @@ def run_memory_cleanup() -> str:
 
     _save_project(session.project_id, memory)
 
-    # Build stats report
+    # Build stats report using canonical counter module
+    from core.knowledge_counters import format_cleanup_report_counts
+
     lines = ["## Knowledge Cleanup Report\n"]
-
-    # Show protected items count
-    decisions_count = len(memory.get('decisions', []))
-    avoid_count = len(memory.get('avoid', []))
-    failed_count = len(lessons.get('failed_attempts', []))
-
-    lines.append("### 🔒 Protected (Never Archived)")
-    lines.append(f"- **Decisions:** {decisions_count}")
-    lines.append(f"- **Avoid Patterns:** {avoid_count}")
-    lines.append(f"- **Failed Attempts:** {failed_count}")
-    lines.append("")
-
-    lines.append("### 📊 Insights")
-    lines.append(f"**Active:** {len(still_active)}")
-    lines.append(f"**Newly Archived:** {len(newly_archived)}")
-    lines.append(f"**Total Archived:** {len(lessons['archived'])}")
+    lines.append(format_cleanup_report_counts(memory, newly_archived, still_active))
 
     if newly_archived:
         lines.append("\n### Archived Insights:")
@@ -8854,39 +8844,29 @@ def get_memory_stats() -> str:
 
     lessons = memory.get('live_record', {}).get('lessons', {})
     insights = lessons.get('insights', [])
-    archived = lessons.get('archived', [])
-    failed = lessons.get('failed_attempts', [])
 
-    # Use committed knowledge as primary source (same as fo_init)
-    # This ensures consistent counts across all tools
+    # Use canonical counter module for all counts
+    # Tries committed_knowledge first, falls back to memory
+    from core.knowledge_counters import get_full_knowledge_counters, format_memory_stats_block
+
+    counters = get_full_knowledge_counters(
+        memory=memory,
+        working_dir=session.working_dir,
+        use_committed=True,
+    )
+
+    # Determine if we used committed_knowledge or memory fallback
+    ck_available = True
     try:
         from core.committed_knowledge import read_committed_knowledge
         ck = read_committed_knowledge(session.working_dir)
-        # Filter superseded from counts
-        decisions_count = len([d for d in ck.get("decisions", []) if not d.get("superseded")])
-        # Use active_count if available, otherwise filter superseded
-        solutions_count = ck.get("active_count") or len([s for s in ck.get("solutions", []) if not s.get("superseded")])
-        avoid_count = len(ck.get("avoid", []))
-        ck_available = True
+        if not ck:
+            ck_available = False
     except Exception:
-        # Fallback to GLOBAL project memory if LOCAL unavailable
-        decisions_count = len([d for d in memory.get('decisions', []) if not d.get("superseded")])
-        solutions_count = len([s for s in memory.get('debug_sessions', []) if not s.get("superseded")])
-        avoid_count = len(memory.get('avoid', []))
         ck_available = False
 
-    lines = ["## Project Knowledge Statistics\n"]
-
-    # Primary counts (from committed knowledge for consistency with fo_init)
-    lines.append(f"**Decisions:** {decisions_count}")
-    lines.append(f"**Solved Bugs:** {solutions_count}")
-    lines.append(f"**Avoid Patterns:** {avoid_count}")
-    lines.append(f"**Active Insights:** {len(insights)}")
-    lines.append(f"**Archived Insights:** {len(archived)}")
-    lines.append(f"**Failed Attempts:** {len(failed)}")
-
-    if not ck_available:
-        lines.append("\n_Note: Using GLOBAL counts (LOCAL committed knowledge unavailable)_")
+    source_note = None if ck_available else "Note: Using GLOBAL counts (LOCAL committed knowledge unavailable)"
+    lines = [format_memory_stats_block(counters, include_insights=True, source_note=source_note)]
 
     if insights:
         # Normalize for stats
