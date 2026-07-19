@@ -103,11 +103,9 @@ def get_agent_opener_preview():
     This is for debugging/verification only - shows the same data
     that fo_init would use, formatted as it would appear to the agent.
 
-    Note: This does NOT include error gates, priorities, or reorientation
-    logic - those are handled in fo_init. This only shows the core
-    snapshot data formatted as text.
+    Uses render_snapshot_opener_v1() for consistent formatting.
     """
-    from core.project_snapshot import get_project_snapshot
+    from core.project_snapshot import get_project_snapshot, render_snapshot_opener_v1
 
     project_id = request.args.get('project_id')
     project_id, working_dir, error = _resolve_project_and_working_dir(project_id)
@@ -118,26 +116,8 @@ def get_agent_opener_preview():
 
     snapshot = get_project_snapshot(project_id, working_dir)
 
-    # Format as simple text preview (not full fo_init output)
-    lines = [f"🧠 Back to {snapshot.project_name}", ""]
-
-    if snapshot.goal:
-        lines.append(snapshot.goal)
-        if snapshot.work_area:
-            lines.append(f"Area: {snapshot.work_area}")
-        lines.append("")
-
-    if snapshot.last:
-        lines.append(f"Last:\n{snapshot.last}.")
-    if snapshot.next:
-        lines.append(f"Next:\n{snapshot.next}.")
-
-    if snapshot.last or snapshot.next:
-        lines.append("")
-
-    lines.append("Ready.")
-
-    opener_text = "\n".join(lines)
+    # Use V1 renderer for consistent format with fo_init
+    opener_text = render_snapshot_opener_v1(snapshot)
 
     return jsonify({
         "opener": opener_text,

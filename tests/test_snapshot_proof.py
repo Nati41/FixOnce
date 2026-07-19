@@ -55,11 +55,20 @@ class TestProjectSnapshotStructure:
         # Recorded Knowledge
         assert hasattr(snapshot, 'recent_decisions')
         assert hasattr(snapshot, 'recent_solutions')
+        assert hasattr(snapshot, 'knowledge_counts')
 
         # Live Evidence
         assert hasattr(snapshot, 'branch')
         assert hasattr(snapshot, 'uncommitted_files')
         assert hasattr(snapshot, 'recent_commits')
+
+        # Activity (V1)
+        assert hasattr(snapshot, 'connected_agent')
+        assert hasattr(snapshot, 'last_activity_at')
+
+        # Freshness (V1)
+        assert hasattr(snapshot, 'state_age_hours')
+        assert hasattr(snapshot, 'may_be_stale')
 
         # Meta
         assert hasattr(snapshot, 'snapshot_at')
@@ -401,6 +410,58 @@ class TestBackwardCompatibility:
         assert ".fixonce" in str(path), "Should use user data directory"
         assert "projects_v2" in str(path), "Should use projects_v2 subdirectory"
         assert str(path).startswith(str(Path.home())), "Should be under home directory"
+
+
+class TestSnapshotV1Renderer:
+    """Test the V1 opener renderer."""
+
+    def test_v1_renderer_includes_snapshot_header(self):
+        """V1 renderer includes Current Project Snapshot header."""
+        from core.project_snapshot import ProjectSnapshot, render_snapshot_opener_v1
+
+        snapshot = ProjectSnapshot(
+            project_id="test",
+            project_name="TestProject",
+            goal="Test goal",
+        )
+
+        result = render_snapshot_opener_v1(snapshot)
+
+        assert "── Current Project Snapshot ──" in result
+        assert "Goal:" in result
+        assert "Test goal" in result
+
+    def test_v1_renderer_shows_stale_warning(self):
+        """V1 renderer shows stale warning when may_be_stale is True."""
+        from core.project_snapshot import ProjectSnapshot, render_snapshot_opener_v1
+
+        snapshot = ProjectSnapshot(
+            project_id="test",
+            project_name="TestProject",
+            next="Do something",
+            may_be_stale=True,
+        )
+
+        result = render_snapshot_opener_v1(snapshot)
+
+        assert "⚠️ This suggestion may be outdated." in result
+
+    def test_v1_renderer_shows_knowledge_counts(self):
+        """V1 renderer shows knowledge counts."""
+        from core.project_snapshot import ProjectSnapshot, KnowledgeCounts, render_snapshot_opener_v1
+
+        snapshot = ProjectSnapshot(
+            project_id="test",
+            project_name="TestProject",
+            knowledge_counts=KnowledgeCounts(decisions=10, solutions=5, insights=3),
+        )
+
+        result = render_snapshot_opener_v1(snapshot)
+
+        assert "📊" in result
+        assert "10 Decisions" in result
+        assert "5 Solved Bugs" in result
+        assert "3 Insights" in result
 
 
 if __name__ == "__main__":

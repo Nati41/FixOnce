@@ -10816,96 +10816,84 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
         _fo_init_trace(f"FORMAT_INIT_RETURN_REORIENTATION length={len(result)}")
         return result
 
-    # CONTINUATION MODE: Build final opener with explicit grounding and stable formatting.
-    line1 = f"🧠 Back to {project_name}"
+    # =========================================================================
+    # CONTINUATION MODE V1: Use unified snapshot renderer
+    # =========================================================================
+    from core.project_snapshot import render_snapshot_opener_v1
 
-    context_bits = []
-    if current_goal:
-        context_bits.append(current_goal)
-    if work_area:
-        context_bits.append(f"Area: {work_area}")
-    elif short_summary and not current_goal:
-        context_bits.append(short_summary)
+    # Build opener using V1 renderer (same as Dashboard API)
+    result_lines = []
 
-    if stale_context and context_bits:
-        line2 = "Last recorded: " + " / ".join(context_bits)
-    elif context_bits:
-        line2 = "\n".join(context_bits)
-    else:
-        line2 = ""
+    # Header
+    result_lines.append(f"🧠 Back to {project_name}")
+    result_lines.append("")
 
-    detail_lines = []
-    if last_thing:
-        detail_lines.append(f"Last:\n{last_thing}.")
-    elif last_file:
-        detail_lines.append(f"Last file:\n{last_file}.")
-
-    if next_thing:
-        detail_lines.append(f"Next:\n{next_thing}.")
-
-    lines = [line1, ""]
-
-    # Navigator V1: Show non-critical priorities if any
-    if priorities and not gate_result.level in ("block", "warn"):
+    # Show non-critical priorities if any
+    if priorities and gate_result.level not in ("block", "warn"):
         priorities_text = _nav_format_priorities(priorities)
         if priorities_text:
-            lines.append(priorities_text)
-            lines.append("")
+            result_lines.append(priorities_text)
+            result_lines.append("")
 
-    if line2:
-        lines.append(line2)
-        lines.append("")
-    if detail_lines:
-        lines.extend(detail_lines)
-        lines.append("")
-    elif not line2:
-        lines.extend(["Ready to continue.", ""])
+    # Current Project Snapshot section
+    result_lines.append("── Current Project Snapshot ──")
+    result_lines.append("")
 
-    # Compact memory summary (counts only, no details)
-    try:
-        from core.knowledge_counters import get_live_project_counters, format_project_knowledge_line
-        counters = get_live_project_counters(data)
-        if any(counters.values()):
-            lines.append(format_project_knowledge_line(counters))
-            lines.append("")
-    except Exception:
-        pass  # Silent fallback if live counters unavailable
+    # Goal
+    if current_goal:
+        result_lines.append("Goal:")
+        result_lines.append(current_goal)
+        result_lines.append("")
 
-    # Subject Context Engine: Surface relevant knowledge for current work
-    try:
-        from core.committed_knowledge import read_committed_knowledge
-        ck = read_committed_knowledge(working_dir)
-        # Build memory dict with decisions from committed knowledge
-        memory_for_search = {
-            "decisions": ck.get("decisions", []) if 'ck' in dir() else [],
-            "avoid": ck.get("avoid", []) if 'ck' in dir() else [],
-            "debug_sessions": data.get("debug_sessions", []) if data else [],
-        }
-        subject_lines = _get_subject_context_for_init(working_dir, intent, memory_for_search, task_hint=task_hint)
-        if subject_lines:
-            lines.extend(subject_lines)
-            lines.append("")
-    except Exception as exc:
-        _log(f"[SubjectContext] Init error: {exc}")
-        pass  # Silent fallback
+    # Last completed
+    if last_thing:
+        result_lines.append("Last completed:")
+        result_lines.append(last_thing)
+        result_lines.append("")
 
-    # Protocol reminder: inform user that progress is tracked
-    lines.append("💾 Progress synced automatically")
-    lines.append("")
-
-    # Navigator V1: Add suggested next action based on context
+    # Suggested next step
     if next_thing:
-        lines.append(f"→ Suggested: {next_thing}")
-        lines.append("")
-    elif priorities:
-        top_priority = priorities[0]
-        lines.append(f"→ Suggested: {top_priority['action']}")
-        lines.append(f"  ({top_priority['item']})")
-        lines.append("")
+        result_lines.append("Suggested next step:")
+        result_lines.append(next_thing)
 
-    lines.append("Ready.")
+        # Source and time (from snapshot)
+        source_parts = []
+        if snapshot.connected_agent:
+            source_parts.append(f"by {snapshot.connected_agent}")
+        if snapshot.updated_at:
+            age_hours = snapshot.state_age_hours
+            if age_hours < 1:
+                age_str = f"{int(age_hours * 60)}m ago"
+            elif age_hours < 24:
+                age_str = f"{int(age_hours)}h ago"
+            else:
+                age_str = f"{int(age_hours / 24)}d ago"
+            source_parts.append(age_str)
+        if source_parts:
+            result_lines.append(f"({', '.join(source_parts)})")
 
-    result = "\n".join(lines)
+        # Stale warning
+        if snapshot.may_be_stale:
+            result_lines.append("⚠️ This suggestion may be outdated.")
+
+        result_lines.append("")
+
+    # Knowledge counts
+    k = snapshot.knowledge_counts
+    if k.decisions or k.solutions or k.insights:
+        parts = []
+        if k.decisions:
+            parts.append(f"{k.decisions} Decisions")
+        if k.solutions:
+            parts.append(f"{k.solutions} Solved Bugs")
+        if k.insights:
+            parts.append(f"{k.insights} Insights")
+        result_lines.append(f"📊 {' · '.join(parts)}")
+        result_lines.append("")
+
+    result_lines.append("Ready.")
+
+    result = "\n".join(result_lines)
     _fo_init_trace(f"FORMAT_INIT_RETURN_OK length={len(result)}")
     return result
 
