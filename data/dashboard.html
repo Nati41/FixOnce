@@ -3342,6 +3342,88 @@ body.native-app .header-btn {
   color: var(--text);
 }
 
+/* Current Project Snapshot */
+.snapshot-section {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+}
+
+.snapshot-header {
+  margin-bottom: 12px;
+}
+
+.snapshot-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.snapshot-path {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.snapshot-divider {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+  margin: 16px 0;
+  letter-spacing: 0.3px;
+}
+
+.snapshot-field {
+  margin-bottom: 14px;
+}
+
+.snapshot-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.snapshot-value {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.snapshot-source {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.snapshot-stale {
+  font-size: 12px;
+  color: var(--amber);
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: var(--amber-soft);
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.snapshot-counts {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.snapshot-counts span {
+  font-weight: 600;
+  color: var(--green);
+}
+
 .footer {
   margin-top: 40px;
   padding-top: 20px;
@@ -3387,58 +3469,35 @@ body.native-app .header-btn {
   <span id="aiConnectionText">Connected now: Claude</span>
 </div>
 
-<!-- Project Section -->
-<div class="section" id="projectSection">
-  <div class="section-label">Project connected to FixOnce</div>
-  <div class="project-title" id="projectName">FixOnce</div>
-  <div class="project-path" id="projectPath">/Users/haimdayan/Desktop/FixOnce</div>
-  <div class="project-description">
-    To work with FixOnce on this project, open your AI tool and say "hi".
-    FixOnce will remember your decisions, fixes, and where you left off.
+<!-- Current Project Snapshot -->
+<div class="section snapshot-section" id="snapshotSection">
+  <div class="snapshot-header">
+    <span class="snapshot-title" id="projectName">FixOnce</span>
+    <span class="snapshot-path" id="projectPath"></span>
   </div>
-  <div class="memory-counts-line" id="memoryCountsLine">
-    Project Knowledge: <span id="decisionCount">0</span> Decisions · <span id="bugCount">0</span> Solved Bugs · <span id="avoidCount">0</span> Avoid Patterns
+
+  <div class="snapshot-divider">── Current Project Snapshot ──</div>
+
+  <div class="snapshot-field" id="snapshotGoalField">
+    <div class="snapshot-label">Goal:</div>
+    <div class="snapshot-value" id="snapshotGoal">—</div>
   </div>
-</div>
 
-<!-- Where We Stopped Section -->
-<div class="section" id="contextSection">
-  <div class="section-label">Where we stopped</div>
-  <div class="context-flow">
-    <div class="context-row">
-      <span class="context-key">Last</span>
-      <span class="context-value">
-        <span class="context-text" id="lastChange">—</span>
-        <span class="context-more" id="lastMore" style="display: none;" onclick="toggleContextText('last')">more</span>
-      </span>
-    </div>
-    <div class="context-row">
-      <span class="context-key">Next Action</span>
-      <span class="context-value">
-        <span class="context-text" id="nextStep">—</span>
-        <span class="context-more" id="nextMore" style="display: none;" onclick="toggleContextText('next')">more</span>
-      </span>
-    </div>
-    <div class="context-row" id="recentRow" style="display: none;">
-      <span class="context-key">Recent</span>
-      <span class="context-value">
-        <span class="context-text" id="recentAction">—</span>
-      </span>
-    </div>
+  <div class="snapshot-field" id="snapshotLastField">
+    <div class="snapshot-label">Last completed:</div>
+    <div class="snapshot-value" id="snapshotLast">—</div>
   </div>
-  <div class="context-meta" id="syncTime"></div>
-</div>
 
-<!-- Saved Memories -->
-<div class="section" id="memoriesGroup" style="display: none;">
-  <div class="section-label">Saved memories</div>
-  <div class="saved-list" id="memoriesList"></div>
-</div>
+  <div class="snapshot-field" id="snapshotNextField">
+    <div class="snapshot-label">Suggested next step:</div>
+    <div class="snapshot-value" id="snapshotNext">—</div>
+    <div class="snapshot-source" id="snapshotSource"></div>
+    <div class="snapshot-stale" id="snapshotStale" style="display: none;">⚠️ This suggestion may be outdated.</div>
+  </div>
 
-<!-- Code Changes -->
-<div class="section" id="codeChangesGroup" style="display: none;">
-  <div class="section-label">Code changes</div>
-  <div class="saved-list" id="codeChangesList"></div>
+  <div class="snapshot-counts" id="snapshotCounts">
+    📊 <span id="decisionCount">0</span> Decisions · <span id="bugCount">0</span> Solved Bugs · <span id="avoidCount">0</span> Insights
+  </div>
 </div>
 
 <!-- Pending Memories Section -->
@@ -3643,6 +3702,108 @@ async function fetchOnboarding() {
     renderIntegrations(data.client_onboarding || {});
   } catch (e) {
     logPollingError('Onboarding fetch error:', e);
+  }
+}
+
+async function fetchSnapshot() {
+  try {
+    const res = await fetch(`${API}/api/snapshot`, {
+      headers: { 'X-Dashboard': 'true' },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!res.ok) return;
+    const snapshot = await res.json();
+    renderSnapshot(snapshot);
+  } catch (e) {
+    logPollingError('Snapshot fetch error:', e);
+  }
+}
+
+function renderSnapshot(snapshot) {
+  const projectNameEl = document.getElementById('projectName');
+  const projectPathEl = document.getElementById('projectPath');
+  const goalEl = document.getElementById('snapshotGoal');
+  const goalField = document.getElementById('snapshotGoalField');
+  const lastEl = document.getElementById('snapshotLast');
+  const lastField = document.getElementById('snapshotLastField');
+  const nextEl = document.getElementById('snapshotNext');
+  const nextField = document.getElementById('snapshotNextField');
+  const sourceEl = document.getElementById('snapshotSource');
+  const staleEl = document.getElementById('snapshotStale');
+  const decisionEl = document.getElementById('decisionCount');
+  const bugEl = document.getElementById('bugCount');
+  const avoidEl = document.getElementById('avoidCount');
+
+  // Project identity
+  if (projectNameEl) projectNameEl.textContent = snapshot.project_name || 'FixOnce';
+  if (projectPathEl) {
+    const path = snapshot.working_dir || '';
+    projectPathEl.textContent = path;
+    projectPathEl.style.display = path ? '' : 'none';
+  }
+
+  // Goal
+  if (goalEl && goalField) {
+    if (snapshot.goal) {
+      goalEl.textContent = snapshot.goal;
+      goalField.style.display = '';
+    } else {
+      goalField.style.display = 'none';
+    }
+  }
+
+  // Last completed
+  if (lastEl && lastField) {
+    if (snapshot.last) {
+      lastEl.textContent = snapshot.last;
+      lastField.style.display = '';
+    } else {
+      lastField.style.display = 'none';
+    }
+  }
+
+  // Suggested next step
+  if (nextEl && nextField) {
+    if (snapshot.next) {
+      nextEl.textContent = snapshot.next;
+      nextField.style.display = '';
+
+      // Source info (agent + time)
+      const sourceParts = [];
+      if (snapshot.connected_agent) {
+        sourceParts.push(`by ${snapshot.connected_agent}`);
+      }
+      if (snapshot.state_age_hours !== undefined) {
+        sourceParts.push(formatTimeAgo(snapshot.state_age_hours));
+      }
+      if (sourceEl) {
+        sourceEl.textContent = sourceParts.length ? `(${sourceParts.join(', ')})` : '';
+      }
+
+      // Stale warning
+      if (staleEl) {
+        staleEl.style.display = snapshot.may_be_stale ? '' : 'none';
+      }
+    } else {
+      nextField.style.display = 'none';
+    }
+  }
+
+  // Knowledge counts
+  const counts = snapshot.knowledge_counts || {};
+  if (decisionEl) decisionEl.textContent = counts.decisions || 0;
+  if (bugEl) bugEl.textContent = counts.solutions || 0;
+  if (avoidEl) avoidEl.textContent = counts.insights || 0;
+}
+
+function formatTimeAgo(hours) {
+  if (hours < 1) {
+    const minutes = Math.floor(hours * 60);
+    return minutes < 1 ? 'just now' : `${minutes}m ago`;
+  } else if (hours < 24) {
+    return `${Math.floor(hours)}h ago`;
+  } else {
+    return `${Math.floor(hours / 24)}d ago`;
   }
 }
 
@@ -5232,13 +5393,14 @@ async function loadAITools() {
 loadPowerState();
 fetchData();
 fetchOnboarding();
+fetchSnapshot();
 fetchActivity();
 loadPendingMemories();
 loadPendingKnowledge();
 loadAITools();
 loadRecentMemories();
 loadCodeChanges();
-setInterval(() => { fetchData(); fetchOnboarding(); fetchActivity(); loadAITools(); loadPendingMemories(); loadPendingKnowledge(); loadRecentMemories(); loadCodeChanges(); }, 5000);
+setInterval(() => { fetchData(); fetchOnboarding(); fetchSnapshot(); fetchActivity(); loadAITools(); loadPendingMemories(); loadPendingKnowledge(); loadRecentMemories(); loadCodeChanges(); }, 5000);
 </script>
 </body>
 </html>

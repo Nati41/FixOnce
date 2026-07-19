@@ -39,6 +39,7 @@ class ProjectSnapshot:
     # Identity
     project_id: str
     project_name: str
+    working_dir: str = ""
 
     # Declared State (from fo_sync -> live_record.intent)
     goal: str = ""
@@ -73,6 +74,7 @@ class ProjectSnapshot:
         return {
             "project_id": self.project_id,
             "project_name": self.project_name,
+            "working_dir": self.working_dir,
             "goal": self.goal,
             "last": self.last,
             "next": self.next,
@@ -425,6 +427,7 @@ def get_project_snapshot(
     return ProjectSnapshot(
         project_id=project_id,
         project_name=project_name,
+        working_dir=working_dir,
         goal=state.get("goal", ""),
         last=state.get("last", ""),
         next=state.get("next", ""),
