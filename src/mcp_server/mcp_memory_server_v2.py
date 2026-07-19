@@ -10706,10 +10706,19 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
             _fo_init_trace("RESUME_STATE_LOAD_AFTER error")
             pass
 
+    # =========================================================================
+    # SNAPSHOT ARCHITECTURE: Single source of truth for project state
+    # Both fo_init and Dashboard API use get_project_snapshot()
+    # =========================================================================
+    from core.project_snapshot import get_project_snapshot
+    _fo_init_trace("FORMAT_INIT_SNAPSHOT_BEFORE")
+    snapshot = get_project_snapshot(project_id, working_dir)
+    _fo_init_trace(f"FORMAT_INIT_SNAPSHOT_AFTER goal={snapshot.goal[:30] if snapshot.goal else 'none'}...")
+
+    # Keep intent reference for backward compatibility with reorientation mode
     intent = data.get("live_record", {}).get("intent", {}) if data else {}
     _fo_init_trace(f"FORMAT_INIT_INTENT_LOADED keys={list(intent.keys()) if isinstance(intent, dict) else 'non-dict'}")
 
-    # Determine which source is fresher (intent from fo_sync, resume_state from save_resume_state)
     def parse_timestamp(ts):
         if not ts:
             return None
@@ -10726,32 +10735,19 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
             return value
         return value[:limit - 1].rstrip() + "…"
 
-    intent_time = parse_timestamp(intent.get("updated_at"))
-    resume_time = parse_timestamp(resume_state.get("updated_at") if resume_state else None)
-    now = datetime.now(intent_time.tzinfo) if intent_time and intent_time.tzinfo else datetime.now()
+    # Use snapshot as PRIMARY source, resume_state as FALLBACK
+    # This ensures Dashboard and fo_init see the same data
+    current_goal = snapshot.goal
+    work_area = snapshot.work_area
+    last_thing = snapshot.last
+    next_thing = snapshot.next
 
-    # Use fresher source, default to intent (more commonly updated via fo_sync)
-    use_intent_first = True
-    if resume_time and intent_time:
-        use_intent_first = intent_time >= resume_time
-    elif resume_time and not intent_time:
-        use_intent_first = False
+    # Resume_state fallbacks (for fields not in snapshot)
+    if not last_thing and resume_state:
+        last_thing = resume_state.get("last_completed_step", "")
+    if not next_thing and resume_state:
+        next_thing = resume_state.get("next_recommended_action", "") or resume_state.get("active_task", "")
 
-    # Extract continuation data based on freshness
-    if use_intent_first:
-        last_thing = intent.get("last_change") or (resume_state.get("last_completed_step") if resume_state else None)
-        next_thing = intent.get("next_step") or (resume_state.get("next_recommended_action") if resume_state else None)
-    else:
-        last_thing = (resume_state.get("last_completed_step") if resume_state else None) or intent.get("last_change")
-        next_thing = (resume_state.get("next_recommended_action") if resume_state else None) or intent.get("next_step")
-
-    # Fallback for next_thing
-    if not next_thing and resume_state and resume_state.get("active_task"):
-        next_thing = resume_state['active_task']
-
-    # Add grounded context fields so the opening reflects real saved state.
-    current_goal = intent.get("current_goal", "")
-    work_area = intent.get("work_area", "")
     last_file = intent.get("last_file", "")
     short_summary = resume_state.get("short_summary") if resume_state else ""
 
@@ -10762,7 +10758,13 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
     last_file = clean_text(last_file, limit=90)
     short_summary = clean_text(short_summary)
 
-    freshest_time = intent_time if use_intent_first else resume_time
+    # Freshness from snapshot
+    intent_time = snapshot.updated_at
+    resume_time = parse_timestamp(resume_state.get("updated_at") if resume_state else None)
+    now = datetime.now(intent_time.tzinfo) if intent_time and intent_time.tzinfo else datetime.now()
+
+    # Use snapshot time as primary, resume_state time as fallback
+    freshest_time = intent_time or resume_time
     stale_context = False
     days_since_last = 0
     if freshest_time:

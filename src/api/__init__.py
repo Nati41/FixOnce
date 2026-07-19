@@ -111,6 +111,9 @@ from .pending import pending_bp
 # Knowledge V2 (Git-style knowledge objects)
 from .knowledge import knowledge_bp
 
+# Snapshot API (unified source for Dashboard and fo_init)
+from .snapshot import snapshot_bp
+
 
 def register_blueprints(app):
     """Register all blueprints with the Flask app."""
@@ -125,3 +128,4 @@ def register_blueprints(app):
     app.register_blueprint(installer_bp)  # /install + /api/installer/* endpoints
     app.register_blueprint(pending_bp)  # /api/pending/* endpoints (Memory Review)
     app.register_blueprint(knowledge_bp)  # /api/knowledge/* endpoints (V2)
+    app.register_blueprint(snapshot_bp)  # /api/snapshot - unified source for Dashboard/fo_init
