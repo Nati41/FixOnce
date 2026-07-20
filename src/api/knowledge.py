@@ -254,6 +254,82 @@ def create_knowledge_commit():
         })
 
 
+@knowledge_bp.route('/api/knowledge/integrity', methods=['GET'])
+def get_integrity_report():
+    """
+    Generate integrity report for solution records.
+
+    This is READ-ONLY - reports issues but does not modify data.
+
+    Checks:
+    - Empty/invalid content (corrupted records)
+    - Missing or duplicate IDs
+    - Canonical records missing from Project Memory
+    - Project Memory records missing from Canonical
+    - Superseded records incorrectly counted as active
+
+    Query params:
+        project_id: Optional. Uses active project if not provided.
+
+    Returns:
+        Detailed integrity report with issues and recommendations.
+    """
+    try:
+        from managers.multi_project_manager import get_active_project_id, load_project_memory
+        from core.committed_knowledge import read_committed_knowledge
+        from core.solution_validator import generate_integrity_report
+
+        # Get project
+        project_id = request.args.get("project_id")
+        if not project_id:
+            project_id = get_active_project_id()
+
+        if not project_id:
+            return jsonify({
+                "status": "no_project",
+                "message": "No project ID",
+            })
+
+        # Load Project Memory
+        memory = load_project_memory(project_id) or {}
+        pm_records = memory.get("debug_sessions", [])
+
+        # Get working_dir for committed knowledge
+        working_dir = memory.get("project_info", {}).get("working_dir")
+        if not working_dir:
+            return jsonify({
+                "status": "error",
+                "message": "No working_dir found for project",
+            })
+
+        # Load Committed Knowledge
+        ck = read_committed_knowledge(working_dir)
+        ck_records = ck.get("solutions", [])
+
+        # Generate report
+        report = generate_integrity_report(pm_records, ck_records)
+        report["project_id"] = project_id
+        report["working_dir"] = working_dir
+
+        # Add status based on issues
+        if report["summary"]["error_count"] > 0:
+            report["status"] = "issues_found"
+        elif report["summary"]["warning_count"] > 0:
+            report["status"] = "warnings"
+        else:
+            report["status"] = "healthy"
+
+        return jsonify(report)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+        })
+
+
 @knowledge_bp.route('/api/knowledge/commits', methods=['GET'])
 def list_knowledge_commits():
     """

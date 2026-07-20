@@ -970,14 +970,28 @@ def api_dashboard_snapshot():
                 decisions = memory.get("decisions", [])
                 avoids = memory.get("avoid", [])
                 project_rules = memory.get("project_rules", [])
-                live_counts = get_live_project_counters(memory)
+
+                # Use CANONICAL provider for consistent counts
+                from core.knowledge_counters import get_canonical_knowledge_counts
+                working_dir = memory.get("project_info", {}).get("working_dir")
+                if working_dir:
+                    canonical = get_canonical_knowledge_counts(working_dir)
+                    count_decisions = canonical.decisions
+                    count_avoid = canonical.avoid
+                    count_solved = canonical.solutions
+                else:
+                    # Fallback for edge case
+                    live_counts = get_live_project_counters(memory)
+                    count_decisions = live_counts["decisions"]
+                    count_avoid = live_counts["avoid"]
+                    count_solved = live_counts["solved"]
 
                 snapshot["knowledge"]["total_insights"] = len(insights)
-                snapshot["knowledge"]["total_decisions"] = live_counts["decisions"]
-                snapshot["knowledge"]["total_avoids"] = live_counts["avoid"]
-                snapshot["knowledge"]["total_solutions"] = live_counts["solved"]
-                snapshot["knowledge"]["solutions_count"] = live_counts["solved"]
-                snapshot["knowledge"]["solved_bugs"] = live_counts["solved"]
+                snapshot["knowledge"]["total_decisions"] = count_decisions
+                snapshot["knowledge"]["total_avoids"] = count_avoid
+                snapshot["knowledge"]["total_solutions"] = count_solved
+                snapshot["knowledge"]["solutions_count"] = count_solved
+                snapshot["knowledge"]["solved_bugs"] = count_solved
                 snapshot["knowledge"]["total_rules"] = len([r for r in project_rules if r.get("enabled", True)])
                 snapshot["knowledge"]["project_rules"] = project_rules
                 snapshot["knowledge"]["decisions"] = decisions[-10:]  # Last 10
@@ -1730,12 +1744,20 @@ def api_tray_status():
             if _known_agent_name(actor):
                 ai_client = _agent_display_name(actor)
 
-        live_counts = get_live_project_counters(memory)
-        tray_counts = {
-            "decisions": live_counts["decisions"],
-            "solved": live_counts["solved"],
-            "avoid": live_counts["avoid"],
-        }
+        # Use CANONICAL provider - same source as Dashboard/fo_init
+        from core.knowledge_counters import get_canonical_knowledge_counts
+        working_dir = memory.get("project_info", {}).get("working_dir") if memory else None
+        if working_dir:
+            canonical = get_canonical_knowledge_counts(working_dir)
+            tray_counts = canonical.to_legacy_dict()
+        else:
+            # Fallback to legacy if no working_dir (shouldn't happen)
+            live_counts = get_live_project_counters(memory)
+            tray_counts = {
+                "decisions": live_counts["decisions"],
+                "solved": live_counts["solved"],
+                "avoid": live_counts["avoid"],
+            }
 
         # Get last sync time
         last_sync = session_health.get("last_success_at")

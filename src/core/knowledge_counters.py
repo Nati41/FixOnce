@@ -5,6 +5,12 @@ This is the SINGLE SOURCE OF TRUTH for all knowledge counting in FixOnce.
 All counter logic MUST live here. MCP, Dashboard, Tray, and API must call
 these functions instead of computing counts inline.
 
+CANONICAL PROVIDER: get_canonical_knowledge_counts()
+----------------------------------------------------
+ALL UI and API consumers MUST use this function for knowledge counts.
+It reads from Committed Knowledge (.fixonce/ in project) which is the
+authoritative source shared across all agents and sessions.
+
 Counter types:
 - decisions: Active (non-superseded) decisions
 - solved: Active (non-superseded) solutions/debug_sessions
@@ -15,8 +21,94 @@ Counter types:
 """
 
 from typing import Any, Dict, Optional
+from dataclasses import dataclass
 from pathlib import Path
 
+
+# =============================================================================
+# CANONICAL PROVIDER - Single source of truth for ALL knowledge counts
+# =============================================================================
+
+@dataclass
+class CanonicalKnowledgeCounts:
+    """
+    Knowledge counts from canonical source (committed knowledge).
+
+    This is the single source of truth for all knowledge counting.
+    All fields represent ACTIVE (non-superseded) counts.
+    """
+    decisions: int = 0
+    solutions: int = 0
+    avoid: int = 0
+    insights: int = 0
+
+    def to_dict(self) -> Dict[str, int]:
+        """Return dict for JSON serialization."""
+        return {
+            "decisions": self.decisions,
+            "solutions": self.solutions,
+            "avoid": self.avoid,
+            "insights": self.insights,
+        }
+
+    def to_legacy_dict(self) -> Dict[str, int]:
+        """Return dict with legacy 'solved' key for backward compatibility."""
+        return {
+            "decisions": self.decisions,
+            "solved": self.solutions,
+            "avoid": self.avoid,
+        }
+
+
+def get_canonical_knowledge_counts(working_dir: str) -> CanonicalKnowledgeCounts:
+    """
+    THE SINGLE SOURCE OF TRUTH for knowledge counts.
+
+    ALL UIs and APIs MUST use this function:
+    - Tray (api/status.py:api_tray_status)
+    - Dashboard (/api/snapshot)
+    - fo_init (via project_snapshot)
+    - /api/status
+    - Reorientation mode
+    - multi_project_manager
+
+    Data source: Committed Knowledge (.fixonce/ in project)
+    This is the authoritative source that:
+    - Is shared across all agents and sessions
+    - Is git-portable and team-shared
+    - Contains validated/committed knowledge only
+
+    Args:
+        working_dir: Project working directory containing .fixonce/
+
+    Returns:
+        CanonicalKnowledgeCounts with active (non-superseded) counts
+    """
+    try:
+        from core.committed_knowledge import read_committed_knowledge
+        ck = read_committed_knowledge(working_dir)
+
+        # Filter superseded items - only count ACTIVE knowledge
+        active_decisions = [d for d in ck.get("decisions", [])
+                          if isinstance(d, dict) and not d.get("superseded")]
+        active_solutions = [s for s in ck.get("solutions", [])
+                          if isinstance(s, dict) and not s.get("superseded")]
+        avoid_patterns = ck.get("avoid", [])
+        insights = ck.get("insights", [])
+
+        return CanonicalKnowledgeCounts(
+            decisions=len(active_decisions),
+            solutions=len(active_solutions),
+            avoid=len(avoid_patterns) if isinstance(avoid_patterns, list) else 0,
+            insights=len(insights) if isinstance(insights, list) else 0,
+        )
+    except Exception:
+        return CanonicalKnowledgeCounts()
+
+
+# =============================================================================
+# LEGACY FUNCTIONS - Deprecated, will be removed after migration
+# =============================================================================
 
 def get_live_project_counters(memory: Dict[str, Any] | None) -> Dict[str, int]:
     """

@@ -1060,14 +1060,24 @@ def sync_from_committed(working_dir: str, memory: Dict[str, Any]) -> Dict[str, A
             merged_insights += 1
 
     # Merge solutions (debug_sessions - avoid duplicates by problem)
+    # Validate each solution before merging
+    from core.solution_validator import is_valid_solution_content
     existing_solutions = {s.get("problem", ""): s for s in memory.get("debug_sessions", [])}
     merged_solutions = 0
+    skipped_invalid = 0
     for solution in committed["solutions"]:
         problem = solution.get("problem", "")
-        if problem and problem not in existing_solutions:
+        sol_text = solution.get("solution", "")
+        # Validate content before merging
+        if not is_valid_solution_content(problem, sol_text):
+            skipped_invalid += 1
+            continue
+        if problem not in existing_solutions:
             solution["source"] = "repo"
             memory.setdefault("debug_sessions", []).append(solution)
             merged_solutions += 1
+    if skipped_invalid > 0:
+        print(f"[CommittedKnowledge] Skipped {skipped_invalid} invalid solution records")
 
     if committed.get("agent_audit"):
         memory["agent_audit"] = list(committed["agent_audit"])[-200:]

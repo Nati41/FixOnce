@@ -21,9 +21,10 @@ import json
 
 @dataclass
 class KnowledgeCounts:
-    """Project knowledge statistics."""
+    """Project knowledge statistics - active items only (excludes superseded)."""
     decisions: int = 0
     solutions: int = 0
+    avoid: int = 0
     insights: int = 0
 
 
@@ -51,6 +52,7 @@ class ProjectSnapshot:
     # Recorded Knowledge (from committed_knowledge)
     recent_decisions: List[Dict] = field(default_factory=list)
     recent_solutions: List[Dict] = field(default_factory=list)
+    recent_avoid: List[Dict] = field(default_factory=list)
     knowledge_counts: KnowledgeCounts = field(default_factory=KnowledgeCounts)
 
     # Live Evidence (computed fresh)
@@ -82,9 +84,11 @@ class ProjectSnapshot:
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "recent_decisions": self.recent_decisions,
             "recent_solutions": self.recent_solutions,
+            "recent_avoid": self.recent_avoid,
             "knowledge_counts": {
                 "decisions": self.knowledge_counts.decisions,
                 "solutions": self.knowledge_counts.solutions,
+                "avoid": self.knowledge_counts.avoid,
                 "insights": self.knowledge_counts.insights,
             },
             "branch": self.branch,
@@ -262,15 +266,19 @@ def _load_declared_state(project_id: str) -> Dict[str, Any]:
 
 def _query_recorded_knowledge(working_dir: str) -> Dict[str, Any]:
     """
-    Query recent decisions and solutions from committed knowledge.
+    Query recent decisions, solutions, and avoid patterns from committed knowledge.
 
-    Source: .fixonce/decisions.json, .fixonce/solutions.json
+    Source: .fixonce/decisions.json, .fixonce/solutions.json, .fixonce/avoid.json
+
+    IMPORTANT: Counts exclude superseded items to match canonical counter semantics.
+    This ensures fo_init and Dashboard show identical knowledge counts.
 
     Returns:
-        {"recent_decisions": [...], "recent_solutions": [...], "counts": KnowledgeCounts}
+        {"recent_decisions": [...], "recent_solutions": [...], "recent_avoid": [...], "counts": KnowledgeCounts}
     """
     recent_decisions = []
     recent_solutions = []
+    recent_avoid = []
     counts = KnowledgeCounts()
 
     try:
@@ -284,18 +292,30 @@ def _query_recorded_knowledge(working_dir: str) -> Dict[str, Any]:
                 reverse=True
             )
 
-        decisions = ck.get("decisions", [])
-        solutions = ck.get("solutions", [])
+        def filter_active(items: List) -> List[Dict]:
+            """Filter out superseded items - only count active knowledge."""
+            return [i for i in items if isinstance(i, dict) and not i.get("superseded")]
+
+        # Raw lists from committed knowledge
+        all_decisions = ck.get("decisions", [])
+        all_solutions = ck.get("solutions", [])
+        avoid_patterns = ck.get("avoid", [])
         insights = ck.get("insights", [])
 
-        # Get 3 most recent of each (V1: compact display)
-        recent_decisions = sort_by_time(decisions)[:3]
-        recent_solutions = sort_by_time(solutions)[:3]
+        # Filter to active items only (exclude superseded)
+        active_decisions = filter_active(all_decisions)
+        active_solutions = filter_active(all_solutions)
 
-        # Counts
+        # Get 3 most recent active items for display
+        recent_decisions = sort_by_time(active_decisions)[:3]
+        recent_solutions = sort_by_time(active_solutions)[:3]
+        recent_avoid = sort_by_time(avoid_patterns)[:3]
+
+        # Counts use ACTIVE items only (same as get_live_project_counters)
         counts = KnowledgeCounts(
-            decisions=len(decisions),
-            solutions=len(solutions),
+            decisions=len(active_decisions),
+            solutions=len(active_solutions),
+            avoid=len(avoid_patterns),
             insights=len(insights),
         )
 
@@ -305,6 +325,7 @@ def _query_recorded_knowledge(working_dir: str) -> Dict[str, Any]:
     return {
         "recent_decisions": recent_decisions,
         "recent_solutions": recent_solutions,
+        "recent_avoid": recent_avoid,
         "counts": counts,
     }
 
@@ -435,6 +456,7 @@ def get_project_snapshot(
         updated_at=state.get("updated_at"),
         recent_decisions=knowledge["recent_decisions"],
         recent_solutions=knowledge["recent_solutions"],
+        recent_avoid=knowledge["recent_avoid"],
         knowledge_counts=knowledge["counts"],
         branch=branch,
         uncommitted_files=uncommitted_files,
@@ -535,14 +557,16 @@ def render_snapshot_opener_v1(snapshot: ProjectSnapshot) -> str:
 
         lines.append("")
 
-    # Knowledge counts
+    # Knowledge counts - show active knowledge (superseded excluded)
     k = snapshot.knowledge_counts
-    if k.decisions or k.solutions or k.insights:
+    if k.decisions or k.solutions or k.avoid or k.insights:
         parts = []
         if k.decisions:
             parts.append(f"{k.decisions} Decisions")
         if k.solutions:
             parts.append(f"{k.solutions} Solved Bugs")
+        if k.avoid:
+            parts.append(f"{k.avoid} Avoid Patterns")
         if k.insights:
             parts.append(f"{k.insights} Insights")
         lines.append(f"📊 {' · '.join(parts)}")

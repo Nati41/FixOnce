@@ -15,10 +15,40 @@ def _resolve_project_and_working_dir(project_id: Optional[str] = None) -> Tuple[
     """
     Resolve project_id and working_dir.
 
+    IMPORTANT: Uses the SAME resolution as fo_init to ensure identical project_id.
+    When working_dir is available, derives project_id from ProjectContext.from_path()
+    rather than relying on active_project.json which may be stale.
+
     Returns:
         (project_id, working_dir, error_message)
     """
-    # Resolve project_id if not provided
+    working_dir = None
+
+    # Step 1: Get working_dir from active_project.json first
+    try:
+        from pathlib import Path
+        import json
+        active_file = Path.home() / ".fixonce" / "active_project.json"
+        if active_file.exists():
+            with open(active_file, 'r', encoding='utf-8') as f:
+                active_data = json.load(f)
+            working_dir = active_data.get("working_dir")
+    except Exception:
+        pass
+
+    # Step 2: If we have working_dir, derive project_id from it (same as fo_init)
+    # This ensures fo_init and /api/snapshot resolve to the SAME project_id
+    if working_dir:
+        try:
+            from core.project_context import ProjectContext
+            # Use the same method as fo_init's _get_project_id()
+            resolved_project_id = ProjectContext.from_path(working_dir)
+            if resolved_project_id:
+                return resolved_project_id, working_dir, None
+        except Exception:
+            pass
+
+    # Step 3: Fallback to provided project_id or active_project_id
     if not project_id:
         try:
             from managers.multi_project_manager import get_active_project_id
@@ -29,33 +59,17 @@ def _resolve_project_and_working_dir(project_id: Optional[str] = None) -> Tuple[
     if not project_id:
         return None, None, "No project_id provided and no active project"
 
-    # Resolve working_dir
-    working_dir = None
-
-    # Try 1: From project file -> project_info.working_dir
-    try:
-        from core.project_context import ProjectContext
-        import json
-        project_file = ProjectContext.get_project_file(project_id)
-        if project_file.exists():
-            with open(project_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            project_info = data.get("project_info", {})
-            working_dir = project_info.get("working_dir")
-    except Exception:
-        pass
-
-    # Try 2: From active_project.json
+    # Step 4: Try to get working_dir from project file if still missing
     if not working_dir:
         try:
-            from pathlib import Path
-            active_file = Path.home() / ".fixonce" / "active_project.json"
-            if active_file.exists():
-                import json
-                with open(active_file, 'r', encoding='utf-8') as f:
-                    active_data = json.load(f)
-                if active_data.get("active_id") == project_id:
-                    working_dir = active_data.get("working_dir")
+            from core.project_context import ProjectContext
+            import json
+            project_file = ProjectContext.get_project_file(project_id)
+            if project_file.exists():
+                with open(project_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                project_info = data.get("project_info", {})
+                working_dir = project_info.get("working_dir")
         except Exception:
             pass
 

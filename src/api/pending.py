@@ -196,21 +196,34 @@ def approve_pending():
                 if item.get("id"):
                     project_item_ids.append(item["id"])
 
-            # Add solutions
+            # Add solutions - WITH VALIDATION
             if not memory.get("debug_sessions"):
                 memory["debug_sessions"] = []
+            from core.solution_validator import validate_solution_record
             for item in items.get("solutions", []):
-                memory["debug_sessions"].append({
+                # Build record for validation
+                solution_record = {
                     "problem": item.get("problem", ""),
                     "solution": item.get("solution", ""),
                     "files_changed": item.get("files", []),
                     "importance": "high",
                     "timestamp": item.get("timestamp") or item.get("created_at"),
                     **attribution,
-                })
-                saved_counts["solutions"] += 1
-                if item.get("id"):
-                    project_item_ids.append(item["id"])
+                }
+                # Validate before persisting
+                validation = validate_solution_record(solution_record)
+                if validation.valid:
+                    memory["debug_sessions"].append(validation.record)
+                    saved_counts["solutions"] += 1
+                    if item.get("id"):
+                        project_item_ids.append(item["id"])
+                else:
+                    # REJECT invalid records - do not silently accept
+                    warnings.append(
+                        f"Solution rejected (invalid content): {validation.errors}"
+                    )
+                    if item.get("id"):
+                        kept_ids.append(item["id"])
 
             # Add custom/notes
             if items.get("custom"):

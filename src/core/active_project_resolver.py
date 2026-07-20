@@ -397,14 +397,24 @@ def get_active_project_for_dashboard() -> Dict[str, Any]:
             if project_file.exists():
                 with open(project_file, 'r', encoding='utf-8') as f:
                     memory = json.load(f)
+                working_dir = (
+                    memory.get("project_info", {}).get("working_dir") or
+                    memory.get("live_record", {}).get("gps", {}).get("working_dir")
+                )
+                # Use CANONICAL provider for consistent counts
+                if working_dir:
+                    from core.knowledge_counters import get_canonical_knowledge_counts
+                    canonical = get_canonical_knowledge_counts(working_dir)
+                    decisions_count = canonical.decisions
+                    avoid_count = canonical.avoid
+                else:
+                    decisions_count = len(memory.get("decisions", []))
+                    avoid_count = len(memory.get("avoid", []))
                 memory_data = {
                     "name": memory.get("project_info", {}).get("name"),
-                    "working_dir": (
-                        memory.get("project_info", {}).get("working_dir") or
-                        memory.get("live_record", {}).get("gps", {}).get("working_dir")
-                    ),
-                    "decisions_count": len(memory.get("decisions", [])),
-                    "avoid_count": len(memory.get("avoid", [])),
+                    "working_dir": working_dir,
+                    "decisions_count": decisions_count,
+                    "avoid_count": avoid_count,
                 }
         except Exception as e:
             logger.warning(f"Failed to load project memory: {e}")

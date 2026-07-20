@@ -3032,7 +3032,12 @@ def _maybe_record_solved_bug_from_memory_event(
         "auto_classified": True,
     }
     record.update(_new_record_attribution(source))
-    debug_sessions.append(_attach_memory_quality_audit("solution", record))
+    # Validate before persisting
+    from core.solution_validator import validate_solution_record
+    validation = validate_solution_record(record, auto_generate_id=False)
+    if not validation.valid:
+        return False  # Reject invalid records
+    debug_sessions.append(_attach_memory_quality_audit("solution", validation.record))
     return True
 
 
@@ -3585,9 +3590,15 @@ def _format_deep_project_brief(memory: Dict[str, Any], mode: str = "compact") ->
             lines.append(f"  • {problem} → {solution}")
         lines.append("")
 
-    # Navigator V1: Memory stats (compact) - use canonical counter module
-    from core.knowledge_counters import get_live_project_counters, format_project_knowledge_line
-    counters = get_live_project_counters(memory)
+    # Navigator V1: Memory stats (compact) - use CANONICAL counter
+    from core.knowledge_counters import get_canonical_knowledge_counts, format_project_knowledge_line
+    working_dir = memory.get("project_info", {}).get("working_dir") if memory else None
+    if working_dir:
+        canonical = get_canonical_knowledge_counts(working_dir)
+        counters = canonical.to_legacy_dict()
+    else:
+        from core.knowledge_counters import get_live_project_counters
+        counters = get_live_project_counters(memory)
     lines.append(format_project_knowledge_line(counters))
     lines.append("")
 
@@ -7757,6 +7768,12 @@ def log_debug_session(
     debug_session.update(_new_record_attribution("fo_solved"))
     _attach_memory_quality_audit("debug_session", debug_session)
 
+    # Validate before persisting
+    from core.solution_validator import validate_solution_record
+    validation = validate_solution_record(debug_session, auto_generate_id=False)
+    if not validation.valid:
+        return context + f"❌ Solution validation failed: {validation.errors}"
+
     # Check for duplicate/similar debug sessions
     problem_lower = problem.lower()
     for existing in memory['debug_sessions']:
@@ -7768,7 +7785,7 @@ def log_debug_session(
         if len(overlap) >= 3:
             return context + f"⚠️ Similar debug session already exists: '{existing.get('problem', '')[:50]}...'\nNot creating duplicate."
 
-    memory['debug_sessions'].append(debug_session)
+    memory['debug_sessions'].append(validation.record)
 
     # Mark related insights as consolidated (optional cleanup)
     # Find insights from today that might be related
@@ -10799,10 +10816,10 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
             "live_record": data.get("live_record", {}) if data else {},
         }
 
-        # Build live project knowledge stats line. Committed knowledge remains
-        # the source for briefing content, not live UI/session counters.
-        from core.knowledge_counters import get_live_project_counters, format_project_knowledge_line
-        counters = get_live_project_counters(data)
+        # Build live project knowledge stats line using CANONICAL provider
+        from core.knowledge_counters import get_canonical_knowledge_counts, format_project_knowledge_line
+        canonical = get_canonical_knowledge_counts(working_dir)
+        counters = canonical.to_legacy_dict()
         knowledge_stats = ""
         if any(counters.values()):
             knowledge_stats = format_project_knowledge_line(counters)
@@ -10878,14 +10895,16 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
 
         result_lines.append("")
 
-    # Knowledge counts
+    # Knowledge counts - show active knowledge (superseded excluded)
     k = snapshot.knowledge_counts
-    if k.decisions or k.solutions or k.insights:
+    if k.decisions or k.solutions or k.avoid or k.insights:
         parts = []
         if k.decisions:
             parts.append(f"{k.decisions} Decisions")
         if k.solutions:
             parts.append(f"{k.solutions} Solved Bugs")
+        if k.avoid:
+            parts.append(f"{k.avoid} Avoid Patterns")
         if k.insights:
             parts.append(f"{k.insights} Insights")
         result_lines.append(f"📊 {' · '.join(parts)}")

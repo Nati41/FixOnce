@@ -555,8 +555,15 @@ def record_solution(
                     is_update=True,
                 )
 
-    # Add new solution
-    memory['debug_sessions'].append(solution_record)
+    # Add new solution - WITH VALIDATION
+    from core.solution_validator import validate_solution_record
+    validation = validate_solution_record(solution_record, auto_generate_id=False)
+    if not validation.valid:
+        return SolutionResult(
+            success=False,
+            message=f"Solution validation failed: {validation.errors}"
+        )
+    memory['debug_sessions'].append(validation.record)
 
     # Save V1
     try:

@@ -1231,14 +1231,26 @@ def list_projects(
             stats = memory.get('stats', {})
             live_record = memory.get('live_record', {})
 
+            # Use CANONICAL provider for consistent counts across all UIs
+            working_dir = info.get('working_dir', '')
+            if working_dir:
+                from core.knowledge_counters import get_canonical_knowledge_counts
+                canonical = get_canonical_knowledge_counts(working_dir)
+                decisions_count = canonical.decisions
+                avoid_count = canonical.avoid
+            else:
+                # Fallback if no working_dir (shouldn't happen for valid projects)
+                decisions_count = len(memory.get('decisions', []))
+                avoid_count = len(memory.get('avoid', []))
+
             raw_projects.append({
                 "id": project_file.stem,
                 "record_path": str(project_file),
                 "name": info.get('name', project_file.stem),
-                "working_dir": info.get('working_dir', ''),
+                "working_dir": working_dir,
                 "provenance": infer_project_provenance(
                     info.get('name', project_file.stem),
-                    info.get('working_dir', ''),
+                    working_dir,
                     info.get('provenance'),
                 ),
                 "pinned_or_imported": _is_pinned_or_imported(info),
@@ -1246,8 +1258,8 @@ def list_projects(
                 "summary": live_record.get('architecture', {}).get('summary', ''),
                 "current_goal": live_record.get('intent', {}).get('current_goal', ''),
                 "last_updated": stats.get('last_updated', ''),
-                "decisions_count": len(memory.get('decisions', [])),
-                "avoid_count": len(memory.get('avoid', [])),
+                "decisions_count": decisions_count,
+                "avoid_count": avoid_count,
                 "issues_count": len(memory.get('active_issues', [])),
                 "insights_count": len(
                     live_record.get('lessons', {}).get('insights', [])
