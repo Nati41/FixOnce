@@ -3395,6 +3395,56 @@ body.native-app .header-btn {
   line-height: 1.5;
 }
 
+.snapshot-value.truncated {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  max-width: calc(100% - 40px);
+  vertical-align: bottom;
+}
+
+.snapshot-value.expanded {
+  white-space: normal;
+  overflow: visible;
+  max-width: none;
+}
+
+.snapshot-value-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.snapshot-more {
+  font-size: 11px;
+  color: var(--green);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.snapshot-more:hover {
+  text-decoration: underline;
+}
+
+.code-changes-header {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.code-changes-header .branch {
+  font-family: 'SF Mono', Monaco, monospace;
+  color: var(--green);
+}
+
+.code-changes-header .uncommitted {
+  color: var(--amber);
+  margin-left: 12px;
+}
+
 .snapshot-source {
   font-size: 11px;
   color: var(--text-dim);
@@ -3485,19 +3535,38 @@ body.native-app .header-btn {
 
   <div class="snapshot-field" id="snapshotLastField">
     <div class="snapshot-label">Last completed:</div>
-    <div class="snapshot-value" id="snapshotLast">—</div>
+    <div class="snapshot-value-row">
+      <span class="snapshot-value" id="snapshotLast">—</span>
+      <span class="snapshot-more" id="snapshotLastMore" style="display: none;" onclick="toggleSnapshotText('last')">more</span>
+    </div>
   </div>
 
   <div class="snapshot-field" id="snapshotNextField">
     <div class="snapshot-label">Suggested next step:</div>
-    <div class="snapshot-value" id="snapshotNext">—</div>
+    <div class="snapshot-value-row">
+      <span class="snapshot-value" id="snapshotNext">—</span>
+      <span class="snapshot-more" id="snapshotNextMore" style="display: none;" onclick="toggleSnapshotText('next')">more</span>
+    </div>
     <div class="snapshot-source" id="snapshotSource"></div>
     <div class="snapshot-stale" id="snapshotStale" style="display: none;">⚠️ This suggestion may be outdated.</div>
   </div>
 
   <div class="snapshot-counts" id="snapshotCounts">
-    📊 <span id="decisionCount">0</span> Decisions · <span id="bugCount">0</span> Solved Bugs · <span id="avoidCount">0</span> Insights
+    📊 <span id="snapshotDecisionCount">0</span> Decisions · <span id="snapshotBugCount">0</span> Solved Bugs · <span id="snapshotAvoidCount">0</span> Avoid Patterns
   </div>
+</div>
+
+<!-- Recent Saved Knowledge -->
+<div class="section" id="memoriesGroup" style="display: none;">
+  <div class="section-label">Recent Saved Knowledge</div>
+  <div class="saved-list" id="memoriesList"></div>
+</div>
+
+<!-- Code Changes -->
+<div class="section" id="codeChangesGroup" style="display: none;">
+  <div class="section-label">Code Changes</div>
+  <div class="code-changes-header" id="codeChangesHeader"></div>
+  <div class="saved-list" id="codeChangesList"></div>
 </div>
 
 <!-- Pending Memories Section -->
@@ -3705,6 +3774,9 @@ async function fetchOnboarding() {
   }
 }
 
+// Last snapshot state for change detection (prevents flicker)
+let lastSnapshotState = null;
+
 async function fetchSnapshot() {
   try {
     const res = await fetch(`${API}/api/snapshot`, {
@@ -3714,59 +3786,104 @@ async function fetchSnapshot() {
     if (!res.ok) return;
     const snapshot = await res.json();
     renderSnapshot(snapshot);
+    // Store for code changes header
+    lastSnapshotState = snapshot;
   } catch (e) {
     logPollingError('Snapshot fetch error:', e);
+    // On error, keep previous state - do not clear
   }
 }
 
+// Truncation threshold for "more" links
+const TRUNCATE_LENGTH = 80;
+
 function renderSnapshot(snapshot) {
+  // Helper: only update if value changed (prevents flicker)
+  function updateText(el, newValue) {
+    if (el && el.textContent !== newValue) {
+      el.textContent = newValue;
+    }
+  }
+
+  // Helper: only toggle display if changed
+  function updateDisplay(el, shouldShow) {
+    if (!el) return;
+    const newDisplay = shouldShow ? '' : 'none';
+    if (el.style.display !== newDisplay) {
+      el.style.display = newDisplay;
+    }
+  }
+
+  // Helper: setup truncation with "more" link
+  function setupTruncation(textEl, moreEl, fullText) {
+    if (!textEl) return;
+    const needsTruncation = fullText && fullText.length > TRUNCATE_LENGTH;
+
+    if (needsTruncation) {
+      // Store full text as data attribute
+      textEl.dataset.fullText = fullText;
+      // Show truncated by default
+      if (!textEl.classList.contains('expanded')) {
+        textEl.textContent = fullText.substring(0, TRUNCATE_LENGTH) + '…';
+        textEl.classList.add('truncated');
+      }
+      updateDisplay(moreEl, true);
+    } else {
+      updateText(textEl, fullText || '—');
+      textEl.classList.remove('truncated', 'expanded');
+      updateDisplay(moreEl, false);
+    }
+  }
+
   const projectNameEl = document.getElementById('projectName');
   const projectPathEl = document.getElementById('projectPath');
   const goalEl = document.getElementById('snapshotGoal');
   const goalField = document.getElementById('snapshotGoalField');
   const lastEl = document.getElementById('snapshotLast');
+  const lastMoreEl = document.getElementById('snapshotLastMore');
   const lastField = document.getElementById('snapshotLastField');
   const nextEl = document.getElementById('snapshotNext');
+  const nextMoreEl = document.getElementById('snapshotNextMore');
   const nextField = document.getElementById('snapshotNextField');
   const sourceEl = document.getElementById('snapshotSource');
   const staleEl = document.getElementById('snapshotStale');
-  const decisionEl = document.getElementById('decisionCount');
-  const bugEl = document.getElementById('bugCount');
-  const avoidEl = document.getElementById('avoidCount');
+  const decisionEl = document.getElementById('snapshotDecisionCount');
+  const bugEl = document.getElementById('snapshotBugCount');
+  const avoidEl = document.getElementById('snapshotAvoidCount');
 
   // Project identity
-  if (projectNameEl) projectNameEl.textContent = snapshot.project_name || 'FixOnce';
+  updateText(projectNameEl, snapshot.project_name || 'FixOnce');
   if (projectPathEl) {
     const path = snapshot.working_dir || '';
-    projectPathEl.textContent = path;
-    projectPathEl.style.display = path ? '' : 'none';
+    updateText(projectPathEl, path);
+    updateDisplay(projectPathEl, !!path);
   }
 
   // Goal
   if (goalEl && goalField) {
     if (snapshot.goal) {
-      goalEl.textContent = snapshot.goal;
-      goalField.style.display = '';
+      updateText(goalEl, snapshot.goal);
+      updateDisplay(goalField, true);
     } else {
-      goalField.style.display = 'none';
+      updateDisplay(goalField, false);
     }
   }
 
-  // Last completed
+  // Last completed (with truncation)
   if (lastEl && lastField) {
     if (snapshot.last) {
-      lastEl.textContent = snapshot.last;
-      lastField.style.display = '';
+      setupTruncation(lastEl, lastMoreEl, snapshot.last);
+      updateDisplay(lastField, true);
     } else {
-      lastField.style.display = 'none';
+      updateDisplay(lastField, false);
     }
   }
 
-  // Suggested next step
+  // Suggested next step (with truncation)
   if (nextEl && nextField) {
     if (snapshot.next) {
-      nextEl.textContent = snapshot.next;
-      nextField.style.display = '';
+      setupTruncation(nextEl, nextMoreEl, snapshot.next);
+      updateDisplay(nextField, true);
 
       // Source info (agent + time)
       const sourceParts = [];
@@ -3776,24 +3893,42 @@ function renderSnapshot(snapshot) {
       if (snapshot.state_age_hours !== undefined) {
         sourceParts.push(formatTimeAgo(snapshot.state_age_hours));
       }
-      if (sourceEl) {
-        sourceEl.textContent = sourceParts.length ? `(${sourceParts.join(', ')})` : '';
-      }
+      const sourceText = sourceParts.length ? `(${sourceParts.join(', ')})` : '';
+      updateText(sourceEl, sourceText);
 
       // Stale warning
-      if (staleEl) {
-        staleEl.style.display = snapshot.may_be_stale ? '' : 'none';
-      }
+      updateDisplay(staleEl, snapshot.may_be_stale);
     } else {
-      nextField.style.display = 'none';
+      updateDisplay(nextField, false);
     }
   }
 
-  // Knowledge counts
+  // Knowledge counts - Snapshot is the SOLE owner of these elements
   const counts = snapshot.knowledge_counts || {};
-  if (decisionEl) decisionEl.textContent = counts.decisions || 0;
-  if (bugEl) bugEl.textContent = counts.solutions || 0;
-  if (avoidEl) avoidEl.textContent = counts.insights || 0;
+  updateText(decisionEl, String(counts.decisions || 0));
+  updateText(bugEl, String(counts.solutions || 0));
+  updateText(avoidEl, String(counts.avoid || 0));
+}
+
+// Toggle expanded/truncated state for snapshot text
+function toggleSnapshotText(field) {
+  const textEl = document.getElementById(field === 'last' ? 'snapshotLast' : 'snapshotNext');
+  const moreEl = document.getElementById(field === 'last' ? 'snapshotLastMore' : 'snapshotNextMore');
+  if (!textEl || !textEl.dataset.fullText) return;
+
+  if (textEl.classList.contains('expanded')) {
+    // Collapse
+    textEl.textContent = textEl.dataset.fullText.substring(0, TRUNCATE_LENGTH) + '…';
+    textEl.classList.remove('expanded');
+    textEl.classList.add('truncated');
+    if (moreEl) moreEl.textContent = 'more';
+  } else {
+    // Expand
+    textEl.textContent = textEl.dataset.fullText;
+    textEl.classList.remove('truncated');
+    textEl.classList.add('expanded');
+    if (moreEl) moreEl.textContent = 'less';
+  }
 }
 
 function formatTimeAgo(hours) {
@@ -3852,35 +3987,20 @@ function render(s) {
     }
   }
 
-  // Project section
-  const projectNameEl = document.getElementById('projectName');
-  const projectPathEl = document.getElementById('projectPath');
-  if (projectNameEl) projectNameEl.textContent = projectName || 'No project';
-  if (projectPathEl) projectPathEl.textContent = workingDir || '';
+  // NOTE: Project section (projectName, projectPath) is now handled by renderSnapshot()
+  // which is the SINGLE SOURCE OF TRUTH for the Current Project Snapshot section.
+  // Do NOT update these elements here to prevent flicker/race conditions.
 
-  // Memory counts
+  // NOTE: Memory counts are now handled EXCLUSIVELY by renderSnapshot()
+  // renderMemoryStats only updates legacy elements, not the snapshot counts.
   renderMemoryStats(s);
 
-  // Context section (Where we stopped)
+  // NOTE: Context section (lastChange, nextStep) has been replaced by the Snapshot section.
+  // Those elements (snapshotLast, snapshotNext) are updated by renderSnapshot().
+  // Do NOT update old IDs here - they don't exist in the new layout.
+
+  // Legacy sync time element (may not exist in new layout)
   const intent = s.intent || s.live_record?.intent || {};
-  const lastChange = intent.last_change || '';
-  const nextStep = intent.next_step || '';
-
-  const lastChangeEl = document.getElementById('lastChange');
-  const nextStepEl = document.getElementById('nextStep');
-  if (lastChangeEl) {
-    lastChangeEl.textContent = lastChange || getLatestText(s) || 'FixOnce is connected to this project.';
-    lastChangeEl.title = lastChange || '';
-  }
-  if (nextStepEl) {
-    nextStepEl.textContent = nextStep || 'Say "hi" in your AI tool.';
-    nextStepEl.title = nextStep || '';
-  }
-
-  // Show/hide "more" buttons based on text length
-  updateContextMoreButtons();
-
-  // Sync time
   const updatedAt = intent.updated_at;
   const syncTimeEl = document.getElementById('syncTime');
   if (syncTimeEl) {
@@ -4072,25 +4192,14 @@ function getSelectedProject(s) {
 }
 
 function renderMemoryStats(s) {
-  const identityCounts = s.identity?.counts || {};
-  const projectCounts = getSelectedProject(s).counts || {};
-  const knowledge = s.knowledge || {};
+  // NOTE: Knowledge counts are now owned EXCLUSIVELY by renderSnapshot().
+  // This function no longer updates count elements to prevent flicker/race conditions.
+  // The snapshotDecisionCount, snapshotBugCount, snapshotAvoidCount elements are
+  // updated only by renderSnapshot() which uses get_project_snapshot() as single source.
+
   const latest = getMeaningfulActivities(s)[0];
 
-  const decisions = identityCounts.decisions ?? projectCounts.decisions ?? knowledge.total_decisions ?? 0;
-  const solvedBugs = identityCounts.solved_bugs ?? projectCounts.solved_bugs ?? knowledge.total_solutions ?? 0;
-  const avoids = identityCounts.avoids ?? projectCounts.avoids ?? knowledge.total_avoids ?? 0;
-
-  // Update individual count elements
-  const decisionEl = document.getElementById('decisionCount');
-  const bugEl = document.getElementById('bugCount');
-  const avoidEl = document.getElementById('avoidCount');
-
-  if (decisionEl) decisionEl.textContent = decisions;
-  if (bugEl) bugEl.textContent = solvedBugs;
-  if (avoidEl) avoidEl.textContent = avoids;
-
-  // Legacy elements
+  // Legacy elements only (not counts)
   const lastActorEl = document.getElementById('memoryLastActor');
   const updatedEl = document.getElementById('memoryUpdated');
   const lastCommitEl = document.getElementById('memoryLastCommit');
@@ -4770,40 +4879,78 @@ async function loadRecentMemories() {
 
 async function loadCodeChanges() {
   try {
-    const res = await fetch(`${API}/api/commits?limit=3`, {
-      headers: { 'X-Dashboard': 'true' },
-      signal: AbortSignal.timeout(3000)
-    });
-    if (!res.ok) return;
-
-    const data = await res.json();
-    const commits = data.commits || [];
     const groupEl = document.getElementById('codeChangesGroup');
+    const headerEl = document.getElementById('codeChangesHeader');
     const listEl = document.getElementById('codeChangesList');
 
     if (!groupEl || !listEl) return;
 
-    if (commits.length === 0) {
+    // Get branch and uncommitted from snapshot (single source of truth)
+    const snapshot = lastSnapshotState || {};
+    const branch = snapshot.branch || '';
+    const uncommitted = snapshot.uncommitted_files || [];
+    const recentCommits = snapshot.recent_commits || [];
+
+    // Also fetch from commits API for fallback/additional data
+    let apiCommits = [];
+    try {
+      const res = await fetch(`${API}/api/commits?limit=3`, {
+        headers: { 'X-Dashboard': 'true' },
+        signal: AbortSignal.timeout(3000)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        apiCommits = data.commits || [];
+      }
+    } catch (e) {
+      // Use snapshot commits as fallback
+    }
+
+    // Prefer API commits, fallback to snapshot commits
+    const commits = apiCommits.length > 0 ? apiCommits : recentCommits;
+
+    // Show section if we have branch info, uncommitted files, or commits
+    const hasContent = branch || uncommitted.length > 0 || commits.length > 0;
+    if (!hasContent) {
       groupEl.style.display = 'none';
       return;
     }
 
     groupEl.style.display = 'block';
-    listEl.innerHTML = commits.slice(0, 3).map(c => {
-      const timeStr = formatTimestamp(c.timestamp);
-      const author = c.author || 'Unknown';
-      const hash = c.hash?.slice(0, 7) || '—';
 
-      return `
-        <div class="saved-item">
-          <div class="saved-item-main">
-            <span class="saved-item-type code">${hash}</span>
-            <span class="saved-item-text">${escapeHtml(c.message || '—')}</span>
+    // Build header with branch and uncommitted status
+    if (headerEl) {
+      let headerHtml = '';
+      if (branch) {
+        headerHtml += `<span class="branch">⎇ ${escapeHtml(branch)}</span>`;
+      }
+      if (uncommitted.length > 0) {
+        headerHtml += `<span class="uncommitted">${uncommitted.length} uncommitted file${uncommitted.length > 1 ? 's' : ''}</span>`;
+      }
+      headerEl.innerHTML = headerHtml;
+      headerEl.style.display = headerHtml ? '' : 'none';
+    }
+
+    // Render commits
+    if (commits.length === 0) {
+      listEl.innerHTML = '<div class="saved-empty">No recent commits</div>';
+    } else {
+      listEl.innerHTML = commits.slice(0, 3).map(c => {
+        const timeStr = c.date ? formatTimestamp(c.date) : (c.timestamp ? formatTimestamp(c.timestamp) : '');
+        const author = c.author || 'Unknown';
+        const hash = (c.hash || '').slice(0, 7) || '—';
+
+        return `
+          <div class="saved-item">
+            <div class="saved-item-main">
+              <span class="saved-item-type code">${hash}</span>
+              <span class="saved-item-text">${escapeHtml(c.message || '—')}</span>
+            </div>
+            ${timeStr || author !== 'Unknown' ? `<div class="saved-item-meta">${escapeHtml(author)}${timeStr ? ' · ' + timeStr : ''}</div>` : ''}
           </div>
-          <div class="saved-item-meta">${escapeHtml(author)} · ${timeStr}</div>
-        </div>
-      `;
-    }).join('');
+        `;
+      }).join('');
+    }
   } catch (e) {
     logPollingError('Code changes fetch error:', e);
   }
