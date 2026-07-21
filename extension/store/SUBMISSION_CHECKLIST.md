@@ -143,11 +143,11 @@ Before submitting, you need public URLs for:
 
 2. **Support Page** (optional)
    - Can use GitHub Issues URL
-   - https://github.com/fixonce/fixonce/issues
+   - https://github.com/Nati41/FixOnce/issues
 
 3. **Homepage** (optional)
    - Can use GitHub repo URL
-   - https://github.com/fixonce/fixonce
+   - https://github.com/Nati41/FixOnce
 
 ---
 

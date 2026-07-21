@@ -30,14 +30,14 @@ Size: 1280x800 or 640x400 pixels (16:10 aspect ratio)
 ## Screenshot 2: Dashboard Overview (REQUIRED)
 
 **What to capture:**
-- Brain Dashboard (localhost:5000/brain)
+- FixOnce dashboard
 - Active Issues section with 2-3 errors
 - Solutions History with at least 1 solution
 - ROI stats showing usage
 - Clean, professional look
 
 **How to take:**
-1. Open localhost:5000/brain
+1. Open the local FixOnce dashboard
 2. Make sure there are some issues and solutions
 3. Full page screenshot
 4. Crop to 1280x800

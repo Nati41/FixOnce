@@ -149,14 +149,14 @@ window.addEventListener('error', (event) => {
 - **No remote code execution** - All code bundled in extension
 - **No analytics/tracking** - Zero external data collection
 - **No minification** - Code is readable and reviewable
-- **Open source** - Full transparency at github.com/fixonce/fixonce
+- **Open source** - Full transparency at github.com/Nati41/FixOnce
 
 ---
 
 ## Contact for Review Questions
 
 If reviewers have questions about permissions or functionality:
-- GitHub Issues: github.com/fixonce/fixonce/issues
+- GitHub Issues: github.com/Nati41/FixOnce/issues
 - Email: [your-email]
 
 We're happy to provide additional clarification or make adjustments to meet Chrome Web Store policies.

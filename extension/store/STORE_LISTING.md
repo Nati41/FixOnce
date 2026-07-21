@@ -84,12 +84,12 @@ FixOnce is an AI Memory Layer for developers. It captures JavaScript errors from
 📖 GETTING STARTED
 
 1. Install this extension
-2. Download FixOnce server from GitHub
-3. Run: python3 server.py
+2. Install the FixOnce desktop app from GitHub Releases
+3. Open FixOnce
 4. Click extension icon → Enable on your site
-5. Open localhost:5000/brain to see captured errors
+5. Open the FixOnce dashboard to review captured errors
 
-Full documentation: github.com/fixonce/fixonce
+Full documentation: github.com/Nati41/FixOnce
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -108,7 +108,7 @@ Need 1-5 screenshots (1280x800 or 640x400):
 - "Open Dashboard" button
 
 ### Screenshot 2: Dashboard Overview
-- Brain dashboard with active issues
+- FixOnce dashboard with active issues
 - Solutions history visible
 - ROI stats
 
@@ -168,11 +168,11 @@ Need 1-5 screenshots (1280x800 or 640x400):
 
 ## Support & Links
 
-**Support URL:** https://github.com/fixonce/fixonce/issues
+**Support URL:** https://github.com/Nati41/FixOnce/issues
 
 **Privacy Policy URL:** [Your hosted privacy-policy.html URL]
 
-**Homepage URL:** https://github.com/fixonce/fixonce
+**Homepage URL:** https://github.com/Nati41/FixOnce
 
 ---
 
@@ -197,5 +197,5 @@ DATA HANDLING:
 - No personal information is collected
 - Users have full control over which sites are monitored
 
-The extension is open source and can be inspected at: github.com/fixonce/fixonce
+The extension is open source and can be inspected at: github.com/Nati41/FixOnce
 ```

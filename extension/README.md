@@ -69,13 +69,13 @@ See the `store/` folder for all submission materials:
 
 - **Dev environments** (localhost, 127.0.0.1, *.local): Scripts auto-inject via manifest
 - **Other sites**: Scripts inject programmatically only when you enable monitoring
-- Scripts never run on sites you haven't enabled
+- Outside recognized development environments, scripts do not run on sites you haven't enabled
 
 ## Privacy
 
 - All data stays on YOUR machine
 - No external servers
-- Opt-in only - inactive by default
+- Non-development sites are opt-in only
 - You control which sites are monitored
 
 ## Version History

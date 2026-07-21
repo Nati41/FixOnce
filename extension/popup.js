@@ -248,7 +248,7 @@ document.getElementById('disable-btn').addEventListener('click', async () => {
 });
 
 document.getElementById('open-dashboard-btn').addEventListener('click', () => {
-  chrome.tabs.create({ url: API + '/brain' });
+  chrome.tabs.create({ url: API + '/' });
 });
 
 // Select Element button
