@@ -176,7 +176,10 @@ class TestAgentContext(unittest.TestCase):
 
             data = json.loads(project_file.read_text(encoding="utf-8"))
 
-        self.assertEqual(result, "Synced.")
+        self.assertTrue(
+            result.startswith("✓ Context synced"),
+            f"fo_sync should return rich feedback starting with '✓ Context synced', got: {result[:50]}"
+        )
         self.assertEqual(data["live_record"]["intent"]["current_goal"], "בדיקת סנכרון")
         self.assertEqual(data["live_record"]["intent"]["next_step"], "המשך בדיקה")
         self.assertEqual(data["live_record"]["intent"]["actor"], "codex")
