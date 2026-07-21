@@ -62,7 +62,14 @@ See the `store/` folder for all submission materials:
 | `storage` | Save whitelist preferences |
 | `activeTab` | Detect current site domain |
 | `tabs` | Query tab URL |
-| `<all_urls>` | Inject error capture on whitelisted sites |
+| `scripting` | Programmatic script injection for whitelisted sites |
+| `<all_urls>` (host) | Required for injecting scripts on any whitelisted domain |
+
+## How Injection Works
+
+- **Dev environments** (localhost, 127.0.0.1, *.local): Scripts auto-inject via manifest
+- **Other sites**: Scripts inject programmatically only when you enable monitoring
+- Scripts never run on sites you haven't enabled
 
 ## Privacy
 
@@ -72,6 +79,11 @@ See the `store/` folder for all submission materials:
 - You control which sites are monitored
 
 ## Version History
+
+### v3.0.1 (Jul 2026)
+- Reduced injection scope: scripts only auto-inject on dev environments
+- Non-dev sites require explicit user opt-in before scripts run
+- Added programmatic injection for whitelisted domains
 
 ### v2.0.0 (Feb 2026)
 - Prepared for Chrome Web Store

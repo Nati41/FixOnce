@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "FixOnce - AI Vision",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "AI Memory Layer + Visual Context. Capture errors, select elements, let AI see what you see.",
-  "permissions": ["storage", "activeTab", "tabs"],
+  "permissions": ["storage", "activeTab", "tabs", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
@@ -18,19 +18,52 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "http://localhost/*",
+        "http://localhost:*/*",
+        "https://localhost/*",
+        "https://localhost:*/*",
+        "http://127.0.0.1/*",
+        "http://127.0.0.1:*/*",
+        "https://127.0.0.1/*",
+        "https://127.0.0.1:*/*",
+        "http://*.local/*",
+        "https://*.local/*"
+      ],
       "js": ["injected.js"],
       "world": "MAIN",
       "run_at": "document_start"
     },
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "http://localhost/*",
+        "http://localhost:*/*",
+        "https://localhost/*",
+        "https://localhost:*/*",
+        "http://127.0.0.1/*",
+        "http://127.0.0.1:*/*",
+        "https://127.0.0.1/*",
+        "https://127.0.0.1:*/*",
+        "http://*.local/*",
+        "https://*.local/*"
+      ],
       "js": ["element-picker.js"],
       "world": "MAIN",
       "run_at": "document_end"
     },
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "http://localhost/*",
+        "http://localhost:*/*",
+        "https://localhost/*",
+        "https://localhost:*/*",
+        "http://127.0.0.1/*",
+        "http://127.0.0.1:*/*",
+        "https://127.0.0.1/*",
+        "https://127.0.0.1:*/*",
+        "http://*.local/*",
+        "https://*.local/*"
+      ],
       "js": ["bridge.js", "picker-bridge.js"],
       "run_at": "document_start"
     }

@@ -103,6 +103,45 @@ async function isDomainAllowed(domain) {
   return permanent.includes(domain) || session.includes(domain);
 }
 
+// Programmatically inject scripts for a whitelisted non-dev domain
+async function injectScriptsForDomain(domain) {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (!tab.url) continue;
+      const tabDomain = getDomain(tab.url);
+      if (tabDomain !== domain) continue;
+
+      console.log(`[FixOnce] Injecting scripts into tab ${tab.id} for domain ${domain}`);
+
+      // Inject bridge first (ISOLATED world)
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['bridge.js', 'picker-bridge.js'],
+        world: 'ISOLATED'
+      });
+
+      // Inject error capture script (MAIN world)
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['injected.js'],
+        world: 'MAIN'
+      });
+
+      // Inject element picker (MAIN world)
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['element-picker.js'],
+        world: 'MAIN'
+      });
+
+      console.log(`[FixOnce] Scripts injected into tab ${tab.id}`);
+    }
+  } catch (err) {
+    console.error('[FixOnce] Failed to inject scripts:', err);
+  }
+}
+
 // Update extension badge based on FixOnce connection only.
 // Current-site monitoring and captured errors are shown separately in the popup.
 async function updateConnectionBadge(tabId) {
@@ -286,6 +325,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Handle whitelist updates from popup
   if (message.type === 'WHITELIST_UPDATED') {
     console.log('[FixOnce] Whitelist updated:', message.domain, message.action);
+
+    // For non-dev domains being enabled, inject scripts programmatically
+    if (message.action === 'add' || message.action === 'add-session') {
+      const domain = message.domain;
+      if (!isAutoAllowed(domain)) {
+        // Inject into all tabs matching this domain
+        injectScriptsForDomain(domain);
+      }
+    }
+
     sendResponse({ success: true });
     return true;
   }
@@ -387,12 +436,40 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 });
 
 // Update icon when tab URL changes
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
     updateConnectionBadge(tabId);
 
     // Reset error count for new page
     tabErrorCounts[tabId] = 0;
+
+    // For whitelisted non-dev domains, inject scripts programmatically
+    const domain = getDomain(tab.url);
+    if (domain && !isAutoAllowed(domain)) {
+      const allowed = await isDomainAllowed(domain);
+      if (allowed) {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            files: ['bridge.js', 'picker-bridge.js'],
+            world: 'ISOLATED'
+          });
+          await chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            files: ['injected.js'],
+            world: 'MAIN'
+          });
+          await chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            files: ['element-picker.js'],
+            world: 'MAIN'
+          });
+          console.log(`[FixOnce] Injected scripts for whitelisted domain: ${domain}`);
+        } catch (err) {
+          // May fail for chrome:// urls or other restricted pages
+        }
+      }
+    }
   }
 });
 
