@@ -7,12 +7,14 @@ Ensures Codex config.toml never gets args = ["--mcp"] without a script path.
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 # Add project paths
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from install import build_install_stdio_config, _build_stdio_mcp_config
+import install as install_module
 
 
 class TestCodexMcpConfig:
@@ -78,7 +80,8 @@ class TestCodexMcpConfig:
             fixonce_exe.write_text("", encoding="utf-8")
             mcp_exe.write_text("", encoding="utf-8")
 
-            config = build_install_stdio_config(install_dir)
+            with patch.object(install_module, "get_platform", return_value="windows"):
+                config = build_install_stdio_config(install_dir)
 
         assert config["command"] == str(mcp_exe)
         assert config["args"] == ["--mcp"]
