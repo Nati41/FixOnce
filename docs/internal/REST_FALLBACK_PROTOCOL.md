@@ -317,5 +317,5 @@ If an MCP call timed out ambiguously and you cannot verify whether it succeeded:
 
 - `src/api/openai_adapter.py` - Added status, sync, decide, solved handlers
 - `tests/test_rest_fallback.py` - 33 tests for REST/MCP parity
-- `docs/REST_FALLBACK_PROTOCOL.md` - This documentation
-- `docs/REST_FALLBACK_QA_PLAN.md` - Manual QA checklist
+- `docs/internal/REST_FALLBACK_PROTOCOL.md` - This documentation
+- `docs/internal/REST_FALLBACK_QA_PLAN.md` - Manual QA checklist

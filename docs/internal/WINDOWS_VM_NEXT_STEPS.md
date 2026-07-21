@@ -29,16 +29,16 @@ build_windows.bat
 - Restart the Windows VM.
 - Log back in.
 
-5. Autostart
+5. Startup Behavior
 
-- Verify `FixOnceServer` scheduled task exists.
-- Verify the task target is valid.
-- Confirm launch after reboot works without manual Python commands.
+- Verify the installer does not recreate legacy startup shortcuts.
+- Launch FixOnce from the Start Menu after reboot.
+- Confirm the app starts without manual Python commands.
 
 6. Uninstall
 
 - Run `uninstall.ps1`.
-- Confirm scheduled task removal.
+- Confirm legacy startup shortcut cleanup remains intact.
 - Confirm background server process stops.
 
 7. Crash Tests
@@ -54,6 +54,6 @@ build_windows.bat
   - warm start passes
   - no terminal window appears
   - `Open in Browser` works from inside app
-  - reboot/autostart passes
+  - reboot/manual app launch passes
   - uninstall passes
   - recovery scenarios pass at acceptable rate
