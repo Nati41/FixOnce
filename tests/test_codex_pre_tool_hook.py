@@ -227,5 +227,54 @@ class TestCodexPreToolHook(unittest.TestCase):
         self.assertIn("path=src/core/project_context.py", curl_args)
 
 
+class TestCodexPreToolHookWindows(unittest.TestCase):
+    """Tests for the Windows PowerShell version of the Codex PreTool hook."""
+
+    def setUp(self):
+        self.ps1_hook = PROJECT_ROOT / "hooks" / "pre_tool_context_codex.ps1"
+
+    def test_windows_hook_exists(self):
+        """Windows PowerShell hook should exist."""
+        self.assertTrue(
+            self.ps1_hook.exists(),
+            "pre_tool_context_codex.ps1 must exist for Windows Codex support"
+        )
+
+    def test_windows_hook_has_required_functions(self):
+        """Windows hook should have the same key functions as bash version."""
+        content = self.ps1_hook.read_text(encoding="utf-8")
+
+        # Should have protected path checking
+        self.assertIn("Test-ProtectedPath", content)
+        self.assertIn("project_context.py", content)
+
+        # Should have blocking output
+        self.assertIn("FIXONCE_BLOCKING_WARNING", content)
+
+        # Should read runtime.json for port
+        self.assertIn("runtime.json", content)
+
+        # Should query area-context API
+        self.assertIn("area-context", content)
+
+        # Should return approve/block decisions
+        self.assertIn('"decision"', content)
+        self.assertIn('"approve"', content)
+        self.assertIn('"block"', content)
+
+    def test_windows_hook_handles_tool_input_formats(self):
+        """Windows hook should handle various tool input formats."""
+        content = self.ps1_hook.read_text(encoding="utf-8")
+
+        # Should extract file_path
+        self.assertIn("file_path", content)
+
+        # Should extract from command
+        self.assertIn("command", content)
+
+        # Should handle patch format
+        self.assertIn("Begin Patch", content)
+
+
 if __name__ == "__main__":
     unittest.main()
