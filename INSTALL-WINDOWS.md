@@ -16,11 +16,7 @@ Release page:
 https://github.com/Nati41/FixOnce/releases
 ```
 
-Direct installer URL:
-
-```text
-https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13.exe
-```
+Use the release page as the canonical download location. The final RC asset should be named `FixOnce_Setup_1.0.13.exe`.
 
 ## Install
 
@@ -28,7 +24,9 @@ https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13
 2. Run the installer.
 3. Follow the installer prompts.
 4. Open the FixOnce desktop app when installation finishes.
-5. Open Claude, Codex, or Cursor from your project and continue work.
+5. Open Claude Code, Codex, or Cursor from your project and continue work.
+
+The Windows public beta is not code-signed yet. Windows SmartScreen may show a warning before first launch. Choose **More info** and **Run anyway** only if the file came from the official GitHub Release.
 
 FixOnce restores the current project state before work continues, including relevant decisions, solved fixes, avoid patterns, and the next step.
 
@@ -43,9 +41,9 @@ FixOnce restores the current project state before work continues, including rele
 
 ## Supported AI Coding Tools
 
-The beta is demonstrated with:
+Public beta support is demonstrated with:
 
-- Claude
+- Claude Code
 - Codex
 - Cursor
 
@@ -56,7 +54,7 @@ Support depends on each coding agent's local integration capabilities.
 Use FixOnce from a real project folder:
 
 1. Open your project.
-2. Start Claude, Codex, or Cursor from that project.
+2. Start Claude Code, Codex, or Cursor from that project.
 3. Continue the task.
 
 The connected AI tool should receive the current project context before work continues.

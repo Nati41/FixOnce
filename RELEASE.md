@@ -15,21 +15,22 @@ Release page:
 https://github.com/Nati41/FixOnce/releases
 ```
 
-Expected direct URLs:
+Canonical download location:
 
 ```text
-https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13.exe
-https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce-mac.dmg
+https://github.com/Nati41/FixOnce/releases
 ```
 
 ## Release Source Of Truth
 
-- Public landing page source: `website/`
 - GitHub Pages source: `docs/`
+- Mirrored landing page copy: `website/`
 - Windows installer config: `installer/fixonce_setup.iss`
 - macOS installer script: `installer/macos/build_installer.sh`
 
-The website download buttons should point to GitHub Release assets, not local `website/downloads/` files.
+`docs/` is the public GitHub Pages source. Keep `website/` byte-for-byte aligned while it remains in the repository; do not edit only one copy.
+
+The website download buttons should point to GitHub Release assets, not local `website/downloads/` files. If final RC asset URLs are not live yet, point public copy to the GitHub Releases page instead of a non-existent direct asset.
 
 ## Public Beta Verification
 
@@ -39,9 +40,21 @@ Before publishing the beta:
 2. Confirm the Windows installer URL returns the real `FixOnce_Setup_1.0.13.exe` asset.
 3. Confirm the macOS installer URL returns the real `FixOnce-mac.dmg` asset.
 4. Install FixOnce on a clean machine or VM.
-5. Open Claude, Codex, or Cursor from a real project folder.
+5. Open Claude Code, Codex, or Cursor from a real project folder.
 6. Confirm FixOnce restores the current project state before work continues.
 7. Confirm the desktop app shows the active project, connected AI tool, current project state, and recent memories accurately.
+8. On Windows, confirm SmartScreen copy is expected for unsigned beta builds.
+9. On macOS, confirm Gatekeeper copy is expected for non-notarized beta builds.
+
+## Public Beta Support Matrix
+
+Public beta support is demonstrated with:
+
+- Claude Code
+- Codex
+- Cursor
+
+Other AI coding tools may have integration work in the repository, but they should not be presented as public beta supported until they pass clean-machine QA.
 
 ## Product Positioning
 

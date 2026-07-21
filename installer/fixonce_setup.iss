@@ -5,12 +5,12 @@
 ; 1. Install Inno Setup from https://jrsoftware.org/isdl.php
 ; 2. Open this file in Inno Setup Compiler
 ; 3. Click Build > Compile
-; 4. Output: installer/Output/FixOnce_Setup.exe
+; 4. Output: installer/Output/FixOnce_Setup_1.0.13.exe
 
 #define MyAppName "FixOnce"
 #define MyAppVersion "1.0.13"
 #define MyAppPublisher "FixOnce"
-#define MyAppURL "https://github.com/fixonce/fixonce"
+#define MyAppURL "https://github.com/Nati41/FixOnce"
 #define MyAppExeName "FixOnce.exe"
 
 [Setup]

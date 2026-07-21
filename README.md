@@ -4,7 +4,7 @@
 
 Project-owned memory for AI coding tools.
 
-FixOnce is a local project memory layer for AI coding work. It keeps the project's decisions, solved fixes, avoid patterns, and next step with the repository so Claude, Codex, or Cursor can continue work without starting from zero.
+FixOnce is a local project memory layer for AI coding work. It keeps the project's decisions, solved fixes, avoid patterns, and next step with the repository so Claude Code, Codex, or Cursor can continue work without starting from zero.
 
 AI conversations end. Projects continue. FixOnce exists to make project continuity independent of any single AI chat.
 
@@ -29,13 +29,13 @@ With FixOnce:
 - Website: https://nati41.github.io/FixOnce/
 - Releases: https://github.com/Nati41/FixOnce/releases
 - Downloads: https://github.com/Nati41/FixOnce/releases
-- Windows installer: https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce_Setup_1.0.13.exe
-- macOS installer: https://github.com/Nati41/FixOnce/releases/download/v1.0.13/FixOnce-mac.dmg
+- Windows installer: published on the current GitHub Release as `FixOnce_Setup_1.0.13.exe`
+- macOS installer: published on the current GitHub Release as `FixOnce-mac.dmg`
 
 1. Download FixOnce from GitHub Releases.
 2. Install it.
 3. Open your project.
-4. Open Claude, Codex, or Cursor.
+4. Open Claude Code, Codex, or Cursor.
 5. Continue the project.
 
 FixOnce restores the project state automatically before work continues.
@@ -56,9 +56,9 @@ The memory belongs to the project, not the model. A developer can move between s
 
 ## Supported AI Coding Tools
 
-Currently tested with:
+Public beta support is currently demonstrated with:
 
-- Claude
+- Claude Code
 - Codex
 - Cursor
 
@@ -78,6 +78,12 @@ FixOnce is designed around local, project-owned memory:
 - Connected AI tools may process context according to their own settings and policies.
 - You can review, edit, or reject proposed memory before it is saved.
 - Project memory may live with the repository through `.fixonce/` where enabled.
+
+## Public Beta Notes
+
+- Windows beta builds are not code-signed yet, so SmartScreen may warn before first launch.
+- macOS beta builds are not notarized yet, so Gatekeeper may require Control-click then Open.
+- A good beta test is: install FixOnce, open a real project, restart your AI coding tool, and confirm the FixOnce opener and desktop app show the same project state.
 
 Legal and trust pages:
 

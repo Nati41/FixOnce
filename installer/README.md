@@ -57,6 +57,12 @@ Build a professional Windows installer using Inno Setup.
 | Data preservation option | ✅ |
 | Modern wizard style | ✅ |
 
+## Public Beta Notes
+
+- The Windows beta installer is not code-signed yet. SmartScreen warnings are expected for first-time beta testers.
+- Public downloads should be published through GitHub Releases, not committed into `website/downloads/`.
+- Public beta AI tool support is demonstrated with Claude Code, Codex, and Cursor.
+
 ## File Structure
 
 ```
