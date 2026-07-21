@@ -73,6 +73,8 @@ HOOK_ALLOWLIST = [
     "hooks/session_start.sh",
     "hooks/session_end.sh",
     "hooks/post_tool_use.sh",
+    "hooks/pre_tool_context.sh",
+    "hooks/pre_tool_context_codex.sh",
 ]
 
 SCRIPTS_ALLOWLIST = [
