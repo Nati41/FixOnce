@@ -850,6 +850,33 @@ class TestMemoryClassification(unittest.TestCase):
         first_result_line = next(line for line in result.splitlines() if line.startswith("> "))
         self.assertIn("Problem:** MCP reconnect failed after startup shortcut launch", first_result_line)
 
+    def test_fo_brief_confidence_block_does_not_crash(self):
+        """Regression test: fo_brief must not crash with NameError on d_count/s_count."""
+        memory = {
+            "project_info": {"name": "Confidence Test"},
+            "live_record": {
+                "intent": {"current_goal": "Test confidence", "next_step": "Verify fix"},
+            },
+            "decisions": [
+                {"decision": f"Decision {i}", "reason": "Test", "timestamp": "2026-06-01T10:00:00"}
+                for i in range(7)
+            ],
+            "avoid": [],
+            "debug_sessions": [
+                {"problem": f"Bug {i}", "solution": f"Fix {i}", "resolved_at": "2026-06-01T10:00:00"}
+                for i in range(5)
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._activate_temp_session(Path(temp_dir), memory)
+
+            result = server.fo_brief()
+
+        self.assertNotIn("NameError", result)
+        self.assertNotIn("d_count", result)
+        self.assertIn("Confidence:", result)
+        self.assertIn("high", result.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

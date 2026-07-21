@@ -3602,6 +3602,9 @@ def _format_deep_project_brief(memory: Dict[str, Any], mode: str = "compact") ->
     lines.append(format_project_knowledge_line(counters))
     lines.append("")
 
+    d_count = counters.get("decisions", 0)
+    s_count = counters.get("solved", 0)
+
     # Navigator V1: Suggested first action
     if not suggested_action and next_step:
         suggested_action = next_step
