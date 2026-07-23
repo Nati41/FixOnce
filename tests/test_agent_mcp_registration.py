@@ -61,7 +61,7 @@ class TestAgentMcpRegistration(unittest.TestCase):
         self.assertIn('[profiles.default]\nmodel = "gpt-5"', text)
         self.assertIn("[mcp_servers.fixonce]", text)
 
-    def test_codex_existing_fixonce_section_is_updated(self):
+    def test_codex_existing_valid_fixonce_section_is_preserved(self):
         config_path = self.home / ".codex" / "config.toml"
         config_path.parent.mkdir(parents=True)
         config_path.write_text(
@@ -86,13 +86,11 @@ class TestAgentMcpRegistration(unittest.TestCase):
 
         text = self._codex_config_text()
         self.assertEqual(text.count("[mcp_servers.fixonce]"), 1)
-        self.assertNotIn('command = "python"', text)
-        self.assertNotIn("PYTHONPATH", text)
-        self.assertIn('command = "C:\\\\Program Files\\\\FixOnce\\\\FixOnce.exe"', text)
-        self.assertIn('args = ["--mcp"]', text)
-        self.assertIn("startup_timeout_sec = 60", text)
+        self.assertIn('command = "python"', text)
+        self.assertIn('args = ["old.py"]', text)
+        self.assertIn("PYTHONPATH", text)
+        self.assertNotIn("startup_timeout_sec = 60", text)
         self.assertIn("[mcp_servers.fixonce.env]", text)
-        self.assertIn('FIXONCE_ACTOR = "codex"', text)
         self.assertIn('[profiles.default]\nmodel = "gpt-5"', text)
 
     def test_codex_packaged_repair_removes_legacy_env_and_script_args(self):
