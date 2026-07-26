@@ -25,6 +25,10 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller fixonce.spec
 
+      - name: Copy icon to dist folder
+        run: |
+          copy assets\FixOnce.ico dist\FixOnce\FixOnce.ico
+
       - name: Install Inno Setup
         run: choco install innosetup -y
 
