@@ -6136,13 +6136,19 @@ def update_live_record(section: str, data: str) -> str:
             new_insight = _create_insight(update_data['insight'], linked_error=linked_error)
             lr['lessons']['insights'].append(new_insight)
 
-            # Auto-index for semantic search
-            semantic = _load_project_semantic()
-            if semantic:
-                try:
-                    semantic["index_insight"](project_id, update_data['insight'])
-                except Exception as e:
-                    _log(f"[SemanticIndex] Failed to index insight: {e}")
+            # Enqueue for semantic indexing (non-blocking, deferred)
+            try:
+                from core.semantic_queue import enqueue_index_job
+                import time as _time
+                insight_id = new_insight.get('id', f"insight_{int(_time.time())}")
+                enqueue_index_job(
+                    project_id=project_id,
+                    record_type="insight",
+                    record_id=insight_id,
+                    text=update_data['insight'],
+                )
+            except Exception as e:
+                _log(f"[SemanticQueue] Failed to enqueue insight: {e}")
 
             # Fix #2: Notify about the link
             if linked_error:

@@ -768,6 +768,15 @@ def _run_flask(strict_port: bool = False):
 
     atexit.register(cleanup)
 
+    # Preload semantic embedding provider in background (non-blocking)
+    # This warms up the model before first memory operation needs it
+    try:
+        from core.semantic_queue import preload_provider_async
+        preload_provider_async()
+        _startup_log("Semantic provider preload started in background")
+    except Exception as e:
+        _startup_log(f"Semantic provider preload skipped: {e}")
+
     try:
         _serve_flask_blocking("127.0.0.1", ACTUAL_PORT)
     except KeyboardInterrupt:

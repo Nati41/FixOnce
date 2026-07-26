@@ -11,6 +11,7 @@ Architecture:
 - Pre-save review checks for potential conflicts before saving
 """
 
+import time
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple, List
 from dataclasses import dataclass, field
@@ -276,10 +277,14 @@ def record_decision(
         try:
             from core.decision_review import review_decision
 
+            # Don't trigger embedding provider load during pre-save review
+            # Use semantic search only if provider is already loaded
             semantic_search_fn = None
             try:
-                from core.project_semantic import search_project
-                semantic_search_fn = search_project
+                from core.semantic_queue import is_provider_ready
+                if is_provider_ready():
+                    from core.project_semantic import search_project
+                    semantic_search_fn = search_project
             except Exception:
                 semantic_search_fn = None
 
@@ -426,14 +431,22 @@ def record_decision(
         # V2 creation is non-blocking - log but don't fail
         warning = f"{warning}\nV2 object creation failed: {e}".strip()
 
-    # Index for semantic search (non-blocking)
+    # Enqueue for semantic indexing (truly non-blocking, deferred)
     try:
-        from core.project_semantic import index_decision
+        from core.semantic_queue import enqueue_index_job
         from core.decision_review import decision_id_for
-        index_decision(project_id, text, reason, {
-            "decision_id": decision_id_for(decision_record),
-            "status": decision_record.get("status", "active"),
-        })
+        decision_id = decision_id_for(decision_record)
+        enqueue_index_job(
+            project_id=project_id,
+            record_type="decision",
+            record_id=decision_id,
+            text=text,
+            reason=reason,
+            metadata={
+                "decision_id": decision_id,
+                "status": decision_record.get("status", "active"),
+            },
+        )
     except Exception:
         pass  # Semantic indexing is optional
 
@@ -543,14 +556,18 @@ def record_avoid(
     except Exception as e:
         pass  # V2 creation is non-blocking
 
-    # Index for semantic search (non-blocking)
+    # Enqueue for semantic indexing (truly non-blocking, deferred)
     try:
-        from core.project_semantic import get_semantic_index
-        semantic = get_semantic_index()
-        if semantic and hasattr(semantic, 'index_avoid'):
-            semantic.index_avoid(project_id, text, reason)
+        from core.semantic_queue import enqueue_index_job
+        enqueue_index_job(
+            project_id=project_id,
+            record_type="avoid",
+            record_id=v2_id or f"avoid_{int(time.time())}",
+            text=text,
+            reason=reason,
+        )
     except Exception:
-        pass
+        pass  # Semantic indexing is optional
 
     return DecisionResult(
         success=True,

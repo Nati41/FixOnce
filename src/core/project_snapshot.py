@@ -104,19 +104,8 @@ class ProjectSnapshot:
 
 # =============================================================================
 # GIT HELPERS - Single source for git data collection
+# Uses run_git_command_safe to avoid Windows subprocess timeout bugs
 # =============================================================================
-
-def _get_creationflags() -> int:
-    """Get subprocess creationflags for Windows (hide console window)."""
-    try:
-        from core.component_stability import no_window_creationflags
-        return no_window_creationflags()
-    except ImportError:
-        import sys
-        if sys.platform == "win32":
-            return subprocess.CREATE_NO_WINDOW
-        return 0
-
 
 def get_git_branch(working_dir: str) -> str:
     """
@@ -126,16 +115,14 @@ def get_git_branch(working_dir: str) -> str:
         Branch name or empty string if not a git repo
     """
     try:
-        result = subprocess.run(
+        from core.windows_subprocess import run_git_command_safe
+        stdout, success = run_git_command_safe(
             ["git", "branch", "--show-current"],
             cwd=working_dir,
-            capture_output=True,
-            text=True,
-            timeout=2,
-            creationflags=_get_creationflags(),
+            timeout_seconds=2.0,
         )
-        if result.returncode == 0:
-            return result.stdout.strip()
+        if success and stdout:
+            return stdout
     except Exception:
         pass
     return ""
@@ -149,17 +136,15 @@ def get_uncommitted_files(working_dir: str) -> List[str]:
         List of file paths with changes (staged, unstaged, or untracked)
     """
     try:
-        result = subprocess.run(
+        from core.windows_subprocess import run_git_command_safe
+        stdout, success = run_git_command_safe(
             ["git", "status", "--porcelain"],
             cwd=working_dir,
-            capture_output=True,
-            text=True,
-            timeout=2,
-            creationflags=_get_creationflags(),
+            timeout_seconds=2.0,
         )
-        if result.returncode == 0 and result.stdout.strip():
+        if success and stdout:
             files = []
-            for line in result.stdout.strip().split('\n'):
+            for line in stdout.split('\n'):
                 if line and len(line) > 3:
                     # Format: "XY filename" where XY is status, filename starts at position 3
                     files.append(line[3:].strip())
@@ -173,21 +158,22 @@ def get_recent_commits(working_dir: str, limit: int = 5) -> List[Dict[str, str]]
     """
     Get recent commit history.
 
+    Uses run_git_command_safe to avoid Windows subprocess timeout bugs
+    (CREATE_NEW_PROCESS_GROUP can cause infinite hangs on pipe EOF).
+
     Returns:
         List of {"hash": ..., "message": ..., "date": ...}
     """
     try:
-        result = subprocess.run(
+        from core.windows_subprocess import run_git_command_safe
+        stdout, success = run_git_command_safe(
             ["git", "log", f"-{limit}", "--format=%h|%s|%ci"],
             cwd=working_dir,
-            capture_output=True,
-            text=True,
-            timeout=3,
-            creationflags=_get_creationflags(),
+            timeout_seconds=3.0,
         )
-        if result.returncode == 0 and result.stdout.strip():
+        if success and stdout:
             commits = []
-            for line in result.stdout.strip().split('\n'):
+            for line in stdout.split('\n'):
                 parts = line.split('|', 2)
                 if len(parts) >= 2:
                     commits.append({

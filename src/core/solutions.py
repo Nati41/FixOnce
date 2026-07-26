@@ -567,8 +567,8 @@ def record_solution(
 
     # Save V1
     try:
-        if save_fn:
-            save_fn(project_id, memory)
+        if _save_fn:
+            _save_fn(project_id, memory)
         else:
             from managers.multi_project_manager import save_project_memory
             save_project_memory(project_id, memory)
@@ -578,28 +578,16 @@ def record_solution(
             message=f"Error saving project memory: {e}"
         )
 
-    # Save to semantic engine for auto-apply matching (non-blocking)
+    # Save to semantic engine only if already loaded (don't block on init)
     try:
-        from core.semantic_engine import get_engine
-        from config import PERSONAL_DB_PATH
-        engine = get_engine(PERSONAL_DB_PATH)
-        engine.save_solution(error_message, solution)
+        from core.semantic_engine import get_cached_engine
+        engine = get_cached_engine()  # Returns None if not already loaded
+        if engine:
+            engine.save_solution(error_message, solution)
     except Exception:
         pass  # Semantic engine is optional
 
-    # Index to project semantic (non-blocking)
-    try:
-        from core.project_semantic import index_error
-        full_text = f"Error: {error_message}. Solution: {solution}"
-        index_error(project_id, full_text, {
-            "error": error_message,
-            "solution": solution,
-            "files": files_list,
-        })
-    except Exception:
-        pass  # Project semantic is optional
-
-    # Create V2 knowledge object
+    # Create V2 knowledge object (before indexing so we have an ID)
     v2_id = None
     try:
         from core.knowledge_objects import create_object
@@ -615,6 +603,25 @@ def record_solution(
         v2_id = obj.id
     except Exception:
         pass  # V2 creation is non-blocking
+
+    # Enqueue for semantic indexing (truly non-blocking, deferred)
+    try:
+        from core.semantic_queue import enqueue_index_job
+        import time as _time
+        enqueue_index_job(
+            project_id=project_id,
+            record_type="error",
+            record_id=v2_id or f"bug_{int(_time.time())}",
+            text=error_message,
+            reason=solution,
+            metadata={
+                "error": error_message,
+                "solution": solution,
+                "files": files_list,
+            },
+        )
+    except Exception:
+        pass  # Semantic indexing is optional
 
     return SolutionResult(
         success=True,

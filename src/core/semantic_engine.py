@@ -353,6 +353,15 @@ def get_engine(db_path: Path) -> SemanticEngine:
     return _engine
 
 
+def get_cached_engine() -> Optional[SemanticEngine]:
+    """Get the engine ONLY if already loaded. Returns None if not initialized.
+
+    Use this when you want to save to the engine but don't want to block
+    on initialization if it hasn't been loaded yet.
+    """
+    return _engine
+
+
 def reset_engine():
     """Reset the engine (useful for testing)."""
     global _engine
