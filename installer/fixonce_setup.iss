@@ -64,8 +64,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; Main application (from PyInstaller dist folder)
 Source: "..\dist\FixOnce\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Icon file
-Source: "..\dist\FixOnce\FixOnce.ico"; DestDir: "{app}"; Flags: ignoreversion
+; Icon file (copied from assets folder in PyInstaller output)
+Source: "..\dist\FixOnce\assets\FixOnce.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 ; Start Menu
