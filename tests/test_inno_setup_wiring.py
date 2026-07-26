@@ -122,6 +122,57 @@ class TestInnoSetupWiring(unittest.TestCase):
         self.assertIn('__version__ = "1.0.14"', version_text)
         self.assertIn('#define MyAppVersion "1.0.14"', self.inno_text)
 
+    def test_dashboard_is_dark_theme_not_legacy(self):
+        """Regression test: dashboard must be dark theme v1.0.14+, not legacy white."""
+        dashboard_file = PROJECT_ROOT / "data" / "dashboard.html"
+        dashboard_text = dashboard_file.read_text(encoding="utf-8")
+        dashboard_size = dashboard_file.stat().st_size
+
+        # Dark dashboard is ~131KB, legacy white was ~45KB
+        self.assertGreater(
+            dashboard_size, 100000,
+            f"Dashboard too small ({dashboard_size} bytes). Expected dark theme ~131KB."
+        )
+
+        # Dark theme uses --bg: #0a0c10; legacy used white backgrounds
+        self.assertIn("--bg: #0a0c10", dashboard_text)
+
+        # Current Project Snapshot is v1.0.14+ feature
+        self.assertIn("Current Project Snapshot", dashboard_text)
+
+        # Must NOT contain hardcoded v1.0.13
+        self.assertNotIn("v1.0.13", dashboard_text)
+
+    def test_no_stale_version_in_dashboard(self):
+        """Regression test: dashboard must not contain hardcoded old versions."""
+        dashboard_file = PROJECT_ROOT / "data" / "dashboard.html"
+        dashboard_text = dashboard_file.read_text(encoding="utf-8")
+
+        # Check for any hardcoded version strings (legacy pattern)
+        # New dashboard fetches version from API, doesn't hardcode it
+        import re
+        hardcoded_versions = re.findall(r'>v1\.0\.\d+<', dashboard_text)
+        self.assertEqual(
+            hardcoded_versions, [],
+            f"Dashboard contains hardcoded version strings: {hardcoded_versions}"
+        )
+
+    def test_workflow_has_build_verification(self):
+        """Ensure CI workflow verifies bundled files before packaging."""
+        workflow_file = PROJECT_ROOT / ".github" / "workflows" / "build-release.yml"
+        workflow_text = workflow_file.read_text(encoding="utf-8")
+
+        # Must clean stale artifacts
+        self.assertIn("Clean stale build artifacts", workflow_text)
+        self.assertIn("Remove-Item", workflow_text)
+
+        # Must verify bundled files
+        self.assertIn("Verify bundled files match source", workflow_text)
+        self.assertIn("FATAL:", workflow_text)
+
+        # Must check for v1.0.13 string absence
+        self.assertIn("v1.0.13", workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()

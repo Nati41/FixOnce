@@ -22,12 +22,92 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
 
+      - name: Clean stale build artifacts
+        run: |
+          if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
+          if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
+          Write-Host "Cleaned build/ and dist/ directories"
+
+      - name: Verify source files before build
+        run: |
+          $versionContent = Get-Content "src/version.py" -Raw
+          Write-Host "Source version.py:"
+          Write-Host $versionContent
+
+          $dashboardSize = (Get-Item "data/dashboard.html").Length
+          Write-Host "Source dashboard.html size: $dashboardSize bytes"
+
+          $dashboardHash = (Get-FileHash "data/dashboard.html" -Algorithm SHA256).Hash
+          Write-Host "Source dashboard.html SHA256: $dashboardHash"
+
+          # Assert version is 1.0.14
+          if ($versionContent -notmatch '__version__ = "1\.0\.14"') {
+            Write-Error "FATAL: Source version.py does not contain 1.0.14"
+            exit 1
+          }
+
+          # Assert dashboard size matches expected (131,266 bytes with LF)
+          # Allow some variance for line endings
+          if ($dashboardSize -lt 130000) {
+            Write-Error "FATAL: Source dashboard.html is too small ($dashboardSize bytes). Expected ~131KB for v1.0.14 dark dashboard."
+            exit 1
+          }
+
       - name: Build with PyInstaller
         run: pyinstaller fixonce.spec
 
       - name: Copy icon to dist folder
         run: |
           copy assets\FixOnce.ico dist\FixOnce\FixOnce.ico
+
+      - name: Verify bundled files match source
+        run: |
+          Write-Host "=== Verifying bundled files ==="
+
+          # Check bundled version.py
+          $bundledVersion = Get-Content "dist\FixOnce\_internal\src\version.py" -Raw
+          Write-Host "Bundled version.py:"
+          Write-Host $bundledVersion
+
+          if ($bundledVersion -notmatch '__version__ = "1\.0\.14"') {
+            Write-Error "FATAL: Bundled version.py does not contain 1.0.14. Build used stale files."
+            exit 1
+          }
+
+          # Check bundled dashboard.html
+          $bundledDashboardPath = "dist\FixOnce\_internal\data\dashboard.html"
+          if (-not (Test-Path $bundledDashboardPath)) {
+            Write-Error "FATAL: Bundled dashboard.html not found at expected path"
+            exit 1
+          }
+
+          $bundledDashboardSize = (Get-Item $bundledDashboardPath).Length
+          Write-Host "Bundled dashboard.html size: $bundledDashboardSize bytes"
+
+          $bundledDashboardHash = (Get-FileHash $bundledDashboardPath -Algorithm SHA256).Hash
+          Write-Host "Bundled dashboard.html SHA256: $bundledDashboardHash"
+
+          # Compare with source (allow for CRLF conversion: ~131KB LF -> ~135KB CRLF)
+          $sourceDashboardSize = (Get-Item "data\dashboard.html").Length
+          if ($bundledDashboardSize -lt ($sourceDashboardSize - 1000)) {
+            Write-Error "FATAL: Bundled dashboard.html ($bundledDashboardSize bytes) is smaller than source ($sourceDashboardSize bytes). Stale file detected."
+            exit 1
+          }
+
+          # Check for v1.0.13 string in bundled files (should NOT exist)
+          $v13InDashboard = Select-String -Path $bundledDashboardPath -Pattern "v1\.0\.13" -Quiet
+          if ($v13InDashboard) {
+            Write-Error "FATAL: Bundled dashboard.html contains 'v1.0.13'. Stale file detected."
+            exit 1
+          }
+
+          $v13InVersion = Select-String -Path "dist\FixOnce\_internal\src\version.py" -Pattern "1\.0\.13" -Quiet
+          if ($v13InVersion) {
+            Write-Error "FATAL: Bundled version.py contains '1.0.13'. Stale file detected."
+            exit 1
+          }
+
+          Write-Host "=== All verifications passed ==="
 
       - name: Install Inno Setup
         run: choco install innosetup -y
