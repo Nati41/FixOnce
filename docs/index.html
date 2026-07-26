@@ -2652,8 +2652,8 @@
           <span><b class="check">✓</b> No signup</span>
           <span><b class="check">✓</b> Uninstall anytime</span>
         </div>
-        <p class="download-warning" id="download-warning">Beta installers are not code-signed or notarized yet. Windows may show SmartScreen. macOS users: see note below. Use only files from the official GitHub Release.</p>
-        <p class="download-warning"><strong>macOS Beta:</strong> This beta is not yet notarized by Apple. If macOS blocks the first launch, open <strong>System Settings → Privacy & Security</strong>, scroll to the bottom, and click <strong>Open Anyway</strong>. You only need to approve the app once. Notarization is planned before production release.</p>
+        <p class="download-warning" id="download-warning">Beta installers are not code-signed or notarized yet. Windows may show SmartScreen. macOS requires Python 3.10+ and may show Gatekeeper. Use only files from the official GitHub Release.</p>
+        <p class="download-warning"><strong>macOS Beta:</strong> If macOS blocks the first launch, open <strong>System Settings → Privacy & Security</strong>, scroll down, click <strong>Open Anyway</strong>, then confirm. You only need to approve the app once.</p>
         <p class="download-warning">Beta testers should install FixOnce, open a real project, restart Claude Code, Codex, or Cursor, and confirm the FixOnce opener and desktop app show the same project state.</p>
       </div>
     </section>
@@ -2755,7 +2755,7 @@
       }
       const warning = document.querySelector("#download-warning");
       if (warning) {
-        warning.textContent = “This beta is not yet notarized by Apple. If macOS blocks the first launch, open System Settings → Privacy & Security, scroll to the bottom, and click Open Anyway. You only need to approve the app once.”;
+        warning.textContent = "The macOS beta is not notarized yet and requires Python 3.10+. If macOS blocks the first launch, open System Settings, go to Privacy & Security, scroll down, click Open Anyway, then confirm. Use only files from the official GitHub Release.";
       }
     }
 

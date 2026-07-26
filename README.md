@@ -82,7 +82,7 @@ FixOnce is designed around local, project-owned memory:
 ## Public Beta Notes
 
 - Windows beta builds are not code-signed yet, so SmartScreen may warn before first launch.
-- macOS beta builds are not yet notarized by Apple. If macOS blocks the first launch, open **System Settings → Privacy & Security**, scroll to the bottom, and click **Open Anyway**. You only need to approve the app once. Notarization is planned before production release.
+- macOS beta builds require Python 3.10+ and are not yet notarized by Apple. If macOS blocks the first launch, open **System Settings → Privacy & Security**, scroll down, click **Open Anyway**, then confirm. You only need to approve the app once. Notarization is planned before production release.
 - A good beta test is: install FixOnce, open a real project, restart your AI coding tool, and confirm the FixOnce opener and desktop app show the same project state.
 
 Legal and trust pages:
