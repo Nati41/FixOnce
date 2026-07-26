@@ -22,22 +22,21 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
 
-      - name: Build with spec file
+      - name: Build with PyInstaller
         run: pyinstaller fixonce.spec
 
-      - name: Create release package
-        run: |
-          mkdir release
-          xcopy /E /I dist\FixOnce release\FixOnce
-          copy CLAUDE.md release\
-          copy README.md release\
-          powershell Compress-Archive -Path release\* -DestinationPath FixOnce-Windows.zip
+      - name: Install Inno Setup
+        run: choco install innosetup -y
 
-      - name: Upload artifact
+      - name: Build installer with Inno Setup
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\fixonce_setup.iss
+
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: FixOnce-Windows
-          path: FixOnce-Windows.zip
+          name: FixOnce-Windows-Installer
+          path: installer/Output/FixOnce_Setup_*.exe
 
   build-mac:
     runs-on: macos-latest
@@ -57,7 +56,7 @@ jobs:
       - name: Build macOS DMG
         run: bash installer/macos/build_installer.sh
 
-      - name: Upload artifact
+      - name: Upload macOS DMG
         uses: actions/upload-artifact@v4
         with:
           name: FixOnce-mac
