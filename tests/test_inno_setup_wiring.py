@@ -70,6 +70,26 @@ class TestInnoSetupWiring(unittest.TestCase):
         ]
         self.assertFalse(postinstall_runs)
 
+    def test_official_uninstall_invokes_packaged_cleanup_before_taskkill(self):
+        cleanup = 'Parameters: "--uninstall-cleanup"'
+        taskkill = 'Filename: "taskkill"'
+        self.assertIn(cleanup, self.inno_text)
+        self.assertLess(self.inno_text.index(cleanup), self.inno_text.index(taskkill))
+        cleanup_lines = [
+            line
+            for line in self.inno_text.splitlines()
+            if "--uninstall-cleanup" in line and line.strip().startswith("Filename:")
+        ]
+        self.assertEqual(len(cleanup_lines), 1)
+        self.assertIn("{app}\\{#MyAppExeName}", cleanup_lines[0])
+        self.assertIn("waituntilterminated", cleanup_lines[0])
+        self.assertIn("skipifdoesntexist", cleanup_lines[0])
+
+    def test_uninstall_wording_preserves_project_memory(self):
+        self.assertIn("Uninstall always removes the app files and FixOnce MCP registrations.", self.inno_text)
+        self.assertIn("Project memory is preserved unless you delete it manually.", self.inno_text)
+        self.assertNotIn("delete everything", self.inno_text.lower())
+
     def test_windows_icon_is_multi_size_square_ico(self):
         data = WINDOWS_ICON.read_bytes()
         self.assertGreaterEqual(len(data), 6)

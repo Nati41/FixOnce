@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .mcp_config import write_codex_config, write_json_mcp_config
+from .mcp_config import remove_codex_config, remove_json_mcp_config, write_codex_config, write_json_mcp_config
 
 
 SERVER_NAME = "fixonce"
@@ -79,7 +79,26 @@ WINDOWS_MCP_CLIENT_ADAPTERS = (
     register_windsurf_mcp,
 )
 
+WINDOWS_MCP_CLIENT_CONFIGS = (
+    ("codex", lambda home: home / ".codex" / "config.toml", remove_codex_config),
+    ("claude", lambda home: home / ".claude.json", remove_json_mcp_config),
+    ("cursor", lambda home: home / ".cursor" / "mcp.json", remove_json_mcp_config),
+)
+
 
 def register_windows_mcp_clients(home_dir: Path, fixonce_exe: Path) -> list[Path]:
     """Register FixOnce with supported Windows MCP clients."""
     return [adapter(home_dir, fixonce_exe) for adapter in WINDOWS_MCP_CLIENT_ADAPTERS]
+
+
+def unregister_windows_mcp_clients(home_dir: Path, server_name: str = SERVER_NAME) -> dict[str, dict]:
+    """Remove FixOnce-owned MCP registrations from public beta Windows clients."""
+    results: dict[str, dict] = {}
+    for client, path_factory, remover in WINDOWS_MCP_CLIENT_CONFIGS:
+        path = path_factory(home_dir)
+        try:
+            status = remover(path, server_name)
+            results[client] = {"status": status, "path": str(path)}
+        except Exception as exc:
+            results[client] = {"status": "error", "path": str(path), "error": f"{type(exc).__name__}: {exc}"}
+    return results

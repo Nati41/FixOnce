@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+PROJECT_ROOT = Path(__file__).parent.parent
 
 
 class TestLaunchAgentCleanup:
@@ -74,6 +75,30 @@ class TestLaunchAgentCleanup:
 
         tray_calls = [c for c in calls if 'com.fixonce.tray' in c]
         assert len(tray_calls) >= 1, "Should handle com.fixonce.tray"
+
+    def test_installer_app_uninstall_handles_all_launchagent_labels(self):
+        source = (PROJECT_ROOT / "installer" / "macos" / "build_installer.sh").read_text(encoding="utf-8")
+
+        for label in ("com.fixonce.app", "com.fixonce.server", "com.fixonce.tray", "com.fixonce.menubar"):
+            assert label in source
+        assert 'launchctl bootout "$domain/$label"' in source
+        assert 'launchctl unload "$HOME/Library/LaunchAgents/$label.plist"' in source
+        assert 'launchctl remove "$label"' in source
+        assert 'rm -f "$HOME/Library/LaunchAgents/$label.plist"' in source
+
+    def test_installer_app_uninstall_stops_server_and_menu_bar_processes(self):
+        source = (PROJECT_ROOT / "installer" / "macos" / "build_installer.sh").read_text(encoding="utf-8")
+
+        for pattern in ("FixOnce", "app_launcher.py", "menubar_app.py", "server.py", "mcp_memory_server"):
+            assert f'pkill -f "{pattern}"' in source
+
+    def test_standalone_and_installer_app_uninstall_cover_same_launchagents(self):
+        standalone = (PROJECT_ROOT / "installer" / "macos" / "uninstall_macos.sh").read_text(encoding="utf-8")
+        installer_app = (PROJECT_ROOT / "installer" / "macos" / "build_installer.sh").read_text(encoding="utf-8")
+        labels = {"com.fixonce.app", "com.fixonce.server", "com.fixonce.tray", "com.fixonce.menubar"}
+
+        assert labels.issubset(set(re.findall(r"com\.fixonce\.[a-z]+", standalone)))
+        assert labels.issubset(set(re.findall(r"com\.fixonce\.[a-z]+", installer_app)))
 
 
 class TestLaunchAgentPaths:

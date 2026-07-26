@@ -39,7 +39,8 @@ Build a professional Windows installer using Inno Setup.
 
 ### Uninstall
 - Removes program files
-- Asks user whether to keep their data (decisions, insights, memory)
+- Asks user whether to keep local runtime AppData
+- Removes FixOnce-owned MCP registrations for Claude Code, Codex, and Cursor
 - Removes registry entries
 - Removes shortcuts
 
@@ -54,12 +55,13 @@ Build a professional Windows installer using Inno Setup.
 | Start Menu shortcut | ✅ |
 | Hebrew language support | ✅ |
 | Clean uninstaller | ✅ |
-| Data preservation option | ✅ |
+| Project memory preserved by default | ✅ |
 | Modern wizard style | ✅ |
 
 ## Public Beta Notes
 
 - The Windows beta installer is not code-signed yet. SmartScreen warnings are expected for first-time beta testers.
+- Windows login autostart is intentionally disabled. Users open FixOnce when they start working.
 - Public downloads should be published through GitHub Releases, not committed into `website/downloads/`.
 - Public beta AI tool support is demonstrated with Claude Code, Codex, and Cursor.
 

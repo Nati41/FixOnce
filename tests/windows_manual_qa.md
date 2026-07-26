@@ -48,27 +48,25 @@ Pass criteria:
 - Reboot the Windows VM.
 - Log back into the same user session.
 - Expected result:
-  - background server is available after login through scheduled task
+  - FixOnce does not auto-start at login
+  - opening FixOnce manually starts or reuses the background server
   - no visible terminal window appears
 
 Pass criteria:
 
 - FixOnce app launch after reboot works without manual repair
 
-## E. Scheduled Task
+## E. Login Autostart
 
-- Open Task Scheduler.
-- Locate task `FixOnceServer`.
-- Verify action target.
+- Open Task Scheduler and the per-user Startup folder.
 - Expected result:
-  - task exists
-  - target is valid for the installed build
-  - packaged install should point to `FixOnce.exe --server`
-  - dev fallback install may point to `pythonw ... scripts/app_launcher.py --server`
+  - no `FixOnceServer` scheduled task is required for the public beta
+  - no legacy `FixOnceServer.lnk` Startup shortcut remains
+  - FixOnce starts cleanly when opened manually
 
 Pass criteria:
 
-- task exists and target path is correct for the installation mode
+- Windows login autostart remains disabled and manual launch works
 
 ## F. Failure Flow
 
@@ -86,13 +84,13 @@ Pass criteria:
 
 ## G. Uninstall
 
-- Run `uninstall.ps1`.
+- Uninstall from Windows Apps & Features / Installed Apps.
 - Expected result:
   - FixOnce background server stops
-  - scheduled task is removed
+  - FixOnce-owned Claude Code, Codex, and Cursor MCP registrations are removed
+  - unrelated MCP server entries remain
   - uninstall completes without leaving active FixOnce server process behind
 
 Pass criteria:
 
-- `FixOnceServer` task removed
 - no active `FixOnce.exe --server` or matching Python server process remains

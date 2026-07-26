@@ -11,7 +11,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DIST_DIR="$PROJECT_ROOT/dist"
 BUILD_DIR="$SCRIPT_DIR/build"
 APP_SOURCE="$DIST_DIR/FixOnce.app"
-DMG_NAME="FixOnce-mac-beta"
+DMG_NAME="FixOnce-mac"
 VERSION=$(
     python3 - "$PROJECT_ROOT/src/version.py" <<'PY' 2>/dev/null || echo "1.0.0"
 import pathlib
@@ -72,9 +72,9 @@ Uninstall:
   Delete ~/.fixonce if you want to remove all data.
 
 Note:
-  This beta build is unsigned. On first launch, you may need to:
-  1. Right-click the app and select "Open"
-  2. Click "Open" in the security dialog
+  This beta build is unsigned and not notarized yet. If macOS blocks
+  the first launch, open System Settings, go to Privacy & Security,
+  scroll down, click Open Anyway, then confirm.
 
 Support: https://fixonce.ai
 README

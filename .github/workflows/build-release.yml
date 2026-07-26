@@ -54,19 +54,11 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
 
-      - name: Build with spec file
-        run: pyinstaller fixonce_macos.spec
-
-      - name: Create release package
-        run: |
-          mkdir release
-          cp -R dist/FixOnce.app release/
-          cp CLAUDE.md release/
-          cp README.md release/
-          zip -r FixOnce-macOS.zip release/
+      - name: Build macOS DMG
+        run: bash installer/macos/build_installer.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FixOnce-macOS
-          path: FixOnce-macOS.zip
+          name: FixOnce-mac
+          path: installer/macos/build/FixOnce-mac.dmg

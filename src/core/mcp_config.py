@@ -130,6 +130,20 @@ def remove_codex_server_blocks(content: str, server_name: str) -> str:
     return "".join(kept_lines).rstrip()
 
 
+def remove_codex_config(path: Path, server_name: str) -> str:
+    """Remove one Codex MCP server block and preserve unrelated TOML."""
+    if not path.exists():
+        return "missing"
+
+    existing = path.read_text(encoding="utf-8")
+    updated = remove_codex_server_blocks(existing, server_name)
+    if updated == existing.rstrip():
+        return "absent"
+
+    path.write_text((updated + "\n") if updated else "", encoding="utf-8")
+    return "removed"
+
+
 def write_codex_config(path: Path, server_name: str, config: dict, include_actor_env: bool = True) -> str:
     """Create missing Codex config or repair only the known broken Python --mcp form."""
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -194,3 +208,25 @@ def write_json_mcp_config(path: Path, server_name: str, config: dict):
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+
+
+def remove_json_mcp_config(path: Path, server_name: str) -> str:
+    """Remove one JSON MCP server entry and preserve unrelated settings."""
+    if not path.exists():
+        return "missing"
+
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return "invalid"
+
+    if not isinstance(loaded, dict):
+        return "invalid"
+
+    servers = loaded.get("mcpServers")
+    if not isinstance(servers, dict) or server_name not in servers:
+        return "absent"
+
+    del servers[server_name]
+    path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
+    return "removed"

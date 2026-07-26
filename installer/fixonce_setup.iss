@@ -99,6 +99,9 @@ Filename: "{app}\{#MyAppExeName}"; Parameters: "--bootstrap"; StatusMsg: "Settin
 Type: files; Name: "{userstartup}\FixOnceServer.lnk"
 
 [UninstallRun]
+; Best-effort MCP cleanup before installed files are removed.
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--uninstall-cleanup"; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "CleanupFixOnceMCP"
+
 ; Stop FixOnce before uninstall
 Filename: "taskkill"; Parameters: "/F /IM {#MyAppExeName}"; Flags: runhidden; RunOnceId: "StopFixOnce"
 
@@ -123,11 +126,13 @@ var
 begin
   Result := True;
 
-  // Ask user if they want to keep their data
+  // Ask user if they want to keep runtime AppData. Project memory is preserved.
   MsgResult := MsgBox(
-    'Do you want to keep your FixOnce data (decisions, insights, project memory)?' + #13#10 + #13#10 +
-    'Click Yes to keep your data for future reinstalls.' + #13#10 +
-    'Click No to delete everything.',
+    'Do you want to keep local FixOnce runtime data for future reinstalls?' + #13#10 + #13#10 +
+    'Uninstall always removes the app files and FixOnce MCP registrations.' + #13#10 +
+    'Project memory is preserved unless you delete it manually.' + #13#10 + #13#10 +
+    'Click Yes to keep runtime data.' + #13#10 +
+    'Click No to remove runtime data from AppData.',
     mbConfirmation, MB_YESNOCANCEL);
 
   if MsgResult = IDCANCEL then

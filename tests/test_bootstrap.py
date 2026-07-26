@@ -615,6 +615,29 @@ class TestBootstrap(unittest.TestCase):
         self.assertIn("FixOnceServer.lnk", uninstall_text)
         self.assertIn("Programs\\Startup", uninstall_text)
 
+    def test_uninstall_cleanup_removes_mcp_and_legacy_startup_without_failing(self):
+        with patch.object(app_launcher.sys, "platform", "win32"), patch.object(
+            app_launcher,
+            "cleanup_packaged_windows_mcp",
+            return_value=False,
+        ) as cleanup_mcp, patch.object(
+            app_launcher,
+            "remove_windows_startup_shortcut",
+            return_value=False,
+        ) as remove_shortcut:
+            code = app_launcher.run_uninstall_cleanup()
+
+        self.assertEqual(code, 0)
+        cleanup_mcp.assert_called_once()
+        remove_shortcut.assert_called_once()
+
+    def test_main_dispatches_uninstall_cleanup(self):
+        with patch.object(app_launcher, "run_uninstall_cleanup", return_value=0) as cleanup, patch.object(sys, "argv", ["FixOnce.exe", "--uninstall-cleanup"]):
+            with self.assertRaises(SystemExit) as ctx:
+                app_launcher.main()
+            self.assertEqual(ctx.exception.code, 0)
+        cleanup.assert_called_once()
+
     def test_main_dispatches_bootstrap(self):
         with patch.object(app_launcher, "run_bootstrap", return_value=0) as run_bootstrap, patch.object(sys, "argv", ["FixOnce.exe", "--bootstrap"]):
             with self.assertRaises(SystemExit) as ctx:

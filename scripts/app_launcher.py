@@ -85,6 +85,7 @@ LOG_DIR = USER_DATA_DIR / "logs"
 LAUNCHER_LOG = LOG_DIR / "app_launcher.log"
 BOOTSTRAP_LOG = LOG_DIR / "bootstrap.log"
 MCP_STARTUP_LOG = LOG_DIR / "mcp_startup.log"
+UNINSTALL_LOG = LOG_DIR / "uninstall.log"
 BOOTSTRAP_TASK_NAME = "FixOnceServer"
 BOOTSTRAP_STARTUP_SHORTCUT_NAME = "FixOnceServer.lnk"
 AUTOSTART_METHOD_SCHEDULED_TASK = "scheduled_task"
@@ -150,6 +151,17 @@ def bootstrap_log(message: str):
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         with BOOTSTRAP_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
+
+
+def uninstall_log(message: str):
+    """Append uninstall cleanup diagnostics to ~/.fixonce/logs/uninstall.log."""
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with UNINSTALL_LOG.open("a", encoding="utf-8") as handle:
             handle.write(f"[{timestamp}] {message}\n")
     except Exception:
         pass
@@ -586,6 +598,55 @@ def configure_packaged_windows_mcp(log_fn: Callable[[str], None] | None = None) 
     except Exception as exc:
         write_log(f"MCP registration result: failed; error={type(exc).__name__}: {exc}")
         return False
+
+
+def cleanup_packaged_windows_mcp(log_fn: Callable[[str], None] | None = None) -> bool:
+    """Remove per-user FixOnce MCP config entries for packaged Windows uninstall."""
+    write_log = log_fn or uninstall_log
+    if sys.platform != "win32":
+        write_log("MCP cleanup skipped: not Windows")
+        return False
+
+    home_dir = Path.home()
+    user_name = os.environ.get("USERNAME") or os.environ.get("USER") or "unknown"
+    user_profile = os.environ.get("USERPROFILE") or str(home_dir)
+    write_log("MCP cleanup started")
+    write_log(f"MCP cleanup user/profile: user={user_name}; home={home_dir}; USERPROFILE={user_profile}")
+
+    try:
+        from core.agent_mcp_registration import unregister_windows_mcp_clients
+
+        results = unregister_windows_mcp_clients(home_dir)
+    except Exception as exc:
+        write_log(f"MCP cleanup result: failed; error={type(exc).__name__}: {exc}")
+        return False
+
+    ok = True
+    for client, result in results.items():
+        status = result.get("status")
+        path = result.get("path")
+        if status == "error":
+            ok = False
+            write_log(f"MCP cleanup {client}: error at {path}: {result.get('error')}")
+        else:
+            write_log(f"MCP cleanup {client}: {status} at {path}")
+
+    write_log("MCP cleanup completed" if ok else "MCP cleanup completed with warnings")
+    return ok
+
+
+def run_uninstall_cleanup() -> int:
+    """Best-effort cleanup invoked by the official Windows uninstaller."""
+    uninstall_log("Uninstall cleanup started")
+    try:
+        cleanup_packaged_windows_mcp()
+        if sys.platform == "win32":
+            remove_windows_startup_shortcut(log_fn=uninstall_log)
+        uninstall_log("Uninstall cleanup completed")
+        return 0
+    except Exception as exc:
+        uninstall_log(f"Uninstall cleanup failed: {type(exc).__name__}: {exc}")
+        return 0
 
 
 def _read_runtime_pid_port() -> tuple[int | None, int | None]:
@@ -1658,6 +1719,9 @@ def main():
 
     if "--bootstrap" in sys.argv:
         raise SystemExit(run_bootstrap())
+
+    if "--uninstall-cleanup" in sys.argv:
+        raise SystemExit(run_uninstall_cleanup())
 
     # Explicit tray mode flags (backward compatible)
     if "--menubar" in sys.argv or "-m" in sys.argv or "--tray" in sys.argv:

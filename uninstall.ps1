@@ -21,13 +21,13 @@ $UserDataDir = Join-Path $env:USERPROFILE ".fixonce"
 Write-Host "This will remove FixOnce from your system." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "What will be removed:"
-Write-Host "  - Scheduled Task (auto-start)"
 Write-Host "  - MCP configuration from Codex/Claude/Cursor"
 Write-Host "  - Desktop and Start Menu shortcuts"
 Write-Host "  - Installed app files"
+Write-Host "  - Legacy Startup shortcut if present"
 Write-Host ""
 Write-Host "What will NOT be removed:"
-Write-Host "  - Runtime data in $UserDataDir"
+Write-Host "  - Project memory in $UserDataDir"
 Write-Host "  - Chrome extension (remove manually)"
 Write-Host ""
 
@@ -51,8 +51,8 @@ Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
     }
 Write-OK "Server stopped"
 
-# Remove Scheduled Task
-Write-Host "[2/5] Removing auto-start..."
+# Remove legacy auto-start entries
+Write-Host "[2/5] Removing legacy auto-start..."
 $taskName = "FixOnceServer"
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($task) {
@@ -84,22 +84,30 @@ if (Test-Path $claudeConfig) {
 
 # Remove MCP from Cursor
 Write-Host "[4/5] Removing MCP from Cursor..."
-$cursorConfig = Join-Path $env:APPDATA "Cursor\mcp.json"
+$cursorConfigs = @(
+    (Join-Path $env:USERPROFILE ".cursor\mcp.json"),
+    (Join-Path $env:APPDATA "Cursor\mcp.json")
+)
+$cursorRemoved = $false
+foreach ($cursorConfig in $cursorConfigs) {
 if (Test-Path $cursorConfig) {
     try {
         $config = Get-Content $cursorConfig | ConvertFrom-Json
         if ($config.mcpServers -and $config.mcpServers.fixonce) {
             $config.mcpServers.PSObject.Properties.Remove('fixonce')
             $config | ConvertTo-Json -Depth 10 | Out-File $cursorConfig -Encoding UTF8
-            Write-OK "Removed from Cursor"
+            Write-OK "Removed from Cursor: $cursorConfig"
+            $cursorRemoved = $true
         } else {
-            Write-Warn "Not configured in Cursor"
+            Write-Warn "Not configured in Cursor: $cursorConfig"
         }
     } catch {
-        Write-Warn "Could not update Cursor config"
+        Write-Warn "Could not update Cursor config: $cursorConfig"
     }
-} else {
-    Write-Warn "Cursor config not found"
+}
+}
+if (-not $cursorRemoved) {
+    Write-Warn "Cursor FixOnce config not found"
 }
 
 # Remove MCP from Codex
@@ -171,7 +179,7 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host "  ✓ Uninstall Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Your runtime data in $UserDataDir is preserved."
+Write-Host "Your project memory in $UserDataDir is preserved."
 Write-Host ""
 Write-Host "To remove Chrome extension:"
 Write-Host "  chrome://extensions/ → Find FixOnce → Remove"

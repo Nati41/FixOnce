@@ -11,7 +11,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
 APP_NAME="FixOnce Installer"
 RUNTIME_APP_NAME="FixOnce"
-DMG_NAME="FixOnce-mac-beta"
+DMG_NAME="FixOnce-mac"
 VERSION=$(
     python3 - "$PROJECT_ROOT/src/version.py" <<'PY' 2>/dev/null || echo "1.0.0"
 import pathlib
@@ -904,15 +904,26 @@ open_fixonce_app() {
 
 uninstall_fixonce() {
     local choice
-    choice=$(osascript -e 'display dialog "Uninstall FixOnce?\n\nThis removes the FixOnce app, local server files, and LaunchAgent.\n\nYour ~/.fixonce memory data will be left in place." with title "FixOnce Installer" buttons {"Cancel", "Uninstall"} default button "Cancel" with icon caution' 2>/dev/null || true)
+    choice=$(osascript -e 'display dialog "Uninstall FixOnce?\n\nThis removes the FixOnce app, local server files, and automatic startup services.\n\nYour ~/.fixonce memory data will be left in place." with title "FixOnce Installer" buttons {"Cancel", "Uninstall"} default button "Cancel" with icon caution' 2>/dev/null || true)
     if [[ "$choice" != *"Uninstall"* ]]; then
         return 0
     fi
 
     local domain="gui/$(id -u)"
-    launchctl bootout "$domain/com.fixonce.server" >/dev/null 2>&1 || true
-    launchctl unload "$HOME/Library/LaunchAgents/com.fixonce.server.plist" >/dev/null 2>&1 || true
-    rm -f "$HOME/Library/LaunchAgents/com.fixonce.server.plist"
+    local label
+    for label in com.fixonce.app com.fixonce.server com.fixonce.tray com.fixonce.menubar; do
+        launchctl bootout "$domain/$label" >/dev/null 2>&1 || true
+        launchctl unload "$HOME/Library/LaunchAgents/$label.plist" >/dev/null 2>&1 || true
+        launchctl remove "$label" >/dev/null 2>&1 || true
+        rm -f "$HOME/Library/LaunchAgents/$label.plist"
+    done
+
+    pkill -f "FixOnce" 2>/dev/null || true
+    pkill -f "app_launcher.py" 2>/dev/null || true
+    pkill -f "menubar_app.py" 2>/dev/null || true
+    pkill -f "server.py" 2>/dev/null || true
+    pkill -f "mcp_memory_server" 2>/dev/null || true
+
     rm -rf "$INSTALL_DIR"
     rm -rf "$RUNTIME_APP_FALLBACK"
     if [ -w "/Applications" ]; then
@@ -2202,7 +2213,8 @@ To install FixOnce:
 
 macOS security note:
 This beta DMG is unsigned and not notarized yet.
-If macOS blocks the app, right-click "FixOnce Installer.app" and choose Open.
+If macOS blocks the first launch, open System Settings, go to Privacy & Security,
+scroll down, click Open Anyway, then confirm.
 If macOS still blocks it, this build needs signing/notarization before wider testing.
 
 Requirements:

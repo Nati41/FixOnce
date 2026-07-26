@@ -12,6 +12,7 @@ from src.core.agent_mcp_registration import (
     register_cursor_mcp,
     register_windsurf_mcp,
     register_windows_mcp_clients,
+    unregister_windows_mcp_clients,
 )
 
 
@@ -378,6 +379,55 @@ class TestAgentMcpRegistration(unittest.TestCase):
         self._assert_json_client_config(self.home / ".claude.json", "claude")
         self._assert_json_client_config(self.home / ".cursor" / "mcp.json", "cursor")
         self._assert_json_client_config(self.home / ".codeium" / "windsurf" / "mcp_config.json", "windsurf")
+
+    def test_windows_unregistration_removes_only_fixonce_entries(self):
+        register_codex_mcp(self.home, self.fixonce_exe)
+        for path in (self.home / ".claude.json", self.home / ".cursor" / "mcp.json"):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(
+                    {
+                        "theme": "dark",
+                        "mcpServers": {
+                            "fixonce": {"command": str(self.fixonce_exe), "args": ["--mcp"]},
+                            "other": {"command": "node", "args": ["server.js"]},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+        codex_config = self.home / ".codex" / "config.toml"
+        codex_config.write_text(
+            codex_config.read_text(encoding="utf-8")
+            + "\n[mcp_servers.other]\ncommand = \"node\"\nargs = [\"server.js\"]\n",
+            encoding="utf-8",
+        )
+
+        results = unregister_windows_mcp_clients(self.home)
+
+        self.assertEqual(results["codex"]["status"], "removed")
+        self.assertEqual(results["claude"]["status"], "removed")
+        self.assertEqual(results["cursor"]["status"], "removed")
+        codex_text = codex_config.read_text(encoding="utf-8")
+        self.assertNotIn("[mcp_servers.fixonce]", codex_text)
+        self.assertNotIn("[mcp_servers.fixonce.env]", codex_text)
+        self.assertIn("[mcp_servers.other]", codex_text)
+        for path in (self.home / ".claude.json", self.home / ".cursor" / "mcp.json"):
+            config = self._json_config(path)
+            self.assertEqual(config["theme"], "dark")
+            self.assertNotIn("fixonce", config["mcpServers"])
+            self.assertEqual(config["mcpServers"]["other"], {"command": "node", "args": ["server.js"]})
+
+    def test_windows_unregistration_is_safe_when_missing_and_idempotent(self):
+        first = unregister_windows_mcp_clients(self.home)
+        second = unregister_windows_mcp_clients(self.home)
+
+        self.assertEqual(first["codex"]["status"], "missing")
+        self.assertEqual(first["claude"]["status"], "missing")
+        self.assertEqual(first["cursor"]["status"], "missing")
+        self.assertEqual(second["codex"]["status"], "missing")
+        self.assertEqual(second["claude"]["status"], "missing")
+        self.assertEqual(second["cursor"]["status"], "missing")
 
 
 if __name__ == "__main__":

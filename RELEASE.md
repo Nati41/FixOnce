@@ -44,7 +44,7 @@ Before publishing the beta:
 6. Confirm FixOnce restores the current project state before work continues.
 7. Confirm the desktop app shows the active project, connected AI tool, current project state, and recent memories accurately.
 8. On Windows, confirm SmartScreen copy is expected for unsigned beta builds.
-9. On macOS, confirm Gatekeeper copy is expected for non-notarized beta builds.
+9. On macOS, confirm Python 3.10+ and Gatekeeper copy are expected for non-notarized beta builds.
 
 ## Public Beta Support Matrix
 

@@ -67,7 +67,9 @@ Use the FixOnce desktop app to confirm the active project, connected AI tool, re
 
 Use Windows Apps & Features / Installed Apps to uninstall FixOnce.
 
-Uninstalling removes the app and integrations. Stored project memory is not sent anywhere. You can also delete local FixOnce data folders if you want to remove stored memory from the machine.
+Uninstalling removes the app and FixOnce-owned MCP integrations for Claude Code, Codex, and Cursor. Unrelated MCP servers are left unchanged.
+
+Project memory is preserved unless you delete it manually. Stored project memory is not sent anywhere.
 
 ## Troubleshooting
 
