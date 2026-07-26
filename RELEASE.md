@@ -21,6 +21,18 @@ Canonical download location:
 https://github.com/Nati41/FixOnce/releases
 ```
 
+## GitHub Release Copy
+
+Use this copy for the public beta release highlights:
+
+- Project continuity for AI coding agents
+- Desktop app for macOS and Windows
+- Works with Claude Code, Codex, and Cursor
+- Local-first architecture
+- Human approval before project knowledge is saved
+
+The published RC1/public beta release should be marked as the GitHub **Latest** release. Do not leave the website or public copy pointing users at an older pre-release after RC1 is published.
+
 ## Release Source Of Truth
 
 - GitHub Pages source: `docs/`

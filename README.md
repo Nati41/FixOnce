@@ -2,7 +2,7 @@
 
 **One developer. Multiple AI agents. One project memory.**
 
-Project-owned memory for AI coding tools.
+Project continuity for AI coding agents.
 
 FixOnce is a local project memory layer for AI coding work. It keeps the project's decisions, solved fixes, avoid patterns, and next step with the repository so Claude Code, Codex, or Cursor can continue work without starting from zero.
 

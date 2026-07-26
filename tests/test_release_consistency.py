@@ -42,3 +42,20 @@ class TestReleaseConsistency(unittest.TestCase):
                 self.assertIn("FixOnce-mac", text)
                 self.assertNotIn("FixOnce-mac-beta", text)
         self.assertIn(expected, (PROJECT_ROOT / "RELEASE.md").read_text(encoding="utf-8"))
+
+    def test_release_positioning_copy_is_current(self):
+        readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        release = (PROJECT_ROOT / "RELEASE.md").read_text(encoding="utf-8")
+        required_highlights = [
+            "Project continuity for AI coding agents",
+            "Desktop app for macOS and Windows",
+            "Works with Claude Code, Codex, and Cursor",
+            "Local-first architecture",
+            "Human approval before project knowledge is saved",
+        ]
+
+        self.assertIn("Project continuity for AI coding agents.", readme)
+        self.assertNotIn("Project-owned memory for AI coding tools", readme)
+        for highlight in required_highlights:
+            self.assertIn(highlight, release)
+        self.assertIn("GitHub **Latest** release", release)
