@@ -29,7 +29,7 @@ With FixOnce:
 - Website: https://nati41.github.io/FixOnce/
 - Releases: https://github.com/Nati41/FixOnce/releases
 - Downloads: https://github.com/Nati41/FixOnce/releases
-- Windows installer: published on the current GitHub Release as `FixOnce_Setup_1.0.13.exe`
+- Windows installer: published on the current GitHub Release as `FixOnce_Setup_1.0.14.exe`
 - macOS installer: published on the current GitHub Release as `FixOnce-mac.dmg`
 
 1. Download FixOnce from GitHub Releases.
@@ -99,4 +99,4 @@ For release builds and packaging notes, see `RELEASE.md`.
 
 ## Version
 
-Current beta: `v1.0.13`
+Current beta: `v1.0.14`

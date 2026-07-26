@@ -1,12 +1,12 @@
 # FixOnce Release Notes
 
-Current beta: `v1.0.13`
+Current beta: `v1.0.14`
 
 ## Public Release Assets
 
 The public beta release should publish these installer assets on GitHub Releases:
 
-- Windows: `FixOnce_Setup_1.0.13.exe`
+- Windows: `FixOnce_Setup_1.0.14.exe`
 - macOS: `FixOnce-mac.dmg`
 
 Release page:
@@ -49,7 +49,7 @@ The website download buttons should point to GitHub Release assets, not local `w
 Before publishing the beta:
 
 1. Confirm `https://nati41.github.io/FixOnce/` serves the current landing page.
-2. Confirm the Windows installer URL returns the real `FixOnce_Setup_1.0.13.exe` asset.
+2. Confirm the Windows installer URL returns the real `FixOnce_Setup_1.0.14.exe` asset.
 3. Confirm the macOS installer URL returns the real `FixOnce-mac.dmg` asset.
 4. Install FixOnce on a clean machine or VM.
 5. Open Claude Code, Codex, or Cursor from a real project folder.

@@ -7,7 +7,7 @@ This guide is for the public beta Windows installer.
 Download the current Windows installer from GitHub Releases:
 
 ```text
-FixOnce_Setup_1.0.13.exe
+FixOnce_Setup_1.0.14.exe
 ```
 
 Release page:
@@ -16,11 +16,11 @@ Release page:
 https://github.com/Nati41/FixOnce/releases
 ```
 
-Use the release page as the canonical download location. The final RC asset should be named `FixOnce_Setup_1.0.13.exe`.
+Use the release page as the canonical download location. The final RC asset should be named `FixOnce_Setup_1.0.14.exe`.
 
 ## Install
 
-1. Download `FixOnce_Setup_1.0.13.exe`.
+1. Download `FixOnce_Setup_1.0.14.exe`.
 2. Run the installer.
 3. Follow the installer prompts.
 4. Open the FixOnce desktop app when installation finishes.
