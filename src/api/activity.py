@@ -26,6 +26,14 @@ from core.runtime_log import log_runtime_event
 from core.unreported_work import mark_work
 from core.windows_subprocess import no_window_creationflags
 
+# Guardian signal production (shadow mode only)
+try:
+    from core.signal_audit import produce_destructive_signal
+    SIGNAL_AUDIT_ENABLED = True
+except ImportError:
+    SIGNAL_AUDIT_ENABLED = False
+    produce_destructive_signal = None
+
 # Boundary detection imports
 try:
     if os.environ.get("FIXONCE_DISABLE_BOUNDARY") == "1":
@@ -325,6 +333,185 @@ def _is_file_delete(command: str) -> bool:
     return bool(re.search(r"(?:^|[;&|])\s*(?:rm|unlink|git\s+rm)(?:\s|$)", normalized))
 
 
+def _extract_delete_paths(command: str, cwd: str = "") -> tuple:
+    """
+    Extract file paths from rm/unlink/git rm commands.
+
+    Returns (paths: list[str], is_ambiguous: bool, raw_command: str).
+    - paths: deterministically extracted paths (may be empty)
+    - is_ambiguous: True if command contains globs/variables/subshells
+    - raw_command: the delete command segment for evidence
+
+    Only extracts paths when parsing is deterministic.
+    """
+    if not command:
+        return [], False, ""
+
+    normalized = " ".join(str(command).strip().split())
+
+    # Find the delete command segment (rm, unlink, or git rm)
+    # Handle chained commands - find the first delete command
+    match = re.search(
+        r"(?:^|[;&|]\s*)((?:git\s+)?(?:rm|unlink)(?:\s+[^;&|]+)?)",
+        normalized,
+    )
+    if not match:
+        return [], False, ""
+
+    delete_segment = match.group(1).strip()
+
+    # Check for ambiguity markers in the entire segment
+    ambiguity_markers = [
+        r"\*",           # Glob *
+        r"\?",           # Glob ?
+        r"\[.*\]",       # Glob [...]
+        r"\$\(",         # Command substitution $(...)
+        r"`",            # Backtick substitution
+        r"\$\{",         # Variable ${...}
+        r"\$[A-Za-z_]",  # Variable $VAR
+    ]
+
+    is_ambiguous = any(re.search(marker, delete_segment) for marker in ambiguity_markers)
+
+    if is_ambiguous:
+        return [], True, delete_segment
+
+    # Tokenize respecting quotes
+    paths = []
+    tokens = []
+
+    # Simple tokenizer that respects quotes
+    current_token = ""
+    in_single_quote = False
+    in_double_quote = False
+    i = 0
+
+    while i < len(delete_segment):
+        char = delete_segment[i]
+
+        if char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+        elif char == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+        elif char == " " and not in_single_quote and not in_double_quote:
+            if current_token:
+                tokens.append(current_token)
+                current_token = ""
+        else:
+            current_token += char
+
+        i += 1
+
+    if current_token:
+        tokens.append(current_token)
+
+    # Skip command name and flags, extract paths
+    skip_next = False
+    for j, token in enumerate(tokens):
+        if skip_next:
+            skip_next = False
+            continue
+
+        # Skip the command itself
+        if j == 0 and token in ("rm", "unlink", "git"):
+            continue
+        if j == 1 and tokens[0] == "git" and token == "rm":
+            continue
+
+        # Skip flags
+        if token.startswith("-"):
+            # Some flags take arguments (e.g., --target-directory)
+            if token in ("--target-directory", "-t"):
+                skip_next = True
+            continue
+
+        # Skip empty tokens
+        if not token.strip():
+            continue
+
+        # This should be a path
+        # Resolve relative to cwd if provided
+        path = token
+        if cwd and not os.path.isabs(path):
+            path = os.path.join(cwd, path)
+
+        paths.append(path)
+
+    return paths, False, delete_segment
+
+
+def _produce_delete_signal_from_command(
+    command: str,
+    project_id: str,
+    cwd: str = "",
+) -> None:
+    """
+    Produce GuardianSignal for destructive Bash commands.
+
+    Called when _is_file_delete(command) is True.
+    Extracts paths deterministically or marks as unknown impact.
+    """
+    if not SIGNAL_AUDIT_ENABLED:
+        return
+
+    try:
+        paths, is_ambiguous, raw_segment = _extract_delete_paths(command, cwd)
+
+        if is_ambiguous:
+            # Cannot determine exact paths - emit unknown impact signal
+            from core.signal_audit import record_signal_audit
+            from core.guardian_signal import GuardianSignal, GuardianEvidence
+
+            signal = GuardianSignal(
+                concern="risk",
+                source="detector",
+                category="risk_unknown_impact",
+                severity="medium",
+                confidence=0.8,
+                reason="Destructive command with unpredictable targets",
+                evidence=GuardianEvidence(
+                    operation="delete",
+                    context_snippet=raw_segment[:200],
+                ),
+            )
+            record_signal_audit(signal, project_id=project_id, evaluate_policy=True)
+
+        elif paths:
+            # Deterministic paths - emit signal for each (or first with context)
+            from core.signal_audit import produce_destructive_signal
+
+            # Use first path as primary, include command as context
+            primary_path = paths[0]
+
+            # For multiple paths, we still produce one signal with context
+            # The dedup key uses the first path
+            from core.signal_audit import record_signal_audit
+            from core.guardian_signal import GuardianSignal, GuardianEvidence
+
+            context = raw_segment[:200] if len(paths) > 1 else None
+
+            signal = GuardianSignal(
+                concern="risk",
+                source="detector",
+                category="risk_destructive_op",
+                severity="high",
+                confidence=1.0,
+                reason=f"Destructive command: {len(paths)} target(s)",
+                evidence=GuardianEvidence(
+                    file_path=primary_path,
+                    operation="delete",
+                    context_snippet=context,
+                ),
+            )
+            record_signal_audit(signal, project_id=project_id, evaluate_policy=True)
+
+        # else: no paths extracted and not ambiguous - skip silently
+
+    except Exception:
+        # Silent failure - must not break activity logging
+        pass
+
+
 def _is_file_write_command(command: str) -> bool:
     normalized = " ".join(str(command or "").strip().split())
     return bool(
@@ -369,6 +556,13 @@ def _track_unreported_work(data: dict, project_id: str, editor: str) -> None:
             session_id=str(data.get("session_id") or ""),
             source=str(data.get("source") or tool or "PostToolUse"),
         )
+        # Shadow-mode: produce GuardianSignal for destructive commands
+        # Must not break activity logging if signal production fails
+        try:
+            cwd = str(data.get("cwd") or "")
+            _produce_delete_signal_from_command(command, project_id, cwd)
+        except Exception:
+            pass  # Silent failure
     elif activity_type == "command" and _is_file_write_command(command):
         mark_work(
             project_id,
@@ -489,6 +683,18 @@ def log_activity():
         # Update session registry so Active AI updates in dashboard
         _update_session_registry(current_editor, project_id, cwd, data.get("tool"))
         _track_unreported_work(data, project_id, current_editor)
+
+        # Shadow-mode: produce GuardianSignal for confirmed file deletions
+        # Does NOT trigger policy, warnings, or blocks - audit only
+        if SIGNAL_AUDIT_ENABLED and data.get("event") == "deleted" and file_path:
+            try:
+                produce_destructive_signal(
+                    file_path=file_path,
+                    operation="delete",
+                    project_id=project_id or "",
+                )
+            except Exception:
+                pass  # Silent failure - must not break activity logging
 
         log_runtime_event(f"[Activity] {activity['type']}: {activity.get('file') or (activity.get('command') or '')[:50] or activity.get('human_name', '')}")
 
