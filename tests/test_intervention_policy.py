@@ -120,5 +120,44 @@ class TestInterventionPolicy(unittest.TestCase):
         self.assertIn("WARNING", message)
 
 
+class TestRiskyChangeExtensionPoint(unittest.TestCase):
+    """Document that risky_change is an extension point with no active detector.
+
+    These tests lock the current behavior: risky_change defaults to False
+    and triggers warn when explicitly set to True. No automatic detection
+    exists - a product decision is needed to define what sets this flag.
+    """
+
+    def test_risky_change_defaults_to_false(self):
+        """Verify risky_change is False by default in InterventionContext."""
+        ctx = InterventionContext()
+        self.assertFalse(ctx.risky_change)
+
+    def test_risky_change_false_does_not_trigger_warn(self):
+        """Without other signals, risky_change=False results in silent."""
+        result = evaluate_risk_gate(InterventionContext(risky_change=False))
+        self.assertEqual(result.level, "silent")
+
+    def test_risky_change_true_triggers_warn(self):
+        """When risky_change is explicitly True, risk_gate returns warn."""
+        result = evaluate_risk_gate(InterventionContext(risky_change=True))
+        self.assertEqual(result.level, "warn")
+        self.assertIn("risky_change", result.evidence)
+
+    def test_risky_change_warn_has_correct_reason(self):
+        """Verify the warn message is generic, not tied to specific detection."""
+        result = evaluate_risk_gate(InterventionContext(risky_change=True))
+        self.assertIn("risky change", result.reason.lower())
+
+    def test_lock_violation_takes_precedence_over_risky_change(self):
+        """lock_violation (block) should fire before risky_change (warn)."""
+        result = evaluate_risk_gate(InterventionContext(
+            lock_violation=True,
+            risky_change=True
+        ))
+        self.assertEqual(result.level, "block")
+        self.assertIn("lock_violation", result.evidence)
+
+
 if __name__ == "__main__":
     unittest.main()

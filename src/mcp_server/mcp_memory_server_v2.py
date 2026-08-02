@@ -1404,7 +1404,12 @@ def _evaluate_current_risk_gate(
     lock_violation: bool = False,
     risky_change: bool = False,
 ):
-    """Evaluate the Stage 7 risk gate without changing existing UX strings."""
+    """Evaluate the Stage 7 risk gate without changing existing UX strings.
+
+    Note: risky_change is an EXTENSION POINT with no active detector.
+    Currently all callers pass False (or omit it). When a producer is
+    implemented, pass risky_change=True to trigger a warn-level intervention.
+    """
     ctx = InterventionContext(
         tool_name=tool_name,
         stable_component_touched=stable_component_touched,

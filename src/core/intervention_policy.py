@@ -9,8 +9,9 @@ block, without changing any existing runtime behavior yet.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
+from core.guardian_signal import GuardianSignal
 from core.intervention_audit import record_intervention_audit
 
 
@@ -39,6 +40,11 @@ class InterventionContext:
     stable_component_touched: bool = False
     blocked_components_relevant: int = 0
     lock_violation: bool = False
+    # EXTENSION POINT: risky_change is a generic risk signal for situations
+    # not covered by specific detectors (stable_component, blocked_components,
+    # lock_violation, decision_conflict). Currently NO active detector sets
+    # this flag - it requires a product decision on what constitutes a "risky
+    # change" (agent-declared flag, LLM evaluation, or dedicated detector).
     risky_change: bool = False
     repeat_bug_detected: bool = False
     similar_past_solution_found: bool = False
@@ -51,6 +57,11 @@ class InterventionContext:
     fo_solved_called: bool = False
     completion_gate_required: bool = False
     extra: Dict[str, Any] = field(default_factory=dict)
+
+    # Phase 1: Guardian signals infrastructure - no aggregation or policy yet
+    # Signals are collected here but NOT evaluated by existing gates.
+    # Future phases will add aggregation logic that consumes these signals.
+    guardian_signals: Tuple[GuardianSignal, ...] = field(default_factory=tuple)
 
 
 def _finalize_result(result: InterventionGateResult) -> InterventionGateResult:
@@ -137,6 +148,8 @@ def evaluate_risk_gate(ctx: InterventionContext) -> InterventionGateResult:
             suggested_action="Review blocked components before proceeding.",
         ))
 
+    # EXTENSION POINT: risky_change is evaluated here but currently has no
+    # active detector. When a producer is implemented, it will trigger this path.
     if ctx.risky_change:
         return _finalize_result(InterventionGateResult(
             gate="risk_gate",
