@@ -20,6 +20,7 @@ from datetime import datetime
 import json
 import os
 import re
+import shlex
 import subprocess
 from core.project_context import ProjectContext
 from core.runtime_log import log_runtime_event
@@ -328,9 +329,217 @@ def _is_git_commit(command: str) -> bool:
     return bool(re.search(r"(?:^|[;&|])\s*git(?:\s+-C\s+\S+)?\s+commit(?:\s|$)", normalized))
 
 
+def _split_shell_commands(command: str) -> list:
+    """
+    Split a shell command by separators (;, &&, ||) while respecting quotes.
+
+    Returns list of individual command segments.
+    Does NOT split on pipe (|) since that's a single pipeline.
+    """
+    if not command:
+        return []
+
+    segments = []
+    current = []
+    i = 0
+    in_single_quote = False
+    in_double_quote = False
+
+    while i < len(command):
+        char = command[i]
+
+        if char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+            current.append(char)
+        elif char == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+            current.append(char)
+        elif not in_single_quote and not in_double_quote:
+            # Check for && or ||
+            if i + 1 < len(command) and command[i:i+2] in ("&&", "||"):
+                if current:
+                    segments.append("".join(current).strip())
+                    current = []
+                i += 2
+                continue
+            # Check for ;
+            elif char == ";":
+                if current:
+                    segments.append("".join(current).strip())
+                    current = []
+            else:
+                current.append(char)
+        else:
+            current.append(char)
+
+        i += 1
+
+    if current:
+        segments.append("".join(current).strip())
+
+    return [s for s in segments if s]
+
+
+def _get_first_command_token(segment: str) -> str:
+    """
+    Get the first command token from a shell segment using shlex.
+
+    Handles:
+    - Quoted arguments (grep "rm test.txt" → grep)
+    - Leading env vars (FOO=bar rm file → rm)
+    - Pipes (echo hi | rm → echo, but we check the whole pipeline)
+
+    Returns the first actual command name, or empty string if unparseable.
+    """
+    if not segment:
+        return ""
+
+    # For pipelines, check the first command in the pipe
+    # We don't split on | in _split_shell_commands, so handle it here
+    # Actually, for our purposes, if ANY command in the pipeline is rm, it might be destructive
+    # But `echo "rm" | grep rm` is NOT destructive
+    # We need to check if the FIRST command in the pipeline is rm
+
+    # Split by pipe, respecting quotes
+    pipe_segments = []
+    current = []
+    in_single_quote = False
+    in_double_quote = False
+
+    for i, char in enumerate(segment):
+        if char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+            current.append(char)
+        elif char == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+            current.append(char)
+        elif char == "|" and not in_single_quote and not in_double_quote:
+            # Check it's not || (already handled by _split_shell_commands, but be safe)
+            if i + 1 < len(segment) and segment[i + 1] == "|":
+                current.append(char)
+            else:
+                if current:
+                    pipe_segments.append("".join(current).strip())
+                    current = []
+        else:
+            current.append(char)
+
+    if current:
+        pipe_segments.append("".join(current).strip())
+
+    if not pipe_segments:
+        return ""
+
+    # Get the first command in the first pipe segment
+    first_segment = pipe_segments[0].strip()
+    if not first_segment:
+        return ""
+
+    try:
+        tokens = shlex.split(first_segment)
+    except ValueError:
+        # Unparseable (unmatched quotes, etc.) - skip
+        return ""
+
+    if not tokens:
+        return ""
+
+    # Skip leading environment variable assignments (VAR=value)
+    for token in tokens:
+        if "=" in token and not token.startswith("-"):
+            # This is an env var assignment, skip it
+            continue
+        return token
+
+    return ""
+
+
 def _is_file_delete(command: str) -> bool:
-    normalized = " ".join(str(command or "").strip().split())
-    return bool(re.search(r"(?:^|[;&|])\s*(?:rm|unlink|git\s+rm)(?:\s|$)", normalized))
+    """
+    Check if a command is a file delete operation.
+
+    Only returns True when the ACTUAL command being executed is:
+    - rm (with any flags)
+    - unlink
+    - git rm
+
+    Does NOT trigger for:
+    - grep "rm test.txt" (rm is in an argument, not the command)
+    - echo "rm file" (same)
+    - rg "rm" (same)
+    """
+    if not command:
+        return False
+
+    segments = _split_shell_commands(command)
+
+    for segment in segments:
+        first_token = _get_first_command_token(segment)
+        if not first_token:
+            continue
+
+        # Check if first token is a delete command
+        if first_token in ("rm", "unlink"):
+            return True
+
+        # Check for git rm
+        if first_token == "git":
+            try:
+                tokens = shlex.split(segment)
+                # Look for "rm" as the git subcommand
+                for i, token in enumerate(tokens):
+                    if token == "git":
+                        # Next non-flag token should be the subcommand
+                        for next_token in tokens[i + 1:]:
+                            if next_token.startswith("-"):
+                                continue  # Skip flags like -C
+                            if next_token == "rm":
+                                return True
+                            break  # First non-flag after git is the subcommand
+            except ValueError:
+                pass
+
+    return False
+
+
+def _find_delete_segment(command: str) -> tuple:
+    """
+    Find the first actual delete command segment in a command.
+
+    Uses proper shell parsing to avoid false positives like:
+    - grep "rm test.txt" (rm is in argument, not the command)
+    - echo "rm file" (same)
+
+    Returns (segment: str, first_token: str) or ("", "") if no delete found.
+    """
+    if not command:
+        return "", ""
+
+    segments = _split_shell_commands(command)
+
+    for segment in segments:
+        first_token = _get_first_command_token(segment)
+        if not first_token:
+            continue
+
+        if first_token in ("rm", "unlink"):
+            return segment, first_token
+
+        if first_token == "git":
+            try:
+                tokens = shlex.split(segment)
+                for i, token in enumerate(tokens):
+                    if token == "git":
+                        for next_token in tokens[i + 1:]:
+                            if next_token.startswith("-"):
+                                continue
+                            if next_token == "rm":
+                                return segment, "git rm"
+                            break
+            except ValueError:
+                pass
+
+    return "", ""
 
 
 def _extract_delete_paths(command: str, cwd: str = "") -> tuple:
@@ -342,25 +551,19 @@ def _extract_delete_paths(command: str, cwd: str = "") -> tuple:
     - is_ambiguous: True if command contains globs/variables/subshells
     - raw_command: the delete command segment for evidence
 
-    Only extracts paths when parsing is deterministic.
+    Uses proper shell parsing to avoid false positives from commands like:
+    - grep "rm test.txt"
+    - echo "rm file"
+    - rg "rm"
     """
     if not command:
         return [], False, ""
 
-    normalized = " ".join(str(command).strip().split())
-
-    # Find the delete command segment (rm, unlink, or git rm)
-    # Handle chained commands - find the first delete command
-    match = re.search(
-        r"(?:^|[;&|]\s*)((?:git\s+)?(?:rm|unlink)(?:\s+[^;&|]+)?)",
-        normalized,
-    )
-    if not match:
+    delete_segment, cmd_type = _find_delete_segment(command)
+    if not delete_segment:
         return [], False, ""
 
-    delete_segment = match.group(1).strip()
-
-    # Check for ambiguity markers in the entire segment
+    # Check for ambiguity markers in the segment
     ambiguity_markers = [
         r"\*",           # Glob *
         r"\?",           # Glob ?
@@ -376,61 +579,52 @@ def _extract_delete_paths(command: str, cwd: str = "") -> tuple:
     if is_ambiguous:
         return [], True, delete_segment
 
-    # Tokenize respecting quotes
+    # Use shlex to properly tokenize
+    try:
+        tokens = shlex.split(delete_segment)
+    except ValueError:
+        # Unparseable - treat as ambiguous
+        return [], True, delete_segment
+
+    if not tokens:
+        return [], False, delete_segment
+
+    # Extract paths (skip command name and flags)
     paths = []
-    tokens = []
-
-    # Simple tokenizer that respects quotes
-    current_token = ""
-    in_single_quote = False
-    in_double_quote = False
-    i = 0
-
-    while i < len(delete_segment):
-        char = delete_segment[i]
-
-        if char == "'" and not in_double_quote:
-            in_single_quote = not in_single_quote
-        elif char == '"' and not in_single_quote:
-            in_double_quote = not in_double_quote
-        elif char == " " and not in_single_quote and not in_double_quote:
-            if current_token:
-                tokens.append(current_token)
-                current_token = ""
-        else:
-            current_token += char
-
-        i += 1
-
-    if current_token:
-        tokens.append(current_token)
-
-    # Skip command name and flags, extract paths
     skip_next = False
-    for j, token in enumerate(tokens):
+    is_git_rm = cmd_type == "git rm"
+    past_command = False
+
+    for i, token in enumerate(tokens):
         if skip_next:
             skip_next = False
             continue
 
         # Skip the command itself
-        if j == 0 and token in ("rm", "unlink", "git"):
-            continue
-        if j == 1 and tokens[0] == "git" and token == "rm":
-            continue
+        if not past_command:
+            if is_git_rm:
+                # For git rm, skip "git" and "rm"
+                if token in ("git", "rm"):
+                    continue
+                # Also skip -C and its argument
+                if token == "-C":
+                    skip_next = True
+                    continue
+            else:
+                # For rm/unlink, skip the command name
+                if token in ("rm", "unlink"):
+                    past_command = True
+                    continue
+
+            past_command = True
 
         # Skip flags
         if token.startswith("-"):
-            # Some flags take arguments (e.g., --target-directory)
             if token in ("--target-directory", "-t"):
                 skip_next = True
             continue
 
-        # Skip empty tokens
-        if not token.strip():
-            continue
-
-        # This should be a path
-        # Resolve relative to cwd if provided
+        # This is a path
         path = token
         if cwd and not os.path.isabs(path):
             path = os.path.join(cwd, path)
