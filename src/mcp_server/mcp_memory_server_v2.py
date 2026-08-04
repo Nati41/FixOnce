@@ -8346,6 +8346,30 @@ def search_past_solutions(query: str, mode: str = "compact") -> str:
     # Track ROI if matches found
     if matched_insights:
         _track_roi_event("solution_reused")
+        # Record structured impact event (Phase 1: Evidence of Impact)
+        try:
+            from core.impact_events import record_solution_reused, record_decision_reused
+            top_match = matched_insights[0]
+            match_category = top_match.get("category", "unknown")
+            match_id = top_match.get("id", f"match_{hash(top_match.get('text', ''))}")
+            match_summary = (top_match.get("text") or "")[:100]
+
+            if match_category == "decision":
+                record_decision_reused(
+                    decision_id=match_id,
+                    decision_summary=match_summary,
+                    source_tool="fo_search",
+                )
+            else:
+                record_solution_reused(
+                    solution_id=match_id,
+                    solution_summary=match_summary,
+                    query=query,
+                    confidence=top_match.get("score", 0.0),
+                    source_tool="fo_search",
+                )
+        except Exception:
+            pass  # Silent - don't break search
 
     # === Navigator V2: Always get navigation targets ===
     working_dir = session.working_dir if session else None
@@ -8524,6 +8548,19 @@ def get_browser_errors(limit: int = 10) -> str:
 
         # Track ROI: errors caught in real-time
         _track_roi_event("error_caught_live")
+
+        # Record impact event: browser error caught (Phase 1: Evidence of Impact)
+        try:
+            from core.impact_events import record_error_caught_live
+            first_error = real_errors[0]
+            error_msg = first_error.get('message', first_error.get('error', 'Unknown'))[:100]
+            record_error_caught_live(
+                error_id=f"err_{hash(error_msg)}",
+                error_summary=error_msg,
+                source_tool="fo_errors",
+            )
+        except Exception:
+            pass  # Silent
 
         # Auto-populate pending_fixes from previous_solution
         try:
@@ -10909,6 +10946,24 @@ def _format_minimal_init(working_dir: str, task_hint: str = "") -> str:
 
         result_lines.append("")
 
+    # Record impact event: context restored (Phase 1: Evidence of Impact)
+    if current_goal or last_thing or next_thing:
+        try:
+            from core.impact_events import record_context_restored
+            context_parts = []
+            if current_goal:
+                context_parts.append(f"Goal: {current_goal[:50]}")
+            if next_thing:
+                context_parts.append(f"Next: {next_thing[:50]}")
+            context_summary = "; ".join(context_parts) if context_parts else "Project context"
+            record_context_restored(
+                context_id=project_id,
+                context_summary=context_summary,
+                source_tool="fo_init",
+            )
+        except Exception:
+            pass  # Silent - don't break init
+
     # Knowledge counts - show active knowledge (superseded excluded)
     k = snapshot.knowledge_counts
     if k.decisions or k.solutions or k.avoid or k.insights:
@@ -11069,6 +11124,60 @@ def fo_status() -> str:
         lines.append(f"Last tool: {last_tool}")
 
     return "\n".join(lines)
+
+
+@mcp.tool()
+def fo_impact(clear: bool = False) -> str:
+    """
+    Get evidence of FixOnce contributions during this session.
+
+    Returns structured data showing what FixOnce actually did to help.
+    AI-agnostic: any agent (Claude, Codex, Cursor, etc.) can request this.
+
+    Only reports observable runtime facts:
+    - Solutions reused
+    - Decisions applied
+    - Context restored
+    - Errors caught
+
+    Never estimates time saved or makes productivity claims.
+
+    Args:
+        clear: If True, clears the session impact log after returning
+
+    Returns:
+        JSON with has_contribution flag and list of evidence events.
+        Empty events list means no measurable contribution occurred.
+    """
+    import json
+
+    try:
+        from core.impact_events import get_impact_report_dict, clear_session_events
+
+        # Get the current session's impact report
+        report = get_impact_report_dict()
+
+        # Optionally clear after returning
+        if clear and report.get("has_contribution"):
+            clear_session_events()
+
+        # Return as JSON for AI-agnostic consumption
+        return json.dumps(report, indent=2, ensure_ascii=False)
+
+    except ImportError:
+        return json.dumps({
+            "has_contribution": False,
+            "event_count": 0,
+            "events": [],
+            "error": "Impact tracking not available"
+        })
+    except Exception as e:
+        return json.dumps({
+            "has_contribution": False,
+            "event_count": 0,
+            "events": [],
+            "error": str(e)
+        })
 
 
 @mcp.tool()
