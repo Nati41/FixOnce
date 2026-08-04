@@ -337,8 +337,7 @@ class TestImpactReport(unittest.TestCase):
         self.assertEqual(event["type"], "decision_reused")
         self.assertEqual(event["source_tool"], "fo_search")
         self.assertEqual(event["content_id"], "dec_456")
-        self.assertEqual(event["category"], "decision")
-        self.assertIn("summary", event)
+        self.assertIn("statement", event)
 
     def test_report_to_dict(self):
         """Report serializes to dict correctly."""
@@ -386,8 +385,8 @@ class TestEventSummaryTemplates(unittest.TestCase):
         from core.impact_events import clear_session_events
         clear_session_events("test_session")
 
-    def test_solution_reused_summary(self):
-        """Solution reused events have correct summary format."""
+    def test_solution_reused_statement(self):
+        """Solution reused events have correct statement format."""
         from core.impact_events import record_impact_event, build_impact_report
 
         record_impact_event(
@@ -399,13 +398,12 @@ class TestEventSummaryTemplates(unittest.TestCase):
         )
 
         report = build_impact_report("test_session")
-        summary = report.events[0]["summary"]
+        statement = report.events[0]["statement"]
 
-        self.assertIn("Reused previously saved solution", summary)
-        self.assertIn("Added null check for undefined", summary)
+        self.assertEqual(statement, "Used FixOnce to reuse a previously saved solution.")
 
-    def test_decision_reused_summary(self):
-        """Decision reused events have correct summary format."""
+    def test_decision_reused_statement(self):
+        """Decision reused events have correct statement format."""
         from core.impact_events import record_impact_event, build_impact_report
 
         record_impact_event(
@@ -417,13 +415,12 @@ class TestEventSummaryTemplates(unittest.TestCase):
         )
 
         report = build_impact_report("test_session")
-        summary = report.events[0]["summary"]
+        statement = report.events[0]["statement"]
 
-        self.assertIn("Applied previous project decision", summary)
-        self.assertIn("Use shlex instead of regex", summary)
+        self.assertEqual(statement, "Used FixOnce to check an existing project decision.")
 
-    def test_avoid_pattern_summary(self):
-        """Avoid pattern events have correct summary format."""
+    def test_avoid_pattern_statement(self):
+        """Avoid pattern events have correct statement format."""
         from core.impact_events import record_impact_event, build_impact_report
 
         record_impact_event(
@@ -435,13 +432,12 @@ class TestEventSummaryTemplates(unittest.TestCase):
         )
 
         report = build_impact_report("test_session")
-        summary = report.events[0]["summary"]
+        statement = report.events[0]["statement"]
 
-        self.assertIn("Surfaced avoid pattern", summary)
-        self.assertIn("Never force push", summary)
+        self.assertEqual(statement, "Used FixOnce to retrieve a known pattern to avoid.")
 
-    def test_context_restored_summary(self):
-        """Context restored events have correct summary format."""
+    def test_context_restored_statement(self):
+        """Context restored events have correct statement format."""
         from core.impact_events import record_impact_event, build_impact_report
 
         record_impact_event(
@@ -453,9 +449,9 @@ class TestEventSummaryTemplates(unittest.TestCase):
         )
 
         report = build_impact_report("test_session")
-        summary = report.events[0]["summary"]
+        statement = report.events[0]["statement"]
 
-        self.assertIn("Restored project context", summary)
+        self.assertEqual(statement, "Used FixOnce to restore previous project context.")
 
 
 class TestHelperFunctions(unittest.TestCase):
@@ -578,83 +574,128 @@ class TestNoRuntimeBehaviorChange(unittest.TestCase):
             self.fail(f"get_impact_report_dict threw: {e}")
 
 
-class TestMCPIntegration(unittest.TestCase):
-    """Test MCP tool integration."""
+class TestUsageStatements(unittest.TestCase):
+    """Test usage statement generation."""
 
     def setUp(self):
         from core.impact_events import clear_session_events
-        clear_session_events("test_mcp")
+        clear_session_events("test_usage")
 
-    def test_fo_impact_empty_session(self):
-        """fo_impact returns empty report for new session."""
-        from core.impact_events import get_impact_report_dict
+    def test_empty_session_returns_empty_list(self):
+        """No events = empty usage list."""
+        from core.impact_events import get_usage_statements
 
-        with patch("core.impact_events._get_current_session_id", return_value="test_mcp"):
-            report = get_impact_report_dict()
+        with patch("core.impact_events._get_current_session_id", return_value="test_usage"):
+            statements = get_usage_statements()
 
-        self.assertFalse(report["has_contribution"])
-        self.assertEqual(report["events"], [])
+        self.assertEqual(statements, [])
 
-    def test_fo_impact_with_events(self):
-        """fo_impact returns events when they exist."""
-        from core.impact_events import record_solution_reused, get_impact_report_dict
+    def test_solution_reused_statement(self):
+        """Solution reused produces correct statement."""
+        from core.impact_events import record_solution_reused, get_usage_statements
 
-        with patch("core.impact_events._get_current_session_id", return_value="test_mcp"):
-            record_solution_reused(
-                solution_id="sol_123",
-                solution_summary="Fixed TypeError",
-                query="TypeError",
-            )
-            report = get_impact_report_dict()
+        with patch("core.impact_events._get_current_session_id", return_value="test_usage"):
+            record_solution_reused("sol_123", "Fixed TypeError")
+            statements = get_usage_statements()
 
-        self.assertTrue(report["has_contribution"])
-        self.assertEqual(report["event_count"], 1)
-        self.assertEqual(len(report["events"]), 1)
-        self.assertEqual(report["events"][0]["type"], "solution_reused")
+        self.assertEqual(len(statements), 1)
+        self.assertEqual(statements[0], "Used FixOnce to reuse a previously saved solution.")
 
-    def test_report_structure_is_ai_agnostic(self):
-        """Report structure is consumable by any AI agent."""
+    def test_context_restored_statement(self):
+        """Context restored produces correct statement."""
+        from core.impact_events import record_context_restored, get_usage_statements
+
+        with patch("core.impact_events._get_current_session_id", return_value="test_usage"):
+            record_context_restored("ctx_1", "Goal: Fix bug")
+            statements = get_usage_statements()
+
+        self.assertEqual(len(statements), 1)
+        self.assertEqual(statements[0], "Used FixOnce to restore previous project context.")
+
+    def test_decision_reused_statement(self):
+        """Decision reused produces correct statement."""
+        from core.impact_events import record_decision_reused, get_usage_statements
+
+        with patch("core.impact_events._get_current_session_id", return_value="test_usage"):
+            record_decision_reused("dec_1", "Use TypeScript")
+            statements = get_usage_statements()
+
+        self.assertEqual(len(statements), 1)
+        self.assertEqual(statements[0], "Used FixOnce to check an existing project decision.")
+
+    def test_multiple_same_type_deduplicated(self):
+        """Multiple events of same type produce one statement."""
+        from core.impact_events import record_solution_reused, get_usage_statements
+
+        with patch("core.impact_events._get_current_session_id", return_value="test_usage"):
+            record_solution_reused("sol_1", "Fix 1")
+            record_solution_reused("sol_2", "Fix 2")
+            record_solution_reused("sol_3", "Fix 3")
+            statements = get_usage_statements()
+
+        # Same event type = one statement
+        self.assertEqual(len(statements), 1)
+
+    def test_multiple_different_types(self):
+        """Different event types produce multiple statements."""
         from core.impact_events import (
             record_solution_reused,
-            record_decision_reused,
-            get_impact_report_dict,
+            record_context_restored,
+            get_usage_statements,
         )
 
-        with patch("core.impact_events._get_current_session_id", return_value="test_mcp"):
-            record_solution_reused("sol_1", "Fix 1")
-            record_decision_reused("dec_1", "Use TypeScript")
-            report = get_impact_report_dict()
+        with patch("core.impact_events._get_current_session_id", return_value="test_usage"):
+            record_context_restored("ctx_1", "Goal")
+            record_solution_reused("sol_1", "Fix")
+            statements = get_usage_statements()
 
-        # Report should be a simple dict structure
-        self.assertIsInstance(report, dict)
-        self.assertIn("session_id", report)
-        self.assertIn("has_contribution", report)
-        self.assertIn("event_count", report)
-        self.assertIn("events", report)
-        self.assertIn("generated_at", report)
+        self.assertEqual(len(statements), 2)
 
-        # Events should have consistent structure
-        for event in report["events"]:
-            self.assertIn("type", event)
-            self.assertIn("summary", event)
-            self.assertIn("source_tool", event)
+
+class TestUsageReport(unittest.TestCase):
+    """Test usage report API."""
+
+    def setUp(self):
+        from core.impact_events import clear_session_events
+        clear_session_events("test_report")
+
+    def test_empty_report(self):
+        """Empty session returns used=False."""
+        from core.impact_events import get_usage_report
+
+        with patch("core.impact_events._get_current_session_id", return_value="test_report"):
+            report = get_usage_report()
+
+        self.assertFalse(report["used"])
+        self.assertEqual(report["statements"], [])
+
+    def test_report_with_usage(self):
+        """Session with events returns used=True."""
+        from core.impact_events import record_solution_reused, get_usage_report
+
+        with patch("core.impact_events._get_current_session_id", return_value="test_report"):
+            record_solution_reused("sol_123", "Fixed bug")
+            report = get_usage_report()
+
+        self.assertTrue(report["used"])
+        self.assertEqual(len(report["statements"]), 1)
 
     def test_report_is_json_serializable(self):
         """Report can be serialized to JSON."""
         import json
-        from core.impact_events import record_solution_reused, get_impact_report_dict
+        from core.impact_events import record_solution_reused, get_usage_report
 
-        with patch("core.impact_events._get_current_session_id", return_value="test_mcp"):
+        with patch("core.impact_events._get_current_session_id", return_value="test_report"):
             record_solution_reused("sol_123", "Fixed bug")
-            report = get_impact_report_dict()
+            report = get_usage_report()
 
-        # Should not raise
         json_str = json.dumps(report)
         self.assertIsInstance(json_str, str)
 
         # Should round-trip
         parsed = json.loads(json_str)
-        self.assertEqual(parsed["has_contribution"], report["has_contribution"])
+        self.assertTrue(parsed["used"])
+        self.assertEqual(parsed["used"], report["used"])
 
 
 class TestClearOnRequest(unittest.TestCase):

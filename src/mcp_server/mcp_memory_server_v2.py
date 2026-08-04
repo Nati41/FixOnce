@@ -11130,55 +11130,45 @@ def fo_status() -> str:
 @mcp.tool()
 def fo_impact(clear: bool = False) -> str:
     """
-    Get evidence of FixOnce contributions during this session.
+    Get FixOnce usage for the current session.
 
-    Returns structured data showing what FixOnce actually did to help.
-    AI-agnostic: any agent (Claude, Codex, Cursor, etc.) can request this.
+    Returns what FixOnce tools were actually used during this task.
+    Include in your task summary when FixOnce contributed to the work.
 
-    Only reports observable runtime facts:
-    - Solutions reused
-    - Decisions applied
-    - Context restored
-    - Errors caught
+    Only reports factual usage - no estimates, no marketing.
 
-    Never estimates time saved or makes productivity claims.
+    Example output:
+    {
+      "used": true,
+      "statements": [
+        "Used FixOnce to restore previous project context.",
+        "Used FixOnce to reuse a previously saved solution."
+      ]
+    }
 
     Args:
-        clear: If True, clears the session impact log after returning
+        clear: If True, clears the usage log after returning
 
     Returns:
-        JSON with has_contribution flag and list of evidence events.
-        Empty events list means no measurable contribution occurred.
+        JSON with used flag and list of usage statements.
+        Empty statements means FixOnce wasn't used for this task.
     """
     import json
 
     try:
-        from core.impact_events import get_impact_report_dict, clear_session_events
+        from core.impact_events import get_usage_report, clear_session_events
 
-        # Get the current session's impact report
-        report = get_impact_report_dict()
+        report = get_usage_report()
 
-        # Optionally clear after returning
-        if clear and report.get("has_contribution"):
+        if clear and report.get("used"):
             clear_session_events()
 
-        # Return as JSON for AI-agnostic consumption
         return json.dumps(report, indent=2, ensure_ascii=False)
 
     except ImportError:
-        return json.dumps({
-            "has_contribution": False,
-            "event_count": 0,
-            "events": [],
-            "error": "Impact tracking not available"
-        })
+        return json.dumps({"used": False, "statements": []})
     except Exception as e:
-        return json.dumps({
-            "has_contribution": False,
-            "event_count": 0,
-            "events": [],
-            "error": str(e)
-        })
+        return json.dumps({"used": False, "statements": [], "error": str(e)})
 
 
 @mcp.tool()

@@ -234,40 +234,73 @@ def clear_session_events(session_id: str = "") -> int:
 # Report Builder
 # ============================================================
 
-# Event type to summary template mapping
-# These are factual templates - no estimates or marketing
-_EVENT_SUMMARIES: Dict[ImpactEventType, str] = {
-    "solution_reused": "Reused previously saved solution: {summary}",
-    "decision_reused": "Applied previous project decision: {summary}",
-    "avoid_pattern_surfaced": "Surfaced avoid pattern: {summary}",
-    "context_restored": "Restored project context: {summary}",
-    "similar_found": "Found similar prior experience: {summary}",
-    "intervention_triggered": "Triggered safety intervention: {summary}",
-    "conflict_detected": "Detected potential conflict: {summary}",
-    "review_triggered": "Review found related items: {summary}",
-    "auto_fix_available": "Auto-fix available: {summary}",
-    "error_caught_live": "Caught browser error proactively: {summary}",
+# Event type to usage statement mapping
+# Format: "Used FixOnce to..." - factual, no estimates, no marketing
+_USAGE_STATEMENTS: Dict[ImpactEventType, str] = {
+    "solution_reused": "Used FixOnce to reuse a previously saved solution.",
+    "decision_reused": "Used FixOnce to check an existing project decision.",
+    "avoid_pattern_surfaced": "Used FixOnce to retrieve a known pattern to avoid.",
+    "context_restored": "Used FixOnce to restore previous project context.",
+    "similar_found": "Used FixOnce to find similar prior experience.",
+    "intervention_triggered": "Used FixOnce Guardian guidance before a destructive operation.",
+    "conflict_detected": "Used FixOnce to detect a potential conflict.",
+    "review_triggered": "Used FixOnce to review related items before saving.",
+    "auto_fix_available": "Used FixOnce to retrieve an available auto-fix.",
+    "error_caught_live": "Used FixOnce to catch a browser error proactively.",
 }
 
 
-def _format_event_summary(event: ImpactEvent) -> str:
-    """Format a single event into a factual summary sentence."""
-    template = _EVENT_SUMMARIES.get(event.event_type, "{summary}")
-    return template.format(summary=event.content_summary)
+def _format_usage_statement(event: ImpactEvent) -> str:
+    """Format a single event into a factual usage statement."""
+    return _USAGE_STATEMENTS.get(event.event_type, f"Used FixOnce: {event.content_summary}")
+
+
+def get_usage_statements(session_id: str = "") -> List[str]:
+    """
+    Get FixOnce usage statements for the current session.
+
+    Returns a simple list of factual usage statements like:
+    - "Used FixOnce to restore previous project context."
+    - "Used FixOnce to reuse a previously saved solution."
+
+    These are meant to be included directly in an agent's task summary.
+    No estimates, no marketing - just what actually happened.
+
+    Returns empty list if FixOnce wasn't used during this task.
+    """
+    if not session_id:
+        session_id = _get_current_session_id()
+
+    events = get_session_events(session_id)
+
+    if not events:
+        return []
+
+    # Deduplicate by statement (same event type = same statement)
+    seen_statements = set()
+    statements = []
+
+    for event in events:
+        statement = _format_usage_statement(event)
+        if statement not in seen_statements:
+            seen_statements.add(statement)
+            statements.append(statement)
+
+    return statements
 
 
 def build_impact_report(session_id: str = "") -> ImpactReport:
     """
-    Build a structured impact report for a session.
+    Build a structured usage report for a session.
 
     Returns:
         ImpactReport with:
-        - has_contribution: True if any events occurred
-        - events: List of event summaries for AI to present
-        - event_count: Total number of contribution events
+        - has_contribution: True if FixOnce was used
+        - events: List of usage details for AI to present
+        - event_count: Total number of usage events
 
-    This is the main API for AI agents to request impact evidence.
-    The report contains structured data - each AI decides how to present it.
+    For simple usage, prefer get_usage_statements() which returns
+    a list of strings ready to include in task summaries.
     """
     if not session_id:
         session_id = _get_current_session_id()
@@ -282,30 +315,49 @@ def build_impact_report(session_id: str = "") -> ImpactReport:
             event_count=0,
         )
 
-    # Build event summaries
-    event_summaries = []
+    # Build event details
+    event_details = []
     for event in events:
-        event_summaries.append({
+        event_details.append({
             "type": event.event_type,
-            "summary": _format_event_summary(event),
+            "statement": _format_usage_statement(event),
             "source_tool": event.source_tool,
             "content_id": event.content_id,
-            "category": event.category,
         })
 
     return ImpactReport(
         session_id=session_id,
-        events=event_summaries,
+        events=event_details,
         has_contribution=True,
         event_count=len(events),
     )
+
+
+def get_usage_report(session_id: str = "") -> Dict[str, Any]:
+    """
+    Get FixOnce usage for the current session as a dict.
+
+    Returns:
+        {
+            "used": bool,           # True if FixOnce was used
+            "statements": [str],    # List of usage statements
+        }
+
+    This is the primary API for AI agents to include FixOnce usage
+    in their task summaries.
+    """
+    statements = get_usage_statements(session_id)
+    return {
+        "used": len(statements) > 0,
+        "statements": statements,
+    }
 
 
 def get_impact_report_dict(session_id: str = "") -> Dict[str, Any]:
     """
     Convenience function: build report and return as dict.
 
-    This is the primary API for external consumers (MCP, REST, etc.)
+    For simple usage, prefer get_usage_report() instead.
     """
     report = build_impact_report(session_id)
     return report.to_dict()
