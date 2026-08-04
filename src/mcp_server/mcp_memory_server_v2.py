@@ -3927,6 +3927,7 @@ _original_mcp_tool = mcp.tool
 PUBLIC_MCP_TOOLS = frozenset({
     "fo_init",
     "fo_status",
+    "fo_impact",
     "fo_search",
     "fo_sync",
     "fo_errors",
