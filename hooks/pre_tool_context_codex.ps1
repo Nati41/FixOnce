@@ -316,13 +316,17 @@ if (-not $combinedContext) {
 $isWriteOp = $toolName -in @("Edit", "Write", "apply_patch", "str_replace_editor", "exec_command", "exec", "Bash", "bash", "shell")
 
 # Detect confirmed conflicts: high-relevance decisions (>=75%) or avoid patterns (>=70%)
+# IMPORTANT: High relevance alone does NOT trigger a block.
+# We must verify the edit actually contradicts the decision.
 $conflictDetected = $false
+$hasRelevantDecision = $false
 $conflictDecision = ""
+$conflictReason = ""
 
 if ($isWriteOp) {
     # Check for high-relevance decisions (75%+)
     if ($combinedContext -match '📌 Decision \(([7-9][5-9]|[89][0-9]|100)%\):') {
-        $conflictDetected = $true
+        $hasRelevantDecision = $true
         $match = [regex]::Match($combinedContext, '📌 Decision \([7-9][0-9]%\): ([^.]+)')
         if ($match.Success) {
             $conflictDecision = "📌 Decision: $($match.Groups[1].Value)"
@@ -331,7 +335,7 @@ if ($isWriteOp) {
 
     # Check for avoid patterns (70%+)
     if ($combinedContext -match '🚫 Avoid \(([7-9][0-9]|100)%\):') {
-        $conflictDetected = $true
+        $hasRelevantDecision = $true
         if (-not $conflictDecision) {
             $match = [regex]::Match($combinedContext, '🚫 Avoid \([7-9][0-9]%\): ([^.]+)')
             if ($match.Success) {
@@ -339,16 +343,77 @@ if ($isWriteOp) {
             }
         }
     }
+
+    # If we have a relevant decision, check if the edit actually contradicts it
+    if ($hasRelevantDecision) {
+        # Get edit content
+        $editContent = ""
+        if ($toolName -in @("Edit", "Write", "str_replace_editor")) {
+            $editContent = $toolInput.new_string
+            if (-not $editContent) { $editContent = $toolInput.content }
+        } elseif ($toolName -eq "apply_patch") {
+            $editContent = $toolInput.command
+        } else {
+            $editContent = $toolInput.cmd
+            if (-not $editContent) { $editContent = $toolInput.command }
+        }
+
+        if ($editContent) {
+            $editLower = $editContent.ToLower()
+            $decisionLower = $conflictDecision.ToLower()
+
+            # Check for mechanical edits (whitespace, comments only)
+            $isMechanical = $true
+            $lines = $editContent -split "`n"
+            foreach ($line in $lines) {
+                $trimmed = $line.Trim()
+                if ($trimmed -and -not ($trimmed -match '^\s*$' -or $trimmed -match '^\s*#' -or $trimmed -match '^\s*//' -or $trimmed -match '^\s*import\s+' -or $trimmed -match '^\s*from\s+\w+\s+import')) {
+                    $isMechanical = $false
+                    break
+                }
+            }
+
+            if (-not $isMechanical) {
+                # Check for technology conflicts
+                $techConflicts = @{
+                    "argparse" = @("click", "typer", "fire")
+                    "click" = @("argparse", "typer", "fire")
+                    "typer" = @("argparse", "click", "fire")
+                    "postgresql" = @("mysql", "sqlite", "mongodb")
+                    "mysql" = @("postgresql", "sqlite", "mongodb")
+                    "flask" = @("django", "fastapi")
+                    "django" = @("flask", "fastapi")
+                    "fastapi" = @("flask", "django")
+                }
+
+                foreach ($tech in $techConflicts.Keys) {
+                    if ($decisionLower -like "*$tech*") {
+                        foreach ($conflict in $techConflicts[$tech]) {
+                            if ($editLower -like "*$conflict*" -or $editLower -like "*import $conflict*" -or $editLower -like "*from $conflict*") {
+                                $conflictDetected = $true
+                                $conflictReason = "introduces $conflict"
+                                break
+                            }
+                        }
+                    }
+                    if ($conflictDetected) { break }
+                }
+            }
+        }
+    }
 }
 
 # If confirmed conflict on write operation, BLOCK the edit
 if ($conflictDetected) {
+    $reasonText = if ($conflictReason) { "This edit $conflictReason" } else { "This edit introduces changes that contradict the decision" }
     $blockReason = @"
-⚠️ CONFLICT WITH ACTIVE PROJECT DECISION
+⚠️ ARCHITECTURAL CONFLICT DETECTED
 
 $conflictDecision
 
-This edit is BLOCKED because it conflicts with an active project decision.
+Conflict reason: $reasonText.
+
+This edit is BLOCKED because it would invalidate an active project decision.
 
 ⛔ YOU MUST ASK THE USER before proceeding.
 
@@ -364,7 +429,7 @@ DO NOT call fo_decide(supersede) without explicit user approval.
 The original task request is NOT approval to change project decisions.
 "@
 
-    Write-DebugLog "OUTPUT_BLOCK conflict_detected decision=$conflictDecision"
+    Write-DebugLog "OUTPUT_BLOCK conflict_detected decision=$conflictDecision reason=$conflictReason"
     Write-BlockOutput -Reason $blockReason
     exit 0
 }

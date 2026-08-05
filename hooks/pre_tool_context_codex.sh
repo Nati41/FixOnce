@@ -270,14 +270,16 @@ case "$TOOL_NAME" in
 esac
 
 # Detect confirmed conflicts: high-relevance decisions (>=75%) or avoid patterns (>=70%)
+# IMPORTANT: High relevance alone does NOT trigger a block.
+# We must verify the edit actually contradicts the decision.
 CONFLICT_DETECTED="false"
 CONFLICT_DECISION=""
+HAS_RELEVANT_DECISION="false"
 
 if [ "$IS_WRITE_OP" = "true" ]; then
   # Check for high-relevance decisions (75%+)
   if echo "$COMBINED_CONTEXT" | grep -qE '📌 Decision \(([7-9][5-9]|[89][0-9]|100)%\):'; then
-    CONFLICT_DETECTED="true"
-    # Extract the first high-relevance decision text
+    HAS_RELEVANT_DECISION="true"
     CONFLICT_DECISION=$(echo "$COMBINED_CONTEXT" | grep -oE '📌 Decision \([7-9][0-9]%\): [^.]+' | head -1)
     if [ -z "$CONFLICT_DECISION" ]; then
       CONFLICT_DECISION=$(echo "$COMBINED_CONTEXT" | grep -oE '📌 Decision \(100%\): [^.]+' | head -1)
@@ -286,7 +288,7 @@ if [ "$IS_WRITE_OP" = "true" ]; then
 
   # Check for avoid patterns (70%+)
   if echo "$COMBINED_CONTEXT" | grep -qE '🚫 Avoid \(([7-9][0-9]|100)%\):'; then
-    CONFLICT_DETECTED="true"
+    HAS_RELEVANT_DECISION="true"
     if [ -z "$CONFLICT_DECISION" ]; then
       CONFLICT_DECISION=$(echo "$COMBINED_CONTEXT" | grep -oE '🚫 Avoid \([7-9][0-9]%\): [^.]+' | head -1)
       if [ -z "$CONFLICT_DECISION" ]; then
@@ -294,15 +296,190 @@ if [ "$IS_WRITE_OP" = "true" ]; then
       fi
     fi
   fi
+
+  # If we have a relevant decision, check if the edit actually contradicts it
+  # Mechanical edits (whitespace, comments, imports, formatting) do NOT contradict
+  if [ "$HAS_RELEVANT_DECISION" = "true" ]; then
+    CONTRADICTION_CHECK=$(HOOK_INPUT="$INPUT" DECISION_TEXT="$CONFLICT_DECISION" python3 - <<'PYCHECK'
+import json
+import os
+import re
+import sys
+
+payload = json.loads(os.environ.get("HOOK_INPUT", "{}") or "{}")
+decision_text = os.environ.get("DECISION_TEXT", "")
+tool_input = payload.get("tool_input") or {}
+tool_name = payload.get("tool_name", "")
+
+# Get edit content based on tool type
+edit_content = ""
+if tool_name in ("Edit", "Write", "str_replace_editor"):
+    edit_content = tool_input.get("new_string", "") or tool_input.get("content", "")
+elif tool_name == "apply_patch":
+    edit_content = tool_input.get("command", "")
+elif tool_name in ("exec_command", "exec", "Bash", "bash", "shell"):
+    edit_content = tool_input.get("cmd", "") or tool_input.get("command", "")
+
+if not edit_content:
+    # No edit content to analyze - allow (fail open)
+    print("ALLOW:no_content")
+    sys.exit(0)
+
+# Check if edit is purely mechanical (whitespace, comments, formatting)
+def is_mechanical_edit(content: str) -> bool:
+    lines = content.strip().split("\n")
+
+    # Empty or whitespace only
+    if not content.strip():
+        return True
+
+    # Check each line
+    mechanical_patterns = [
+        r"^\s*$",  # blank line
+        r"^\s*#.*$",  # Python comment
+        r"^\s*//.*$",  # JS/C comment
+        r"^\s*/\*.*\*/\s*$",  # block comment
+        r"^\s*\*.*$",  # block comment continuation
+        r"^\s*import\s+",  # import statement
+        r"^\s*from\s+\w+\s+import",  # from import
+        r"^\s*$",  # empty
+    ]
+
+    non_mechanical_lines = 0
+    for line in lines:
+        is_mechanical = any(re.match(p, line) for p in mechanical_patterns)
+        if not is_mechanical and line.strip():
+            # Check if it's just whitespace changes
+            if re.match(r"^[\s\t]+$", line):
+                continue
+            non_mechanical_lines += 1
+
+    # If most lines are mechanical, it's a mechanical edit
+    total_lines = len([l for l in lines if l.strip()])
+    if total_lines == 0:
+        return True
+    return non_mechanical_lines == 0
+
+# Extract technology keywords from decision
+def extract_decision_keywords(decision: str) -> set:
+    decision_lower = decision.lower()
+    keywords = set()
+
+    # Technology groups - techs in same group conflict with each other
+    tech_groups = {
+        "cli": {"argparse", "click", "typer", "fire"},
+        "database": {"postgresql", "mysql", "sqlite", "mongodb"},
+        "web": {"flask", "django", "fastapi", "express"},
+    }
+
+    # Find which tech is mentioned in decision
+    decision_tech = None
+    decision_group = None
+    for group_name, techs in tech_groups.items():
+        for tech in techs:
+            if tech in decision_lower:
+                decision_tech = tech
+                decision_group = group_name
+                keywords.add(tech)
+                break
+        if decision_tech:
+            break
+
+    # Mark all other techs in same group as conflicts
+    if decision_tech and decision_group:
+        for tech in tech_groups[decision_group]:
+            if tech != decision_tech:
+                keywords.add(f"CONFLICT:{tech}")
+
+    return keywords
+
+# Check if edit introduces conflicting technology
+def check_contradiction(edit: str, decision: str) -> tuple:
+    keywords = extract_decision_keywords(decision)
+    edit_lower = edit.lower()
+
+    # Technology alias patterns for detection
+    tech_patterns = {
+        "click": [r"\bclick\b", r"from click\b", r"import click\b", r"@click\."],
+        "argparse": [r"\bargparse\b", r"ArgumentParser"],
+        "typer": [r"\btyper\b", r"import typer\b", r"@typer\."],
+        "fire": [r"\bfire\b", r"import fire\b"],
+        "mysql": [r"\bmysql\b", r"mysql\.connector", r"mysqlclient", r"pymysql"],
+        "postgresql": [r"\bpostgresql\b", r"\bpostgres\b", r"psycopg"],
+        "sqlite": [r"\bsqlite\b", r"sqlite3"],
+        "mongodb": [r"\bmongodb\b", r"pymongo"],
+        "django": [r"\bdjango\b", r"from django\.", r"import django"],
+        "flask": [r"\bflask\b", r"from flask\b", r"import flask\b"],
+        "fastapi": [r"\bfastapi\b", r"from fastapi\b", r"import fastapi\b"],
+    }
+
+    # Check for conflict keywords
+    for kw in keywords:
+        if kw.startswith("CONFLICT:"):
+            conflict_tech = kw[9:]  # Remove "CONFLICT:" prefix
+
+            # Check all patterns for this technology
+            if conflict_tech in tech_patterns:
+                for pattern in tech_patterns[conflict_tech]:
+                    if re.search(pattern, edit_lower, re.IGNORECASE):
+                        return True, f"introduces {conflict_tech}"
+            else:
+                # Fallback to simple substring check
+                if conflict_tech in edit_lower:
+                    return True, f"introduces {conflict_tech}"
+                if f"import {conflict_tech}" in edit_lower:
+                    return True, f"imports {conflict_tech}"
+                if f"from {conflict_tech}" in edit_lower:
+                    return True, f"imports from {conflict_tech}"
+
+    return False, ""
+
+# Main logic
+# Check conflicts FIRST, before mechanical edit detection
+# (because importing conflicting tech is NOT mechanical)
+has_conflict, conflict_reason = check_contradiction(edit_content, decision_text)
+if has_conflict:
+    print(f"BLOCK:{conflict_reason}")
+    sys.exit(0)
+
+# Only after ruling out conflicts, check for mechanical edits
+if is_mechanical_edit(edit_content):
+    print("ALLOW:mechanical_edit")
+    sys.exit(0)
+
+# No conflict and not mechanical - allow
+print("ALLOW:no_contradiction")
+PYCHECK
+)
+
+    _debug_log "CONTRADICTION_CHECK result=$CONTRADICTION_CHECK"
+
+    case "$CONTRADICTION_CHECK" in
+      BLOCK:*)
+        CONFLICT_DETECTED="true"
+        CONFLICT_REASON="${CONTRADICTION_CHECK#BLOCK:}"
+        ;;
+      ALLOW:*)
+        CONFLICT_DETECTED="false"
+        _debug_log "Edit allowed: ${CONTRADICTION_CHECK#ALLOW:}"
+        ;;
+      *)
+        # Unknown result - fail open
+        CONFLICT_DETECTED="false"
+        ;;
+    esac
+  fi
 fi
 
 # If confirmed conflict on write operation, BLOCK the edit
 if [ "$CONFLICT_DETECTED" = "true" ]; then
-  BLOCK_REASON="⚠️ CONFLICT WITH ACTIVE PROJECT DECISION
+  BLOCK_REASON="⚠️ ARCHITECTURAL CONFLICT DETECTED
 
 $CONFLICT_DECISION
 
-This edit is BLOCKED because it conflicts with an active project decision.
+Conflict reason: This edit ${CONFLICT_REASON:-introduces changes that contradict the decision}.
+
+This edit is BLOCKED because it would invalidate an active project decision.
 
 ⛔ YOU MUST ASK THE USER before proceeding.
 
@@ -317,7 +494,7 @@ Options to present to the user:
 DO NOT call fo_decide(supersede) without explicit user approval.
 The original task request is NOT approval to change project decisions."
 
-  _debug_log "OUTPUT_BLOCK conflict_detected decision=$CONFLICT_DECISION"
+  _debug_log "OUTPUT_BLOCK conflict_detected decision=$CONFLICT_DECISION reason=$CONFLICT_REASON"
   emit_block "$BLOCK_REASON"
   exit 0
 fi

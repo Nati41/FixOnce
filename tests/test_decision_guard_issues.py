@@ -59,7 +59,7 @@ class TestUserConfirmationRequired(unittest.TestCase):
         self.assertTrue(user_confirmed)
 
     def test_hook_message_requires_user_confirmation(self):
-        """Hook block message must instruct agent to ask user."""
+        """Hook block message must instruct agent to ask user when blocking."""
         temp_dir = tempfile.TemporaryDirectory()
         fake_bin = Path(temp_dir.name) / "bin"
         fake_bin.mkdir()
@@ -76,10 +76,15 @@ class TestUserConfirmationRequired(unittest.TestCase):
         env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
         env["HOME"] = temp_dir.name
 
+        # Must provide edit content that actually contradicts the decision
+        # (importing click when argparse is decided)
         payload = json.dumps({
             "cwd": str(PROJECT_ROOT),
             "tool_name": "Edit",
-            "tool_input": {"file_path": "src/cli.py"}
+            "tool_input": {
+                "file_path": "src/cli.py",
+                "new_string": "import click\n\n@click.command()\ndef main():\n    pass\n"
+            }
         })
 
         result = subprocess.run(
@@ -291,19 +296,20 @@ pathlib.Path("src/safe_rename/cli.py").write_text("# modified")
         self.assertIn("src/safe_rename/cli.py", paths)
 
     def test_exec_command_blocks_on_conflict(self):
-        """exec_command should block when target file has conflicting decision."""
+        """exec_command should block when command introduces conflicting tech."""
         self._create_fake_curl({
             "count": 1,
             "context": "📌 Decision (80%): Use argparse for CLI. Reason: Standard library..."
         })
 
+        # Command that writes click code when argparse is decided
         output = self._run_hook({
             "cwd": str(PROJECT_ROOT),
             "tool_name": "exec_command",
-            "tool_input": {"cmd": "python3 -c 'open(\"src/cli.py\", \"w\").write(\"test\")'"}
+            "tool_input": {"cmd": "python3 -c 'open(\"src/cli.py\", \"w\").write(\"import click\\n@click.command()\")'"}
         })
 
-        # Should block
+        # Should block because command introduces click
         if output:
             hook_output = output.get("hookSpecificOutput", {})
             self.assertEqual(hook_output.get("permissionDecision"), "deny")
@@ -330,12 +336,16 @@ class TestHookMessageContent(unittest.TestCase):
         env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
         env["HOME"] = temp_dir.name
 
+        # Edit that introduces conflicting technology (click instead of argparse)
         result = subprocess.run(
             [str(HOOK)],
             input=json.dumps({
                 "cwd": str(PROJECT_ROOT),
                 "tool_name": "Edit",
-                "tool_input": {"file_path": "src/cli.py"}
+                "tool_input": {
+                    "file_path": "src/cli.py",
+                    "new_string": "import click\n@click.command()\ndef main(): pass\n"
+                }
             }),
             text=True,
             capture_output=True,
