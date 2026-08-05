@@ -7009,6 +7009,24 @@ def supersede_decision(
     )
     _save_project(session.project_id, memory)
 
+    # Update semantic index: remove old, add new
+    # This ensures search results reflect current decisions
+    index_result = {"status": "skipped"}
+    try:
+        from core.project_semantic import supersede_decision_in_index
+        index_result = supersede_decision_in_index(
+            session.project_id,
+            old_decision,
+            new_decision,
+            new_reason,
+        )
+        if index_result.get("status") == "error":
+            _log(f"[supersede_decision] Index update warning: {index_result.get('error')}")
+    except ImportError:
+        pass  # Semantic module not available
+    except Exception as e:
+        _log(f"[supersede_decision] Index update error: {e}")
+
     # Log MCP activity
     _log_mcp_activity("supersede_decision", {
         "old": old_decision[:30],
@@ -7018,6 +7036,8 @@ def supersede_decision(
     result = f"✅ {message}"
     if new_decision:
         result += f"\n📝 New decision: {new_decision}"
+    if index_result.get("old_removed"):
+        result += "\n🔄 Semantic index updated"
 
     return context + result
 
@@ -11136,13 +11156,15 @@ def fo_impact(clear: bool = False) -> str:
     Include in your task summary when FixOnce contributed to the work.
 
     Only reports factual usage - no estimates, no marketing.
+    Prioritizes specific, evidence-backed contributions over generic statements.
 
     Example output:
     {
       "used": true,
+      "highest_impact": "FixOnce surfaced an active argparse decision before the CLI was changed.",
       "statements": [
-        "Used FixOnce to restore previous project context.",
-        "Used FixOnce to reuse a previously saved solution."
+        "FixOnce surfaced an active argparse decision before the CLI was changed.",
+        "FixOnce restored the last project state and next step."
       ]
     }
 
@@ -11150,25 +11172,38 @@ def fo_impact(clear: bool = False) -> str:
         clear: If True, clears the usage log after returning
 
     Returns:
-        JSON with used flag and list of usage statements.
-        Empty statements means FixOnce wasn't used for this task.
+        JSON with:
+        - used: True if FixOnce contributed
+        - highest_impact: Single sentence for the most significant contribution
+        - statements: Full list of usage statements
     """
     import json
 
     try:
-        from core.impact_events import get_usage_report, clear_session_events
+        from core.impact_events import (
+            get_usage_report,
+            get_highest_impact_statement,
+            clear_session_events,
+        )
 
         report = get_usage_report()
+        highest = get_highest_impact_statement()
 
-        if clear and report.get("used"):
+        result = {
+            "used": report.get("used", False),
+            "highest_impact": highest,
+            "statements": report.get("statements", []),
+        }
+
+        if clear and result.get("used"):
             clear_session_events()
 
-        return json.dumps(report, indent=2, ensure_ascii=False)
+        return json.dumps(result, indent=2, ensure_ascii=False)
 
     except ImportError:
-        return json.dumps({"used": False, "statements": []})
+        return json.dumps({"used": False, "highest_impact": "", "statements": []})
     except Exception as e:
-        return json.dumps({"used": False, "statements": [], "error": str(e)})
+        return json.dumps({"used": False, "highest_impact": "", "statements": [], "error": str(e)})
 
 
 @mcp.tool()

@@ -185,6 +185,17 @@ def record_decision(
                 target_decision["superseded_by_actor"] = actor
                 target_decision["superseded_by_source"] = actor_source
 
+                # Remove superseded decision from semantic index
+                try:
+                    from core.project_semantic import remove_decision
+                    old_text = target_decision.get("decision", "")
+                    if old_text:
+                        remove_decision(project_id, old_text)
+                except ImportError:
+                    pass  # Semantic module not available
+                except Exception:
+                    pass  # Non-blocking
+
             elif action == ResolutionAction.SAVE_ANYWAY_UNDER_REVIEW:
                 if not target_decision:
                     return DecisionResult(

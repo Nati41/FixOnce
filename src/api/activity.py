@@ -1067,6 +1067,11 @@ def _get_relevant_project_memory(file_path: str, area: str) -> dict:
     Returns decisions, solved bugs, and avoid patterns that match
     the file path, filename, or area name.
 
+    Scoring: base semantic similarity + file-mention bonus.
+    If a decision explicitly mentions the filename, stem, or area,
+    it gets a relevance bonus (up to +15%) because it's directly
+    about the component being edited.
+
     Fails open: returns empty dict on any error.
     """
     result = {"decisions": [], "solved": [], "avoid": []}
@@ -1077,34 +1082,73 @@ def _get_relevant_project_memory(file_path: str, area: str) -> dict:
             return result
 
         filename = Path(file_path).name if file_path else ""
-        query_terms = [t for t in [area, filename, Path(file_path).stem] if t]
+        stem = Path(file_path).stem if file_path else ""
+        query_terms = [t for t in [area, filename, stem] if t]
         if not query_terms:
             return result
 
         query = " ".join(query_terms)
 
+        # Terms to check for file-mention bonus
+        # Normalize to lowercase for matching
+        mention_terms = set()
+        if area:
+            mention_terms.add(area.lower())
+            # Also add variations: safe_rename -> SafeRename, saferename
+            mention_terms.add(area.replace("_", "").lower())
+            mention_terms.add(area.replace("_", " ").lower())
+        if stem and stem.lower() not in ("index", "main", "app", "test", "utils"):
+            # Only add stem if it's not a generic filename
+            mention_terms.add(stem.lower())
+
+        def compute_boosted_score(r) -> int:
+            """Compute score with file-mention bonus."""
+            base_score = r.score
+            bonus = 0.0
+
+            text_lower = r.text.lower()
+
+            # Check if decision mentions the file/area
+            for term in mention_terms:
+                if len(term) >= 3 and term in text_lower:
+                    # +10% for area mention, +5% for stem mention
+                    if term == area.lower() or term == area.replace("_", "").lower():
+                        bonus = max(bonus, 0.10)
+                    else:
+                        bonus = max(bonus, 0.05)
+
+            # Additional bonus if decision mentions common component terms
+            # that match the file type (CLI for cli.py, API for api.py, etc.)
+            if stem.lower() == "cli" and "cli" in text_lower:
+                bonus = max(bonus, 0.10)
+            elif stem.lower() == "api" and "api" in text_lower:
+                bonus = max(bonus, 0.10)
+
+            final_score = min(1.0, base_score + bonus)
+            return int(final_score * 100)
+
         try:
             from core.project_semantic import search_project
 
-            decisions = search_project(project_id, query, k=2, doc_type="decision", min_score=0.60)
+            decisions = search_project(project_id, query, k=2, doc_type="decision", min_score=0.55)
             for r in decisions[:2]:
                 result["decisions"].append({
                     "text": r.text[:120] + ("..." if len(r.text) > 120 else ""),
-                    "score": int(r.score * 100)
+                    "score": compute_boosted_score(r)
                 })
 
-            errors = search_project(project_id, query, k=2, doc_type="error", min_score=0.60)
+            errors = search_project(project_id, query, k=2, doc_type="error", min_score=0.55)
             for r in errors[:2]:
                 result["solved"].append({
                     "text": r.text[:120] + ("..." if len(r.text) > 120 else ""),
-                    "score": int(r.score * 100)
+                    "score": compute_boosted_score(r)
                 })
 
-            avoids = search_project(project_id, query, k=2, doc_type="avoid", min_score=0.60)
+            avoids = search_project(project_id, query, k=2, doc_type="avoid", min_score=0.55)
             for r in avoids[:2]:
                 result["avoid"].append({
                     "text": r.text[:120] + ("..." if len(r.text) > 120 else ""),
-                    "score": int(r.score * 100)
+                    "score": compute_boosted_score(r)
                 })
 
         except ImportError:
@@ -1255,6 +1299,85 @@ def get_area_context():
             "context": context_text,
             "activities": area_activities[:limit] if area_activities else []
         })
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@activity_bp.route("/rebuild-decision-index", methods=["POST"])
+def rebuild_decision_index():
+    """
+    Rebuild decision entries in the semantic index from project memory.
+
+    This repairs stale indexes where:
+    - Superseded decisions still appear as active
+    - New decisions are missing from the index
+    - Index/memory divergence has occurred
+
+    JSON body:
+        project_id: Project ID to rebuild (optional - uses active project if not provided)
+
+    Returns:
+        Stats about the rebuild including removed/added counts.
+    """
+    try:
+        data = request.get_json() or {}
+        project_id = data.get("project_id")
+
+        # Get project ID from active project if not provided
+        if not project_id:
+            project_id = _get_project_id_from_file("")  # Get active project
+
+        if not project_id or project_id == "__global__":
+            return jsonify({
+                "status": "error",
+                "message": "No project_id provided and no active project found"
+            }), 400
+
+        from core.project_semantic import rebuild_decisions_only
+        result = rebuild_decisions_only(project_id)
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@activity_bp.route("/rebuild-project-index", methods=["POST"])
+def rebuild_project_index_endpoint():
+    """
+    Rebuild the entire semantic index for a project from memory.
+
+    This is a full rebuild that re-indexes all:
+    - Decisions (active only, excludes superseded)
+    - Insights
+    - Avoid patterns
+    - Solved bugs
+
+    JSON body:
+        project_id: Project ID to rebuild (optional - uses active project if not provided)
+
+    Returns:
+        Stats about the rebuild.
+    """
+    try:
+        data = request.get_json() or {}
+        project_id = data.get("project_id")
+
+        # Get project ID from active project if not provided
+        if not project_id:
+            project_id = _get_project_id_from_file("")  # Get active project
+
+        if not project_id or project_id == "__global__":
+            return jsonify({
+                "status": "error",
+                "message": "No project_id provided and no active project found"
+            }), 400
+
+        from core.project_semantic import rebuild_project_index
+        result = rebuild_project_index(project_id)
+
+        return jsonify(result)
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
