@@ -1,6 +1,19 @@
 #!/bin/bash
 # FixOnce Hook: PreToolUse for Codex
 # Injects area-based context when agent touches a file.
+#
+# Output formats (official Codex PreToolUse spec):
+#
+# 1. No context: empty output (allow)
+#
+# 2. Relevant context (non-blocking):
+#    {"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"..."}}
+#
+# 3. Confirmed conflict (blocking):
+#    {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}
+#    OR legacy: {"decision":"block","reason":"..."}
+#
+# DO NOT USE: ask, approve, top-level deny
 
 _debug_log() {
   if [ -z "$FIXONCE_HOOK_DEBUG" ]; then
@@ -23,9 +36,23 @@ is_protected_path() {
   esac
 }
 
-block_context_unavailable() {
-  cat <<'EOF'
-{"decision":"block","reason":"FIXONCE_BLOCKING_WARNING FixOnce context server is unavailable; refusing to read protected file before context is checked."}
+# Block output using official hookSpecificOutput format
+emit_block() {
+  local REASON="$1"
+  local REASON_ESCAPED
+  REASON_ESCAPED=$(printf '%s' "$REASON" | jq -Rs '.')
+  cat <<EOF
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":$REASON_ESCAPED}}
+EOF
+}
+
+# Context output using official hookSpecificOutput format
+emit_context() {
+  local CONTEXT="$1"
+  local CONTEXT_ESCAPED
+  CONTEXT_ESCAPED=$(printf '%s' "$CONTEXT" | jq -Rs '.')
+  cat <<EOF
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":$CONTEXT_ESCAPED}}
 EOF
 }
 
@@ -100,7 +127,10 @@ def extract_from_command(command: str, depth: int = 0) -> list[str]:
                     add_path(paths, path)
 
     read_tools = {"sed", "cat", "head", "tail", "grep", "rg", "awk"}
-    script_tools = {"python", "python3", "perl", "ruby"}
+    script_tools = {"python", "python3", "perl", "ruby", "node"}
+    write_indicators = {"open(", "write(", "Path(", ".write_text(", ".write_bytes(",
+                        "with open", ">>", "> ", "tee ", "sed -i", "shutil.copy",
+                        "shutil.move", "os.rename", "pathlib"}
 
     if tool in read_tools or tool in script_tools:
         for token in tokens[1:]:
@@ -116,6 +146,29 @@ def extract_from_command(command: str, depth: int = 0) -> list[str]:
     for match in re.findall(r"(?<![\w./-])([\w./-]+/[\w./-]+\.(?:py|js|ts|tsx|jsx|sh|html|css|json|yaml|yml|toml|md|txt))(?![\w./-])", command):
         if looks_like_path(match):
             add_path(paths, match)
+
+    # For python/python3 commands running a script file, parse the script for write targets
+    if tool in script_tools:
+        script_file = None
+        for token in tokens[1:]:
+            if not token.startswith("-") and looks_like_path(token):
+                script_file = token
+                break
+
+        if script_file:
+            script_path = Path(script_file) if Path(script_file).is_absolute() else cwd / script_file
+            if script_path.exists() and script_path.suffix in {".py", ".js", ".rb", ".pl"}:
+                try:
+                    script_content = script_path.read_text(encoding="utf-8", errors="ignore")
+                    # Check if script contains write operations
+                    has_writes = any(ind in script_content for ind in write_indicators)
+                    if has_writes:
+                        # Extract all file paths from the script content
+                        for match in re.findall(r"['\"]([^'\"]+\.(?:py|js|ts|tsx|jsx|sh|html|css|json|yaml|yml|toml))['\"]", script_content):
+                            if "/" in match or match.startswith("src"):
+                                add_path(paths, match)
+                except Exception:
+                    pass
 
     return paths
 
@@ -135,8 +188,8 @@ _debug_log "FILE_PATHS=$(printf '%s' "$FILE_PATHS" | tr '\n' '|')"
 
 # Only process on actual files
 if [ -z "$FILE_PATHS" ]; then
-  _debug_log 'OUTPUT={"decision": "approve"} reason=no_file_paths'
-  echo '{"decision": "approve"}'
+  _debug_log 'OUTPUT=(empty) reason=no_file_paths'
+  # No output = allow
   exit 0
 fi
 
@@ -171,7 +224,7 @@ while IFS= read -r FILE_PATH; do
   if [ "$CURL_STATUS" != "0" ] || [ -z "$RESPONSE" ] || [ "$RESPONSE" = "null" ]; then
     if is_protected_path "$FILE_PATH"; then
       _debug_log "OUTPUT_BLOCK reason=context_unavailable protected_path=$FILE_PATH curl_status=$CURL_STATUS"
-      block_context_unavailable
+      emit_block "FIXONCE_BLOCKING_WARNING: FixOnce context server is unavailable. Cannot verify project memory before editing protected file."
       exit 0
     fi
     continue
@@ -185,12 +238,10 @@ while IFS= read -r FILE_PATH; do
     continue
   fi
 
+  # Check for explicit blocking warning
   if echo "$CONTEXT" | grep -q "FIXONCE_BLOCKING_WARNING"; then
-    REASON=$(printf '%s' "$CONTEXT" | jq -Rs '.')
-    _debug_log "OUTPUT_BLOCK reason=$CONTEXT"
-    cat <<EOF
-{"decision":"block","reason":$REASON}
-EOF
+    _debug_log "OUTPUT_BLOCK reason=FIXONCE_BLOCKING_WARNING"
+    emit_block "$CONTEXT"
     exit 0
   fi
 
@@ -205,21 +256,73 @@ $FILE_PATHS
 EOF
 
 if [ -z "$COMBINED_CONTEXT" ]; then
-  _debug_log 'OUTPUT={"decision": "approve"} reason=no_combined_context'
-  echo '{"decision": "approve"}'
+  _debug_log 'OUTPUT=(empty) reason=no_combined_context'
+  # No output = allow
   exit 0
 fi
 
-# Escape for JSON
-CONTEXT_ESCAPED=$(echo "$COMBINED_CONTEXT" | jq -Rs '.')
+# Check if this is a write operation that may conflict with active decisions
+IS_WRITE_OP="false"
+case "$TOOL_NAME" in
+  Edit|Write|apply_patch|str_replace_editor|exec_command|exec|Bash|bash|shell)
+    IS_WRITE_OP="true"
+    ;;
+esac
 
-# Return context for injection (Codex format - may differ from Claude)
-cat <<EOF
-{
-  "decision": "approve",
-  "message": $CONTEXT_ESCAPED
-}
-EOF
-_debug_log "OUTPUT_APPROVE message=$COMBINED_CONTEXT"
+# Detect confirmed conflicts: high-relevance decisions (>=75%) or avoid patterns (>=70%)
+CONFLICT_DETECTED="false"
+CONFLICT_DECISION=""
 
+if [ "$IS_WRITE_OP" = "true" ]; then
+  # Check for high-relevance decisions (75%+)
+  if echo "$COMBINED_CONTEXT" | grep -qE '📌 Decision \(([7-9][5-9]|[89][0-9]|100)%\):'; then
+    CONFLICT_DETECTED="true"
+    # Extract the first high-relevance decision text
+    CONFLICT_DECISION=$(echo "$COMBINED_CONTEXT" | grep -oE '📌 Decision \([7-9][0-9]%\): [^.]+' | head -1)
+    if [ -z "$CONFLICT_DECISION" ]; then
+      CONFLICT_DECISION=$(echo "$COMBINED_CONTEXT" | grep -oE '📌 Decision \(100%\): [^.]+' | head -1)
+    fi
+  fi
+
+  # Check for avoid patterns (70%+)
+  if echo "$COMBINED_CONTEXT" | grep -qE '🚫 Avoid \(([7-9][0-9]|100)%\):'; then
+    CONFLICT_DETECTED="true"
+    if [ -z "$CONFLICT_DECISION" ]; then
+      CONFLICT_DECISION=$(echo "$COMBINED_CONTEXT" | grep -oE '🚫 Avoid \([7-9][0-9]%\): [^.]+' | head -1)
+      if [ -z "$CONFLICT_DECISION" ]; then
+        CONFLICT_DECISION=$(echo "$COMBINED_CONTEXT" | grep -oE '🚫 Avoid \(100%\): [^.]+' | head -1)
+      fi
+    fi
+  fi
+fi
+
+# If confirmed conflict on write operation, BLOCK the edit
+if [ "$CONFLICT_DETECTED" = "true" ]; then
+  BLOCK_REASON="⚠️ CONFLICT WITH ACTIVE PROJECT DECISION
+
+$CONFLICT_DECISION
+
+This edit is BLOCKED because it conflicts with an active project decision.
+
+⛔ YOU MUST ASK THE USER before proceeding.
+
+Tell the user:
+\"This change conflicts with a documented project decision. How would you like to proceed?\"
+
+Options to present to the user:
+1. Supersede the old decision (user explicitly confirms replacing it)
+2. Add as exception (keep old decision, add scoped exception)
+3. Cancel the change
+
+DO NOT call fo_decide(supersede) without explicit user approval.
+The original task request is NOT approval to change project decisions."
+
+  _debug_log "OUTPUT_BLOCK conflict_detected decision=$CONFLICT_DECISION"
+  emit_block "$BLOCK_REASON"
+  exit 0
+fi
+
+# No conflict: inject context via additionalContext (non-blocking)
+_debug_log "OUTPUT_CONTEXT context=$COMBINED_CONTEXT"
+emit_context "$COMBINED_CONTEXT"
 exit 0

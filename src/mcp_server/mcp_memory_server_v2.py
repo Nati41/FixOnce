@@ -11246,12 +11246,17 @@ def fo_sync(
 
 
 @mcp.tool()
-def fo_decide(text: str, reason: str, action: str = "add") -> str:
+def fo_decide(text: str, reason: str, action: str = "add", user_confirmed: bool = False) -> str:
     """
     Record a decision, avoid pattern, or supersede existing decision.
 
     Pre-save review: Before saving, checks for related/conflicting decisions.
     If a potential conflict is found, returns review options.
+
+    IMPORTANT: Supersede actions require explicit user confirmation.
+    Set user_confirmed=True only after the user has explicitly approved
+    replacing or modifying the existing decision. The original task request
+    (e.g., "migrate from X to Y") is NOT considered user approval.
 
     Args:
         text: The decision or avoid text
@@ -11261,21 +11266,44 @@ def fo_decide(text: str, reason: str, action: str = "add") -> str:
             - "avoid": Add as avoid pattern
             - "refine:OLD_TEXT": Refine existing decision
             - "clarify:OLD_TEXT": Clarify existing decision
-            - "supersede:OLD_TEXT": Supersede existing decision
+            - "supersede:OLD_TEXT": Supersede existing decision (requires user_confirmed=True)
             - "resolve:CONFLICT_ID": Resolve legacy conflict
             - "resolve:acknowledge_existing:TARGET_ID": Acknowledge duplicate without saving
             - "resolve:save_as_extends:TARGET_ID": Save as extension (from review)
-            - "resolve:save_as_exception:TARGET_ID": Save as exception (from review)
-            - "resolve:supersede_existing:TARGET_ID": Supersede existing (from review)
+            - "resolve:save_as_exception:TARGET_ID": Save as exception (requires user_confirmed=True)
+            - "resolve:supersede_existing:TARGET_ID": Supersede existing (requires user_confirmed=True)
             - "resolve:save_anyway_under_review:TARGET_ID": Save under review (from review)
+        user_confirmed: Must be True for supersede/exception actions. Confirms the user
+            explicitly approved changing the existing decision.
 
     Examples:
         fo_decide("Use PostgreSQL", "Better for our scale")
         fo_decide("Never use eval()", "Security risk", action="avoid")
-        fo_decide("Use MySQL", "Changed requirements", action="supersede:Use PostgreSQL")
-        # After review suggests conflict:
-        fo_decide("Bulk import bypasses logging", "Performance", action="resolve:save_as_exception:dec_003")
+        # After user explicitly confirms superseding:
+        fo_decide("Use MySQL", "Changed requirements", action="supersede:Use PostgreSQL", user_confirmed=True)
     """
+    # Check if this is a destructive action that requires user confirmation
+    requires_confirmation = (
+        action.startswith("supersede:") or
+        action.startswith("resolve:supersede_existing:") or
+        action.startswith("resolve:save_as_exception:")
+    )
+
+    if requires_confirmation and not user_confirmed:
+        return (
+            "⛔ USER CONFIRMATION REQUIRED\n\n"
+            "This action modifies or replaces an existing project decision.\n"
+            "You MUST ask the user before proceeding.\n\n"
+            "Tell the user:\n"
+            "\"This change conflicts with a documented project decision: [show decision].\n"
+            "Do you want me to:\n"
+            "1. Replace the old decision with the new one?\n"
+            "2. Add this as an exception to the existing decision?\n"
+            "3. Cancel the change?\"\n\n"
+            "After the user explicitly chooses, call fo_decide with user_confirmed=True.\n"
+            "The original task request is NOT considered approval."
+        )
+
     if action == "avoid":
         result = log_avoid(text, reason)
     elif action.startswith("resolve:"):

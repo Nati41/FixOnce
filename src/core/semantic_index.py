@@ -86,6 +86,7 @@ class SemanticIndex:
         self._documents: Optional[List[Document]] = None
         self._config: Optional[EmbeddingConfig] = None
         self._loaded = False
+        self._last_mtime: float = 0.0  # Track file modification time
 
     @property
     def config(self) -> Optional[EmbeddingConfig]:
@@ -94,13 +95,22 @@ class SemanticIndex:
             self._config = EmbeddingConfig.load(self.index_dir)
         return self._config
 
-    def _ensure_loaded(self):
-        """Load index from disk if not already loaded."""
-        if self._loaded:
-            return
+    def _get_index_mtime(self) -> float:
+        """Get the modification time of the index files."""
+        metadata_file = self.index_dir / "metadata.json"
+        if metadata_file.exists():
+            return metadata_file.stat().st_mtime
+        return 0.0
 
-        self._load_index()
-        self._loaded = True
+    def _ensure_loaded(self):
+        """Load index from disk if not already loaded or if modified externally."""
+        current_mtime = self._get_index_mtime()
+
+        # Reload if: not loaded, or file was modified by another process
+        if not self._loaded or (current_mtime > 0 and current_mtime > self._last_mtime):
+            self._load_index()
+            self._loaded = True
+            self._last_mtime = current_mtime
 
     def _load_index(self):
         """Load vectors and documents from disk."""
@@ -175,6 +185,9 @@ class SemanticIndex:
             )
         self._config.document_count = len(self._documents)
         self._config.save(self.index_dir)
+
+        # Update mtime after save so we don't reload our own changes
+        self._last_mtime = self._get_index_mtime()
 
         print(f"[SemanticIndex] Saved {len(self._documents)} documents")
 

@@ -1,5 +1,17 @@
 # FixOnce Hook: PreToolUse for Codex (Windows)
 # Injects area-based context when agent touches a file.
+#
+# Output formats (official Codex PreToolUse spec):
+#
+# 1. No context: empty output (allow)
+#
+# 2. Relevant context (non-blocking):
+#    {"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"..."}}
+#
+# 3. Confirmed conflict (blocking):
+#    {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}
+#
+# DO NOT USE: ask, approve, top-level deny
 
 param()
 
@@ -28,8 +40,27 @@ function Test-ProtectedPath {
     return $false
 }
 
-function Get-BlockContextUnavailable {
-    return '{"decision":"block","reason":"FIXONCE_BLOCKING_WARNING FixOnce context server is unavailable; refusing to read protected file before context is checked."}'
+function Write-BlockOutput {
+    param([string]$Reason)
+    $output = @{
+        hookSpecificOutput = @{
+            hookEventName = "PreToolUse"
+            permissionDecision = "deny"
+            permissionDecisionReason = $Reason
+        }
+    } | ConvertTo-Json -Compress -Depth 3
+    Write-Output $output
+}
+
+function Write-ContextOutput {
+    param([string]$Context)
+    $output = @{
+        hookSpecificOutput = @{
+            hookEventName = "PreToolUse"
+            additionalContext = $Context
+        }
+    } | ConvertTo-Json -Compress -Depth 3
+    Write-Output $output
 }
 
 function Test-LooksLikePath {
@@ -80,7 +111,6 @@ function Get-PathsFromCommand {
     # Parse command tokens
     $tokens = @()
     try {
-        # Simple tokenization (doesn't handle all edge cases)
         $tokens = $Command -split '\s+' | Where-Object { $_ }
     } catch {
         $tokens = $Command -split '\s+' | Where-Object { $_ }
@@ -102,6 +132,9 @@ function Get-PathsFromCommand {
 
     $readTools = @("sed", "cat", "head", "tail", "grep", "rg", "awk", "type", "Get-Content")
     $scriptTools = @("python", "python3", "perl", "ruby", "node")
+    $writeIndicators = @("open(", "write(", "Path(", ".write_text(", ".write_bytes(",
+                         "with open", ">>", "> ", "tee ", "sed -i", "shutil.copy",
+                         "shutil.move", "os.rename", "pathlib", "Set-Content", "Out-File")
 
     if ($tool -in $readTools -or $tool -in $scriptTools) {
         foreach ($token in $tokens[1..($tokens.Count - 1)]) {
@@ -121,6 +154,49 @@ function Get-PathsFromCommand {
         }
     }
 
+    # For python/python3 commands running a script file, parse the script for write targets
+    if ($tool -in $scriptTools) {
+        $scriptFile = $null
+        foreach ($token in $tokens[1..($tokens.Count - 1)]) {
+            if (-not $token.StartsWith("-") -and (Test-LooksLikePath -Token $token -Cwd $Cwd)) {
+                $scriptFile = $token
+                break
+            }
+        }
+
+        if ($scriptFile) {
+            $scriptPath = if ([System.IO.Path]::IsPathRooted($scriptFile)) {
+                $scriptFile
+            } else {
+                Join-Path $Cwd $scriptFile
+            }
+
+            if ((Test-Path $scriptPath) -and ($scriptPath -match "\.(py|js|rb|pl)$")) {
+                try {
+                    $scriptContent = Get-Content $scriptPath -Raw -ErrorAction Stop
+                    $hasWrites = $false
+                    foreach ($ind in $writeIndicators) {
+                        if ($scriptContent -like "*$ind*") {
+                            $hasWrites = $true
+                            break
+                        }
+                    }
+                    if ($hasWrites) {
+                        $scriptMatches = [regex]::Matches($scriptContent, "['\`"]([^'\`"]+\.(?:py|js|ts|tsx|jsx|sh|html|css|json|yaml|yml|toml))['\`"]")
+                        foreach ($m in $scriptMatches) {
+                            $p = $m.Groups[1].Value
+                            if ($p -like "*/*" -or $p -like "src*") {
+                                $paths += $p
+                            }
+                        }
+                    }
+                } catch {
+                    # Ignore errors reading script
+                }
+            }
+        }
+    }
+
     return $paths | Select-Object -Unique
 }
 
@@ -132,7 +208,7 @@ try {
     $hookInput = $inputJson | ConvertFrom-Json
 } catch {
     Write-DebugLog "ERROR parsing JSON: $_"
-    Write-Output '{"decision": "approve"}'
+    # Empty output = allow
     exit 0
 }
 
@@ -167,8 +243,8 @@ Write-DebugLog "FILE_PATHS=$($filePaths -join '|')"
 
 # Only process on actual files
 if ($filePaths.Count -eq 0) {
-    Write-DebugLog 'OUTPUT={"decision": "approve"} reason=no_file_paths'
-    Write-Output '{"decision": "approve"}'
+    Write-DebugLog 'OUTPUT=(empty) reason=no_file_paths'
+    # Empty output = allow
     exit 0
 }
 
@@ -211,9 +287,8 @@ foreach ($filePath in $filePaths) {
         if (-not $context) { continue }
 
         if ($context -match "FIXONCE_BLOCKING_WARNING") {
-            $reason = $context | ConvertTo-Json
-            Write-DebugLog "OUTPUT_BLOCK reason=$context"
-            Write-Output "{`"decision`":`"block`",`"reason`":$reason}"
+            Write-DebugLog "OUTPUT_BLOCK reason=FIXONCE_BLOCKING_WARNING"
+            Write-BlockOutput -Reason $context
             exit 0
         }
 
@@ -224,7 +299,7 @@ foreach ($filePath in $filePaths) {
         Write-DebugLog "ERROR querying area context: $_"
         if (Test-ProtectedPath -Path $filePath) {
             Write-DebugLog "OUTPUT_BLOCK reason=context_unavailable protected_path=$filePath"
-            Write-Output (Get-BlockContextUnavailable)
+            Write-BlockOutput -Reason "FIXONCE_BLOCKING_WARNING: FixOnce context server is unavailable. Cannot verify project memory before editing protected file."
             exit 0
         }
         continue
@@ -232,21 +307,69 @@ foreach ($filePath in $filePaths) {
 }
 
 if (-not $combinedContext) {
-    Write-DebugLog 'OUTPUT={"decision": "approve"} reason=no_combined_context'
-    Write-Output '{"decision": "approve"}'
+    Write-DebugLog 'OUTPUT=(empty) reason=no_combined_context'
+    # Empty output = allow
     exit 0
 }
 
-# Escape for JSON
-$contextEscaped = $combinedContext | ConvertTo-Json
+# Check if this is a write operation that may conflict with active decisions
+$isWriteOp = $toolName -in @("Edit", "Write", "apply_patch", "str_replace_editor", "exec_command", "exec", "Bash", "bash", "shell")
 
-# Return context for injection
-$output = @{
-    decision = "approve"
-    message = $combinedContext.Trim()
-} | ConvertTo-Json -Compress
+# Detect confirmed conflicts: high-relevance decisions (>=75%) or avoid patterns (>=70%)
+$conflictDetected = $false
+$conflictDecision = ""
 
-Write-Output $output
-Write-DebugLog "OUTPUT_APPROVE message=$combinedContext"
+if ($isWriteOp) {
+    # Check for high-relevance decisions (75%+)
+    if ($combinedContext -match '📌 Decision \(([7-9][5-9]|[89][0-9]|100)%\):') {
+        $conflictDetected = $true
+        $match = [regex]::Match($combinedContext, '📌 Decision \([7-9][0-9]%\): ([^.]+)')
+        if ($match.Success) {
+            $conflictDecision = "📌 Decision: $($match.Groups[1].Value)"
+        }
+    }
 
+    # Check for avoid patterns (70%+)
+    if ($combinedContext -match '🚫 Avoid \(([7-9][0-9]|100)%\):') {
+        $conflictDetected = $true
+        if (-not $conflictDecision) {
+            $match = [regex]::Match($combinedContext, '🚫 Avoid \([7-9][0-9]%\): ([^.]+)')
+            if ($match.Success) {
+                $conflictDecision = "🚫 Avoid: $($match.Groups[1].Value)"
+            }
+        }
+    }
+}
+
+# If confirmed conflict on write operation, BLOCK the edit
+if ($conflictDetected) {
+    $blockReason = @"
+⚠️ CONFLICT WITH ACTIVE PROJECT DECISION
+
+$conflictDecision
+
+This edit is BLOCKED because it conflicts with an active project decision.
+
+⛔ YOU MUST ASK THE USER before proceeding.
+
+Tell the user:
+"This change conflicts with a documented project decision. How would you like to proceed?"
+
+Options to present to the user:
+1. Supersede the old decision (user explicitly confirms replacing it)
+2. Add as exception (keep old decision, add scoped exception)
+3. Cancel the change
+
+DO NOT call fo_decide(supersede) without explicit user approval.
+The original task request is NOT approval to change project decisions.
+"@
+
+    Write-DebugLog "OUTPUT_BLOCK conflict_detected decision=$conflictDecision"
+    Write-BlockOutput -Reason $blockReason
+    exit 0
+}
+
+# No conflict: inject context via additionalContext (non-blocking)
+Write-DebugLog "OUTPUT_CONTEXT context=$combinedContext"
+Write-ContextOutput -Context $combinedContext.Trim()
 exit 0
